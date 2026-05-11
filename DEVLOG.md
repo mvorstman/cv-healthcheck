@@ -2,6 +2,9 @@
 
 ## 2026-05-11
 
+- Started Phase 2.3 candidate validation by dataset execution.
+- Added local execution validation output for prioritized dataset candidates without creating health rules.
+- Added CLI and Flask views for execution validation status review.
 - Started Phase 2.2 Reports Plus catalog inspection and candidate prioritization.
 - Added local catalog prioritization that writes `health_candidate_priority.json` from generated report and dataset summaries.
 - Added CLI and Flask views for prioritized healthcheck candidates without implementing health rules.

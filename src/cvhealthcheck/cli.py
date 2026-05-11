@@ -19,6 +19,7 @@ from .reportsplus.inventory import (
     summarize_records,
 )
 from .reportsplus.priority import prioritize_candidates, priority_summary
+from .reportsplus.validation import validate_candidates, validation_summary
 
 
 def _parse_parameters(values: list[str] | None) -> dict[str, str]:
@@ -47,7 +48,7 @@ def _print_result(result: Any) -> int:
 
 def _print_table(rows: list[dict[str, Any]], fields: list[str]) -> None:
     widths = {
-        field: max(len(field), *(len(str(row.get(field, "") or "")) for row in rows))
+        field: max(len(field), *(_display_width(row.get(field)) for row in rows))
         for field in fields
     }
     print("  ".join(field.ljust(widths[field]) for field in fields))
@@ -55,10 +56,18 @@ def _print_table(rows: list[dict[str, Any]], fields: list[str]) -> None:
     for row in rows:
         print(
             "  ".join(
-                str(row.get(field, "") or "").ljust(widths[field])
+                _display_value(row.get(field)).ljust(widths[field])
                 for field in fields
             )
         )
+
+
+def _display_value(value: Any) -> str:
+    return "" if value is None else str(value)
+
+
+def _display_width(value: Any) -> int:
+    return len(_display_value(value))
 
 
 def _print_inventory_result(
@@ -196,6 +205,90 @@ def _show_priority_catalog() -> int:
     return 0
 
 
+def _write_execution_validation(
+    priority: str,
+    limit: int,
+    include_all: bool,
+) -> int:
+    priority_payload = read_json("health_candidate_priority.json")
+    datasets_payload = read_json("datasets.json")
+    candidates = priority_payload.get("records", [])
+    datasets = datasets_payload.get("records", [])
+    if not isinstance(candidates, list):
+        candidates = []
+    if not isinstance(datasets, list):
+        datasets = []
+    records = validate_candidates(
+        candidates,
+        datasets,
+        priority=priority,
+        limit=limit,
+        include_all=include_all,
+    )
+    summary = validation_summary(records)
+    path = write_json(
+        "execution_validation.json",
+        {
+            "collected_at": collected_at(),
+            "source_catalogs": [
+                "data/catalog/health_candidate_priority.json",
+                "data/catalog/datasets.json",
+            ],
+            "record_count": len(records),
+            "summary": summary,
+            "records": records,
+        },
+    )
+    print(f"{path}: {len(records)} records")
+    print(
+        "EXECUTABLE: {EXECUTABLE}  NEEDS_PARAMS: {NEEDS_PARAMS}  "
+        "FAILS: {FAILS}  SKIPPED: {SKIPPED}".format(**summary)
+    )
+    return 0
+
+
+def _show_execution_validation() -> int:
+    try:
+        payload = read_json("execution_validation.json")
+    except FileNotFoundError:
+        print(
+            "data/catalog/execution_validation.json is missing. "
+            "Run `cv-healthcheck reportsplus catalog validate-candidates` first.",
+            file=sys.stderr,
+        )
+        return 1
+    records = payload.get("records", [])
+    if not isinstance(records, list):
+        records = []
+    summary = validation_summary(records)
+    print(
+        "EXECUTABLE: {EXECUTABLE}  NEEDS_PARAMS: {NEEDS_PARAMS}  "
+        "FAILS: {FAILS}  SKIPPED: {SKIPPED}".format(**summary)
+    )
+    rows = [
+        {
+            "candidate_name": record.get("candidate_name"),
+            "mapped_health_area": record.get("mapped_health_area"),
+            "status": record.get("status"),
+            "record_count": record.get("record_count"),
+            "field_count": len(record.get("returned_fields") or []),
+        }
+        for record in records
+    ]
+    if rows:
+        _print_table(
+            rows,
+            [
+                "candidate_name",
+                "mapped_health_area",
+                "status",
+                "record_count",
+                "field_count",
+            ],
+        )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="cv-healthcheck")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -226,6 +319,11 @@ def build_parser() -> argparse.ArgumentParser:
     catalog_subparsers.add_parser("all")
     catalog_subparsers.add_parser("prioritize")
     catalog_subparsers.add_parser("show-priority")
+    validate_parser = catalog_subparsers.add_parser("validate-candidates")
+    validate_parser.add_argument("--priority", default="HIGH")
+    validate_parser.add_argument("--limit", type=int, default=5)
+    validate_parser.add_argument("--all", action="store_true")
+    catalog_subparsers.add_parser("show-validation")
 
     metadata_parser = reports_subparsers.add_parser("metadata")
     metadata_parser.add_argument("--dataset-guid", required=True)
@@ -285,6 +383,14 @@ def main(argv: list[str] | None = None) -> int:
                 return _write_priority_catalog()
             if args.catalog_command == "show-priority":
                 return _show_priority_catalog()
+            if args.catalog_command == "validate-candidates":
+                return _write_execution_validation(
+                    priority=args.priority,
+                    limit=args.limit,
+                    include_all=args.all,
+                )
+            if args.catalog_command == "show-validation":
+                return _show_execution_validation()
         if args.reportsplus_command == "reports":
             result = client.list_reports()
             records = extract_records(result.data, preferred_keys=("reports", "data"))

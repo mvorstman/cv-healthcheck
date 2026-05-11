@@ -42,6 +42,14 @@ Status: started.
 - Map candidates to known API mapping subjects when confidence is reasonable.
 - Keep prioritization heuristic and adjustable; no health rules.
 
+## Phase 2.3: Candidate Validation by Dataset Execution
+
+Status: started.
+
+- Execute safe, prioritized dataset candidates with bounded result limits.
+- Record EXECUTABLE, NEEDS_PARAMS, FAILS, and SKIPPED validation outcomes.
+- Keep validation file-based and exploratory; no health rules.
+
 ## Later Phases
 
 - Collector orchestration

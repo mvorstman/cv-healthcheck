@@ -187,6 +187,39 @@ def reportsplus_health_candidates():
     )
 
 
+@bp.route("/reportsplus/execution-validation")
+def reportsplus_execution_validation():
+    status = catalog_status("execution_validation.json")
+    records = []
+    message = None
+    if status.get("exists"):
+        payload = read_json("execution_validation.json")
+        value = payload.get("records", [])
+        records = value if isinstance(value, list) else []
+    else:
+        message = (
+            "Run `cv-healthcheck reportsplus catalog validate-candidates` "
+            "to generate execution_validation.json."
+        )
+    grouped = {
+        validation_status: [
+            record for record in records if record.get("status") == validation_status
+        ]
+        for validation_status in ("EXECUTABLE", "NEEDS_PARAMS", "FAILS", "SKIPPED")
+    }
+    summary = {
+        validation_status: len(items)
+        for validation_status, items in grouped.items()
+    }
+    return render_template(
+        "execution_validation.html",
+        catalog_status=status,
+        grouped=grouped,
+        summary=summary,
+        message=message,
+    )
+
+
 @bp.route("/reportsplus/dataset/<path:dataset_guid>")
 def reportsplus_dataset(dataset_guid: str):
     result = ReportsPlusClient().get_dataset_metadata(dataset_guid)

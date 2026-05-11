@@ -248,6 +248,26 @@ data/catalog/health_candidate_priority.json
 
 Priority is heuristic and transparent. It favors SLA, failed or backup jobs, storage capacity, infrastructure utilization, readiness, MediaAgent/library/DDB signals, and audit/security candidates. It does not implement health rules.
 
+Validate whether prioritized dataset candidates can execute safely:
+
+```bash
+cv-healthcheck reportsplus catalog validate-candidates --priority HIGH --limit 5
+cv-healthcheck reportsplus catalog show-validation
+```
+
+Use `--all` to include all priorities. Validation writes:
+
+```text
+data/catalog/execution_validation.json
+```
+
+Validation statuses:
+
+- `EXECUTABLE`: dataset data endpoint returned HTTP 200 with fields and a valid record set, including an empty set.
+- `NEEDS_PARAMS`: required dataset parameters were present but missing safe literal/default values.
+- `FAILS`: endpoint returned an error or an invalid response.
+- `SKIPPED`: candidate is not a dataset or has no dataset GUID.
+
 Generated catalog JSON files are local runtime artifacts and are not committed.
 
 ## CLI
@@ -307,3 +327,5 @@ Pages:
 - `/reportsplus/datasets`
 - `/reportsplus/dataset/<dataset_guid>`
 - `/reportsplus/data/<dataset_guid>`
+- `/reportsplus/health-candidates`
+- `/reportsplus/execution-validation`
