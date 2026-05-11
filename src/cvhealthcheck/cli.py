@@ -10,6 +10,7 @@ from .reportsplus.catalog import write_catalog
 from .reportsplus.client import ReportsPlusClient
 from .reportsplus.inventory import (
     DATASET_SUMMARY_FIELDS,
+    LOGIN_TOKEN_REQUIRED_MESSAGE,
     REPORT_SUMMARY_FIELDS,
     extract_records,
     summarize_records,
@@ -63,6 +64,8 @@ def _print_inventory_result(
     summary_fields: list[str],
 ) -> int:
     if not getattr(result, "ok", False):
+        if getattr(result, "status_code", None) == 401:
+            print(LOGIN_TOKEN_REQUIRED_MESSAGE, file=sys.stderr)
         return _print_result(result)
     if summary:
         _print_table(summarize_records(records, summary_fields), summary_fields)

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from cvhealthcheck.api_client import ApiResult, CommvaultApiClient
+from cvhealthcheck.auth import load_login_token
 
 REPORTS_PLUS_BASE_PATH = "/commandcenter/api/cr/reportsplusengine"
 REPORTS_PATH = f"{REPORTS_PLUS_BASE_PATH}/reports"
@@ -20,14 +21,22 @@ class ReportsPlusClient:
         self.reports_path = reports_path
         self.datasets_path = datasets_path
 
+    def _inventory_api_client(self) -> CommvaultApiClient:
+        login_token = load_login_token()
+        if login_token:
+            return CommvaultApiClient(settings=self.api_client.settings, token=login_token)
+        return self.api_client
+
     def list_reports(self) -> ApiResult:
-        return self.api_client.get(self.reports_path)
+        return self._inventory_api_client().get(self.reports_path)
 
     def get_report(self, report_id_or_guid: str) -> ApiResult:
-        return self.api_client.get(f"{self.reports_path}/{report_id_or_guid}")
+        return self._inventory_api_client().get(
+            f"{self.reports_path}/{report_id_or_guid}"
+        )
 
     def list_datasets(self) -> ApiResult:
-        return self.api_client.get(self.datasets_path)
+        return self._inventory_api_client().get(self.datasets_path)
 
     def get_dataset_metadata(self, dataset_guid: str) -> ApiResult:
         return self.api_client.get(f"{self.datasets_path}/{dataset_guid}")

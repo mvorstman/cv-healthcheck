@@ -8,6 +8,7 @@ from cvhealthcheck.output.json_report import to_pretty_json
 from cvhealthcheck.reportsplus.catalog import write_catalog
 from cvhealthcheck.reportsplus.client import ReportsPlusClient
 from cvhealthcheck.reportsplus.inventory import (
+    LOGIN_TOKEN_REQUIRED_MESSAGE,
     extract_records,
     filter_reports,
     find_report_content_clues,
@@ -49,6 +50,12 @@ def _diagnostics(result, records) -> dict[str, object]:
         ),
         "record_count": len(records),
     }
+
+
+def _inventory_message(result) -> str | None:
+    if result.status_code == 401:
+        return LOGIN_TOKEN_REQUIRED_MESSAGE
+    return None
 
 
 @bp.route("/")
@@ -98,6 +105,7 @@ def reportsplus_reports():
         "reports.html",
         result=result,
         diagnostics=_diagnostics(result, records),
+        message=_inventory_message(result),
         reports=filtered_records,
         filters={
             "name": request.args.get("name", ""),
@@ -137,6 +145,7 @@ def reportsplus_datasets():
         "datasets.html",
         result=result,
         diagnostics=_diagnostics(result, records),
+        message=_inventory_message(result),
         datasets=records,
         formatted=to_pretty_json(result.data) if result.data is not None else result.text,
     )

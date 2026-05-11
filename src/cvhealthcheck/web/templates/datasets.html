@@ -14,6 +14,10 @@
     <dd>{{ diagnostics.record_count }}</dd>
   </dl>
 
+  {% if message %}
+    <p class="notice">{{ message }}</p>
+  {% endif %}
+
   {% if datasets %}
     <table>
       <thead>
@@ -28,12 +32,14 @@
       </thead>
       <tbody>
         {% for dataset in datasets %}
+          {% set nested = dataset.get("dataSet", {}) %}
           <tr>
-            <td>{{ dataset.get("dataSetId", "") }}</td>
-            <td>{{ dataset.get("dataSetName", "") }}</td>
+            <td>{{ dataset.get("dataSetId") or nested.get("dataSetId", "") }}</td>
+            <td>{{ dataset.get("dataSetName") or nested.get("dataSetName", "") }}</td>
             <td>
-              {% if dataset.get("dataSetGuid") %}
-                <a href="{{ url_for('main.reportsplus_dataset', dataset_guid=dataset.get('dataSetGuid')) }}">{{ dataset.get("dataSetGuid") }}</a>
+              {% if dataset.get("dataSetGuid") or nested.get("dataSetGuid") %}
+                {% set dataset_guid = dataset.get("dataSetGuid") or nested.get("dataSetGuid") %}
+                <a href="{{ url_for('main.reportsplus_dataset', dataset_guid=dataset_guid) }}">{{ dataset_guid }}</a>
               {% endif %}
             </td>
             <td>

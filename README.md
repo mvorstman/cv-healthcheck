@@ -124,7 +124,7 @@ scripts/probe_dataset_data.sh 979eba7f-8c67-420c-a27e-85ed82066514:8ac30a77-3de2
 
 Reports Plus discovery moves cv-healthcheck from a single known dataset toward a local inventory of Reports Plus reports and datasets.
 
-Reports Plus inventory endpoints may require an `Authtoken` issued by `POST /commandcenter/api/Login`. The current `.token` value can work for `/commandcenter/api` while returning HTTP 401 `Unauthenticated` for Reports Plus inventory endpoints.
+Reports Plus discovery and catalog endpoints require an `Authtoken` issued by `POST /commandcenter/api/Login`. The current `.token` value can work for `/commandcenter/api` while returning HTTP 401 `Unauthenticated` for Reports Plus inventory endpoints.
 
 Safe manual login-token workflow:
 
@@ -159,10 +159,11 @@ unset CV_USERNAME CV_PASSWORD_B64
 rm -f /tmp/cv-healthcheck-login.json
 ```
 
-Then test Reports Plus report inventory with the Login-issued token:
+Then test Reports Plus report and dataset inventory with the Login-issued token:
 
 ```bash
 scripts/probe_reports_with_login_token.sh
+scripts/probe_datasets_with_login_token.sh
 ```
 
 The `.login_token` file is local-only and must not be committed.
@@ -202,6 +203,8 @@ Show a compact dataset inventory summary:
 ```bash
 cv-healthcheck reportsplus datasets --summary
 ```
+
+When `CV_LOGIN_TOKEN` is set, inventory commands use it. Otherwise they use project-local `.login_token` when present. If neither exists, they fall back to the configured `.token`; Reports Plus inventory calls are expected to fail with HTTP 401 in that mode.
 
 Successful inventory calls write local JSON catalogs:
 

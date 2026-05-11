@@ -22,6 +22,11 @@ DATASET_SUMMARY_FIELDS = [
     "endpoint",
 ]
 
+LOGIN_TOKEN_REQUIRED_MESSAGE = (
+    "Reports Plus inventory requires a Login API token. "
+    "Create .login_token or set CV_LOGIN_TOKEN."
+)
+
 
 def extract_records(value: Any, preferred_keys: tuple[str, ...] = ()) -> list[Any]:
     if isinstance(value, list):
@@ -38,7 +43,7 @@ def extract_records(value: Any, preferred_keys: tuple[str, ...] = ()) -> list[An
             if nested:
                 return nested
 
-    for key in ("records", "items", "data", "reports", "datasets", "rows"):
+    for key in ("records", "items", "data", "reports", "datasets", "dataSet", "rows"):
         child = value.get(key)
         if isinstance(child, list):
             return child
@@ -58,8 +63,18 @@ def summarize_records(records: list[Any], fields: list[str]) -> list[dict[str, A
     for record in records:
         if not isinstance(record, dict):
             continue
-        summary.append({field: record.get(field) for field in fields})
+        summary.append({field: _field_value(record, field) for field in fields})
     return summary
+
+
+def _field_value(record: dict[str, Any], field: str) -> Any:
+    value = record.get(field)
+    if value is not None:
+        return value
+    nested_dataset = record.get("dataSet")
+    if isinstance(nested_dataset, dict):
+        return nested_dataset.get(field)
+    return None
 
 
 def filter_reports(
