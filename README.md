@@ -336,7 +336,22 @@ cv-healthcheck reportsplus data \
 
 ## Flask UI
 
-Run the development UI on port 5001. The `cv-topology` project may use port 5000, so cv-healthcheck should use 5001 during lab work:
+Start the operational-style Flask UI:
+
+```bash
+./start.sh
+./start.sh DEBUG
+```
+
+`start.sh` loads `~/.cv-healthcheck-env` when present, stops previous `python run.py` or `flask run` instances, generates a fresh `CV_SECRET_KEY`, sets `CV_LOG_LEVEL`, activates `venv`, ensures runtime directories exist, and starts the app with:
+
+```bash
+flask run --host="${CV_WEB_HOST}" --port="${CV_WEB_PORT}"
+```
+
+Defaults are `CV_WEB_HOST=0.0.0.0`, `CV_WEB_PORT=5000`, and log level `INFO`. Override the host or port by exporting `CV_WEB_HOST` or `CV_WEB_PORT` before running the script.
+
+For manual development, run the UI on port 5001. The `cv-topology` project may use port 5000, so cv-healthcheck can use 5001 during lab work:
 
 ```bash
 source venv/bin/activate
