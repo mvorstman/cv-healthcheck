@@ -5,6 +5,7 @@ import sys
 from typing import Any
 
 from .api_client import CommvaultApiClient
+from .labreadiness.evaluator import assess_lab_readiness
 from .output.json_report import to_pretty_json
 from .reportsplus.catalog import collected_at, read_json, write_catalog, write_json
 from .reportsplus.client import ReportsPlusClient
@@ -340,6 +341,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Dataset parameter as key=value. Can be repeated.",
     )
 
+    lab_parser = subparsers.add_parser("lab")
+    lab_subparsers = lab_parser.add_subparsers(dest="lab_command", required=True)
+    readiness_parser = lab_subparsers.add_parser("readiness")
+    readiness_parser.add_argument("--json", action="store_true")
+
     return parser
 
 
@@ -350,6 +356,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "api" and args.api_command == "ping":
         result = CommvaultApiClient().ping()
         return _print_result(result)
+
+    if args.command == "lab" and args.lab_command == "readiness":
+        result = assess_lab_readiness(write=True)
+        if args.json:
+            print(to_pretty_json(result))
+        else:
+            _print_lab_readiness(result)
+        return 0
 
     if args.command == "reportsplus":
         client = ReportsPlusClient()
@@ -428,6 +442,25 @@ def main(argv: list[str] | None = None) -> int:
 
     parser.error("Unsupported command")
     return 2
+
+
+def _print_lab_readiness(result: dict[str, Any]) -> None:
+    print(f"Readiness state: {result['readiness_state']}")
+    print(result["summary"])
+    print("\nMajor indicators:")
+    indicators = result.get("indicators", {})
+    rows = [
+        {
+            "indicator": name,
+            "value": indicator.get("value"),
+            "status": indicator.get("status"),
+        }
+        for name, indicator in indicators.items()
+    ]
+    _print_table(rows, ["indicator", "value", "status"])
+    print("\nRecommendations:")
+    for recommendation in result.get("recommendations", []):
+        print(f"- {recommendation}")
 
 
 if __name__ == "__main__":

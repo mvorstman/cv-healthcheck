@@ -4,6 +4,7 @@ from flask import Blueprint, render_template, request
 
 from cvhealthcheck.api_client import CommvaultApiClient
 from cvhealthcheck.config import load_settings
+from cvhealthcheck.labreadiness.evaluator import assess_lab_readiness
 from cvhealthcheck.output.json_report import to_pretty_json
 from cvhealthcheck.reportsplus.catalog import catalog_status, read_json, write_catalog
 from cvhealthcheck.reportsplus.client import ReportsPlusClient
@@ -73,6 +74,23 @@ def index():
         api_reachable=bool(ping and ping.ok),
         api_status_code=ping.status_code if ping else None,
         api_error=ping.error if ping else None,
+    )
+
+
+@bp.route("/lab-readiness")
+def lab_readiness():
+    result = assess_lab_readiness(write=True)
+    states = [
+        "NOT_READY",
+        "READY_FOR_DISCOVERY",
+        "READY_FOR_DATA_EXECUTION",
+        "READY_FOR_HEALTH_RULE_TESTING",
+    ]
+    return render_template(
+        "lab_readiness.html",
+        result=result,
+        states=states,
+        indicators=result.get("indicators", {}),
     )
 
 

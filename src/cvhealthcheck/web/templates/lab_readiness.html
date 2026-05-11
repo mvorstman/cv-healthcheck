@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h2>Lab Readiness</h2>
+  <dl>
+    <dt>Readiness state</dt>
+    <dd>{{ result.readiness_state }}</dd>
+    <dt>Summary</dt>
+    <dd>{{ result.summary }}</dd>
+  </dl>
+
+  <h3>Progression</h3>
+  <ol>
+    {% for state in states %}
+      <li{% if state == result.readiness_state %} class="current"{% endif %}>{{ state }}</li>
+    {% endfor %}
+  </ol>
+
+  <h3>Indicators</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>indicator</th>
+        <th>value</th>
+        <th>status</th>
+        <th>notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for name, indicator in indicators.items() %}
+        <tr>
+          <td>{{ name }}</td>
+          <td>{{ indicator.value }}</td>
+          <td>{{ indicator.status }}</td>
+          <td>{{ indicator.notes }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3>Recommendations</h3>
+  <ul>
+    {% for recommendation in result.recommendations %}
+      <li>{{ recommendation }}</li>
+    {% endfor %}
+  </ul>
+
+  <h3>Missing Operational Areas</h3>
+  <ul>
+    {% for name, indicator in indicators.items() %}
+      {% if indicator.status in ["missing", "unknown"] %}
+        <li>{{ name }}: {{ indicator.notes }}</li>
+      {% endif %}
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

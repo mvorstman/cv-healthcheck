@@ -12,6 +12,8 @@ build/
 *.egg-info/
 data/catalog/*.json
 !data/catalog/.gitkeep
+data/labreadiness/*.json
+!data/labreadiness/.gitkeep
 .env
 .cv-healthcheck-env
 .token
