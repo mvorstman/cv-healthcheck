@@ -15,5 +15,6 @@ data/catalog/*.json
 .env
 .cv-healthcheck-env
 .token
+.login_token
 .refresh_token
 *.local

@@ -124,6 +124,49 @@ scripts/probe_dataset_data.sh 979eba7f-8c67-420c-a27e-85ed82066514:8ac30a77-3de2
 
 Reports Plus discovery moves cv-healthcheck from a single known dataset toward a local inventory of Reports Plus reports and datasets.
 
+Reports Plus inventory endpoints may require an `Authtoken` issued by `POST /commandcenter/api/Login`. The current `.token` value can work for `/commandcenter/api` while returning HTTP 401 `Unauthenticated` for Reports Plus inventory endpoints.
+
+Safe manual login-token workflow:
+
+```bash
+source ~/.cv-healthcheck-env
+cd ~/dev/cv-healthcheck
+
+export CV_USERNAME="your-username"
+export CV_PASSWORD_B64="$(printf '%s' 'your-password' | base64 -w 0)"
+
+curl -k -sS \
+  -H "Accept: application/json" \
+  -H "Content-Type: application/json" \
+  -X POST \
+  -d "{\"username\":\"${CV_USERNAME}\",\"password\":\"${CV_PASSWORD_B64}\"}" \
+  "${CV_BASE_URL%/}/commandcenter/api/Login" > /tmp/cv-healthcheck-login.json
+
+python - <<'PY'
+import json
+from pathlib import Path
+
+body = json.loads(Path("/tmp/cv-healthcheck-login.json").read_text())
+token = body.get("token")
+if not token:
+    raise SystemExit("Login response did not include token")
+Path(".login_token").write_text(token + "\n")
+PY
+
+chmod 600 .login_token
+export CV_LOGIN_TOKEN="$(cat .login_token)"
+unset CV_USERNAME CV_PASSWORD_B64
+rm -f /tmp/cv-healthcheck-login.json
+```
+
+Then test Reports Plus report inventory with the Login-issued token:
+
+```bash
+scripts/probe_reports_with_login_token.sh
+```
+
+The `.login_token` file is local-only and must not be committed.
+
 List Reports Plus reports as formatted JSON:
 
 ```bash
