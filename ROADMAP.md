@@ -50,6 +50,15 @@ Status: started.
 - Record EXECUTABLE, NEEDS_PARAMS, FAILS, and SKIPPED validation outcomes.
 - Keep validation file-based and exploratory; no health rules.
 
+## Phase 2.4: Lab Readiness Baseline
+
+Status: started.
+
+- Summarize whether the lab is ready for discovery, dataset execution, or future health-rule testing.
+- Write the latest readiness result to `data/labreadiness/latest.json`.
+- Expose readiness through `cv-healthcheck lab readiness`, `cv-healthcheck lab readiness --json`, and `/lab-readiness`.
+- Keep readiness file-based and credential-free; no database and no health rules.
+
 ## Later Phases
 
 - Collector orchestration

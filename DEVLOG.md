@@ -2,6 +2,10 @@
 
 ## 2026-05-11
 
+- Started Phase 2.4 lab readiness baseline assessment.
+- Added readiness assessment output at `data/labreadiness/latest.json`.
+- Added `cv-healthcheck lab readiness`, JSON output mode, and `/lab-readiness` Flask view.
+- Kept readiness baseline file-based and limited to source availability and operational evidence; no health rules, database, or credential storage.
 - Started Phase 2.3 candidate validation by dataset execution.
 - Added local execution validation output for prioritized dataset candidates without creating health rules.
 - Added CLI and Flask views for execution validation status review.

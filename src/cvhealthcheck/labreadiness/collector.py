@@ -14,8 +14,14 @@ CATALOG_DIR = Path("data/catalog")
 
 def collect_indicators() -> dict[str, Indicator]:
     indicators: dict[str, Indicator] = {}
-    indicators["commserve_reachable"] = _api_ping_indicator()
-    indicators["command_center_reachable"] = indicators["commserve_reachable"]
+    api_ping = _api_ping_indicator()
+    indicators["commserve_reachable"] = api_ping
+    indicators["command_center_reachable"] = Indicator(
+        "command_center_reachable",
+        api_ping.value,
+        api_ping.status,
+        api_ping.notes,
+    )
     indicators["reports_plus_reachable"] = _reports_plus_indicator()
 
     reports = _read_catalog("reports.json")

@@ -270,6 +270,32 @@ Validation statuses:
 
 Generated catalog JSON files are local runtime artifacts and are not committed.
 
+## Phase 2.4: Lab Readiness Baseline
+
+Lab readiness summarizes whether the current lab has enough discovered and executable data to continue toward healthcheck rule development. It is a baseline assessment only: it does not implement health rules, does not create a database, and does not store credentials.
+
+Run the readiness assessment:
+
+```bash
+cv-healthcheck lab readiness
+cv-healthcheck lab readiness --json
+```
+
+The assessment writes the latest local result to:
+
+```text
+data/labreadiness/latest.json
+```
+
+Readiness states:
+
+- `NOT_READY`: base API or Reports Plus inventory is not reachable.
+- `READY_FOR_DISCOVERY`: APIs are reachable, but dataset execution validation is not available.
+- `READY_FOR_DATA_EXECUTION`: discovery and dataset execution work, but operational lab activity is incomplete.
+- `READY_FOR_HEALTH_RULE_TESTING`: enough operational evidence exists to begin health-rule testing.
+
+The baseline currently uses live API reachability, existing Reports Plus catalog files, existing execution validation output, and conservative operational activity indicators. Unknown object counts remain explicit until a proven source is mapped.
+
 ## CLI
 
 Install for local development:
@@ -329,3 +355,4 @@ Pages:
 - `/reportsplus/data/<dataset_guid>`
 - `/reportsplus/health-candidates`
 - `/reportsplus/execution-validation`
+- `/lab-readiness`
