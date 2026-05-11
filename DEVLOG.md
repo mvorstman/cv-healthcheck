@@ -2,6 +2,8 @@
 
 ## 2026-05-11
 
+- Added `scripts/probe_auth_matrix.sh` to compare `Authtoken` and `Authorization: Bearer` across base API, known Reports Plus dataset metadata, report inventory, and dataset inventory endpoints.
+- Auth matrix result with current `.token`: `/commandcenter/api` returned HTTP 200 for both header styles; Reports Plus dataset metadata, report inventory, and dataset inventory returned HTTP 401 `Unauthenticated` for both header styles. This suggests the current token is not accepted by Reports Plus and a Login-issued Authtoken should be tested before changing endpoint status.
 - Started Phase 2 Reports Plus discovery and cataloging.
 - Added reusable Reports Plus report and dataset inventory methods.
 - Added CLI inventory commands with JSON output, summary output, and local JSON catalog persistence.
