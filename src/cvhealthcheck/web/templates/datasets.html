@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h2>Reports Plus Datasets</h2>
+  <dl>
+    <dt>Endpoint</dt>
+    <dd>{{ diagnostics.endpoint }}</dd>
+    <dt>Status</dt>
+    <dd>{{ diagnostics.status }}</dd>
+    <dt>Elapsed</dt>
+    <dd>{{ diagnostics.elapsed_ms if diagnostics.elapsed_ms is not none else "unknown" }} ms</dd>
+    <dt>Records</dt>
+    <dd>{{ diagnostics.record_count }}</dd>
+  </dl>
+
+  {% if datasets %}
+    <table>
+      <thead>
+        <tr>
+          <th>dataSetId</th>
+          <th>dataSetName</th>
+          <th>dataSetGuid</th>
+          <th>guid</th>
+          <th>deployed</th>
+          <th>endpoint</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for dataset in datasets %}
+          <tr>
+            <td>{{ dataset.get("dataSetId", "") }}</td>
+            <td>{{ dataset.get("dataSetName", "") }}</td>
+            <td>
+              {% if dataset.get("dataSetGuid") %}
+                <a href="{{ url_for('main.reportsplus_dataset', dataset_guid=dataset.get('dataSetGuid')) }}">{{ dataset.get("dataSetGuid") }}</a>
+              {% endif %}
+            </td>
+            <td>
+              {% if dataset.get("guid") %}
+                <a href="{{ url_for('main.reportsplus_dataset', dataset_guid=dataset.get('guid')) }}">{{ dataset.get("guid") }}</a>
+              {% endif %}
+            </td>
+            <td>{{ dataset.get("deployed", "") }}</td>
+            <td>{{ dataset.get("endpoint", "") }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+  <h3>Raw JSON</h3>
+  <pre>{{ formatted }}</pre>
+</section>
+{% endblock %}

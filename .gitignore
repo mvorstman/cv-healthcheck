@@ -10,6 +10,8 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+data/catalog/*.json
+!data/catalog/.gitkeep
 .env
 .cv-healthcheck-env
 .token

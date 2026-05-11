@@ -5,7 +5,14 @@ from flask import Blueprint, render_template, request
 from cvhealthcheck.api_client import CommvaultApiClient
 from cvhealthcheck.config import load_settings
 from cvhealthcheck.output.json_report import to_pretty_json
+from cvhealthcheck.reportsplus.catalog import write_catalog
 from cvhealthcheck.reportsplus.client import ReportsPlusClient
+from cvhealthcheck.reportsplus.inventory import (
+    extract_records,
+    filter_reports,
+    find_report_content_clues,
+    parse_content_field,
+)
 from cvhealthcheck.reportsplus.metadata import summarize_dataset_metadata
 
 bp = Blueprint("main", __name__)
@@ -20,6 +27,28 @@ def _parameters_from_form() -> dict[str, str]:
         key, value = line.split("=", 1)
         parameters[key.strip()] = value.strip()
     return parameters
+
+
+def _bool_filter(name: str) -> bool | None:
+    value = request.args.get(name, "").strip().lower()
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    return None
+
+
+def _diagnostics(result, records) -> dict[str, object]:
+    return {
+        "endpoint": result.url,
+        "status": result.status_code or "request failed",
+        "elapsed_ms": (
+            round(result.elapsed_seconds * 1000, 1)
+            if result.elapsed_seconds is not None
+            else None
+        ),
+        "record_count": len(records),
+    }
 
 
 @bp.route("/")
@@ -46,6 +75,69 @@ def api_test():
         "api_test.html",
         result=result,
         running=running,
+        formatted=to_pretty_json(result.data) if result.data is not None else result.text,
+    )
+
+
+@bp.route("/reportsplus/reports")
+def reportsplus_reports():
+    client = ReportsPlusClient()
+    result = client.list_reports()
+    records = extract_records(result.data, preferred_keys=("reports", "data"))
+    if result.ok:
+        write_catalog("reports", client.reports_path, records)
+
+    filtered_records = filter_reports(
+        records,
+        name=request.args.get("name") or None,
+        metrics_only=request.args.get("metrics_only") == "on",
+        deployed=_bool_filter("deployed"),
+        viewable=_bool_filter("viewable"),
+    )
+    return render_template(
+        "reports.html",
+        result=result,
+        diagnostics=_diagnostics(result, records),
+        reports=filtered_records,
+        filters={
+            "name": request.args.get("name", ""),
+            "metrics_only": request.args.get("metrics_only") == "on",
+            "deployed": request.args.get("deployed", ""),
+            "viewable": request.args.get("viewable", ""),
+        },
+        formatted=to_pretty_json(result.data) if result.data is not None else result.text,
+    )
+
+
+@bp.route("/reportsplus/reports/<path:report_id_or_guid>")
+def reportsplus_report_detail(report_id_or_guid: str):
+    result = ReportsPlusClient().get_report(report_id_or_guid)
+    content = parse_content_field(result.data)
+    clues = find_report_content_clues(content)
+    return render_template(
+        "report_detail.html",
+        report_id_or_guid=report_id_or_guid,
+        result=result,
+        diagnostics=_diagnostics(result, extract_records(result.data)),
+        content=content,
+        clues=clues,
+        formatted=to_pretty_json(result.data) if result.data is not None else result.text,
+        formatted_content=to_pretty_json(content) if content is not None else "",
+    )
+
+
+@bp.route("/reportsplus/datasets")
+def reportsplus_datasets():
+    client = ReportsPlusClient()
+    result = client.list_datasets()
+    records = extract_records(result.data, preferred_keys=("datasets", "data"))
+    if result.ok:
+        write_catalog("datasets", client.datasets_path, records)
+    return render_template(
+        "datasets.html",
+        result=result,
+        diagnostics=_diagnostics(result, records),
+        datasets=records,
         formatted=to_pretty_json(result.data) if result.data is not None else result.text,
     )
 
@@ -104,4 +196,3 @@ def reportsplus_data(dataset_guid: str):
             to_pretty_json(result.data) if result and result.data is not None else ""
         ),
     )
-

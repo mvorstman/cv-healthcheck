@@ -6,7 +6,14 @@ from typing import Any
 
 from .api_client import CommvaultApiClient
 from .output.json_report import to_pretty_json
+from .reportsplus.catalog import write_catalog
 from .reportsplus.client import ReportsPlusClient
+from .reportsplus.inventory import (
+    DATASET_SUMMARY_FIELDS,
+    REPORT_SUMMARY_FIELDS,
+    extract_records,
+    summarize_records,
+)
 
 
 def _parse_parameters(values: list[str] | None) -> dict[str, str]:
@@ -33,6 +40,37 @@ def _print_result(result: Any) -> int:
     return 0 if getattr(result, "ok", True) else 1
 
 
+def _print_table(rows: list[dict[str, Any]], fields: list[str]) -> None:
+    widths = {
+        field: max(len(field), *(len(str(row.get(field, "") or "")) for row in rows))
+        for field in fields
+    }
+    print("  ".join(field.ljust(widths[field]) for field in fields))
+    print("  ".join("-" * widths[field] for field in fields))
+    for row in rows:
+        print(
+            "  ".join(
+                str(row.get(field, "") or "").ljust(widths[field])
+                for field in fields
+            )
+        )
+
+
+def _print_inventory_result(
+    result: Any,
+    records: list[Any],
+    summary: bool,
+    summary_fields: list[str],
+) -> int:
+    if not getattr(result, "ok", False):
+        return _print_result(result)
+    if summary:
+        _print_table(summarize_records(records, summary_fields), summary_fields)
+    else:
+        print(to_pretty_json(result.data))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="cv-healthcheck")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -46,6 +84,12 @@ def build_parser() -> argparse.ArgumentParser:
         dest="reportsplus_command",
         required=True,
     )
+
+    reports_inventory_parser = reports_subparsers.add_parser("reports")
+    reports_inventory_parser.add_argument("--summary", action="store_true")
+
+    datasets_inventory_parser = reports_subparsers.add_parser("datasets")
+    datasets_inventory_parser.add_argument("--summary", action="store_true")
 
     metadata_parser = reports_subparsers.add_parser("metadata")
     metadata_parser.add_argument("--dataset-guid", required=True)
@@ -75,6 +119,28 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "reportsplus":
         client = ReportsPlusClient()
+        if args.reportsplus_command == "reports":
+            result = client.list_reports()
+            records = extract_records(result.data, preferred_keys=("reports", "data"))
+            if result.ok:
+                write_catalog("reports", client.reports_path, records)
+            return _print_inventory_result(
+                result,
+                records,
+                args.summary,
+                REPORT_SUMMARY_FIELDS,
+            )
+        if args.reportsplus_command == "datasets":
+            result = client.list_datasets()
+            records = extract_records(result.data, preferred_keys=("datasets", "data"))
+            if result.ok:
+                write_catalog("datasets", client.datasets_path, records)
+            return _print_inventory_result(
+                result,
+                records,
+                args.summary,
+                DATASET_SUMMARY_FIELDS,
+            )
         if args.reportsplus_command == "metadata":
             return _print_result(client.get_dataset_metadata(args.dataset_guid))
         if args.reportsplus_command == "data":

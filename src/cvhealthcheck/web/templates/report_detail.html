@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h2>Report Detail</h2>
+  <p><code>{{ report_id_or_guid }}</code></p>
+  <dl>
+    <dt>Endpoint</dt>
+    <dd>{{ diagnostics.endpoint }}</dd>
+    <dt>Status</dt>
+    <dd>{{ diagnostics.status }}</dd>
+    <dt>Elapsed</dt>
+    <dd>{{ diagnostics.elapsed_ms if diagnostics.elapsed_ms is not none else "unknown" }} ms</dd>
+  </dl>
+
+  {% if formatted_content %}
+    <h3>Content</h3>
+    <pre>{{ formatted_content }}</pre>
+  {% endif %}
+
+  <h3>Content Clues</h3>
+  <dl>
+    <dt>Dataset references</dt>
+    <dd><pre>{{ clues.dataset_references }}</pre></dd>
+    <dt>Dataset GUIDs</dt>
+    <dd><pre>{{ clues.dataset_guids }}</pre></dd>
+    <dt>Chart definitions</dt>
+    <dd><pre>{{ clues.chart_definitions }}</pre></dd>
+    <dt>Metrics references</dt>
+    <dd><pre>{{ clues.metrics_references }}</pre></dd>
+    <dt>Query structures</dt>
+    <dd><pre>{{ clues.query_structures }}</pre></dd>
+  </dl>
+
+  <h3>Raw JSON</h3>
+  <pre>{{ formatted }}</pre>
+</section>
+{% endblock %}

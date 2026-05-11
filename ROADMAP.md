@@ -15,6 +15,16 @@
 - Use the API mapping as the foundation for collectors.
 - Implement health rules only after source capabilities are mapped.
 
+## Phase 2: Reports Plus Discovery and Cataloging
+
+Status: started.
+
+- Report inventory CLI and Flask views.
+- Dataset inventory CLI and Flask views.
+- Report and dataset JSON catalog generation.
+- Report content inspection for dataset references, chart definitions, metrics references, query structures, and report composition metadata.
+- Report/dataset mapping research.
+
 ## Later Phases
 
 - Collector orchestration

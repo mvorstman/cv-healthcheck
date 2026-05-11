@@ -120,6 +120,61 @@ Verify the proven Reports Plus dataset data endpoint:
 scripts/probe_dataset_data.sh 979eba7f-8c67-420c-a27e-85ed82066514:8ac30a77-3de2-4968-86c1-ade4b02c85a4
 ```
 
+## Phase 2: Reports Plus Discovery
+
+Reports Plus discovery moves cv-healthcheck from a single known dataset toward a local inventory of Reports Plus reports and datasets.
+
+List Reports Plus reports as formatted JSON:
+
+```bash
+source venv/bin/activate
+source ~/.cv-healthcheck-env
+cv-healthcheck reportsplus reports
+```
+
+Show a compact report inventory summary:
+
+```bash
+cv-healthcheck reportsplus reports --summary
+```
+
+Summary columns:
+
+- `reportId`
+- `reportName`
+- `guid`
+- `deployed`
+- `viewable`
+- `editable`
+- `isMetrics`
+
+List Reports Plus datasets as formatted JSON:
+
+```bash
+cv-healthcheck reportsplus datasets
+```
+
+Show a compact dataset inventory summary:
+
+```bash
+cv-healthcheck reportsplus datasets --summary
+```
+
+Successful inventory calls write local JSON catalogs:
+
+```text
+data/catalog/reports.json
+data/catalog/datasets.json
+```
+
+Each catalog contains:
+
+- `collected_at`
+- `source`
+- `records`
+
+Generated catalog JSON files are local runtime artifacts and are not committed.
+
 ## CLI
 
 Install for local development:
@@ -172,5 +227,8 @@ Pages:
 
 - `/`
 - `/api/test`
+- `/reportsplus/reports`
+- `/reportsplus/reports/<report_id_or_guid>`
+- `/reportsplus/datasets`
 - `/reportsplus/dataset/<dataset_guid>`
 - `/reportsplus/data/<dataset_guid>`

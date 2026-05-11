@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any
 
 import requests
@@ -27,6 +28,7 @@ class ApiResult:
     data: Any
     text: str
     error: str | None = None
+    elapsed_seconds: float | None = None
 
 
 class CommvaultApiClient:
@@ -73,6 +75,7 @@ class CommvaultApiClient:
             )
 
         try:
+            started = perf_counter()
             response = self.session.get(
                 url,
                 headers=self._headers(),
@@ -80,6 +83,7 @@ class CommvaultApiClient:
                 verify=self.settings.verify_ssl,
                 timeout=self.settings.timeout_seconds,
             )
+            elapsed_seconds = perf_counter() - started
         except requests.RequestException as exc:
             return ApiResult(
                 ok=False,
@@ -90,12 +94,16 @@ class CommvaultApiClient:
                 error=str(exc),
             )
 
-        return self._result_from_response(response)
+        return self._result_from_response(response, elapsed_seconds=elapsed_seconds)
 
     def ping(self) -> ApiResult:
         return self.get("/commandcenter/api")
 
-    def _result_from_response(self, response: Response) -> ApiResult:
+    def _result_from_response(
+        self,
+        response: Response,
+        elapsed_seconds: float | None = None,
+    ) -> ApiResult:
         data: Any
         try:
             data = response.json()
@@ -109,4 +117,5 @@ class CommvaultApiClient:
             data=data,
             text=response.text,
             error=None if response.ok else response.text,
+            elapsed_seconds=elapsed_seconds,
         )

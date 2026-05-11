@@ -4,15 +4,33 @@ from typing import Any
 
 from cvhealthcheck.api_client import ApiResult, CommvaultApiClient
 
+REPORTS_PLUS_BASE_PATH = "/commandcenter/api/cr/reportsplusengine"
+REPORTS_PATH = f"{REPORTS_PLUS_BASE_PATH}/reports"
+DATASETS_PATH = f"{REPORTS_PLUS_BASE_PATH}/datasets"
+
 
 class ReportsPlusClient:
-    def __init__(self, api_client: CommvaultApiClient | None = None) -> None:
+    def __init__(
+        self,
+        api_client: CommvaultApiClient | None = None,
+        reports_path: str = REPORTS_PATH,
+        datasets_path: str = DATASETS_PATH,
+    ) -> None:
         self.api_client = api_client or CommvaultApiClient()
+        self.reports_path = reports_path
+        self.datasets_path = datasets_path
+
+    def list_reports(self) -> ApiResult:
+        return self.api_client.get(self.reports_path)
+
+    def get_report(self, report_id_or_guid: str) -> ApiResult:
+        return self.api_client.get(f"{self.reports_path}/{report_id_or_guid}")
+
+    def list_datasets(self) -> ApiResult:
+        return self.api_client.get(self.datasets_path)
 
     def get_dataset_metadata(self, dataset_guid: str) -> ApiResult:
-        return self.api_client.get(
-            f"/commandcenter/api/cr/reportsplusengine/datasets/{dataset_guid}"
-        )
+        return self.api_client.get(f"{self.datasets_path}/{dataset_guid}")
 
     def get_dataset_data(
         self,
@@ -38,7 +56,6 @@ class ReportsPlusClient:
             params.update(parameters)
 
         return self.api_client.get(
-            f"/commandcenter/api/cr/reportsplusengine/datasets/{dataset_guid}/data",
+            f"{self.datasets_path}/{dataset_guid}/data",
             params=params,
         )
-
