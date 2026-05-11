@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h2>API Test</h2>
+  <dl>
+    <dt>URL</dt>
+    <dd>{{ result.url }}</dd>
+    <dt>Status</dt>
+    <dd>{{ result.status_code or "request failed" }}</dd>
+    <dt>WebService is Running!</dt>
+    <dd>{{ "yes" if running else "no" }}</dd>
+  </dl>
+  <pre>{{ formatted }}</pre>
+</section>
+{% endblock %}
+

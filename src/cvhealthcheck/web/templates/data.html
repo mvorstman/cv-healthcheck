@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h2>Dataset Data</h2>
+  <p><code>{{ dataset_guid }}</code></p>
+  <form method="get">
+    <label>Fields <input name="fields" value="{{ fields }}"></label>
+    <label>Limit <input name="limit" type="number" min="1" value="{{ limit }}"></label>
+    <label>Order by <input name="orderby" value="{{ orderby }}"></label>
+    <label>Parameters <textarea name="parameters" rows="4">{{ parameters }}</textarea></label>
+    <button type="submit">Run</button>
+  </form>
+
+  {% if result %}
+    <h3>Result</h3>
+    <p>Status: {{ result.status_code or "request failed" }}</p>
+    {% if rows and columns %}
+      <table>
+        <thead>
+          <tr>
+            {% for column in columns %}
+              <th>{{ column }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              {% for column in columns %}
+                <td>{{ row.get(column, "") }}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+    <pre>{{ formatted }}</pre>
+  {% endif %}
+</section>
+{% endblock %}
+
