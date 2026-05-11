@@ -206,18 +206,32 @@ cv-healthcheck reportsplus datasets --summary
 
 When `CV_LOGIN_TOKEN` is set, inventory commands use it. Otherwise they use project-local `.login_token` when present. If neither exists, they fall back to the configured `.token`; Reports Plus inventory calls are expected to fail with HTTP 401 in that mode.
 
-Successful inventory calls write local JSON catalogs:
+Build local Reports Plus catalog files:
+
+```bash
+cv-healthcheck reportsplus catalog reports
+cv-healthcheck reportsplus catalog datasets
+cv-healthcheck reportsplus catalog all
+```
+
+Successful catalog calls write local JSON catalogs and summaries:
 
 ```text
 data/catalog/reports.json
 data/catalog/datasets.json
+data/catalog/reports_summary.json
+data/catalog/datasets_summary.json
+data/catalog/health_candidates.json
 ```
 
-Each catalog contains:
+Raw catalog files contain:
 
 - `collected_at`
-- `source`
+- `source_endpoint`
+- `record_count`
 - `records`
+
+Summary files extract stable fields from the raw Reports Plus inventory and add a simple heuristic `relevance` tag such as `Storage`, `Jobs`, `SLA`, `Audit`, `Security`, `Infrastructure`, `Tenant`, `Metrics`, or `Unknown`. These tags are only discovery aids for future healthcheck design; they are not health rules.
 
 Generated catalog JSON files are local runtime artifacts and are not committed.
 

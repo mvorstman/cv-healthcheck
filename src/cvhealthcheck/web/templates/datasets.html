@@ -12,6 +12,14 @@
     <dd>{{ diagnostics.elapsed_ms if diagnostics.elapsed_ms is not none else "unknown" }} ms</dd>
     <dt>Records</dt>
     <dd>{{ diagnostics.record_count }}</dd>
+    <dt>Catalog</dt>
+    <dd>
+      {% if catalog_status.exists %}
+        {{ catalog_status.path }}{% if catalog_status.record_count is not none %} ({{ catalog_status.record_count }} records){% endif %}
+      {% else %}
+        not written
+      {% endif %}
+    </dd>
   </dl>
 
   {% if message %}
@@ -28,18 +36,21 @@
           <th>guid</th>
           <th>deployed</th>
           <th>endpoint</th>
+          <th>databaseName</th>
+          <th>fields</th>
+          <th>parameters</th>
+          <th>has_sql_text</th>
+          <th>relevance</th>
         </tr>
       </thead>
       <tbody>
         {% for dataset in datasets %}
-          {% set nested = dataset.get("dataSet", {}) %}
           <tr>
-            <td>{{ dataset.get("dataSetId") or nested.get("dataSetId", "") }}</td>
-            <td>{{ dataset.get("dataSetName") or nested.get("dataSetName", "") }}</td>
+            <td>{{ dataset.get("dataSetId", "") }}</td>
+            <td>{{ dataset.get("dataSetName", "") }}</td>
             <td>
-              {% if dataset.get("dataSetGuid") or nested.get("dataSetGuid") %}
-                {% set dataset_guid = dataset.get("dataSetGuid") or nested.get("dataSetGuid") %}
-                <a href="{{ url_for('main.reportsplus_dataset', dataset_guid=dataset_guid) }}">{{ dataset_guid }}</a>
+              {% if dataset.get("dataSetGuid") %}
+                <a href="{{ url_for('main.reportsplus_dataset', dataset_guid=dataset.get('dataSetGuid')) }}">{{ dataset.get("dataSetGuid") }}</a>
               {% endif %}
             </td>
             <td>
@@ -49,13 +60,20 @@
             </td>
             <td>{{ dataset.get("deployed", "") }}</td>
             <td>{{ dataset.get("endpoint", "") }}</td>
+            <td>{{ dataset.get("databaseName", "") }}</td>
+            <td>{{ dataset.get("field_count", "") }}</td>
+            <td>{{ dataset.get("parameter_count", "") }}</td>
+            <td>{{ dataset.get("has_sql_text", "") }}</td>
+            <td>{{ dataset.get("relevance", "") }}</td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
   {% endif %}
 
-  <h3>Raw JSON</h3>
-  <pre>{{ formatted }}</pre>
+  <details>
+    <summary>Raw JSON</summary>
+    <pre>{{ formatted }}</pre>
+  </details>
 </section>
 {% endblock %}

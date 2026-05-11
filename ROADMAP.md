@@ -25,6 +25,15 @@ Status: started.
 - Report content inspection for dataset references, chart definitions, metrics references, query structures, and report composition metadata.
 - Report/dataset mapping research.
 
+## Phase 2.1: Catalog Persistence and Analysis
+
+Status: started.
+
+- Persist Reports Plus report and dataset inventory to local JSON catalog files.
+- Generate report and dataset summary JSON files from catalog records.
+- Add lightweight heuristic relevance tags for future healthcheck candidate discovery.
+- Keep catalog persistence file-based; no database.
+
 ## Later Phases
 
 - Collector orchestration

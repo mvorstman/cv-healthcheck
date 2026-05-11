@@ -6,13 +6,16 @@ from typing import Any
 
 from .api_client import CommvaultApiClient
 from .output.json_report import to_pretty_json
-from .reportsplus.catalog import write_catalog
+from .reportsplus.catalog import collected_at, write_catalog, write_json
 from .reportsplus.client import ReportsPlusClient
 from .reportsplus.inventory import (
     DATASET_SUMMARY_FIELDS,
     LOGIN_TOKEN_REQUIRED_MESSAGE,
     REPORT_SUMMARY_FIELDS,
     extract_records,
+    health_candidates,
+    summarize_datasets,
+    summarize_reports,
     summarize_records,
 )
 
@@ -74,6 +77,55 @@ def _print_inventory_result(
     return 0
 
 
+def _summary_payload(source_catalog: str, records: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "collected_at": collected_at(),
+        "source_catalog": source_catalog,
+        "record_count": len(records),
+        "records": records,
+    }
+
+
+def _write_reports_catalog(client: ReportsPlusClient) -> tuple[int, list[dict[str, Any]]]:
+    result = client.list_reports()
+    records = extract_records(result.data, preferred_keys=("reports", "data"))
+    if not result.ok:
+        if result.status_code == 401:
+            print(LOGIN_TOKEN_REQUIRED_MESSAGE, file=sys.stderr)
+        _print_result(result)
+        return 1, []
+
+    catalog_path = write_catalog("reports", client.reports_path, records)
+    summaries = summarize_reports(records)
+    summary_path = write_json(
+        "reports_summary.json",
+        _summary_payload(str(catalog_path), summaries),
+    )
+    print(f"{catalog_path}: {len(records)} records")
+    print(f"{summary_path}: {len(summaries)} records")
+    return 0, summaries
+
+
+def _write_datasets_catalog(client: ReportsPlusClient) -> tuple[int, list[dict[str, Any]]]:
+    result = client.list_datasets()
+    records = extract_records(result.data, preferred_keys=("dataSet", "datasets", "data"))
+    if not result.ok:
+        if result.status_code == 401:
+            print(LOGIN_TOKEN_REQUIRED_MESSAGE, file=sys.stderr)
+        _print_result(result)
+        return 1, []
+
+    catalog_path = write_catalog("datasets", client.datasets_path, records)
+    summaries = summarize_datasets(records)
+    summary_path = write_json(
+        "datasets_summary.json",
+        _summary_payload(str(catalog_path), summaries),
+    )
+    print(f"{catalog_path}: {len(records)} records")
+    print(f"{summary_path}: {len(summaries)} records")
+    return 0, summaries
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="cv-healthcheck")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -93,6 +145,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     datasets_inventory_parser = reports_subparsers.add_parser("datasets")
     datasets_inventory_parser.add_argument("--summary", action="store_true")
+
+    catalog_parser = reports_subparsers.add_parser("catalog")
+    catalog_subparsers = catalog_parser.add_subparsers(
+        dest="catalog_command",
+        required=True,
+    )
+    catalog_subparsers.add_parser("reports")
+    catalog_subparsers.add_parser("datasets")
+    catalog_subparsers.add_parser("all")
 
     metadata_parser = reports_subparsers.add_parser("metadata")
     metadata_parser.add_argument("--dataset-guid", required=True)
@@ -122,6 +183,32 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "reportsplus":
         client = ReportsPlusClient()
+        if args.reportsplus_command == "catalog":
+            if args.catalog_command == "reports":
+                status, _ = _write_reports_catalog(client)
+                return status
+            if args.catalog_command == "datasets":
+                status, _ = _write_datasets_catalog(client)
+                return status
+            if args.catalog_command == "all":
+                reports_status, report_summaries = _write_reports_catalog(client)
+                datasets_status, dataset_summaries = _write_datasets_catalog(client)
+                candidates = health_candidates(report_summaries, dataset_summaries)
+                candidates_path = write_json(
+                    "health_candidates.json",
+                    {
+                        "collected_at": collected_at(),
+                        "record_count": len(candidates["reports"])
+                        + len(candidates["datasets"]),
+                        "records": candidates,
+                    },
+                )
+                print(
+                    f"{candidates_path}: "
+                    f"{len(candidates['reports'])} reports, "
+                    f"{len(candidates['datasets'])} datasets"
+                )
+                return 0 if reports_status == 0 and datasets_status == 0 else 1
         if args.reportsplus_command == "reports":
             result = client.list_reports()
             records = extract_records(result.data, preferred_keys=("reports", "data"))

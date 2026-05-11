@@ -77,6 +77,109 @@ def _field_value(record: dict[str, Any], field: str) -> Any:
     return None
 
 
+def summarize_reports(records: list[Any]) -> list[dict[str, Any]]:
+    summaries: list[dict[str, Any]] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        summary = {
+            "reportId": record.get("reportId"),
+            "reportName": record.get("reportName"),
+            "guid": record.get("guid"),
+            "tags": record.get("tags"),
+            "reportSource": record.get("reportSource"),
+            "isMetrics": record.get("isMetrics"),
+            "deployed": record.get("deployed"),
+            "viewable": record.get("viewable"),
+            "editable": record.get("editable"),
+            "has_content": bool(record.get("content")),
+            "packageId": record.get("packageId"),
+        }
+        summary["relevance"] = classify_relevance(record)
+        summaries.append(summary)
+    return summaries
+
+
+def summarize_datasets(records: list[Any]) -> list[dict[str, Any]]:
+    summaries: list[dict[str, Any]] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        operation = record.get("GetOperation")
+        if not isinstance(operation, dict):
+            operation = {}
+        fields = record.get("fields")
+        parameters = operation.get("parameters")
+        summary = {
+            "dataSetId": _field_value(record, "dataSetId"),
+            "dataSetName": _field_value(record, "dataSetName"),
+            "dataSetGuid": _field_value(record, "dataSetGuid") or record.get("guid"),
+            "endpoint": record.get("endpoint"),
+            "databaseName": record.get("databaseName"),
+            "field_count": len(fields) if isinstance(fields, list) else 0,
+            "parameter_count": len(parameters) if isinstance(parameters, list) else 0,
+            "has_sql_text": bool(operation.get("sqlText")),
+            "visibleToTenantAdmins": record.get("visibleToTenantAdmins"),
+            "builtIn": record.get("builtIn"),
+            "systemDataSet": record.get("systemDataSet"),
+            "hidden": record.get("hidden"),
+            "readOnly": record.get("readOnly"),
+            "description": record.get("description"),
+        }
+        summary["relevance"] = classify_relevance(record)
+        summaries.append(summary)
+    return summaries
+
+
+def health_candidates(
+    report_summaries: list[dict[str, Any]],
+    dataset_summaries: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "reports": [
+            item for item in report_summaries if item.get("relevance") != "Unknown"
+        ],
+        "datasets": [
+            item for item in dataset_summaries if item.get("relevance") != "Unknown"
+        ],
+    }
+
+
+def classify_relevance(value: Any) -> str:
+    text = _searchable_text(value)
+    rules = [
+        ("Storage", ("storage", "disk", "library", "capacity", "dedup", "ddb")),
+        ("Jobs", ("job", "backup", "restore", "aux copy", "failed")),
+        ("SLA", ("sla", "service level")),
+        ("Audit", ("audit", "event", "trail")),
+        ("Security", ("security", "permission", "user", "credential")),
+        ("Infrastructure", ("infrastructure", "commcell", "mediaagent", "index")),
+        ("Tenant", ("tenant", "company", "commcell group")),
+        ("Metrics", ("metric", "metrics")),
+    ]
+    for label, needles in rules:
+        if any(needle in text for needle in needles):
+            return label
+    return "Unknown"
+
+
+def _searchable_text(value: Any) -> str:
+    parts: list[str] = []
+    _collect_text(value, parts)
+    return " ".join(parts).lower()
+
+
+def _collect_text(value: Any, parts: list[str]) -> None:
+    if isinstance(value, dict):
+        for child in value.values():
+            _collect_text(child, parts)
+    elif isinstance(value, list):
+        for child in value:
+            _collect_text(child, parts)
+    elif value is not None:
+        parts.append(str(value))
+
+
 def filter_reports(
     records: list[Any],
     name: str | None = None,

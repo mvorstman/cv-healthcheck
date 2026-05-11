@@ -12,6 +12,14 @@
     <dd>{{ diagnostics.elapsed_ms if diagnostics.elapsed_ms is not none else "unknown" }} ms</dd>
     <dt>Records</dt>
     <dd>{{ diagnostics.record_count }}</dd>
+    <dt>Catalog</dt>
+    <dd>
+      {% if catalog_status.exists %}
+        {{ catalog_status.path }}{% if catalog_status.record_count is not none %} ({{ catalog_status.record_count }} records){% endif %}
+      {% else %}
+        not written
+      {% endif %}
+    </dd>
   </dl>
 
   {% if message %}
@@ -49,6 +57,10 @@
           <th>viewable</th>
           <th>editable</th>
           <th>isMetrics</th>
+          <th>relevance</th>
+          <th>has_content</th>
+          <th>reportSource</th>
+          <th>packageId</th>
         </tr>
       </thead>
       <tbody>
@@ -71,15 +83,21 @@
             <td>{{ report.get("viewable", "") }}</td>
             <td>{{ report.get("editable", "") }}</td>
             <td>{{ report.get("isMetrics", "") }}</td>
+            <td>{{ report.get("relevance", "") }}</td>
+            <td>{{ report.get("has_content", "") }}</td>
+            <td>{{ report.get("reportSource", "") }}</td>
+            <td>{{ report.get("packageId", "") }}</td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
   {% endif %}
 
-  {% if result and not result.ok %}
-    <h3>Raw Response</h3>
-    <pre>{{ formatted }}</pre>
+  {% if result %}
+    <details>
+      <summary>Raw JSON</summary>
+      <pre>{{ formatted }}</pre>
+    </details>
   {% endif %}
 </section>
 {% endblock %}
