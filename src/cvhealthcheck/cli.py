@@ -6,7 +6,7 @@ from typing import Any
 
 from .api_client import CommvaultApiClient
 from .output.json_report import to_pretty_json
-from .reportsplus.catalog import collected_at, write_catalog, write_json
+from .reportsplus.catalog import collected_at, read_json, write_catalog, write_json
 from .reportsplus.client import ReportsPlusClient
 from .reportsplus.inventory import (
     DATASET_SUMMARY_FIELDS,
@@ -18,6 +18,7 @@ from .reportsplus.inventory import (
     summarize_reports,
     summarize_records,
 )
+from .reportsplus.priority import prioritize_candidates, priority_summary
 
 
 def _parse_parameters(values: list[str] | None) -> dict[str, str]:
@@ -126,6 +127,75 @@ def _write_datasets_catalog(client: ReportsPlusClient) -> tuple[int, list[dict[s
     return 0, summaries
 
 
+def _read_records(name: str) -> list[dict[str, Any]]:
+    payload = read_json(name)
+    records = payload.get("records", [])
+    return records if isinstance(records, list) else []
+
+
+def _write_priority_catalog() -> int:
+    read_json("health_candidates.json")
+    report_summaries = _read_records("reports_summary.json")
+    dataset_summaries = _read_records("datasets_summary.json")
+    candidates = prioritize_candidates(report_summaries, dataset_summaries)
+    summary = priority_summary(candidates)
+    path = write_json(
+        "health_candidate_priority.json",
+        {
+            "collected_at": collected_at(),
+            "source_catalogs": [
+                "data/catalog/health_candidates.json",
+                "data/catalog/reports_summary.json",
+                "data/catalog/datasets_summary.json",
+            ],
+            "record_count": len(candidates),
+            "summary": summary,
+            "records": candidates,
+        },
+    )
+    print(f"{path}: {len(candidates)} records")
+    print(f"HIGH: {summary['HIGH']}  MEDIUM: {summary['MEDIUM']}  LOW: {summary['LOW']}")
+    for candidate in candidates[:10]:
+        print(
+            f"{candidate['priority']:6} "
+            f"{candidate['source_type']:7} "
+            f"{candidate['name']} -> {candidate['mapped_health_area']}"
+        )
+    return 0
+
+
+def _show_priority_catalog() -> int:
+    try:
+        payload = read_json("health_candidate_priority.json")
+    except FileNotFoundError:
+        print(
+            "data/catalog/health_candidate_priority.json is missing. "
+            "Run `cv-healthcheck reportsplus catalog prioritize` first.",
+            file=sys.stderr,
+        )
+        return 1
+    records = payload.get("records", [])
+    if not isinstance(records, list):
+        records = []
+    for priority in ("HIGH", "MEDIUM", "LOW"):
+        group = [record for record in records if record.get("priority") == priority]
+        if not group:
+            continue
+        print(f"\n{priority}")
+        _print_table(
+            group,
+            [
+                "source_type",
+                "name",
+                "id",
+                "guid",
+                "mapped_health_area",
+                "reason",
+            ],
+        )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="cv-healthcheck")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -154,6 +224,8 @@ def build_parser() -> argparse.ArgumentParser:
     catalog_subparsers.add_parser("reports")
     catalog_subparsers.add_parser("datasets")
     catalog_subparsers.add_parser("all")
+    catalog_subparsers.add_parser("prioritize")
+    catalog_subparsers.add_parser("show-priority")
 
     metadata_parser = reports_subparsers.add_parser("metadata")
     metadata_parser.add_argument("--dataset-guid", required=True)
@@ -209,6 +281,10 @@ def main(argv: list[str] | None = None) -> int:
                     f"{len(candidates['datasets'])} datasets"
                 )
                 return 0 if reports_status == 0 and datasets_status == 0 else 1
+            if args.catalog_command == "prioritize":
+                return _write_priority_catalog()
+            if args.catalog_command == "show-priority":
+                return _show_priority_catalog()
         if args.reportsplus_command == "reports":
             result = client.list_reports()
             records = extract_records(result.data, preferred_keys=("reports", "data"))

@@ -233,6 +233,21 @@ Raw catalog files contain:
 
 Summary files extract stable fields from the raw Reports Plus inventory and add a simple heuristic `relevance` tag such as `Storage`, `Jobs`, `SLA`, `Audit`, `Security`, `Infrastructure`, `Tenant`, `Metrics`, or `Unknown`. These tags are only discovery aids for future healthcheck design; they are not health rules.
 
+Prioritize local healthcheck candidates from generated catalog summaries:
+
+```bash
+cv-healthcheck reportsplus catalog prioritize
+cv-healthcheck reportsplus catalog show-priority
+```
+
+This writes:
+
+```text
+data/catalog/health_candidate_priority.json
+```
+
+Priority is heuristic and transparent. It favors SLA, failed or backup jobs, storage capacity, infrastructure utilization, readiness, MediaAgent/library/DDB signals, and audit/security candidates. It does not implement health rules.
+
 Generated catalog JSON files are local runtime artifacts and are not committed.
 
 ## CLI

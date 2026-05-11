@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h2>Reports Plus Health Candidates</h2>
+  <dl>
+    <dt>Catalog</dt>
+    <dd>
+      {% if catalog_status.exists %}
+        {{ catalog_status.path }}{% if catalog_status.record_count is not none %} ({{ catalog_status.record_count }} records){% endif %}
+      {% else %}
+        not written
+      {% endif %}
+    </dd>
+  </dl>
+
+  {% if message %}
+    <p class="notice">{{ message }}</p>
+  {% endif %}
+
+  {% for priority, candidates in grouped.items() %}
+    {% if candidates %}
+      <h3>{{ priority }}</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>source_type</th>
+            <th>name</th>
+            <th>relevance_tags</th>
+            <th>reason</th>
+            <th>mapped_health_area</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for candidate in candidates %}
+            <tr>
+              <td>{{ candidate.get("source_type", "") }}</td>
+              <td>{{ candidate.get("name", "") }}</td>
+              <td>{{ candidate.get("relevance_tags", [])|join(", ") }}</td>
+              <td>{{ candidate.get("reason", "") }}</td>
+              <td>{{ candidate.get("mapped_health_area", "") }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  {% endfor %}
+</section>
+{% endblock %}

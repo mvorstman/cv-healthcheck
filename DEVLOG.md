@@ -2,6 +2,9 @@
 
 ## 2026-05-11
 
+- Started Phase 2.2 Reports Plus catalog inspection and candidate prioritization.
+- Added local catalog prioritization that writes `health_candidate_priority.json` from generated report and dataset summaries.
+- Added CLI and Flask views for prioritized healthcheck candidates without implementing health rules.
 - Started Phase 2.1 Reports Plus catalog persistence and analysis.
 - Added catalog CLI commands for reports, datasets, and all inventory sources.
 - Added summary JSON generation for report and dataset catalogs plus heuristic health candidate discovery tags.

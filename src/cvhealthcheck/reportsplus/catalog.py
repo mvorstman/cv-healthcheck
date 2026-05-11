@@ -43,6 +43,11 @@ def write_json(name: str, payload: Any, catalog_dir: Path = CATALOG_DIR) -> Path
     return path
 
 
+def read_json(name: str, catalog_dir: Path = CATALOG_DIR) -> Any:
+    path = catalog_dir / name
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def catalog_path(name: str, catalog_dir: Path = CATALOG_DIR) -> Path:
     return catalog_dir / name
 

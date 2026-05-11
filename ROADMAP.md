@@ -34,6 +34,14 @@ Status: started.
 - Add lightweight heuristic relevance tags for future healthcheck candidate discovery.
 - Keep catalog persistence file-based; no database.
 
+## Phase 2.2: Catalog Inspection and Candidate Prioritization
+
+Status: started.
+
+- Prioritize local Reports Plus catalog candidates for future healthcheck coverage.
+- Map candidates to known API mapping subjects when confidence is reasonable.
+- Keep prioritization heuristic and adjustable; no health rules.
+
 ## Later Phases
 
 - Collector orchestration

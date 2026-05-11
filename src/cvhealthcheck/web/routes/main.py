@@ -5,7 +5,7 @@ from flask import Blueprint, render_template, request
 from cvhealthcheck.api_client import CommvaultApiClient
 from cvhealthcheck.config import load_settings
 from cvhealthcheck.output.json_report import to_pretty_json
-from cvhealthcheck.reportsplus.catalog import catalog_status, write_catalog
+from cvhealthcheck.reportsplus.catalog import catalog_status, read_json, write_catalog
 from cvhealthcheck.reportsplus.client import ReportsPlusClient
 from cvhealthcheck.reportsplus.inventory import (
     LOGIN_TOKEN_REQUIRED_MESSAGE,
@@ -154,6 +154,36 @@ def reportsplus_datasets():
         message=_inventory_message(result),
         datasets=summaries,
         formatted=to_pretty_json(result.data) if result.data is not None else result.text,
+    )
+
+
+@bp.route("/reportsplus/health-candidates")
+def reportsplus_health_candidates():
+    status = catalog_status("health_candidate_priority.json")
+    candidates = []
+    message = None
+    if status.get("exists"):
+        payload = read_json("health_candidate_priority.json")
+        records = payload.get("records", [])
+        candidates = records if isinstance(records, list) else []
+    else:
+        message = (
+            "Run `cv-healthcheck reportsplus catalog prioritize` "
+            "to generate health_candidate_priority.json."
+        )
+    grouped = {
+        priority: [
+            candidate
+            for candidate in candidates
+            if candidate.get("priority") == priority
+        ]
+        for priority in ("HIGH", "MEDIUM", "LOW")
+    }
+    return render_template(
+        "health_candidates.html",
+        catalog_status=status,
+        grouped=grouped,
+        message=message,
     )
 
 
