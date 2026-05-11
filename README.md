@@ -14,6 +14,13 @@ Initial focus:
 - Lightweight Flask exploration UI
 - CLI access to the same reusable service layer
 
+## Architecture Documents
+
+- [API_MAPPING.md](API_MAPPING.md) is the technical collection and source catalog. It tracks what data can be collected, where it comes from, required authentication and parameters, and whether the source is proven.
+- [HEALTHCHECK_MATRIX.md](HEALTHCHECK_MATRIX.md) is the health evaluation and rule catalog. It tracks the health questions, required collected data, evaluation rules, severities, and reporting categories.
+
+The API mapping feeds the collector capability layer. The health matrix consumes collected data and feeds the health rule engine, reports, and UI.
+
 ## Configuration
 
 Set the Commvault Command Center base URL:
@@ -85,4 +92,3 @@ Pages:
 - `/api/test`
 - `/reportsplus/dataset/<dataset_guid>`
 - `/reportsplus/data/<dataset_guid>`
-
