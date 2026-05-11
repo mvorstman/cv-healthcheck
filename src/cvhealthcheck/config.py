@@ -25,9 +25,9 @@ def project_root() -> Path:
 
 def load_settings() -> Settings:
     base_url = os.getenv("CV_BASE_URL", "").rstrip("/")
-    token_path = Path(os.getenv("CV_TOKEN_PATH", ".token"))
+    token_path = Path(os.getenv("CV_TOKEN_FILE") or os.getenv("CV_TOKEN_PATH", ".token"))
     verify_ssl = _as_bool(os.getenv("CV_VERIFY_SSL"), default=False)
-    timeout_seconds = float(os.getenv("CV_TIMEOUT_SECONDS", "30"))
+    timeout_seconds = float(os.getenv("CV_TIMEOUT") or os.getenv("CV_TIMEOUT_SECONDS", "30"))
 
     return Settings(
         base_url=base_url,
@@ -35,4 +35,3 @@ def load_settings() -> Settings:
         verify_ssl=verify_ssl,
         timeout_seconds=timeout_seconds,
     )
-

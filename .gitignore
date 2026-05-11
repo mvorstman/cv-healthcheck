@@ -10,5 +10,7 @@ dist/
 build/
 *.egg-info/
 .env
+.cv-healthcheck-env
 .token
-
+.refresh_token
+*.local
