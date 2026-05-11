@@ -349,7 +349,7 @@ Start the operational-style Flask UI:
 flask run --host="${CV_WEB_HOST}" --port="${CV_WEB_PORT}"
 ```
 
-Defaults are `CV_WEB_HOST=0.0.0.0`, `CV_WEB_PORT=5000`, and log level `INFO`. Override the host or port by exporting `CV_WEB_HOST` or `CV_WEB_PORT` before running the script.
+Defaults are `CV_WEB_HOST=0.0.0.0`, `CV_WEB_PORT=5001`, and log level `INFO`. Override the host or port by exporting `CV_WEB_HOST` or `CV_WEB_PORT` before running the script.
 
 For manual development, run the UI on port 5001. The `cv-topology` project may use port 5000, so cv-healthcheck can use 5001 during lab work:
 

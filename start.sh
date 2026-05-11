@@ -38,7 +38,7 @@ export FLASK_APP="cvhealthcheck.web.app"
 export FLASK_ENV="production"
 export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 export CV_WEB_HOST="${CV_WEB_HOST:-0.0.0.0}"
-export CV_WEB_PORT="${CV_WEB_PORT:-5000}"
+export CV_WEB_PORT="${CV_WEB_PORT:-5001}"
 
 # Start the app
 echo "[start] starting cv-healthcheck on ${CV_WEB_HOST}:${CV_WEB_PORT}..."
