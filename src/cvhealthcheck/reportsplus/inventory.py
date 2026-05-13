@@ -205,15 +205,33 @@ def filter_reports(
 
 
 def parse_content_field(report: Any) -> Any:
-    if not isinstance(report, dict) or "content" not in report:
+    if not isinstance(report, dict):
         return None
-    content = report.get("content")
-    if isinstance(content, str):
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            return content
-    return content
+    if "content" in report and report.get("content") not in (None, ""):
+        return _parse_json_value(report.get("content"))
+    if isinstance(report.get("pages"), list):
+        parsed_report = dict(report)
+        parsed_pages = []
+        for page in report["pages"]:
+            if not isinstance(page, dict):
+                parsed_pages.append(page)
+                continue
+            parsed_page = dict(page)
+            if "body" in parsed_page:
+                parsed_page["body"] = _parse_json_value(parsed_page["body"])
+            parsed_pages.append(parsed_page)
+        parsed_report["pages"] = parsed_pages
+        return parsed_report
+    return report
+
+
+def _parse_json_value(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return value
 
 
 def find_report_content_clues(content: Any) -> dict[str, list[Any]]:

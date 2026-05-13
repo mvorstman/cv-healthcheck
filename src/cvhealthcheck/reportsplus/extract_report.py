@@ -143,15 +143,16 @@ def discover_widgets(definition: Any) -> list[dict[str, Any]]:
     for path, node in _walk(definition):
         if not isinstance(node, dict) or not _looks_like_widget(node):
             continue
+        dataset_info = _dataset_info(node)
         widgets.append(
             {
                 "path": path,
-                "title": _first_string(node, ("title", "name", "displayName", "label")),
+                "title": _title_text(_first_key_value(node, ("title", "name", "displayName", "label"))),
                 "type": _first_string(node, ("type", "chartType", "widgetType", "componentType")),
-                "dataset_guid": _first_key_value(node, ("datasetGuid", "dataSetGuid", "guid")),
-                "dataset_id": _first_key_value(node, ("datasetId", "dataSetId")),
-                "dataset_name": _first_string(node, ("datasetName", "dataSetName")),
-                "selected_fields": _field_names(_first_key_value(node, ("fields", "columns", "selectedFields"))),
+                "dataset_guid": dataset_info.get("dataset_guid"),
+                "dataset_id": dataset_info.get("dataset_id"),
+                "dataset_name": dataset_info.get("dataset_name"),
+                "selected_fields": _component_fields(node),
                 "filters": _first_key_value(node, ("filters", "filter", "where")),
                 "sorting": _first_key_value(node, ("sort", "sorting", "orderBy", "orderby")),
                 "limit": _first_key_value(node, ("limit", "top", "rowLimit")),
@@ -165,12 +166,11 @@ def discover_dataset_references(definition: Any) -> list[dict[str, Any]]:
     for path, node in _walk(definition):
         if not isinstance(node, dict):
             continue
-        keys = {str(key).lower(): key for key in node}
-        has_dataset_key = any("dataset" in key for key in keys)
-        guid = _first_key_value(node, ("datasetGuid", "dataSetGuid", "guid"))
-        dataset_id = _first_key_value(node, ("datasetId", "dataSetId"))
-        dataset_name = _first_string(node, ("datasetName", "dataSetName"))
-        if not has_dataset_key and not guid and not dataset_id:
+        dataset_info = _dataset_info(node)
+        guid = dataset_info.get("dataset_guid")
+        dataset_id = dataset_info.get("dataset_id")
+        dataset_name = dataset_info.get("dataset_name")
+        if not guid and not dataset_id and not dataset_name:
             continue
         identity = str(guid or dataset_id or dataset_name or path)
         refs.setdefault(
@@ -180,7 +180,7 @@ def discover_dataset_references(definition: Any) -> list[dict[str, Any]]:
                 "dataset_guid": guid,
                 "dataset_id": dataset_id,
                 "dataset_name": dataset_name,
-                "selected_fields": _field_names(_first_key_value(node, ("fields", "columns", "selectedFields"))),
+                "selected_fields": _component_fields(node),
                 "filters": _first_key_value(node, ("filters", "filter", "where")),
                 "sorting": _first_key_value(node, ("sort", "sorting", "orderBy", "orderby")),
                 "limit": _first_key_value(node, ("limit", "top", "rowLimit")),
@@ -323,10 +323,15 @@ def _walk(value: Any, path: str = "$"):
 
 def _looks_like_widget(node: dict[str, Any]) -> bool:
     keys = {str(key).lower() for key in node}
-    widget_keys = {"widget", "chart", "section", "component", "visualization", "tile"}
-    if any(any(marker in key for marker in widget_keys) for key in keys):
+    if any(key in keys for key in {"charttype", "widgettype", "componenttype"}):
         return True
-    return any(key in keys for key in {"title", "displayname", "charttype", "widgettype"})
+    node_type = str(node.get("type", "")).lower()
+    if node_type in {"chart", "table", "grid", "metric", "tile", "component"}:
+        return True
+    return "title" in keys and any(
+        key in keys
+        for key in {"dataset", "datafield", "dimensiondatafield", "measuredatafield"}
+    )
 
 
 def _first_key_value(node: dict[str, Any], keys: tuple[str, ...]) -> Any:
@@ -357,13 +362,52 @@ def _field_names(value: Any) -> list[str]:
             if isinstance(item, str):
                 names.append(item)
             elif isinstance(item, dict):
-                candidate = _first_key_value(item, ("name", "field", "dataField", "fieldName", "label"))
+                candidate = _first_key_value(
+                    item,
+                    ("name", "field", "dataField", "fieldName", "column", "label"),
+                )
                 if candidate:
                     names.append(str(candidate))
         return names
     if isinstance(value, dict):
         return _field_names(list(value.values()))
     return []
+
+
+def _component_fields(node: dict[str, Any]) -> list[str]:
+    names: list[str] = []
+    for key in (
+        "fields",
+        "columns",
+        "selectedFields",
+        "dimensionDataField",
+        "measureDataField",
+    ):
+        _extend_unique(names, _field_names(_first_key_value(node, (key,))))
+    return names
+
+
+def _dataset_info(node: dict[str, Any]) -> dict[str, Any]:
+    nested = node.get("dataSet")
+    source = nested if isinstance(nested, dict) else node
+    dataset_guid = _first_key_value(source, ("datasetGuid", "dataSetGuid"))
+    if dataset_guid is None and (
+        _first_key_value(source, ("datasetId", "dataSetId"))
+        or _first_string(source, ("datasetName", "dataSetName"))
+    ):
+        dataset_guid = _first_key_value(source, ("guid",))
+    return {
+        "dataset_guid": dataset_guid,
+        "dataset_id": _first_key_value(source, ("datasetId", "dataSetId")),
+        "dataset_name": _first_string(source, ("datasetName", "dataSetName")),
+    }
+
+
+def _title_text(value: Any) -> str | None:
+    if isinstance(value, dict):
+        text = _first_key_value(value, ("text", "label", "name"))
+        return str(text) if text not in (None, "") else None
+    return str(value) if value not in (None, "") else None
 
 
 def _usage(source: dict[str, Any]) -> dict[str, Any]:

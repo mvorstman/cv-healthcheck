@@ -43,7 +43,7 @@ class ReportsPlusClient:
         return self._inventory_api_client().get(self.datasets_path)
 
     def get_dataset_metadata(self, dataset_guid: str) -> ApiResult:
-        return self.api_client.get(f"{self.datasets_path}/{dataset_guid}")
+        return self._inventory_api_client().get(f"{self.datasets_path}/{dataset_guid}")
 
     def get_dataset_data(
         self,
@@ -68,7 +68,7 @@ class ReportsPlusClient:
         if parameters:
             params.update(parameters)
 
-        return self.api_client.get(
+        return self._inventory_api_client().get(
             f"{self.datasets_path}/{dataset_guid}/data",
             params=params,
         )

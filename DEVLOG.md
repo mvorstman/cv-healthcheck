@@ -1,5 +1,12 @@
 # Development Log
 
+## 2026-05-13
+
+- Continued Report 318 live validation work on 2026-05-13: restarted `cv-healthcheck`, confirmed `/login` returns HTTP 200 locally, and confirmed unauthenticated `/reportsplus/report/318` redirects to `/login`.
+- Fresh lab validation is blocked because the configured Command Center host `192.168.182.129:4433` is unreachable from this environment (`No route to host` / connection failure), and local ignored env does not expose `CV_USERNAME`/`CV_PASSWORD` for noninteractive login.
+- Refined Report 318 parsing for the live response shape observed in local artifacts: report definitions can be stored in `pages[].body` JSON strings, and widgets/datasets reference nested `dataSet` objects rather than a direct top-level `content` field.
+- Updated Reports Plus dataset metadata and execution calls to use the same Login-issued/session token path as report inventory.
+
 ## 2026-05-11
 
 - Added focused Reports Plus extraction workflow for Report 318.
