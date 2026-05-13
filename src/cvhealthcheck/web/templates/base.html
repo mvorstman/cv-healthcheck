@@ -10,6 +10,7 @@
     <header>
       <h1>cv-healthcheck</h1>
       <nav>
+        <a href="{{ url_for('main.login') }}">Login</a>
         <a href="{{ url_for('main.index') }}">Status</a>
         <a href="{{ url_for('main.lab_readiness') }}">Lab Readiness</a>
         <a href="{{ url_for('main.api_test') }}">API Test</a>
@@ -17,6 +18,9 @@
         <a href="{{ url_for('main.reportsplus_datasets') }}">Datasets</a>
         <a href="{{ url_for('main.reportsplus_health_candidates') }}">Health Candidates</a>
         <a href="{{ url_for('main.reportsplus_execution_validation') }}">Execution Validation</a>
+        <form method="post" action="{{ url_for('main.logout') }}">
+          <button type="submit">Logout</button>
+        </form>
       </nav>
     </header>
     <main>

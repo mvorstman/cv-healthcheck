@@ -12,9 +12,9 @@ from .models import Indicator
 CATALOG_DIR = Path("data/catalog")
 
 
-def collect_indicators() -> dict[str, Indicator]:
+def collect_indicators(token: str | None = None) -> dict[str, Indicator]:
     indicators: dict[str, Indicator] = {}
-    api_ping = _api_ping_indicator()
+    api_ping = _api_ping_indicator(token=token)
     indicators["commserve_reachable"] = api_ping
     indicators["command_center_reachable"] = Indicator(
         "command_center_reachable",
@@ -22,7 +22,7 @@ def collect_indicators() -> dict[str, Indicator]:
         api_ping.status,
         api_ping.notes,
     )
-    indicators["reports_plus_reachable"] = _reports_plus_indicator()
+    indicators["reports_plus_reachable"] = _reports_plus_indicator(token=token)
 
     reports = _read_catalog("reports.json")
     datasets = _read_catalog("datasets.json")
@@ -56,8 +56,8 @@ def collect_indicators() -> dict[str, Indicator]:
     return indicators
 
 
-def _api_ping_indicator() -> Indicator:
-    result = CommvaultApiClient().ping()
+def _api_ping_indicator(token: str | None = None) -> Indicator:
+    result = CommvaultApiClient(token=token).ping()
     return Indicator(
         "commserve_reachable",
         bool(result.ok),
@@ -66,8 +66,8 @@ def _api_ping_indicator() -> Indicator:
     )
 
 
-def _reports_plus_indicator() -> Indicator:
-    result = ReportsPlusClient().list_reports()
+def _reports_plus_indicator(token: str | None = None) -> Indicator:
+    result = ReportsPlusClient(token=token).list_reports()
     return Indicator(
         "reports_plus_reachable",
         bool(result.ok),

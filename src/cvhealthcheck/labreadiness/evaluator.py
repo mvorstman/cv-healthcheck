@@ -12,8 +12,8 @@ from .models import Indicator, ReadinessState
 LABREADINESS_DIR = Path("data/labreadiness")
 
 
-def assess_lab_readiness(write: bool = True) -> dict[str, Any]:
-    indicators = collect_indicators()
+def assess_lab_readiness(write: bool = True, token: str | None = None) -> dict[str, Any]:
+    indicators = collect_indicators(token=token)
     state, reasoning, recommendations = evaluate(indicators)
     payload = {
         "timestamp": collected_at(),

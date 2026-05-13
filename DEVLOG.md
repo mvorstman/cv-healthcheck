@@ -2,6 +2,9 @@
 
 ## 2026-05-11
 
+- Added Flask login flow for Commvault authentication.
+- Token expiry handling now clears the session token and redirects users to login.
+- Kept Commvault login logic separated from Reports Plus report and dataset execution.
 - Started Phase 2.4 lab readiness baseline assessment.
 - Added readiness assessment output at `data/labreadiness/latest.json`.
 - Added `cv-healthcheck lab readiness`, JSON output mode, and `/lab-readiness` Flask view.

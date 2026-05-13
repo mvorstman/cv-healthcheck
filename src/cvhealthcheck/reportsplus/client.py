@@ -14,14 +14,18 @@ class ReportsPlusClient:
     def __init__(
         self,
         api_client: CommvaultApiClient | None = None,
+        token: str | None = None,
         reports_path: str = REPORTS_PATH,
         datasets_path: str = DATASETS_PATH,
     ) -> None:
-        self.api_client = api_client or CommvaultApiClient()
+        self.api_client = api_client or CommvaultApiClient(token=token)
+        self.token = token
         self.reports_path = reports_path
         self.datasets_path = datasets_path
 
     def _inventory_api_client(self) -> CommvaultApiClient:
+        if self.token:
+            return self.api_client
         login_token = load_login_token()
         if login_token:
             return CommvaultApiClient(settings=self.api_client.settings, token=login_token)

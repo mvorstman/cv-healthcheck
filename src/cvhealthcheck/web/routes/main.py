@@ -1,8 +1,19 @@
 from __future__ import annotations
 
-from flask import Blueprint, render_template, request
+from functools import wraps
+from typing import Callable, TypeVar
+
+from flask import Blueprint, redirect, render_template, request, url_for
 
 from cvhealthcheck.api_client import CommvaultApiClient
+from cvhealthcheck.auth import (
+    AuthError,
+    clear_current_token,
+    get_current_token,
+    is_authenticated,
+    login_to_commvault,
+    set_current_token,
+)
 from cvhealthcheck.config import load_settings
 from cvhealthcheck.labreadiness.evaluator import assess_lab_readiness
 from cvhealthcheck.output.json_report import to_pretty_json
@@ -20,6 +31,43 @@ from cvhealthcheck.reportsplus.inventory import (
 from cvhealthcheck.reportsplus.metadata import summarize_dataset_metadata
 
 bp = Blueprint("main", __name__)
+F = TypeVar("F", bound=Callable)
+
+
+def login_required(view: F) -> F:
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not is_authenticated():
+            return redirect(url_for("main.login", next=request.path))
+        return view(*args, **kwargs)
+
+    return wrapped  # type: ignore[return-value]
+
+
+def _current_token() -> str:
+    return get_current_token() or ""
+
+
+def _api_client() -> CommvaultApiClient:
+    return CommvaultApiClient(token=_current_token())
+
+
+def _reportsplus_client() -> ReportsPlusClient:
+    return ReportsPlusClient(token=_current_token())
+
+
+def _auth_failure_redirect(result):
+    if getattr(result, "status_code", None) == 401:
+        clear_current_token()
+        return redirect(url_for("main.login", next=request.path, expired="1"))
+    return None
+
+
+def _safe_next(default: str | None = None) -> str:
+    value = request.values.get("next", "")
+    if value.startswith("/") and not value.startswith("//"):
+        return value
+    return default or url_for("main.lab_readiness")
 
 
 def _parameters_from_form() -> dict[str, str]:
@@ -61,11 +109,50 @@ def _inventory_message(result) -> str | None:
     return None
 
 
+@bp.route("/login", methods=["GET", "POST"])
+def login():
+    settings = load_settings()
+    error = None
+    next_url = _safe_next()
+    if request.args.get("expired") == "1":
+        error = "Commvault token expired. Please sign in again."
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        next_url = _safe_next(next_url)
+        try:
+            token = login_to_commvault(settings.base_url, username, password)
+        except AuthError as exc:
+            error = str(exc)
+        else:
+            set_current_token(token)
+            return redirect(next_url or url_for("main.lab_readiness"))
+
+    return render_template(
+        "login.html",
+        error=error,
+        base_url=settings.base_url,
+        next_url=next_url,
+    )
+
+
+@bp.route("/logout", methods=["POST"])
+def logout():
+    clear_current_token()
+    return redirect(url_for("main.login"))
+
+
 @bp.route("/")
+@login_required
 def index():
     settings = load_settings()
-    client = CommvaultApiClient(settings=settings)
+    client = CommvaultApiClient(settings=settings, token=_current_token())
     ping = client.ping() if settings.base_url else None
+    if ping:
+        auth_redirect = _auth_failure_redirect(ping)
+        if auth_redirect:
+            return auth_redirect
     return render_template(
         "index.html",
         base_url=settings.base_url,
@@ -78,8 +165,15 @@ def index():
 
 
 @bp.route("/lab-readiness")
+@login_required
 def lab_readiness():
-    result = assess_lab_readiness(write=True)
+    result = assess_lab_readiness(write=True, token=_current_token())
+    indicators = result.get("indicators", {})
+    for name in ("commserve_reachable", "reports_plus_reachable"):
+        indicator = indicators.get(name, {})
+        if indicator.get("notes") == "HTTP 401":
+            clear_current_token()
+            return redirect(url_for("main.login", next=request.path, expired="1"))
     states = [
         "NOT_READY",
         "READY_FOR_DISCOVERY",
@@ -95,8 +189,12 @@ def lab_readiness():
 
 
 @bp.route("/api/test")
+@login_required
 def api_test():
-    result = CommvaultApiClient().ping()
+    result = _api_client().ping()
+    auth_redirect = _auth_failure_redirect(result)
+    if auth_redirect:
+        return auth_redirect
     running = "WebService is Running!" in result.text
     return render_template(
         "api_test.html",
@@ -107,9 +205,13 @@ def api_test():
 
 
 @bp.route("/reportsplus/reports")
+@login_required
 def reportsplus_reports():
-    client = ReportsPlusClient()
+    client = _reportsplus_client()
     result = client.list_reports()
+    auth_redirect = _auth_failure_redirect(result)
+    if auth_redirect:
+        return auth_redirect
     records = extract_records(result.data, preferred_keys=("reports", "data"))
     if result.ok:
         write_catalog("reports", client.reports_path, records)
@@ -140,8 +242,12 @@ def reportsplus_reports():
 
 
 @bp.route("/reportsplus/reports/<path:report_id_or_guid>")
+@login_required
 def reportsplus_report_detail(report_id_or_guid: str):
-    result = ReportsPlusClient().get_report(report_id_or_guid)
+    result = _reportsplus_client().get_report(report_id_or_guid)
+    auth_redirect = _auth_failure_redirect(result)
+    if auth_redirect:
+        return auth_redirect
     content = parse_content_field(result.data)
     clues = find_report_content_clues(content)
     return render_template(
@@ -157,9 +263,13 @@ def reportsplus_report_detail(report_id_or_guid: str):
 
 
 @bp.route("/reportsplus/datasets")
+@login_required
 def reportsplus_datasets():
-    client = ReportsPlusClient()
+    client = _reportsplus_client()
     result = client.list_datasets()
+    auth_redirect = _auth_failure_redirect(result)
+    if auth_redirect:
+        return auth_redirect
     records = extract_records(result.data, preferred_keys=("dataSet", "datasets", "data"))
     if result.ok:
         write_catalog("datasets", client.datasets_path, records)
@@ -239,8 +349,12 @@ def reportsplus_execution_validation():
 
 
 @bp.route("/reportsplus/dataset/<path:dataset_guid>")
+@login_required
 def reportsplus_dataset(dataset_guid: str):
-    result = ReportsPlusClient().get_dataset_metadata(dataset_guid)
+    result = _reportsplus_client().get_dataset_metadata(dataset_guid)
+    auth_redirect = _auth_failure_redirect(result)
+    if auth_redirect:
+        return auth_redirect
     summary = summarize_dataset_metadata(result.data)
     return render_template(
         "dataset.html",
@@ -252,6 +366,7 @@ def reportsplus_dataset(dataset_guid: str):
 
 
 @bp.route("/reportsplus/data/<path:dataset_guid>")
+@login_required
 def reportsplus_data(dataset_guid: str):
     fields = request.args.get("fields") or None
     orderby = request.args.get("orderby") or None
@@ -262,13 +377,16 @@ def reportsplus_data(dataset_guid: str):
     result = None
     rows = []
     if request.args:
-        result = ReportsPlusClient().get_dataset_data(
+        result = _reportsplus_client().get_dataset_data(
             dataset_guid=dataset_guid,
             fields=fields,
             orderby=orderby,
             limit=limit,
             parameters=parameters,
         )
+        auth_redirect = _auth_failure_redirect(result)
+        if auth_redirect:
+            return auth_redirect
         if isinstance(result.data, list):
             rows = result.data
         elif isinstance(result.data, dict):

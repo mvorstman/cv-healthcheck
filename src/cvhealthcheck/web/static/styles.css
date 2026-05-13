@@ -23,10 +23,24 @@ header h1 {
 nav {
   display: flex;
   gap: 1rem;
+  align-items: center;
 }
 
 nav a {
   color: #fff;
+}
+
+nav form {
+  display: block;
+  max-width: none;
+  margin: 0;
+}
+
+nav button {
+  background: transparent;
+  color: #fff;
+  padding: 0;
+  text-decoration: underline;
 }
 
 main {
@@ -118,5 +132,13 @@ th {
   border-radius: 4px;
   background: #fff8e5;
   color: #3f2d00;
+  padding: 0.75rem;
+}
+
+.error {
+  border: 1px solid #c2410c;
+  border-radius: 4px;
+  background: #fff1ed;
+  color: #7c2d12;
   padding: 0.75rem;
 }
