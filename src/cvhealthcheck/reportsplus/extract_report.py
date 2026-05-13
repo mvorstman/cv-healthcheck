@@ -522,7 +522,17 @@ def _result_payload(result: Any) -> dict[str, Any]:
 
 def _report_name(data: Any) -> str | None:
     if isinstance(data, dict):
-        value = data.get("reportName") or data.get("name")
+        nested_report = data.get("report")
+        if isinstance(nested_report, dict):
+            value = nested_report.get("customReportName") or nested_report.get("reportName")
+            if value:
+                return str(value)
+        value = (
+            data.get("reportName")
+            or data.get("customReportName")
+            or data.get("userReportId")
+            or data.get("name")
+        )
         return str(value) if value else None
     return None
 

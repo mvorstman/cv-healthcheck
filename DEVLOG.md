@@ -2,8 +2,13 @@
 
 ## 2026-05-13
 
-- Continued Report 318 live validation work on 2026-05-13: restarted `cv-healthcheck`, confirmed `/login` returns HTTP 200 locally, and confirmed unauthenticated `/reportsplus/report/318` redirects to `/login`.
-- Fresh lab validation is blocked because the configured Command Center host `192.168.182.129:4433` is unreachable from this environment (`No route to host` / connection failure), and local ignored env does not expose `CV_USERNAME`/`CV_PASSWORD` for noninteractive login.
+- Completed live Report 318 validation after GW02 network reachability was restored.
+- Confirmed Command Center `/commandcenter/api` returns HTTP 200 from dev, Flask `/login` returns HTTP 200 locally, Flask login redirects to `/reportsplus/report/318`, and the Report 318 extraction page renders HTTP 200.
+- Confirmed `/commandcenter/api/cr/reportsplusengine/reports/318` returns HTTP 200 with a Login-issued Authtoken and identifies Report 318 as `Growth and Trends`.
+- Confirmed Report 318 extraction discovers 24 widgets and 30 backing datasets, fetches dataset metadata for the discovered datasets, and executes all 30 backing datasets with HTTP 200 where default/no parameters allow.
+- Confirmed local ignored artifacts are populated for Report 318 metadata, definition, dataset map, execution summary, and 30 raw dataset execution outputs under `data/catalog/reportsplus/`.
+- Normalized Report 318 summary naming for live responses that expose the report title through the nested `report.customReportName` shape.
+- Earlier 2026-05-13 validation was blocked by temporary GW02 reachability failure; validation was rerun successfully after static lab networking was restored.
 - Refined Report 318 parsing for the live response shape observed in local artifacts: report definitions can be stored in `pages[].body` JSON strings, and widgets/datasets reference nested `dataSet` objects rather than a direct top-level `content` field.
 - Updated Reports Plus dataset metadata and execution calls to use the same Login-issued/session token path as report inventory.
 
