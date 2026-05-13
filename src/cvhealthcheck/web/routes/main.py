@@ -16,6 +16,12 @@ from cvhealthcheck.auth import (
 )
 from cvhealthcheck.config import load_settings
 from cvhealthcheck.labreadiness.evaluator import assess_lab_readiness
+from cvhealthcheck.metrics import (
+    get_capacity_license_usage,
+    get_client_count_history,
+    get_client_growth_details,
+    get_client_growth_summary,
+)
 from cvhealthcheck.output.json_report import to_pretty_json
 from cvhealthcheck.reportsplus.catalog import catalog_status, read_json, write_catalog
 from cvhealthcheck.reportsplus.client import ReportsPlusClient
@@ -376,6 +382,38 @@ def reportsplus_execution_validation():
         grouped=grouped,
         summary=summary,
         message=message,
+    )
+
+
+@bp.route("/metrics/client-count")
+def metrics_client_count():
+    metric = get_client_count_history(live=False)
+    return render_template(
+        "metric_detail.html",
+        title="Client Count",
+        metrics=[metric],
+    )
+
+
+@bp.route("/metrics/client-growth")
+def metrics_client_growth():
+    return render_template(
+        "metric_detail.html",
+        title="Client Growth",
+        metrics=[
+            get_client_growth_summary(live=False),
+            get_client_growth_details(live=False),
+        ],
+    )
+
+
+@bp.route("/metrics/capacity-license")
+def metrics_capacity_license():
+    metric = get_capacity_license_usage(live=False)
+    return render_template(
+        "metric_detail.html",
+        title="Capacity License Usage",
+        metrics=[metric],
     )
 
 

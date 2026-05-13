@@ -2,6 +2,10 @@
 
 ## 2026-05-13
 
+- Added focused metric extraction pipelines for the four high-value Report 318 datasets: Client Count, Client Growth Summary, Capacity License Usage, and ClientGrowthDetails.
+- Added normalized local metric artifacts under `data/catalog/metrics/` with source report/dataset/widget metadata, extraction timestamps, record counts, history ranges, and stable metric-oriented records.
+- Added `/metrics/client-count`, `/metrics/client-growth`, and `/metrics/capacity-license` pages that display focused metric acquisition results from the local ignored artifacts.
+- Kept the focused metric layer limited to acquisition and normalization; no health findings, scores, recommendations, or good/bad interpretation were added.
 - Added normalized Report 318 metric inventory generation from the live extraction artifacts.
 - Created `data/catalog/reportsplus/report_318_metric_inventory.json` with 30 classified datasets, returned columns, record counts, sample values, time ranges where visible, usefulness labels, and operational questions.
 - Added `/reportsplus/report/318/metrics` to review the normalized metric inventory without introducing health findings or scoring.
