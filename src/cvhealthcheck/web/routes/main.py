@@ -19,6 +19,7 @@ from cvhealthcheck.labreadiness.evaluator import assess_lab_readiness
 from cvhealthcheck.output.json_report import to_pretty_json
 from cvhealthcheck.reportsplus.catalog import catalog_status, read_json, write_catalog
 from cvhealthcheck.reportsplus.client import ReportsPlusClient
+from cvhealthcheck.reportsplus.extract_report import extract_report
 from cvhealthcheck.reportsplus.inventory import (
     LOGIN_TOKEN_REQUIRED_MESSAGE,
     extract_records,
@@ -259,6 +260,25 @@ def reportsplus_report_detail(report_id_or_guid: str):
         clues=clues,
         formatted=to_pretty_json(result.data) if result.data is not None else result.text,
         formatted_content=to_pretty_json(content) if content is not None else "",
+    )
+
+
+@bp.route("/reportsplus/report/<report_id>")
+@login_required
+def reportsplus_report_extract(report_id: str):
+    extraction = extract_report(
+        report_id,
+        client=_reportsplus_client(),
+        execute=request.args.get("execute", "1") != "0",
+    )
+    report_status = extraction.get("summary", {}).get("report_http_status")
+    if report_status == 401:
+        clear_current_token()
+        return redirect(url_for("main.login", next=request.path, expired="1"))
+    return render_template(
+        "report_extract.html",
+        extraction=extraction,
+        report_id=report_id,
     )
 
 

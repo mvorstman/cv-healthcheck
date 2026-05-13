@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h2>Reports Plus Report {{ report_id }} Extraction</h2>
+  {% set summary = extraction.summary %}
+  <dl>
+    <dt>Report name</dt>
+    <dd>{{ summary.report_name or "unknown" }}</dd>
+    <dt>Report status</dt>
+    <dd>{{ summary.report_http_status }}{% if summary.report_ok %} OK{% endif %}</dd>
+    <dt>Widgets</dt>
+    <dd>{{ summary.widget_count }}</dd>
+    <dt>Datasets</dt>
+    <dd>{{ summary.dataset_count }}</dd>
+    <dt>Executions</dt>
+    <dd>{{ summary.executions_ok }} / {{ summary.execution_count }} executable</dd>
+  </dl>
+
+  <h3>Artifacts</h3>
+  <ul>
+    {% for name, path in extraction.artifacts.items() %}
+      <li>{{ name }}: <code>{{ path }}</code></li>
+    {% endfor %}
+  </ul>
+
+  <h3>Widgets and Sections</h3>
+  {% if extraction.widgets %}
+    <table>
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Type</th>
+          <th>Dataset GUID</th>
+          <th>Dataset ID</th>
+          <th>Selected fields</th>
+          <th>Path</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for widget in extraction.widgets %}
+          <tr>
+            <td>{{ widget.title or "" }}</td>
+            <td>{{ widget.type or "" }}</td>
+            <td>{{ widget.dataset_guid or "" }}</td>
+            <td>{{ widget.dataset_id or "" }}</td>
+            <td>{{ (widget.selected_fields or []) | join(", ") }}</td>
+            <td><code>{{ widget.path }}</code></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="notice">No widgets or sections were discovered in the report definition.</p>
+  {% endif %}
+
+  <h3>Dataset Map</h3>
+  {% if extraction.datasets %}
+    <table>
+      <thead>
+        <tr>
+          <th>Dataset</th>
+          <th>GUID</th>
+          <th>Required parameters</th>
+          <th>Default parameters</th>
+          <th>Available fields</th>
+          <th>Selected fields</th>
+          <th>Endpoint</th>
+          <th>Metadata</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for dataset in extraction.datasets %}
+          <tr>
+            <td>{{ dataset.dataset_name or dataset.dataset_id or "" }}</td>
+            <td>{{ dataset.dataset_guid or "" }}</td>
+            <td>{{ (dataset.required_parameters or []) | join(", ") }}</td>
+            <td><pre>{{ dataset.default_parameters }}</pre></td>
+            <td>{{ (dataset.available_fields or []) | join(", ") }}</td>
+            <td>{{ (dataset.selected_fields or []) | join(", ") }}</td>
+            <td><code>{{ dataset.execution_endpoint or "" }}</code></td>
+            <td>{{ dataset.metadata_status }} {{ dataset.metadata_http_status or "" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="notice">No backing datasets were discovered. Refresh the report extraction after login with a valid Reports Plus token.</p>
+  {% endif %}
+
+  <h3>Execution Status and Samples</h3>
+  {% if extraction.executions %}
+    {% for execution in extraction.executions %}
+      <h4>{{ execution.dataset_name or execution.dataset_guid }}</h4>
+      <dl>
+        <dt>Status</dt>
+        <dd>{{ execution.status }}</dd>
+        <dt>HTTP status</dt>
+        <dd>{{ execution.http_status or "not attempted" }}</dd>
+        <dt>Rows</dt>
+        <dd>{{ execution.record_count }}</dd>
+        <dt>Raw artifact</dt>
+        <dd><code>{{ execution.raw_artifact or "" }}</code></dd>
+        {% if execution.error %}
+          <dt>Error</dt>
+          <dd>{{ execution.error }}</dd>
+        {% endif %}
+      </dl>
+      {% if execution.sample_rows %}
+        {% set columns = execution.sample_rows[0].keys() | list %}
+        <table>
+          <thead>
+            <tr>
+              {% for column in columns %}
+                <th>{{ column }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in execution.sample_rows %}
+              <tr>
+                {% for column in columns %}
+                  <td>{{ row.get(column, "") }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    {% endfor %}
+  {% else %}
+    <p class="notice">No dataset executions were attempted.</p>
+  {% endif %}
+</section>
+{% endblock %}

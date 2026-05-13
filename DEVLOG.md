@@ -2,6 +2,10 @@
 
 ## 2026-05-11
 
+- Added focused Reports Plus extraction workflow for Report 318.
+- Added local Report 318 artifacts for metadata, definition, dataset mapping, execution summary, and raw dataset execution results under `data/catalog/reportsplus/`.
+- Added `/reportsplus/report/318` inspection page for report metadata, widgets, dataset mappings, execution status, sample rows, and artifact paths.
+- Documented Report 318 backend endpoints and extraction artifacts in `API_MAPPING.md`.
 - Added Flask login flow for Commvault authentication.
 - Token expiry handling now clears the session token and redirects users to login.
 - Kept Commvault login logic separated from Reports Plus report and dataset execution.
