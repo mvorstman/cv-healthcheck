@@ -2,6 +2,12 @@
 
 ## 2026-05-13
 
+- Added normalized Report 318 metric inventory generation from the live extraction artifacts.
+- Created `data/catalog/reportsplus/report_318_metric_inventory.json` with 30 classified datasets, returned columns, record counts, sample values, time ranges where visible, usefulness labels, and operational questions.
+- Added `/reportsplus/report/318/metrics` to review the normalized metric inventory without introducing health findings or scoring.
+- Classified the Report 318 datasets as 10 capacity/growth, 3 client growth, 6 deduplication/compression, 5 storage usage, and 6 low-value/unclear selector-style datasets.
+- Notable useful metrics include client count and client growth monthly history from May 2025 through May 2026, capacity license usage over the same period, and client growth detail rollups.
+- Low-value or unclear datasets are input/selector sources such as entity-name and library-name datasets that executed but did not expose standalone operational measurements in the lab sample.
 - Completed live Report 318 validation after GW02 network reachability was restored.
 - Confirmed Command Center `/commandcenter/api` returns HTTP 200 from dev, Flask `/login` returns HTTP 200 locally, Flask login redirects to `/reportsplus/report/318`, and the Report 318 extraction page renders HTTP 200.
 - Confirmed `/commandcenter/api/cr/reportsplusengine/reports/318` returns HTTP 200 with a Login-issued Authtoken and identifies Report 318 as `Growth and Trends`.

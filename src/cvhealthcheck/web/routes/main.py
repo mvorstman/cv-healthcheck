@@ -29,6 +29,7 @@ from cvhealthcheck.reportsplus.inventory import (
     summarize_datasets,
     summarize_reports,
 )
+from cvhealthcheck.reportsplus.metric_inventory import build_report_metric_inventory
 from cvhealthcheck.reportsplus.metadata import summarize_dataset_metadata
 
 bp = Blueprint("main", __name__)
@@ -278,6 +279,16 @@ def reportsplus_report_extract(report_id: str):
     return render_template(
         "report_extract.html",
         extraction=extraction,
+        report_id=report_id,
+    )
+
+
+@bp.route("/reportsplus/report/<report_id>/metrics")
+def reportsplus_report_metrics(report_id: str):
+    inventory = build_report_metric_inventory(report_id)
+    return render_template(
+        "report_metrics.html",
+        inventory=inventory,
         report_id=report_id,
     )
 

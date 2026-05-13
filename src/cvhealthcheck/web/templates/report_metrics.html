@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h2>Report {{ report_id }} Metric Inventory</h2>
+  <dl>
+    <dt>Report name</dt>
+    <dd>{{ inventory.report_name or "unknown" }}</dd>
+    <dt>Datasets classified</dt>
+    <dd>{{ inventory.dataset_count }}</dd>
+    <dt>Collected</dt>
+    <dd>{{ inventory.collected_at }}</dd>
+  </dl>
+
+  <h3>Categories</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Category</th>
+        <th>Datasets</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for category, count in inventory.categories.items() %}
+        <tr>
+          <td>{{ category }}</td>
+          <td>{{ count }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3>Metrics</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Dataset</th>
+        <th>ID</th>
+        <th>Category</th>
+        <th>Usefulness</th>
+        <th>Rows</th>
+        <th>Columns</th>
+        <th>Time range</th>
+        <th>Question</th>
+        <th>Widget / section</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for metric in inventory.metrics %}
+        <tr>
+          <td>{{ metric.dataset_name }}</td>
+          <td>{{ metric.dataset_id }}</td>
+          <td>{{ metric.category }}</td>
+          <td>{{ metric.healthcheck_usefulness }}</td>
+          <td>{{ metric.record_count }}</td>
+          <td>{{ (metric.returned_columns or []) | join(", ") }}</td>
+          <td>
+            {% if metric.time_range %}
+              {{ metric.time_range.start }} to {{ metric.time_range.end }}
+              via {{ metric.time_range.column }}
+            {% endif %}
+          </td>
+          <td>{{ metric.operational_question }}</td>
+          <td>
+            {% for section in metric.widget_sections[:3] %}
+              <div>{{ section.title or section.path }}</div>
+            {% endfor %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
