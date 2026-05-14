@@ -57,6 +57,7 @@ http://127.0.0.1:5001/quick-hc/commcell
 
 ## Architecture Documents
 
+- [DATA_SOURCE_MAPPING.md](DATA_SOURCE_MAPPING.md) is the operating-mode source strategy. It documents which datasource should be used per healthcheck subject across Quick HC, Daily Reporting, and Full Healthcheck, including REST, Reports Plus / Metrics, and import/manual fallbacks.
 - [API_MAPPING.md](API_MAPPING.md) is the technical collection and source catalog. It tracks what data can be collected, where it comes from, required authentication and parameters, and whether the source is proven.
 - [HEALTHCHECK_MATRIX.md](HEALTHCHECK_MATRIX.md) is the health evaluation and rule catalog. It tracks the health questions, required collected data, evaluation rules, severities, and reporting categories.
 
