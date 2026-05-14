@@ -132,6 +132,27 @@ Characteristics:
 * low operational impact
 * focused on major operational risks
 
+Current UI direction:
+
+* Keep navigation simple: Login / Logout, Quick HC, Development
+* Quick HC is the customer-facing healthcheck output area
+* Development is the raw/debug/API/report exploration area
+* Do not add broad Dashboard / Admin / Data Sources navigation unless explicitly requested
+
+Current Quick HC items include:
+
+* CommCell Identity / Version
+* Client Growth and Capacity License metric pages
+* Security Assessment from Reports Plus report 336
+
+Security Assessment:
+
+* Source report: 336 / Security Assessment
+* Normalized artifact: data/catalog/reportsplus/report_336_security_assessment_normalized.json
+* Sections: Access Security, Auditing, Platform Security, Company and Owners Security, Capabilities, Hardening
+* Current artifact summary: 32 total checks, 2 Critical, 0 Warning, 18 Info, 12 Good
+* Checklist normalization lives in src/cvhealthcheck/reportsplus/checklist.py
+
 FULL HEALTHCHECK
 
 Primary sources:
@@ -172,6 +193,14 @@ Important:
 * dataset execution validation is required
 
 Private Metrics servers are expected to become major long-term data sources.
+
+METRIC VISUALIZATION
+
+Historical metric pages should use the reusable Chart.js payload pattern:
+
+route -> server-side chart payload -> metric_detail.html -> Chart.js render
+
+Future historical metrics should reuse this pattern instead of adding page-specific JavaScript.
 
 COLLECTION STRATEGY
 
@@ -218,6 +247,13 @@ Before health-rule development:
 * generate alerts/failures
 * create realistic storage usage
 * generate SLA trends
+
+PROJECT BOUNDARY
+
+cv-topology is a frozen reference/prototype platform. Do not refactor,
+reorganize, modernize, or redesign cv-topology unless explicitly requested.
+It may be inspected for Commvault API, topology, compliance, Flask, UI, and
+database patterns, but active development should stay in cv-healthcheck.
 
 ENGINEERING RULES
 

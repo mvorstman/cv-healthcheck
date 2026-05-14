@@ -4,6 +4,8 @@ Automated Commvault HealthCheck and analytics exploration tooling.
 
 This project is standalone. It does not import from or integrate with `cv-topology`.
 
+`cv-topology` is now treated as a frozen reference/prototype platform. It can be inspected for Commvault API, Flask, UI, database, topology, and compliance patterns, but active development should happen in this repository.
+
 ## Scope
 
 Initial focus:
@@ -28,7 +30,21 @@ The central cv-healthcheck/reporting platform must not assume direct access to c
 
 ## Quick HC Foundation
 
-Quick HC is the fast, read-only, API-first path for low-impact operational collection. Phase 3.0 starts with CommCell Identity / Version from:
+Quick HC is the fast, read-only path for customer-facing healthcheck output. The Flask UI intentionally stays simple:
+
+- Login / Logout
+- Quick HC
+- Development
+
+Quick HC contains finished or useful healthcheck items. Development contains raw/debug/API/report exploration pages, including lab readiness, Reports Plus inventory, report extraction, dataset execution, and validation views.
+
+Current Quick HC items:
+
+- CommCell Identity / Version from REST.
+- Client Growth and Capacity License metric pages from Reports Plus / Metrics artifacts.
+- Security Assessment from Reports Plus report 336.
+
+Phase 3.0 started with CommCell Identity / Version from:
 
 ```text
 GET /commandcenter/api/CommServ
@@ -53,7 +69,61 @@ Flask UI:
 ```text
 http://127.0.0.1:5001/quick-hc
 http://127.0.0.1:5001/quick-hc/commcell
+http://127.0.0.1:5001/quick-hc/security-assessment
 ```
+
+## Reports Plus Security Assessment
+
+Security Assessment is integrated from Reports Plus report 336.
+
+Endpoint pattern:
+
+```text
+/commandcenter/api/cr/reportsplusengine/reports/336
+/commandcenter/api/cr/reportsplusengine/datasets/<guid>
+/commandcenter/api/cr/reportsplusengine/datasets/<guid>/data
+```
+
+The normalized local artifact is:
+
+```text
+data/catalog/reportsplus/report_336_security_assessment_normalized.json
+```
+
+Discovered sections:
+
+- Access Security
+- Auditing
+- Platform Security
+- Company and Owners Security
+- Capabilities
+- Hardening
+
+The reusable checklist normalizer lives in `src/cvhealthcheck/reportsplus/checklist.py`. It normalizes status values, strips unsafe HTML from remarks, extracts safe action links, and groups checks for Quick HC display.
+
+Current artifact summary:
+
+- Total checks: 32
+- Critical: 2
+- Warning: 0
+- Info: 18
+- Good: 12
+
+Development/debug page:
+
+```text
+http://127.0.0.1:5001/reportsplus/security-assessment
+```
+
+## Metric Charts
+
+Historical metric pages use Chart.js through a reusable server-side payload pattern:
+
+```text
+route -> server-side chart payload -> metric_detail.html -> Chart.js render
+```
+
+`/metrics/client-growth` renders a mixed chart with a line for total clients and bars for monthly additions/removals. Future historical metrics should reuse this pattern by passing chart payloads into `metric_detail.html`; do not add page-specific JavaScript unless the shared pattern is insufficient.
 
 ## Architecture Documents
 
@@ -143,6 +213,17 @@ test -n "$CV_TOKEN_FILE" && test -f "$CV_TOKEN_FILE" && ls -l "$CV_TOKEN_FILE"
 ```
 
 Authentication currently uses the `Authtoken` header for known Reports Plus and API ping tests. The existing `cv-topology` project uses `Authorization: Bearer`; cv-healthcheck is structured so a future auth-header option can be added if needed.
+
+A shared login helper exists outside this repository:
+
+```bash
+export CV_BASE_URL="https://example:4433"
+export CV_USERNAME="admin"
+export CV_PASSWORD_B64="$(printf '%s' 'password' | base64 -w 0)"
+source ~/dev/scripts/cv-env.sh
+```
+
+This retrieves a fresh `CV_TOKEN` into the current shell and does not print the token.
 
 Verify API connectivity:
 

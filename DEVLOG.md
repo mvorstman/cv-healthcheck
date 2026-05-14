@@ -1,5 +1,22 @@
 # Development Log
 
+## 2026-05-15
+
+- Kept the Flask navigation intentionally simple: Login / Logout, Quick HC, and Development.
+- Clarified the product split: Quick HC is customer-facing healthcheck output; Development is for raw/debug/API/report exploration, validation, lab readiness, and report/dataset inspection.
+- Added the Chart.js metric visualization pattern for historical metrics. Routes build server-side chart payloads, `metric_detail.html` renders them, and Chart.js is loaded only when chart data is present.
+- Added a Client Growth mixed chart with total clients as a line and monthly additions/removals as bars.
+- Extended the reusable chart approach to current historical metric pages: Client Count, Client Growth, and Capacity License Usage.
+- Added Reports Plus Security Assessment extraction for report 336 using the existing report extraction pattern.
+- Security Assessment endpoint pattern: `/commandcenter/api/cr/reportsplusengine/reports/336`, `/commandcenter/api/cr/reportsplusengine/datasets/<guid>`, and `/commandcenter/api/cr/reportsplusengine/datasets/<guid>/data`.
+- Added normalized Security Assessment artifact output at `data/catalog/reportsplus/report_336_security_assessment_normalized.json`.
+- Discovered six Security Assessment datasets: Access Security, Auditing, Platform Security, Company and Owners Security, Capabilities, and Hardening.
+- Added reusable checklist-style normalization in `src/cvhealthcheck/reportsplus/checklist.py`.
+- Added `/reportsplus/security-assessment` as the Development/debug view for report 336.
+- Added Security Assessment to Quick HC with `/quick-hc/security-assessment`.
+- Current Security Assessment artifact summary: 32 total checks, 2 Critical, 0 Warning, 18 Info, and 12 Good.
+- Confirmed `cv-topology` is reference-only. It should not be refactored or modernized as part of active cv-healthcheck work.
+
 ## 2026-05-14
 
 - Started Phase 3.0 Quick HC Foundation.
