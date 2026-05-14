@@ -74,6 +74,17 @@ Status: started.
 - Expose readiness through `cv-healthcheck lab readiness`, `cv-healthcheck lab readiness --json`, and `/lab-readiness`.
 - Keep readiness file-based and credential-free; no database and no health rules.
 
+## Phase 3.0: Quick HC Foundation
+
+Status: started.
+
+- Add a Quick HC section to the Flask UI.
+- Keep Quick HC fast, read-only, low impact, and API-first.
+- Implement reusable Quick HC collectors outside Flask route handlers.
+- Persist latest REST collection artifacts under `data/catalog/rest/`.
+- First subject: CommCell Identity / Version from `GET /commandcenter/api/CommServ`.
+- Normalize CommCell identity fields for later rule-engine consumption without adding health scoring.
+
 ## Later Phases
 
 - Collector orchestration

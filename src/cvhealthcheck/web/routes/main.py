@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import wraps
+from pathlib import Path
 from typing import Callable, TypeVar
 
 from flask import Blueprint, redirect, render_template, request, url_for
@@ -23,6 +24,7 @@ from cvhealthcheck.metrics import (
     get_client_growth_summary,
 )
 from cvhealthcheck.output.json_report import to_pretty_json
+from cvhealthcheck.quickhc import get_commcell_identity
 from cvhealthcheck.reportsplus.catalog import catalog_status, read_json, write_catalog
 from cvhealthcheck.reportsplus.client import ReportsPlusClient
 from cvhealthcheck.reportsplus.extract_report import extract_report
@@ -209,6 +211,33 @@ def api_test():
         result=result,
         running=running,
         formatted=to_pretty_json(result.data) if result.data is not None else result.text,
+    )
+
+
+@bp.route("/quick-hc")
+def quick_hc():
+    return render_template(
+        "quick_hc.html",
+        commcell_status=catalog_status("commserv.json", catalog_dir=Path("data/catalog/rest")),
+    )
+
+
+@bp.route("/quick-hc/commcell")
+def quick_hc_commcell():
+    if is_authenticated():
+        result = get_commcell_identity(token=_current_token())
+    else:
+        try:
+            result = read_json("commserv.json", catalog_dir=Path("data/catalog/rest"))
+        except FileNotFoundError:
+            return redirect(url_for("main.login", next=request.path))
+    if result.get("http_status") == 401:
+        clear_current_token()
+        return redirect(url_for("main.login", next=request.path, expired="1"))
+    return render_template(
+        "quick_hc_commcell.html",
+        result=result,
+        formatted=to_pretty_json(result),
     )
 
 

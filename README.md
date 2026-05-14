@@ -26,6 +26,35 @@ Private Metrics / Reports Plus servers are a primary strategic trend and reporti
 
 The central cv-healthcheck/reporting platform must not assume direct access to customer CommServe systems. The expected real-world model is central analysis over accessible Metrics / Reports Plus data plus customer-side REST collectors that gather live configuration/state and upload structured snapshots or evidence artifacts, potentially through S3. S3 is planned as a transport and evidence store; S3 collection code is not implemented yet.
 
+## Quick HC Foundation
+
+Quick HC is the fast, read-only, API-first path for low-impact operational collection. Phase 3.0 starts with CommCell Identity / Version from:
+
+```text
+GET /commandcenter/api/CommServ
+```
+
+The collector normalizes `hostName`, `csGUID`, `csVersionInfo`, `releaseId`, `osType`, and `timeZone`, then writes the latest local artifact:
+
+```text
+data/catalog/rest/commserv.json
+```
+
+CLI:
+
+```bash
+source venv/bin/activate
+source ~/.cv-healthcheck-env
+cv-healthcheck quickhc commcell
+```
+
+Flask UI:
+
+```text
+http://127.0.0.1:5001/quick-hc
+http://127.0.0.1:5001/quick-hc/commcell
+```
+
 ## Architecture Documents
 
 - [API_MAPPING.md](API_MAPPING.md) is the technical collection and source catalog. It tracks what data can be collected, where it comes from, required authentication and parameters, and whether the source is proven.

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h2>Quick HC</h2>
+  <p>Quick HealthCheck is the fast, read-only acquisition path for low-impact operational checks.</p>
+
+  <h3>Subjects</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Subject</th>
+        <th>Source</th>
+        <th>Latest artifact</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a href="{{ url_for('main.quick_hc_commcell') }}">CommCell Identity / Version</a></td>
+        <td><code>GET /commandcenter/api/CommServ</code></td>
+        <td><code>{{ commcell_status.path }}</code></td>
+        <td>
+          {% if commcell_status.exists %}
+            collected {{ commcell_status.collected_at or "unknown" }}
+          {% else %}
+            not collected
+          {% endif %}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+{% endblock %}

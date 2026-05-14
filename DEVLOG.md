@@ -2,6 +2,13 @@
 
 ## 2026-05-14
 
+- Started Phase 3.0 Quick HC Foundation.
+- Added reusable Quick HC CommCell Identity / Version collector for `GET /commandcenter/api/CommServ`.
+- Added normalized REST artifact output at `data/catalog/rest/commserv.json`.
+- Added `cv-healthcheck quickhc commcell`.
+- Added Flask Quick HC pages at `/quick-hc` and `/quick-hc/commcell`.
+- Live validated `/commandcenter/api/CommServ` with a Login-issued Authtoken: HTTP 200 returned `hostName`, nested `csGUID`, `csVersionInfo`, `releaseId`, `osType`, and `timeZone`.
+- Kept Quick HC read-only and acquisition-only; no health scoring, health rules, SQL, database, or S3 code was added.
 - Added `PROMPT.txt` as a durable project and AI guidance handover for future sessions.
 - Clarified the strategic operating model around Daily Reporting, Quick HealthCheck, and Full HealthCheck modes.
 - Clarified Reports Plus / private Metrics as a primary strategic trend and reporting source.

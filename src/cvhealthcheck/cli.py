@@ -7,6 +7,7 @@ from typing import Any
 from .api_client import CommvaultApiClient
 from .labreadiness.evaluator import assess_lab_readiness
 from .output.json_report import to_pretty_json
+from .quickhc import get_commcell_identity
 from .reportsplus.catalog import collected_at, read_json, write_catalog, write_json
 from .reportsplus.client import ReportsPlusClient
 from .reportsplus.inventory import (
@@ -346,6 +347,13 @@ def build_parser() -> argparse.ArgumentParser:
     readiness_parser = lab_subparsers.add_parser("readiness")
     readiness_parser.add_argument("--json", action="store_true")
 
+    quickhc_parser = subparsers.add_parser("quickhc")
+    quickhc_subparsers = quickhc_parser.add_subparsers(
+        dest="quickhc_command",
+        required=True,
+    )
+    quickhc_subparsers.add_parser("commcell")
+
     return parser
 
 
@@ -364,6 +372,11 @@ def main(argv: list[str] | None = None) -> int:
         else:
             _print_lab_readiness(result)
         return 0
+
+    if args.command == "quickhc" and args.quickhc_command == "commcell":
+        result = get_commcell_identity()
+        print(to_pretty_json(result))
+        return 0 if result.get("ok") else 1
 
     if args.command == "reportsplus":
         client = ReportsPlusClient()
