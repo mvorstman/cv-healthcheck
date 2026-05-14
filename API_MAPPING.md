@@ -11,9 +11,90 @@ Status values:
 - `UNKNOWN`: research required
 - `FALLBACK_ONLY`: usable only when preferred sources are unavailable
 
-## Mapping Notes
+## Source Strategy
 
-API mappings describe source capabilities, not fixed health rules. Exact report IDs, dataset IDs, and dataset GUIDs may vary by environment, so collectors should prefer semantic report/dataset names, report composition mapping, and stable field structures where possible. Private Metrics / Reports Plus servers are expected to be primary long-term reporting and trend sources, while customer-side REST collectors and uploaded artifacts may provide environment-specific state where central CommServe reachability is not available.
+API mappings describe source capabilities, not fixed health rules.
+
+### Preferred Collection Order
+
+Collection should prefer the most stable and supported acquisition methods first.
+
+Preferred order:
+
+1. REST APIs
+2. Reports Plus / Metrics datasets
+3. Existing reports
+4. Uploaded exports/artifacts
+5. SQL only as last resort
+
+Rationale:
+
+- REST APIs are the preferred authoritative operational source.
+- Reports Plus / Metrics is the preferred historical and trend-analysis source.
+- Existing reports may expose already-validated operational datasets.
+- Uploaded artifacts and snapshots allow disconnected/offline analysis.
+- SQL should only be used when no supported API/report source exists.
+
+Important architectural notes:
+
+- dataset GUIDs may vary between environments
+- report IDs may vary between environments
+- semantic report names are more stable than IDs
+- field structures are often more stable than GUID references
+- report composition mapping is important
+- dataset execution validation is required
+- private Metrics / Reports Plus servers are expected to become primary long-term reporting sources
+
+The central reporting platform must NOT assume direct access to customer CommServe systems.
+
+Expected long-term operating model:
+
+- customer-side collectors gather operational data
+- Metrics / Reports Plus provides trend and historical visibility
+- uploaded snapshots/artifacts may be transported through S3
+- analysis and reporting may happen centrally
+
+### Source Capability Matrix
+
+| Subject | Preferred Source | Details | Fallback |
+| --- | --- | --- | --- |
+| CommCell identity/version | REST API | CommCell / system / environment endpoints | OS / registry / install files |
+| License status | REST API / Report | Licensing report/dataset | Command Center export |
+| Clients | REST API | Client list / client details | Report dataset |
+| Client groups | REST API | Client group endpoints | SQL/custom report |
+| Agents installed | REST API | Client properties / agent list | Report dataset |
+| Failed jobs | REST API | Job controller / job history | Reports API |
+| Running jobs | REST API | Active jobs endpoint | Metrics |
+| Job SLA | Reports API | SLA / Job summary datasets | Custom report |
+| Long-running jobs | REST API / Metrics | Job list filtered by duration | Custom report |
+| Alerts | REST API | Alert details / alert list | Metrics / report |
+| Events | REST API | Event viewer endpoints | Custom report |
+| MediaAgents | REST API | MediaAgent list/details | OS access for service checks |
+| MediaAgent status | REST API | MediaAgent endpoints | Metrics |
+| Libraries | REST API | Library / library details | OS/storage access |
+| Disk libraries | REST API | Library details / mount paths | OS filesystem |
+| Cloud libraries | REST API | Cloud library / storage pool details | S3/object API |
+| Storage pools | REST API | Storage pool list/details | Reports API |
+| Capacity/free space | REST API | Storage pool details: capacity/free/status | OS/storage API |
+| Deduplication DB | REST API / Reports | DDB/storage pool details, DDB jobs | OS access |
+| Storage policies | REST API | Storage policy endpoints | Reports API |
+| Storage policy copies | REST API | Copy details / copy size | Reports API |
+| Retention | REST API | Storage pool / storage policy copy details | Report/custom report |
+| Auxiliary copy | REST API / Reports | Aux copy jobs/status | Report dataset |
+| Data aging | REST API / Reports | Data aging jobs/events | Report dataset |
+| Index Servers | REST API / Reports | Server/client role inventory | OS/service check |
+| Index health | Metrics / Reports | Indexing related metrics/reports | OS access |
+| CommServe DR backup | REST API / Reports | DR backup jobs/alerts | OS filesystem |
+| Schedules | REST API | Schedule policy/list endpoints | Report dataset |
+| Plans | REST API | Plan list/details | Report dataset |
+| Companies / tenants | REST API | Company endpoints | Report dataset |
+| Users / security | REST API | User/group/security endpoints | Export/report |
+| Credential Manager | REST API / Workflow | Credential metadata only where exposed | Workflow/custom report |
+| Network topology | REST API limited / SQL/custom report | Firewall topology custom report | SQL last resort |
+| Web Server health | REST API / Metrics | API reachability, service metrics | OS service check |
+| Command Center health | REST API / Metrics | Login/API probe, metrics | OS service check |
+| Metrics reporting | Metrics / Reports API | Metrics datasets / reportsplusengine | OS only if unavailable |
+| Custom report data | Reports API | reportsplusengine dataset execution | Manual export |
 
 | Subject | Source Type | Endpoint / Dataset | Method | Auth | Parameters | Status | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
