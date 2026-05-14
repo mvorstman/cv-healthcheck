@@ -28,6 +28,34 @@
           {% endif %}
         </td>
       </tr>
+      <tr>
+        <td><a href="{{ url_for('main.metrics_client_growth') }}">Client Growth</a></td>
+        <td>Reports Plus / Metrics</td>
+        <td>Report 318 extraction artifacts</td>
+        <td>available when extracted</td>
+      </tr>
+      <tr>
+        <td><a href="{{ url_for('main.metrics_capacity_license') }}">Capacity License</a></td>
+        <td>Reports Plus / Metrics</td>
+        <td>Report 318 extraction artifacts</td>
+        <td>available when extracted</td>
+      </tr>
+      <tr>
+        <td><a href="{{ url_for('main.quick_hc_security_assessment') }}">Security Assessment</a></td>
+        <td>Reports Plus / Metrics report 336</td>
+        <td><code>{{ security_assessment.path }}</code></td>
+        <td>
+          {% if security_assessment.exists and security_assessment.summary %}
+            {% set counters = security_assessment.summary.counters %}
+            {{ counters["Critical"] }} critical,
+            {{ counters["Warning"] }} warning,
+            {{ counters["Info"] }} info,
+            {{ counters["Good"] }} good
+          {% else %}
+            not collected
+          {% endif %}
+        </td>
+      </tr>
     </tbody>
   </table>
 </section>

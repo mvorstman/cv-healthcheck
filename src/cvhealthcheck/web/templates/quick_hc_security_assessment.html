@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h2>Security Assessment</h2>
+  <p>Customer-facing summary of Commvault Security Assessment report checks.</p>
+
+  {% if not assessment.exists or not assessment.summary %}
+    <p class="notice">
+      No Security Assessment artifact is available yet. Use the Development page
+      to refresh report 336 from Reports Plus.
+    </p>
+    <p><a href="{{ url_for('main.reportsplus_security_assessment') }}">Open Development view</a></p>
+  {% else %}
+    {% set summary = assessment.summary %}
+    {% set counters = summary.counters %}
+
+    <dl>
+      <dt>Collected</dt>
+      <dd>{{ assessment.collected_at or "unknown" }}</dd>
+      <dt>Source</dt>
+      <dd>{{ assessment.source.report_name or "Security Assessment" }} / report {{ assessment.source.report_id or "336" }}</dd>
+      <dt>Artifact</dt>
+      <dd><code>{{ assessment.path }}</code></dd>
+    </dl>
+
+    <div class="status-summary">
+      <div class="status-card status-critical">
+        <strong>{{ counters["Critical"] }}</strong>
+        <span>Critical</span>
+      </div>
+      <div class="status-card status-warning">
+        <strong>{{ counters["Warning"] }}</strong>
+        <span>Warning</span>
+      </div>
+      <div class="status-card status-info">
+        <strong>{{ counters["Info"] }}</strong>
+        <span>Info</span>
+      </div>
+      <div class="status-card status-good">
+        <strong>{{ counters["Good"] }}</strong>
+        <span>Good</span>
+      </div>
+      <div class="status-card">
+        <strong>{{ counters["Total checks"] }}</strong>
+        <span>Total checks</span>
+      </div>
+    </div>
+
+    <h3>Items Requiring Attention</h3>
+    {% if summary.highlights %}
+      <table>
+        <thead>
+          <tr>
+            <th>Section</th>
+            <th>Parameter</th>
+            <th>Status</th>
+            <th>Remarks</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for check in summary.highlights %}
+            <tr>
+              <td>{{ check.section }}</td>
+              <td>{{ check.parameter }}</td>
+              <td><span class="badge badge-{{ check.status|lower }}">{{ check.status }}</span></td>
+              <td>{{ check.remarks }}</td>
+              <td>
+                {% if check.action %}
+                  <a href="{{ check.action.href }}" rel="noopener noreferrer" target="_blank">{{ check.action.label }}</a>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="notice">No Critical or Warning items were found.</p>
+    {% endif %}
+
+    <h3>Detailed Checks</h3>
+    {% for section in summary.sections %}
+      <h4>{{ section.name }}</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>Parameter</th>
+            <th>Status</th>
+            <th>Remarks</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for check in section.checks %}
+            <tr>
+              <td>{{ check.parameter }}</td>
+              <td><span class="badge badge-{{ check.status|lower }}">{{ check.status }}</span></td>
+              <td>{{ check.remarks }}</td>
+              <td>
+                {% if check.action %}
+                  <a href="{{ check.action.href }}" rel="noopener noreferrer" target="_blank">{{ check.action.label }}</a>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endfor %}
+  {% endif %}
+</section>
+{% endblock %}

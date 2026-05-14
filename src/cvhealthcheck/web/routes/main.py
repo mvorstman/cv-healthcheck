@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import wraps
 from pathlib import Path
-from typing import Callable, TypeVar
+from typing import Any, Callable, TypeVar
 
 from flask import Blueprint, redirect, render_template, request, url_for
 
@@ -39,6 +39,12 @@ from cvhealthcheck.reportsplus.inventory import (
 )
 from cvhealthcheck.reportsplus.metric_inventory import build_report_metric_inventory
 from cvhealthcheck.reportsplus.metadata import summarize_dataset_metadata
+from cvhealthcheck.reportsplus.security_assessment import (
+    extract_security_assessment,
+    load_security_assessment_artifact,
+    security_assessment_quick_hc,
+    security_assessment_status,
+)
 
 bp = Blueprint("main", __name__)
 F = TypeVar("F", bound=Callable)
@@ -119,6 +125,263 @@ def _inventory_message(result) -> str | None:
     return None
 
 
+def _month_records(metric: dict[str, Any]) -> list[dict[str, Any]]:
+    return sorted(
+        [
+            record
+            for record in metric.get("records", [])
+            if isinstance(record, dict) and record.get("month")
+        ],
+        key=lambda record: str(record.get("month", "")),
+    )
+
+
+def _number_or_none(value: Any, *, allow_negative: bool = True) -> int | float | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, (int, float)):
+        if not allow_negative and value < 0:
+            return None
+        return value
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not allow_negative and number < 0:
+        return None
+    return number
+
+
+def _client_count_chart(metric: dict[str, Any]) -> dict[str, Any] | None:
+    records = _month_records(metric)
+    if not records:
+        return None
+
+    return {
+        "canvas_id": "client-count-chart",
+        "type": "line",
+        "title": "Client Count History",
+        "subtitle": "Total protected clients by month.",
+        "labels": [record.get("month") for record in records],
+        "datasets": [
+            {
+                "type": "line",
+                "label": "Total clients",
+                "data": [
+                    _number_or_none(record.get("total_clients")) or 0
+                    for record in records
+                ],
+                "borderColor": "rgb(15, 118, 110)",
+                "backgroundColor": "rgba(15, 118, 110, 0.12)",
+                "borderWidth": 2,
+                "pointRadius": 3,
+                "tension": 0.25,
+                "fill": True,
+                "yAxisID": "clients",
+            }
+        ],
+        "x_label": "Month",
+        "scales": {
+            "clients": {
+                "beginAtZero": True,
+                "position": "left",
+                "title": {"display": True, "text": "Total clients"},
+            }
+        },
+    }
+
+
+def _client_growth_chart(metric: dict[str, Any]) -> dict[str, Any] | None:
+    records = _month_records(metric)
+    if not records:
+        return None
+
+    removed_values = [_number_or_none(record.get("removed")) or 0 for record in records]
+    datasets = [
+        {
+            "type": "bar",
+            "label": "Added",
+            "data": [_number_or_none(record.get("added")) or 0 for record in records],
+            "backgroundColor": "rgba(37, 99, 235, 0.35)",
+            "borderColor": "rgb(37, 99, 235)",
+            "borderWidth": 1,
+            "order": 2,
+            "yAxisID": "yActivity",
+        },
+        {
+            "type": "line",
+            "label": "Total clients",
+            "data": [
+                _number_or_none(record.get("total_clients")) or 0
+                for record in records
+            ],
+            "borderColor": "rgb(15, 118, 110)",
+            "backgroundColor": "rgba(15, 118, 110, 0.12)",
+            "borderWidth": 2,
+            "pointRadius": 3,
+            "tension": 0.25,
+            "fill": False,
+            "order": 1,
+            "yAxisID": "yTotal",
+        },
+    ]
+    if any(value for value in removed_values):
+        datasets.insert(
+            1,
+            {
+                "type": "bar",
+                "label": "Removed",
+                "data": removed_values,
+                "backgroundColor": "rgba(220, 38, 38, 0.25)",
+                "borderColor": "rgb(220, 38, 38)",
+                "borderWidth": 1,
+                "order": 2,
+                "yAxisID": "yActivity",
+            },
+        )
+
+    return {
+        "canvas_id": "client-growth-chart",
+        "type": "bar",
+        "title": "Client Growth History",
+        "subtitle": "Total clients over time with monthly additions and removals.",
+        "labels": [record.get("month") for record in records],
+        "datasets": datasets,
+        "x_label": "Month",
+        "scales": {
+            "yTotal": {
+                "beginAtZero": True,
+                "position": "left",
+                "title": {"display": True, "text": "Total clients"},
+            },
+            "yActivity": {
+                "beginAtZero": True,
+                "position": "right",
+                "grid": {"drawOnChartArea": False},
+                "title": {"display": True, "text": "Added / removed clients"},
+            },
+        },
+    }
+
+
+def _capacity_license_chart(metric: dict[str, Any]) -> dict[str, Any] | None:
+    records = _month_records(metric)
+    if not records:
+        return None
+
+    return {
+        "canvas_id": "capacity-license-chart",
+        "type": "line",
+        "title": "Capacity License Usage History",
+        "subtitle": "Used and purchased capacity by month.",
+        "labels": [record.get("month") for record in records],
+        "datasets": [
+            {
+                "type": "line",
+                "label": "Used capacity",
+                "data": [
+                    _number_or_none(record.get("used_capacity"), allow_negative=False)
+                    for record in records
+                ],
+                "borderColor": "rgb(37, 99, 235)",
+                "backgroundColor": "rgba(37, 99, 235, 0.12)",
+                "borderWidth": 2,
+                "pointRadius": 3,
+                "tension": 0.25,
+                "spanGaps": True,
+                "yAxisID": "capacity",
+            },
+            {
+                "type": "line",
+                "label": "Purchased capacity",
+                "data": [
+                    _number_or_none(
+                        record.get("purchased_capacity"),
+                        allow_negative=False,
+                    )
+                    for record in records
+                ],
+                "borderColor": "rgb(15, 118, 110)",
+                "backgroundColor": "rgba(15, 118, 110, 0.12)",
+                "borderWidth": 2,
+                "borderDash": [6, 4],
+                "pointRadius": 3,
+                "tension": 0.25,
+                "spanGaps": True,
+                "yAxisID": "capacity",
+            },
+        ],
+        "x_label": "Month",
+        "scales": {
+            "capacity": {
+                "beginAtZero": True,
+                "position": "left",
+                "title": {"display": True, "text": "Capacity"},
+            }
+        },
+    }
+
+
+def _client_growth_detail_chart(metric: dict[str, Any]) -> dict[str, Any] | None:
+    records = [
+        record
+        for record in metric.get("records", [])
+        if isinstance(record, dict) and isinstance(record.get("monthly_counts"), dict)
+    ]
+    months = sorted(
+        {
+            month
+            for record in records
+            for month in record.get("monthly_counts", {})
+            if month
+        }
+    )
+    if not records or not months:
+        return None
+
+    colors = [
+        "rgb(37, 99, 235)",
+        "rgb(15, 118, 110)",
+        "rgb(124, 58, 237)",
+        "rgb(217, 119, 6)",
+    ]
+    datasets = []
+    for index, record in enumerate(records):
+        counts = record.get("monthly_counts", {})
+        color = colors[index % len(colors)]
+        label = record.get("commcell_name") or record.get("data_source") or "CommCell"
+        datasets.append(
+            {
+                "type": "line",
+                "label": label,
+                "data": [_number_or_none(counts.get(month)) or 0 for month in months],
+                "borderColor": color,
+                "backgroundColor": "rgba(37, 99, 235, 0.08)",
+                "borderWidth": 2,
+                "pointRadius": 3,
+                "tension": 0.25,
+                "yAxisID": "clients",
+            }
+        )
+
+    return {
+        "canvas_id": "client-growth-detail-chart",
+        "type": "line",
+        "title": "Client Growth Detail",
+        "subtitle": "Client count history by CommCell.",
+        "labels": months,
+        "datasets": datasets,
+        "x_label": "Month",
+        "scales": {
+            "clients": {
+                "beginAtZero": True,
+                "position": "left",
+                "title": {"display": True, "text": "Clients"},
+            }
+        },
+    }
+
+
 @bp.route("/login", methods=["GET", "POST"])
 def login():
     settings = load_settings()
@@ -174,6 +437,11 @@ def index():
     )
 
 
+@bp.route("/development")
+def development():
+    return render_template("development.html")
+
+
 @bp.route("/lab-readiness")
 @login_required
 def lab_readiness():
@@ -219,6 +487,7 @@ def quick_hc():
     return render_template(
         "quick_hc.html",
         commcell_status=catalog_status("commserv.json", catalog_dir=Path("data/catalog/rest")),
+        security_assessment=security_assessment_quick_hc(),
     )
 
 
@@ -238,6 +507,14 @@ def quick_hc_commcell():
         "quick_hc_commcell.html",
         result=result,
         formatted=to_pretty_json(result),
+    )
+
+
+@bp.route("/quick-hc/security-assessment")
+def quick_hc_security_assessment():
+    return render_template(
+        "quick_hc_security_assessment.html",
+        assessment=security_assessment_quick_hc(),
     )
 
 
@@ -325,6 +602,38 @@ def reportsplus_report_metrics(report_id: str):
         "report_metrics.html",
         inventory=inventory,
         report_id=report_id,
+    )
+
+
+@bp.route("/reportsplus/security-assessment")
+def reportsplus_security_assessment():
+    message = None
+    result = None
+    if is_authenticated() and request.args.get("refresh") == "1":
+        result = extract_security_assessment(
+            client=_reportsplus_client(),
+            execute=request.args.get("execute", "1") != "0",
+        )
+        report_status = result["normalized"].get("source", {}).get("http_status")
+        if report_status == 401:
+            clear_current_token()
+            return redirect(url_for("main.login", next=request.path, expired="1"))
+        normalized = result["normalized"]
+    else:
+        try:
+            normalized = load_security_assessment_artifact()
+        except FileNotFoundError:
+            normalized = None
+            message = (
+                "No Security Assessment artifact exists yet. Log in and use "
+                "`?refresh=1` to discover report 336."
+            )
+    return render_template(
+        "security_assessment.html",
+        normalized=normalized,
+        status=security_assessment_status(),
+        extraction=result["extraction"] if result else None,
+        message=message,
     )
 
 
@@ -421,18 +730,27 @@ def metrics_client_count():
         "metric_detail.html",
         title="Client Count",
         metrics=[metric],
+        chart=_client_count_chart(metric),
     )
 
 
 @bp.route("/metrics/client-growth")
 def metrics_client_growth():
+    summary = get_client_growth_summary(live=False)
+    details = get_client_growth_details(live=False)
+    charts = [
+        chart
+        for chart in (
+            _client_growth_chart(summary),
+            _client_growth_detail_chart(details),
+        )
+        if chart
+    ]
     return render_template(
         "metric_detail.html",
         title="Client Growth",
-        metrics=[
-            get_client_growth_summary(live=False),
-            get_client_growth_details(live=False),
-        ],
+        metrics=[summary, details],
+        charts=charts,
     )
 
 
@@ -443,6 +761,7 @@ def metrics_capacity_license():
         "metric_detail.html",
         title="Capacity License Usage",
         metrics=[metric],
+        chart=_capacity_license_chart(metric),
     )
 
 
