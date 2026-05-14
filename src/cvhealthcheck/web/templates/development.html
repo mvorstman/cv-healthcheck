@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h2>Development</h2>
+  <p>Working area for lab, API, Reports Plus, dataset, validation, and raw exploration pages.</p>
+
+  <h3>Environment</h3>
+  <ul>
+    <li><a href="{{ url_for('main.index') }}">Status</a></li>
+    <li><a href="{{ url_for('main.lab_readiness') }}">Lab Readiness</a></li>
+    <li><a href="{{ url_for('main.api_test') }}">API Test</a></li>
+  </ul>
+
+  <h3>Reports Plus / Metrics</h3>
+  <ul>
+    <li><a href="{{ url_for('main.reportsplus_reports') }}">Reports</a></li>
+    <li><a href="{{ url_for('main.reportsplus_report_extract', report_id='318') }}">Report 318</a></li>
+    <li><a href="{{ url_for('main.reportsplus_report_metrics', report_id='318') }}">Report 318 Metrics</a></li>
+    <li><a href="{{ url_for('main.reportsplus_security_assessment') }}">Security Assessment</a></li>
+    <li><a href="{{ url_for('main.reportsplus_datasets') }}">Datasets</a></li>
+    <li><a href="{{ url_for('main.reportsplus_health_candidates') }}">Health Candidates</a></li>
+    <li><a href="{{ url_for('main.reportsplus_execution_validation') }}">Execution Validation</a></li>
+  </ul>
+
+  <h3>Metric Details</h3>
+  <ul>
+    <li><a href="{{ url_for('main.metrics_client_count') }}">Client Count</a></li>
+    <li><a href="{{ url_for('main.metrics_client_growth') }}">Client Growth</a></li>
+    <li><a href="{{ url_for('main.metrics_capacity_license') }}">Capacity License</a></li>
+  </ul>
+</section>
+{% endblock %}

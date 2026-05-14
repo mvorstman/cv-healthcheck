@@ -4,6 +4,17 @@
 <section>
   <h2>{{ title }}</h2>
 
+  {% set chart_list = charts if charts is defined else ([chart] if chart else []) %}
+  {% for chart in chart_list %}
+    <div class="chart-panel">
+      <h3>{{ chart.title }}</h3>
+      <p>{{ chart.subtitle }}</p>
+      <div class="chart-frame">
+        <canvas id="{{ chart.canvas_id }}" aria-label="{{ chart.title }}" role="img"></canvas>
+      </div>
+    </div>
+  {% endfor %}
+
   {% for metric in metrics %}
     <h3>{{ metric.source.dataset_name }}</h3>
     <dl>
@@ -58,4 +69,53 @@
     {% endif %}
   {% endfor %}
 </section>
+{% endblock %}
+
+{% block scripts %}
+  {% set chart_list = charts if charts is defined else ([chart] if chart else []) %}
+  {% if chart_list %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+      const chartPayloads = {{ chart_list | tojson }};
+      for (const chartPayload of chartPayloads) {
+        const chartContext = document.getElementById(chartPayload.canvas_id);
+        if (!chartContext) {
+          continue;
+        }
+        const scales = Object.assign({
+          x: {
+            title: {
+              display: true,
+              text: chartPayload.x_label
+            }
+          }
+        }, chartPayload.scales || {});
+        new Chart(chartContext, {
+          type: chartPayload.type || "line",
+          data: {
+            labels: chartPayload.labels,
+            datasets: chartPayload.datasets
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              mode: "index",
+              intersect: false
+            },
+            plugins: {
+              legend: {
+                position: "top"
+              },
+              title: {
+                display: true,
+                text: chartPayload.title
+              }
+            },
+            scales: scales
+          }
+        });
+      }
+    </script>
+  {% endif %}
 {% endblock %}

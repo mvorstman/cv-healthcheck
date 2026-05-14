@@ -11,25 +11,16 @@
       <h1>cv-healthcheck</h1>
       <nav>
         <a href="{{ url_for('main.login') }}">Login</a>
-        <a href="{{ url_for('main.index') }}">Status</a>
-        <a href="{{ url_for('main.lab_readiness') }}">Lab Readiness</a>
-        <a href="{{ url_for('main.quick_hc') }}">Quick HC</a>
-        <a href="{{ url_for('main.api_test') }}">API Test</a>
-        <a href="{{ url_for('main.reportsplus_reports') }}">Reports</a>
-        <a href="{{ url_for('main.reportsplus_report_extract', report_id='318') }}">Report 318</a>
-        <a href="{{ url_for('main.reportsplus_report_metrics', report_id='318') }}">Report 318 Metrics</a>
-        <a href="{{ url_for('main.metrics_client_growth') }}">Client Growth</a>
-        <a href="{{ url_for('main.metrics_capacity_license') }}">Capacity License</a>
-        <a href="{{ url_for('main.reportsplus_datasets') }}">Datasets</a>
-        <a href="{{ url_for('main.reportsplus_health_candidates') }}">Health Candidates</a>
-        <a href="{{ url_for('main.reportsplus_execution_validation') }}">Execution Validation</a>
         <form method="post" action="{{ url_for('main.logout') }}">
           <button type="submit">Logout</button>
         </form>
+        <a href="{{ url_for('main.quick_hc') }}">Quick HC</a>
+        <a href="{{ url_for('main.development') }}">Development</a>
       </nav>
     </header>
     <main>
       {% block content %}{% endblock %}
     </main>
+    {% block scripts %}{% endblock %}
   </body>
 </html>

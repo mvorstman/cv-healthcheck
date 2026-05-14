@@ -21,6 +21,7 @@ from .reportsplus.inventory import (
     summarize_records,
 )
 from .reportsplus.priority import prioritize_candidates, priority_summary
+from .reportsplus.security_assessment import extract_security_assessment
 from .reportsplus.validation import validate_candidates, validation_summary
 
 
@@ -342,6 +343,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Dataset parameter as key=value. Can be repeated.",
     )
 
+    security_parser = reports_subparsers.add_parser("security-assessment")
+    security_parser.add_argument("--no-execute", action="store_true")
+    security_parser.add_argument("--sample-limit", type=int, default=50)
+
     lab_parser = subparsers.add_parser("lab")
     lab_subparsers = lab_parser.add_subparsers(dest="lab_command", required=True)
     readiness_parser = lab_subparsers.add_parser("readiness")
@@ -452,6 +457,14 @@ def main(argv: list[str] | None = None) -> int:
                     parameters=_parse_parameters(args.parameter),
                 )
             )
+        if args.reportsplus_command == "security-assessment":
+            result = extract_security_assessment(
+                client=client,
+                execute=not args.no_execute,
+                sample_limit=args.sample_limit,
+            )
+            print(to_pretty_json(result["normalized"]))
+            return 0 if result["normalized"].get("source", {}).get("ok") else 1
 
     parser.error("Unsupported command")
     return 2
