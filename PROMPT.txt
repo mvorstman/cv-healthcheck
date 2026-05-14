@@ -1,0 +1,267 @@
+cv-healthcheck Project Instructions
+
+PROJECT PURPOSE
+
+cv-healthcheck is a Commvault-focused healthcheck, reporting, and operational analysis platform.
+
+The platform is intended to support:
+
+* daily operational reporting
+* quick health assessments
+* full environment healthchecks
+* operational trend analysis
+* customer reporting
+* proactive risk identification
+
+The platform uses:
+
+* Reports Plus / Metrics datasets
+* Reports Plus reports
+* Command Center REST APIs
+* uploaded operational snapshots
+* future S3-based collection pipelines
+
+OPERATING MODES
+
+cv-healthcheck should support three operating modes:
+
+1. Daily Reporting
+2. Quick HealthCheck
+3. Full HealthCheck
+
+Daily Reporting focuses on operational overview, trends, exceptions, SLA visibility, and quick operational insight.
+
+Quick HealthCheck focuses on fast, minimally invasive collection and analysis of major operational risks.
+
+Full HealthCheck focuses on comprehensive, evidence-driven operational analysis, deeper configuration validation, and long-form reporting.
+
+ARCHITECTURE PRINCIPLES
+
+Maintain strict separation of responsibilities.
+
+reportsplus/
+
+* Handles Reports Plus inventory and dataset execution
+* Handles Metrics server interaction
+* No health scoring logic
+* No Flask rendering logic
+
+collectors/
+
+* Handles REST API collection from customer environments
+* Produces structured collection artifacts
+* Must remain reusable and transportable
+* Future collectors may upload artifacts to S3
+
+web/
+
+* Presentation layer only
+* Flask routes must remain lightweight
+* No business logic in templates
+* No health evaluation logic in routes
+
+catalog/
+
+* Local inventory and discovery persistence
+* Catalog files are artifacts
+* Live APIs remain authoritative
+
+labreadiness/
+
+* Determines whether the environment is suitable for meaningful testing
+* Used as gating logic before health-rule development
+
+future rules engine
+
+* Health evaluation
+* Correlation logic
+* Findings generation
+* Scoring
+* Recommendations
+* Risk interpretation
+
+IMPORTANT STRATEGIC DIRECTION
+
+The platform must NOT assume direct access to customer CommServe systems.
+
+Expected real-world model:
+
+1. Central reporting platform
+    * accesses Reports Plus / Metrics servers
+    * performs trend analysis
+    * aggregates uploaded data
+    * generates reporting
+2. Customer-side collection
+    * REST API collectors gather operational data
+    * collectors may run locally or remotely
+    * collected snapshots may be uploaded to S3
+    * collection should function with minimal customer exposure
+3. Healthcheck modes
+    * Daily Reporting
+    * Quick HealthCheck
+    * Full HealthCheck
+
+DAILY REPORTING
+
+Primary sources:
+
+* Reports Plus / Metrics
+* Email
+* Existing trend datasets
+
+Purpose:
+
+* operational overview
+* trends
+* exceptions
+* SLA visibility
+* quick operational insight
+
+QUICK HEALTHCHECK
+
+Primary sources:
+
+* Reports Plus / Metrics
+* REST APIs
+* Uploaded snapshots/artifacts
+
+Characteristics:
+
+* fast
+* minimally invasive
+* low operational impact
+* focused on major operational risks
+
+FULL HEALTHCHECK
+
+Primary sources:
+
+* Reports Plus / Metrics
+* REST APIs
+* uploaded operational snapshots
+* expanded detailed collectors
+
+Characteristics:
+
+* comprehensive
+* evidence driven
+* detailed operational analysis
+* deeper configuration validation
+* long-form reporting
+
+REPORTS PLUS / METRICS STRATEGY
+
+Reports Plus / Metrics is a PRIMARY strategic data source.
+
+Reports Plus is especially valuable for:
+
+* trends
+* historical reporting
+* SLA analysis
+* growth analysis
+* operational summaries
+* capacity analysis
+* multi-CommCell reporting
+
+Important:
+
+* dataset GUIDs may differ across environments
+* report IDs may differ across environments
+* report names are more stable than IDs
+* report composition mapping is important
+* dataset execution validation is required
+
+Private Metrics servers are expected to become major long-term data sources.
+
+COLLECTION STRATEGY
+
+Preferred collection order:
+
+1. REST APIs
+2. Reports Plus datasets
+3. Existing reports
+4. Uploaded exports/artifacts
+5. SQL only as last resort
+
+Avoid:
+
+* unsupported DB access assumptions
+* hardcoded environment assumptions
+* tight coupling to one lab
+* assumptions that reports are identical everywhere
+
+LAB ENVIRONMENT NOTES
+
+Current lab environment is intentionally minimal.
+
+Current limitations:
+
+* few or no completed backup jobs
+* limited operational history
+* minimal alerting activity
+* limited DDB activity
+* minimal SLA data
+* minimal MediaAgent activity
+
+Because of this:
+
+* discovery work is valid
+* API validation is valid
+* dataset execution validation is valid
+* health-rule conclusions are NOT yet representative
+
+Before health-rule development:
+
+* improve lab realism
+* generate operational activity
+* create backup history
+* generate alerts/failures
+* create realistic storage usage
+* generate SLA trends
+
+ENGINEERING RULES
+
+* Preserve clean architecture
+* Keep modules focused
+* Prefer reusable collectors
+* Avoid monolithic route handlers
+* Prefer explicit behavior
+* Avoid hidden assumptions
+* Preserve backward compatibility where practical
+
+DO NOT
+
+* Do not place health logic in Flask routes
+* Do not place evaluation logic inside reportsplus clients
+* Do not tightly couple collectors to UI
+* Do not assume direct CommServe access
+* Do not assume the current lab reflects production scale
+* Do not silently overwrite existing work
+
+VALIDATION REQUIREMENTS
+
+Before commits:
+
+* python -m compileall src must pass
+* bash -n scripts/*.sh start.sh must pass
+* relevant CLI commands must be tested
+* relevant Flask routes must return HTTP 200
+
+Update when appropriate:
+
+* README.md
+* ROADMAP.md
+* DEVLOG.md
+* API_MAPPING.md
+
+SESSION WRAP-UP
+
+At the end of major sessions:
+
+* update DEVLOG.md
+* update ROADMAP.md if direction changed
+* update API_MAPPING.md for validated discoveries
+* validate code
+* commit cleanly
+* push to GitHub
+* summarize completed work clearly

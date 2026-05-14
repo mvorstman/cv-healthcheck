@@ -1,5 +1,13 @@
 # Development Log
 
+## 2026-05-14
+
+- Added `PROMPT.txt` as a durable project and AI guidance handover for future sessions.
+- Clarified the strategic operating model around Daily Reporting, Quick HealthCheck, and Full HealthCheck modes.
+- Clarified Reports Plus / private Metrics as a primary strategic trend and reporting source.
+- Documented the disconnected/customer-side collection model: customer-side REST collectors can gather snapshots and upload evidence artifacts, with S3 expected as a future transport/evidence store.
+- Clarified that the central reporting platform must not assume direct reachability to customer CommServe systems.
+
 ## 2026-05-13
 
 - Added focused metric extraction pipelines for the four high-value Report 318 datasets: Client Count, Client Growth Summary, Capacity License Usage, and ClientGrowthDetails.

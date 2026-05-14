@@ -14,6 +14,18 @@ Initial focus:
 - Lightweight Flask exploration UI
 - CLI access to the same reusable service layer
 
+## Strategic Direction
+
+cv-healthcheck is being shaped around three operating modes:
+
+- Daily Reporting: recurring operational reporting from Reports Plus / Metrics, email, and existing trend datasets.
+- Quick HealthCheck: fast, minimally invasive assessment using Metrics trend data, REST API collection, and uploaded snapshots.
+- Full HealthCheck: comprehensive, evidence-driven analysis using Metrics, REST APIs, uploaded operational snapshots, and expanded collectors.
+
+Private Metrics / Reports Plus servers are a primary strategic trend and reporting source, especially for historical growth, SLA visibility, capacity analysis, operational summaries, and multi-CommCell reporting.
+
+The central cv-healthcheck/reporting platform must not assume direct access to customer CommServe systems. The expected real-world model is central analysis over accessible Metrics / Reports Plus data plus customer-side REST collectors that gather live configuration/state and upload structured snapshots or evidence artifacts, potentially through S3. S3 is planned as a transport and evidence store; S3 collection code is not implemented yet.
+
 ## Architecture Documents
 
 - [API_MAPPING.md](API_MAPPING.md) is the technical collection and source catalog. It tracks what data can be collected, where it comes from, required authentication and parameters, and whether the source is proven.

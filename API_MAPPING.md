@@ -11,6 +11,10 @@ Status values:
 - `UNKNOWN`: research required
 - `FALLBACK_ONLY`: usable only when preferred sources are unavailable
 
+## Mapping Notes
+
+API mappings describe source capabilities, not fixed health rules. Exact report IDs, dataset IDs, and dataset GUIDs may vary by environment, so collectors should prefer semantic report/dataset names, report composition mapping, and stable field structures where possible. Private Metrics / Reports Plus servers are expected to be primary long-term reporting and trend sources, while customer-side REST collectors and uploaded artifacts may provide environment-specific state where central CommServe reachability is not available.
+
 | Subject | Source Type | Endpoint / Dataset | Method | Auth | Parameters | Status | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Client Growth / Client Usage Trend | ReportsPlus Dataset | `/commandcenter/api/cr/reportsplusengine/datasets/979eba7f-8c67-420c-a27e-85ed82066514:8ac30a77-3de2-4968-86c1-ade4b02c85a4/data` | GET | Authtoken | `fields=[MonthStart],[Added],[Removed],[Total]`; `format=object`; `orderby=[MonthStart] Asc`; `limit=15`; `includeOther=false`; `parameter.showDeconfigClients=0`; `parameter.includePsuedoClients=0` | PROVEN | Verified through Command Center Reports Plus internal REST API. Metadata exposes dataset fields, parameters, backend type, and SQL/stored procedure mapping. Auth matrix with the current `.token` later returned HTTP 401 for Reports Plus metadata using both `Authtoken` and `Authorization: Bearer`; retest with a fresh Login-issued Authtoken before relying on the current token source. |
