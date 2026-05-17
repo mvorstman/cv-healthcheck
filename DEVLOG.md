@@ -1,5 +1,33 @@
 # Development Log
 
+## 2026-05-17
+
+- Added Security Assessment HTML import support.
+- Added Security Assessment CSV import support.
+- Added a shared Security Assessment normalization pipeline so REST, HTML, and CSV sources now converge on one canonical artifact schema.
+- Expanded the Security Assessment architecture into a multi-source evidence ingestion path:
+  `collect -> normalize -> persist -> render`.
+- Added persisted latest artifacts for source-specific and selected output states:
+  `data/imports/security_assessment/latest.json`,
+  `data/imports/security_assessment/latest_rest.json`,
+  `data/imports/security_assessment/latest_html.json`,
+  and `data/imports/security_assessment/latest_csv.json`.
+- Added reusable upload/import service support for Security Assessment ingestion outside Flask route handlers.
+- Added browser upload/import support in the Flask UI for HTML and CSV evidence.
+- Added runtime import storage at `data/imports/security_assessment/`.
+- Hardened normalization with canonical field enforcement, noise rejection, deduplication, and footer/header filtering.
+- Hardened HTML ingestion with strict table parsing that validates `thead` and only extracts `tbody`/`tr`/`td` cell content.
+- Added regression coverage for noisy HTML exports to protect the parser against presentation-heavy report markup.
+- Added source-type rendering in the Flask UI so the active artifact/source can be surfaced during review.
+- Added debug logging for Security Assessment artifact loading and selection to support source precedence debugging.
+- Key finding: HTML exports are presentation-heavy and cannot be treated as simple text extraction inputs; strict table parsing is required.
+- Key finding: CSV exports are materially cleaner than HTML exports and currently appear to be the more reliable offline import format.
+- Key finding: the Security Assessment implementation has evolved from single-source report extraction into multi-source canonical evidence ingestion.
+- Debugging result: imported HTML and CSV artifacts appear to load and render correctly when REST/live source is unavailable.
+- Unresolved issue remains open: noisy text may still appear in the UI when REST source is active even though offline imports normalize correctly.
+- Current best hypothesis is that the remaining defect is in REST/live source interaction, source precedence, stale artifact selection, or an alternate rendering/load path rather than HTML/CSV parsing itself.
+- This issue is not resolved yet and should not be documented as closed.
+
 ## 2026-05-15
 
 - Kept the Flask navigation intentionally simple: Login / Logout, Quick HC, and Development.

@@ -85,6 +85,23 @@ Status: started.
 - First subject: CommCell Identity / Version from `GET /commandcenter/api/CommServ`.
 - Normalize CommCell identity fields for later rule-engine consumption without adding health scoring.
 
+## Near-Term Follow-Up: Security Assessment Multi-Source Stabilization
+
+Status: active.
+
+- Resolve the remaining REST/source precedence issue affecting Security Assessment rendering.
+- Finalize the canonical artifact render path so REST, HTML, and CSV all load through one consistent selection path.
+- Complete end-to-end ingestion validation across live REST collection, HTML import, CSV import, persistence, and Flask rendering.
+- Strengthen artifact provenance and debugging so selected source, artifact path, and normalization history are explicit.
+- Validate REST normalization parity against HTML and CSV canonical artifacts to confirm equivalent field-level output.
+- Install and standardize `pytest` plus required runtime/development dependencies in the local environment so regression coverage can run consistently.
+- Continue expanding regression coverage for noisy exports and source-selection edge cases.
+
+## Future Architecture: Evidence Provenance and Confidence
+
+- Add explicit provenance metadata to canonical artifacts so downstream health logic can distinguish live REST evidence from imported offline evidence.
+- Add evidence confidence concepts so future health scoring can account for source quality, completeness, and collection freshness.
+
 ## Later Phases
 
 - Collector orchestration

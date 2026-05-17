@@ -76,6 +76,14 @@ http://127.0.0.1:5001/quick-hc/security-assessment
 
 Security Assessment is integrated from Reports Plus report 336.
 
+Security Assessment now supports multi-source ingestion with a shared canonical artifact model. Supported sources are:
+
+- REST
+- HTML export import
+- CSV export import
+
+All three sources feed the same collect -> normalize -> persist -> render path. The canonical artifact is the normalized evidence contract shared across REST, HTML, and CSV so the UI and downstream health logic can render one consistent structure regardless of acquisition method.
+
 Endpoint pattern:
 
 ```text
@@ -90,6 +98,17 @@ The normalized local artifact is:
 data/catalog/reportsplus/report_336_security_assessment_normalized.json
 ```
 
+Latest persisted multi-source artifacts are now stored as:
+
+```text
+data/imports/security_assessment/latest.json
+data/imports/security_assessment/latest_rest.json
+data/imports/security_assessment/latest_html.json
+data/imports/security_assessment/latest_csv.json
+```
+
+Imported HTML and CSV sources are intended to support offline evidence ingestion and browser-driven upload workflows when live REST access is unavailable or unsuitable.
+
 Discovered sections:
 
 - Access Security
@@ -100,6 +119,8 @@ Discovered sections:
 - Hardening
 
 The reusable checklist normalizer lives in `src/cvhealthcheck/reportsplus/checklist.py`. It normalizes status values, strips unsafe HTML from remarks, extracts safe action links, and groups checks for Quick HC display.
+
+Recent ingestion hardening added canonical field enforcement, noise rejection, deduplication, header/footer filtering, and strict HTML table parsing limited to validated `thead` headers plus `tbody`/`tr`/`td` extraction.
 
 Current artifact summary:
 
@@ -114,6 +135,8 @@ Development/debug page:
 ```text
 http://127.0.0.1:5001/reportsplus/security-assessment
 ```
+
+Current unresolved issue: imported HTML and CSV artifacts appear to render correctly when REST is unavailable, but noisy text may still appear when the REST source is active. The remaining defect is believed to be in REST/live source interaction, source precedence, stale artifact selection, or an alternate render/load path rather than the offline import normalization pipeline itself.
 
 ## Metric Charts
 

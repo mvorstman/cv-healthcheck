@@ -3,18 +3,36 @@
 {% block content %}
 <section>
   <h2>Security Assessment</h2>
-  <p>Reports Plus report 336 discovery and extraction output.</p>
+  <p>Security Assessment normalized artifact view across REST, HTML, and CSV sources.</p>
+
+  {% if flashes %}
+    {% for flash in flashes %}
+      <p class="{{ 'error' if flash.category == 'error' else 'notice' }}">{{ flash.message }}</p>
+    {% endfor %}
+  {% endif %}
+
+  <h3>Import</h3>
+  <form method="post" action="{{ url_for('main.security_assessment_import') }}" enctype="multipart/form-data">
+    <label for="assessment_file">
+      Assessment file
+      <input id="assessment_file" type="file" name="assessment_file" accept=".html,.htm,.csv">
+    </label>
+    <p class="helper-text">Upload Commvault Security Assessment HTML or CSV export.</p>
+    <button type="submit">Import Security Assessment</button>
+  </form>
 
   <dl>
-    <dt>Artifact</dt>
+    <dt>Latest artifact</dt>
     <dd><code>{{ status.path }}</code></dd>
     <dt>Status</dt>
     <dd>{{ "available" if status.exists else "not collected" }}</dd>
     {% if status.exists %}
-      <dt>Collected</dt>
+      <dt>Active rendered source</dt>
+      <dd>{{ (status.source_type or "unknown") | upper }}</dd>
+      <dt>Imported at</dt>
       <dd>{{ status.collected_at or "unknown" }}</dd>
-      <dt>Datasets</dt>
-      <dd>{{ status.executable_dataset_count }} executable / {{ status.dataset_count }} discovered</dd>
+      <dt>Findings</dt>
+      <dd>{{ status.finding_count or 0 }}</dd>
     {% endif %}
   </dl>
 
@@ -29,21 +47,92 @@
   {% endif %}
 
   {% if normalized %}
+    {% set counts = normalized.status_counts or {} %}
     <h3>Source</h3>
     <dl>
-      <dt>Report</dt>
-      <dd>{{ normalized.source.report_id }} / {{ normalized.source.report_name }}</dd>
-      <dt>HTTP status</dt>
-      <dd>{{ normalized.source.http_status }}</dd>
-      <dt>Widgets</dt>
-      <dd>{{ normalized.summary.widget_count }}</dd>
-      <dt>Datasets</dt>
-      <dd>{{ normalized.summary.dataset_count }}</dd>
-      <dt>Executions</dt>
-      <dd>{{ normalized.summary.executions_ok }} / {{ normalized.summary.execution_count }}</dd>
+      <dt>Rendered source</dt>
+      <dd>{{ (normalized.source_type or "unknown") | upper }}</dd>
+      <dt>Type</dt>
+      <dd>{{ (normalized.source_type or "unknown") | upper }}</dd>
+      <dt>Source file</dt>
+      <dd><code>{{ normalized.source_file or "n/a" }}</code></dd>
+      {% if normalized.artifact_paths %}
+        <dt>Latest source artifact</dt>
+        <dd><code>{{ normalized.artifact_paths.latest_source }}</code></dd>
+      {% endif %}
+      <dt>Generated on</dt>
+      <dd>{{ normalized.generated_on or "unknown" }}</dd>
+      <dt>Imported at</dt>
+      <dd>{{ normalized.imported_at or "unknown" }}</dd>
+      {% if normalized.source.report_id %}
+        <dt>Report</dt>
+        <dd>{{ normalized.source.report_id }} / {{ normalized.source.report_name }}</dd>
+      {% endif %}
+      {% if normalized.source.http_status or normalized.source.report_http_status %}
+        <dt>HTTP status</dt>
+        <dd>{{ normalized.source.http_status or normalized.source.report_http_status }}</dd>
+      {% endif %}
+      {% if normalized.rest_summary %}
+        <dt>Widgets</dt>
+        <dd>{{ normalized.rest_summary.widget_count }}</dd>
+        <dt>Datasets</dt>
+        <dd>{{ normalized.rest_summary.dataset_count }}</dd>
+        <dt>Executions</dt>
+        <dd>{{ normalized.rest_summary.executions_ok }} / {{ normalized.rest_summary.execution_count }}</dd>
+      {% endif %}
     </dl>
 
-    <h3>Widgets</h3>
+    <h3>Status Counts</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Critical</th>
+          <th>Warning</th>
+          <th>Info</th>
+          <th>Good</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{{ counts.get("Critical", 0) }}</td>
+          <td>{{ counts.get("Warning", 0) }}</td>
+          <td>{{ counts.get("Info", 0) }}</td>
+          <td>{{ counts.get("Good", 0) }}</td>
+          <td>{{ normalized.finding_count or 0 }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Findings</h3>
+    {% if normalized.findings %}
+      <table>
+        <thead>
+          <tr>
+            <th>Section</th>
+            <th>Parameter</th>
+            <th>Status</th>
+            <th>Remarks</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for finding in normalized.findings %}
+            <tr>
+              <td>{{ finding.section }}</td>
+              <td>{{ finding.parameter }}</td>
+              <td><span class="badge badge-{{ finding.status|lower }}">{{ finding.status }}</span></td>
+              <td style="white-space: pre-wrap;">{{ finding.remarks }}</td>
+              <td style="white-space: pre-wrap;">{{ finding.action }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="notice">No findings discovered yet.</p>
+    {% endif %}
+
+    <h3>REST Discovery Details</h3>
     {% if normalized.widgets %}
       <table>
         <thead>
@@ -69,10 +158,10 @@
         </tbody>
       </table>
     {% else %}
-      <p class="notice">No widgets discovered yet.</p>
+      <p class="notice">No REST discovery details are available for this artifact.</p>
     {% endif %}
 
-    <h3>Datasets and Fields</h3>
+    <h3>REST Datasets and Fields</h3>
     {% if normalized.datasets %}
       {% for dataset in normalized.datasets %}
         <h4>{{ dataset.dataset_name or dataset.dataset_guid }}</h4>
@@ -118,7 +207,7 @@
         {% endif %}
       {% endfor %}
     {% else %}
-      <p class="notice">No datasets discovered yet.</p>
+      <p class="notice">No REST datasets are available for this artifact.</p>
     {% endif %}
   {% endif %}
 </section>

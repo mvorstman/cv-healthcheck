@@ -23,6 +23,10 @@ from .reportsplus.inventory import (
 from .reportsplus.priority import prioritize_candidates, priority_summary
 from .reportsplus.security_assessment import extract_security_assessment
 from .reportsplus.validation import validate_candidates, validation_summary
+from .security_assessment import (
+    import_security_assessment_csv,
+    import_security_assessment_html,
+)
 
 
 def _parse_parameters(values: list[str] | None) -> dict[str, str]:
@@ -359,6 +363,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     quickhc_subparsers.add_parser("commcell")
 
+    security_assessment_parser = subparsers.add_parser("security-assessment")
+    security_assessment_subparsers = security_assessment_parser.add_subparsers(
+        dest="security_assessment_command",
+        required=True,
+    )
+    import_html_parser = security_assessment_subparsers.add_parser("import-html")
+    import_html_parser.add_argument("--file", required=True)
+    import_csv_parser = security_assessment_subparsers.add_parser("import-csv")
+    import_csv_parser.add_argument("--file", required=True)
+
     return parser
 
 
@@ -382,6 +396,16 @@ def main(argv: list[str] | None = None) -> int:
         result = get_commcell_identity()
         print(to_pretty_json(result))
         return 0 if result.get("ok") else 1
+
+    if args.command == "security-assessment":
+        if args.security_assessment_command == "import-html":
+            artifact = import_security_assessment_html(args.file)
+            print(to_pretty_json(artifact))
+            return 0
+        if args.security_assessment_command == "import-csv":
+            artifact = import_security_assessment_csv(args.file)
+            print(to_pretty_json(artifact))
+            return 0
 
     if args.command == "reportsplus":
         client = ReportsPlusClient()

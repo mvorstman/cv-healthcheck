@@ -19,7 +19,14 @@
       <dt>Collected</dt>
       <dd>{{ assessment.collected_at or "unknown" }}</dd>
       <dt>Source</dt>
-      <dd>{{ assessment.source.report_name or "Security Assessment" }} / report {{ assessment.source.report_id or "336" }}</dd>
+      <dd>
+        {{ (assessment.source_type or "unknown") | upper }}
+        {% if assessment.source.report_id %}
+          / {{ assessment.source.report_name or "Security Assessment" }} / report {{ assessment.source.report_id or "336" }}
+        {% elif assessment.source.raw_file_path %}
+          / <code>{{ assessment.source.raw_file_path }}</code>
+        {% endif %}
+      </dd>
       <dt>Artifact</dt>
       <dd><code>{{ assessment.path }}</code></dd>
     </dl>
@@ -65,12 +72,8 @@
               <td>{{ check.section }}</td>
               <td>{{ check.parameter }}</td>
               <td><span class="badge badge-{{ check.status|lower }}">{{ check.status }}</span></td>
-              <td>{{ check.remarks }}</td>
-              <td>
-                {% if check.action %}
-                  <a href="{{ check.action.href }}" rel="noopener noreferrer" target="_blank">{{ check.action.label }}</a>
-                {% endif %}
-              </td>
+              <td style="white-space: pre-wrap;">{{ check.remarks }}</td>
+              <td style="white-space: pre-wrap;">{{ check.action }}</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -96,12 +99,8 @@
             <tr>
               <td>{{ check.parameter }}</td>
               <td><span class="badge badge-{{ check.status|lower }}">{{ check.status }}</span></td>
-              <td>{{ check.remarks }}</td>
-              <td>
-                {% if check.action %}
-                  <a href="{{ check.action.href }}" rel="noopener noreferrer" target="_blank">{{ check.action.label }}</a>
-                {% endif %}
-              </td>
+              <td style="white-space: pre-wrap;">{{ check.remarks }}</td>
+              <td style="white-space: pre-wrap;">{{ check.action }}</td>
             </tr>
           {% endfor %}
         </tbody>

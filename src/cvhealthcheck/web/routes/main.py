@@ -1,10 +1,20 @@
 from __future__ import annotations
 
 from functools import wraps
+import logging
 from pathlib import Path
 from typing import Any, Callable, TypeVar
 
-from flask import Blueprint, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    flash,
+    get_flashed_messages,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 
 from cvhealthcheck.api_client import CommvaultApiClient
 from cvhealthcheck.auth import (
@@ -45,9 +55,14 @@ from cvhealthcheck.reportsplus.security_assessment import (
     security_assessment_quick_hc,
     security_assessment_status,
 )
+from cvhealthcheck.security_assessment.service import (
+    SecurityAssessmentImportError,
+    import_security_assessment_upload,
+)
 
 bp = Blueprint("main", __name__)
 F = TypeVar("F", bound=Callable)
+logger = logging.getLogger(__name__)
 
 
 def login_required(view: F) -> F:
@@ -605,10 +620,9 @@ def reportsplus_report_metrics(report_id: str):
     )
 
 
-@bp.route("/reportsplus/security-assessment")
+@bp.route("/security-assessment")
 def reportsplus_security_assessment():
     message = None
-    result = None
     if is_authenticated() and request.args.get("refresh") == "1":
         result = extract_security_assessment(
             client=_reportsplus_client(),
@@ -618,23 +632,97 @@ def reportsplus_security_assessment():
         if report_status == 401:
             clear_current_token()
             return redirect(url_for("main.login", next=request.path, expired="1"))
-        normalized = result["normalized"]
-    else:
-        try:
-            normalized = load_security_assessment_artifact()
-        except FileNotFoundError:
-            normalized = None
-            message = (
-                "No Security Assessment artifact exists yet. Log in and use "
-                "`?refresh=1` to discover report 336."
-            )
-    return render_template(
-        "security_assessment.html",
-        normalized=normalized,
-        status=security_assessment_status(),
-        extraction=result["extraction"] if result else None,
-        message=message,
+        flash(
+            f"REST refresh completed with {result['normalized'].get('finding_count', 0)} findings.",
+            "success",
+        )
+        logger.info(
+            "Selected Security Assessment source=rest-refresh artifact_path=%s source_type=%s finding_count=%s",
+            result.get("artifact"),
+            result["normalized"].get("source_type"),
+            result["normalized"].get("finding_count"),
+        )
+        return redirect(url_for("main.reportsplus_security_assessment"))
+
+    try:
+        normalized = load_security_assessment_artifact()
+    except FileNotFoundError:
+        normalized = None
+        message = (
+            "No Security Assessment artifact exists yet. Log in and use "
+            "`?refresh=1` to discover report 336."
+        )
+    flashes = [
+        {"category": category, "message": text}
+        for category, text in get_flashed_messages(with_categories=True)
+    ]
+    status = security_assessment_status()
+    selected_source = normalized.get("source_type") if normalized else None
+    logger.info(
+        "Rendering Security Assessment page selected_source=%s artifact_path=%s imported_at=%s source_type=%s finding_count=%s first_finding=%s",
+        selected_source,
+        status["path"],
+        normalized.get("imported_at") if normalized else None,
+        normalized.get("source_type") if normalized else None,
+        normalized.get("finding_count") if normalized else None,
+        _finding_preview(normalized.get("findings", [])) if normalized else "none",
     )
+    response = make_response(
+        render_template(
+            "security_assessment.html",
+            normalized=normalized,
+            status=status,
+            flashes=flashes,
+            message=message,
+        )
+    )
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+
+@bp.route("/reportsplus/security-assessment")
+def reportsplus_security_assessment_legacy():
+    return redirect(url_for("main.reportsplus_security_assessment", **request.args))
+
+
+@bp.route("/security-assessment/import", methods=["POST"])
+def security_assessment_import():
+    upload = request.files.get("assessment_file")
+    filename = (upload.filename if upload else "") or ""
+    if not filename:
+        flash("No file selected.", "error")
+        return redirect(url_for("main.reportsplus_security_assessment"))
+
+    try:
+        artifact = import_security_assessment_upload(
+            upload.stream,
+            original_filename=filename,
+        )
+    except SecurityAssessmentImportError as exc:
+        flash(str(exc), "error")
+    except Exception as exc:
+        flash(f"Security Assessment import failed: {exc}", "error")
+    else:
+        source_type = str(artifact.get("source_type") or "unknown").upper()
+        finding_count = int(artifact.get("finding_count") or 0)
+        flash(
+            f"{source_type} import completed for {artifact.get('source_file')} with {finding_count} findings.",
+            "success",
+        )
+    return redirect(url_for("main.reportsplus_security_assessment"))
+
+
+def _finding_preview(findings: Any) -> str:
+    if not isinstance(findings, list) or not findings:
+        return "none"
+    first = findings[0]
+    if not isinstance(first, dict):
+        return str(first)[:160]
+    section = str(first.get("section") or "").strip()
+    parameter = str(first.get("parameter") or "").strip()
+    status = str(first.get("status") or "").strip()
+    return f"{section} | {parameter} | {status}"[:160]
 
 
 @bp.route("/reportsplus/datasets")

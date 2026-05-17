@@ -172,6 +172,11 @@ label {
   font-weight: 700;
 }
 
+.helper-text {
+  margin: 0;
+  color: #4b5563;
+}
+
 input,
 textarea,
 button {

@@ -14,6 +14,8 @@ logs/
 data/catalog/*.json
 data/catalog/**/*.json
 !data/catalog/.gitkeep
+data/imports/**
+!data/imports/.gitkeep
 data/labreadiness/*.json
 !data/labreadiness/.gitkeep
 .env
