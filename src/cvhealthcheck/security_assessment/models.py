@@ -135,6 +135,8 @@ class ImportRun:
     report_run_id: str | None = None
     executed_at: str | None = None
     run_sequence: int | None = None
+    imported_by: str | None = None
+    import_method: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "import_run_id", _require_text(self.import_run_id, "import_run_id"))
@@ -145,6 +147,8 @@ class ImportRun:
         object.__setattr__(self, "report_stream_id", _optional_text(self.report_stream_id))
         object.__setattr__(self, "report_run_id", _optional_text(self.report_run_id))
         object.__setattr__(self, "executed_at", _optional_text(self.executed_at))
+        object.__setattr__(self, "imported_by", _optional_text(self.imported_by))
+        object.__setattr__(self, "import_method", _optional_text(self.import_method))
         if self.run_sequence is not None and self.run_sequence < 0:
             raise ValueError("run_sequence must be non-negative.")
 
@@ -159,6 +163,8 @@ class ImportRun:
             "imported_at": self.imported_at,
             "executed_at": self.executed_at,
             "run_sequence": self.run_sequence,
+            "imported_by": self.imported_by,
+            "import_method": self.import_method,
         }
 
 
@@ -179,6 +185,12 @@ class ArtifactRecord:
     executed_at: str | None = None
     run_sequence: int | None = None
     is_active: bool = True
+    created_at: str | None = None
+    last_accessed_at: str | None = None
+    retention_policy: str | None = None
+    imported_by: str | None = None
+    import_method: str | None = None
+    source_metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "artifact_id", _require_text(self.artifact_id, "artifact_id"))
@@ -194,6 +206,11 @@ class ArtifactRecord:
         object.__setattr__(self, "report_stream_id", _optional_text(self.report_stream_id))
         object.__setattr__(self, "report_run_id", _optional_text(self.report_run_id))
         object.__setattr__(self, "executed_at", _optional_text(self.executed_at))
+        object.__setattr__(self, "created_at", _optional_text(self.created_at) or self.imported_at)
+        object.__setattr__(self, "last_accessed_at", _optional_text(self.last_accessed_at))
+        object.__setattr__(self, "retention_policy", _optional_text(self.retention_policy))
+        object.__setattr__(self, "imported_by", _optional_text(self.imported_by))
+        object.__setattr__(self, "import_method", _optional_text(self.import_method))
         if self.run_sequence is not None and self.run_sequence < 0:
             raise ValueError("run_sequence must be non-negative.")
 
@@ -214,6 +231,12 @@ class ArtifactRecord:
             "executed_at": self.executed_at,
             "run_sequence": self.run_sequence,
             "is_active": self.is_active,
+            "created_at": self.created_at,
+            "last_accessed_at": self.last_accessed_at,
+            "retention_policy": self.retention_policy,
+            "imported_by": self.imported_by,
+            "import_method": self.import_method,
+            "source_metadata": dict(self.source_metadata),
         }
 
 
@@ -276,6 +299,12 @@ class SecurityAssessmentArtifact:
     executed_at: str | None = None
     run_sequence: int | None = None
     is_active: bool = True
+    created_at: str | None = None
+    last_accessed_at: str | None = None
+    retention_policy: str | None = None
+    imported_by: str | None = None
+    import_method: str | None = None
+    source_metadata: dict[str, Any] = field(default_factory=dict)
     artifacts: dict[str, Any] = field(default_factory=dict)
     rest_summary: dict[str, Any] = field(default_factory=dict)
     widgets: list[Any] = field(default_factory=list)
@@ -297,6 +326,11 @@ class SecurityAssessmentArtifact:
         object.__setattr__(self, "report_stream_id", _optional_text(self.report_stream_id))
         object.__setattr__(self, "report_run_id", _optional_text(self.report_run_id))
         object.__setattr__(self, "executed_at", _optional_text(self.executed_at))
+        object.__setattr__(self, "created_at", _optional_text(self.created_at) or self.imported_at)
+        object.__setattr__(self, "last_accessed_at", _optional_text(self.last_accessed_at))
+        object.__setattr__(self, "retention_policy", _optional_text(self.retention_policy))
+        object.__setattr__(self, "imported_by", _optional_text(self.imported_by))
+        object.__setattr__(self, "import_method", _optional_text(self.import_method))
         if self.finding_count != len(self.findings):
             raise ValueError("finding_count must match findings length.")
         counts = {status: int(self.status_counts.get(status, 0) or 0) for status in DEFAULT_STATUS_KEYS}
@@ -324,6 +358,12 @@ class SecurityAssessmentArtifact:
             "is_active": self.is_active,
             "imported_at": self.imported_at,
             "generated_on": self.generated_on,
+            "created_at": self.created_at,
+            "last_accessed_at": self.last_accessed_at,
+            "retention_policy": self.retention_policy,
+            "imported_by": self.imported_by,
+            "import_method": self.import_method,
+            "source_metadata": dict(self.source_metadata),
             "finding_count": self.finding_count,
             "status_counts": dict(self.status_counts),
             "sections": list(self.sections),
@@ -372,6 +412,12 @@ class SecurityAssessmentArtifact:
             report_run_id=payload.get("report_run_id"),
             executed_at=payload.get("executed_at"),
             run_sequence=payload.get("run_sequence"),
+            created_at=payload.get("created_at"),
+            last_accessed_at=payload.get("last_accessed_at"),
+            retention_policy=payload.get("retention_policy"),
+            imported_by=payload.get("imported_by"),
+            import_method=payload.get("import_method"),
+            source_metadata=dict(payload.get("source_metadata") or {}),
             finding_count=int(payload.get("finding_count") or len(findings)),
             status_counts=dict(payload.get("status_counts") or {}),
             sections=list(payload.get("sections") or []),

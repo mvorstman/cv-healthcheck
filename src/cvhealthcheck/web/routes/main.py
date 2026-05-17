@@ -56,7 +56,9 @@ from cvhealthcheck.reportsplus.security_assessment import (
     security_assessment_status,
 )
 from cvhealthcheck.security_assessment.service import (
+    SecurityAssessmentService,
     SecurityAssessmentImportError,
+    export_security_assessment_registry,
     import_security_assessment_upload,
 )
 
@@ -711,6 +713,45 @@ def security_assessment_import():
             "success",
         )
     return redirect(url_for("main.reportsplus_security_assessment"))
+
+
+@bp.route("/security-assessment/history")
+def security_assessment_history():
+    service = SecurityAssessmentService()
+    artifact_id = request.args.get("artifact_id", "").strip() or None
+    import_run_id = request.args.get("import_run_id", "").strip() or None
+    report_run_id = request.args.get("report_run_id", "").strip() or None
+    if artifact_id or import_run_id or report_run_id:
+        payload = service.get_artifact(
+            artifact_id=artifact_id,
+            import_run_id=import_run_id,
+            report_run_id=report_run_id,
+        )
+        response_payload = {
+            "artifact": payload,
+        }
+    else:
+        response_payload = service.get_history(
+            customer_id=request.args.get("customer_id", "").strip() or None,
+            commcell_id=request.args.get("commcell_id", "").strip() or None,
+            source_type=request.args.get("source_type", "").strip() or None,
+            engagement_id=request.args.get("engagement_id", "").strip() or None,
+            report_stream_id=request.args.get("report_stream_id", "").strip() or None,
+        )
+    response = make_response(to_pretty_json(response_payload))
+    response.mimetype = "application/json"
+    return response
+
+
+@bp.route("/security-assessment/registry-export")
+def security_assessment_registry_export():
+    response = make_response(
+        to_pretty_json(
+            export_security_assessment_registry()
+        )
+    )
+    response.mimetype = "application/json"
+    return response
 
 
 def _finding_preview(findings: Any) -> str:

@@ -143,6 +143,24 @@ Registry stabilization notes:
 - The registry layer uses simple SQLite hardening (`foreign_keys`, `busy_timeout`, `WAL`) but does not yet introduce a migration framework.
 - A registry export utility exists for audit/debugging; destructive cleanup is not implemented.
 
+Historical/read-path foundation added on top of the registry layer:
+
+- Registry helpers now support listing artifacts, fetching the latest artifact within scope, fetching the active artifact within scope, and listing report/import runs.
+- Service-layer reads now prefer registry-backed artifact loading over `latest.json`.
+- A lightweight `SecurityAssessmentService` exposes current-state, history, and artifact-by-id/run retrieval methods for future UI and reporting use.
+- Hidden debug/history endpoints exist without changing the visible page flow:
+  `/security-assessment/history`
+  `/security-assessment/registry-export`
+
+Additional metadata now tracked for artifacts/import runs:
+
+- `created_at`
+- `last_accessed_at`
+- `retention_policy`
+- `imported_by`
+- `import_method`
+- `source_metadata`
+
 Retention intent for this phase:
 
 - Keep all artifact files by default.

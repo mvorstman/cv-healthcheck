@@ -2,6 +2,30 @@
 
 ## 2026-05-17
 
+- Added the next read-path migration layer on top of the Security Assessment registry foundation.
+- Expanded the registry with historical query helpers for active/latest artifact selection, artifact listing, report-run listing, and import-run listing.
+- Added historical retrieval support by `artifact_id`, `import_run_id`, `report_run_id`, and latest-within-scope.
+- Added a lightweight `SecurityAssessmentService` read API:
+  `get_current(...)`,
+  `get_history(...)`,
+  and `get_artifact(...)`.
+- Reduced internal dependence on `latest.json` by preferring registry-backed artifact reads in service code while preserving `latest.json` as compatibility fallback only.
+- Added hidden/debug history and registry export endpoints without changing the visible Security Assessment page flow.
+- Added retention/provenance metadata fields:
+  `created_at`,
+  `last_accessed_at`,
+  `retention_policy`,
+  `imported_by`,
+  `import_method`,
+  and `source_metadata`.
+- Kept Flask routes thin; business logic remains in the service/registry layer.
+- Added tests for historical retrieval, latest artifact lookup, import/report run listings, provenance metadata persistence, and hidden history/export endpoints.
+- Confirmed validation still passes:
+  `venv/bin/python -m compileall src tests`
+  `venv/bin/python -m pytest`
+
+## 2026-05-17
+
 - Stabilized the new Security Assessment SQLite registry foundation after the initial refactor.
 - Tightened active-artifact selection so it is no longer global by artifact type; it now scopes by customer, CommCell, artifact type, source type, and engagement/report-stream context where applicable.
 - Verified that repeated imports create unique artifact files and preserve prior registry rows instead of overwriting historical runs.

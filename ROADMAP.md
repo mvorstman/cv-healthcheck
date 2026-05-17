@@ -111,6 +111,16 @@ Status: started.
 - Support multiple recurring report runs on the same day through `report_run_id`, `executed_at`, and optional `run_sequence`.
 - Keep active-artifact selection scoped so customers and CommCells cannot select each other’s artifacts.
 
+## Foundation Milestone: Read-Path Migration and Historical Retrieval
+
+Status: started.
+
+- Prefer registry-backed reads internally and treat `latest.json` as compatibility/cache only.
+- Expose service-layer methods for current artifact, artifact history, and artifact lookup by artifact/run identifiers.
+- Support historical browsing by customer, CommCell, import run, and report run.
+- Keep any history UI additive and debug-oriented until the backend contracts settle.
+- Track retention/provenance metadata now, but defer destructive cleanup and retention enforcement.
+
 ## Future Architecture: Evidence Provenance and Confidence
 
 - Add explicit provenance metadata to canonical artifacts so downstream health logic can distinguish live REST evidence from imported offline evidence.

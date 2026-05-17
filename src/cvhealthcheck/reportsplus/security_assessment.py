@@ -10,6 +10,7 @@ from cvhealthcheck.security_assessment.artifact import (
     summarize_security_assessment_artifact,
 )
 from cvhealthcheck.security_assessment.service import (
+    SecurityAssessmentService,
     load_active_security_assessment_artifact,
     persist_security_assessment_artifact,
 )
@@ -61,9 +62,9 @@ def extract_security_assessment(
 
 def load_security_assessment_artifact() -> dict[str, Any]:
     path = SECURITY_ASSESSMENT_CATALOG_DIR / NORMALIZED_ARTIFACT
-    payload = load_active_security_assessment_artifact(
+    payload = SecurityAssessmentService(
         catalog_dir=SECURITY_ASSESSMENT_CATALOG_DIR
-    )
+    ).get_current()
     logger.info(
         "Loaded Security Assessment artifact path=%s imported_at=%s source_type=%s finding_count=%s first_finding=%s",
         payload.get("file_path") or path,
