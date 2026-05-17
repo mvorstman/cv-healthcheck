@@ -7,7 +7,7 @@ from typing import Any
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
-from .normalize import build_security_assessment_artifact, write_security_assessment_artifact
+from .artifact import build_security_assessment_artifact, write_security_assessment_artifact
 
 EXPECTED_HEADERS = ["parameter", "status", "remarks", "action"]
 IGNORED_SECTION_HEADINGS = {"security assessment", "detailed checks"}

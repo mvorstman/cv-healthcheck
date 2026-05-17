@@ -2,6 +2,48 @@
 
 ## 2026-05-17
 
+- Stabilized the new Security Assessment SQLite registry foundation after the initial refactor.
+- Tightened active-artifact selection so it is no longer global by artifact type; it now scopes by customer, CommCell, artifact type, source type, and engagement/report-stream context where applicable.
+- Verified that repeated imports create unique artifact files and preserve prior registry rows instead of overwriting historical runs.
+- Added recovery logic for missing active artifact files: the service now attempts to promote the newest recoverable artifact in the same scope before falling back to `latest.json`.
+- Added explicit fallback diagnostics by marking the path actually loaded when compatibility fallback is used.
+- Added registry export support for audit/debugging as JSON without introducing restore or destructive cleanup features.
+- Added SQLite hardening through idempotent schema creation plus `foreign_keys`, `busy_timeout`, and `WAL` pragmas.
+- Added tests for:
+  unique artifact lifecycle,
+  scoped active selection,
+  multi-customer isolation,
+  multi-CommCell isolation,
+  missing-artifact recovery,
+  `latest.json` fallback,
+  and registry export.
+- Confirmed full validation still passes:
+  `venv/bin/python -m compileall src tests`
+  `venv/bin/python -m pytest`
+
+## 2026-05-17
+
+- Refactored the Security Assessment artifact foundation under the existing Flask UI without removing pages or changing the visible Development interface.
+- Split the previous monolithic normalization path into:
+  `models.py`, `normalize.py`, `validate.py`, `artifact.py`, `registry.py`, and `service.py`.
+- Added strict schema models for customer/CommCell/engagement/report stream/report run/import run/artifact record/canonical finding/Security Assessment artifact.
+- Added a SQLite artifact registry at `data/imports/security_assessment/artifact_registry.sqlite3`.
+- Added unique persisted artifact files per import/refresh in addition to `latest.json` compatibility files.
+- Kept temporary compatibility behavior by continuing to write:
+  `latest.json`, `latest_rest.json`, `latest_html.json`, and `latest_csv.json`.
+- Added service orchestration so Flask routes stay thin and call a backend layer that imports, normalizes, validates, stores, and registers artifacts.
+- Moved source activation/selection responsibility out of `normalize.py`; active artifact selection now belongs to registry/service logic.
+- Kept `normalize.py` limited to field cleanup and canonical mapping only.
+- Moved invalid/noisy finding filtering and deduplication into a dedicated validation layer.
+- Updated HTML/CSV import flow to register artifacts in SQLite while keeping existing UI behavior intact.
+- Updated the REST refresh path to persist artifacts through the same registry-backed foundation.
+- Added tests for canonical finding validation, post-normalization filtering, registry insert/read behavior, `latest.json` compatibility, and multiple same-day report runs.
+- Confirmed validation passes after the refactor:
+  `python -m compileall src tests`
+  `python -m pytest`
+
+## 2026-05-17
+
 - Added Security Assessment HTML import support.
 - Added Security Assessment CSV import support.
 - Added a shared Security Assessment normalization pipeline so REST, HTML, and CSV sources now converge on one canonical artifact schema.

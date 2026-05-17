@@ -109,6 +109,46 @@ data/imports/security_assessment/latest_csv.json
 
 Imported HTML and CSV sources are intended to support offline evidence ingestion and browser-driven upload workflows when live REST access is unavailable or unsuitable.
 
+Under the current UI, the Security Assessment backend has been refactored into a persistent artifact foundation:
+
+- `models.py`: strict schema layer for customer/CommCell/import/artifact/finding models
+- `normalize.py`: field cleanup and canonical mapping only
+- `validate.py`: noise rejection, validity checks, and deduplication
+- `artifact.py`: canonical artifact building, unique artifact persistence, and `latest.json` compatibility writes
+- `registry.py`: SQLite artifact registry
+- `service.py`: orchestration used by Flask routes and future non-UI collectors
+
+Compatibility is intentionally preserved during this phase. The current UI still works through `latest.json`, but each import/refresh now also writes a unique artifact JSON file and registers it in SQLite so the long-term read path can shift to:
+
+```text
+registry -> active artifact -> artifact file
+```
+
+Current registry/compatibility outputs include:
+
+```text
+data/imports/security_assessment/artifact_registry.sqlite3
+data/catalog/security_assessment/<artifact_id>.json
+data/catalog/security_assessment/latest.json
+data/catalog/security_assessment/latest_<source_type>.json
+```
+
+Registry stabilization notes:
+
+- The registry database path is deterministic: `data/imports/security_assessment/artifact_registry.sqlite3`.
+- SQLite schema creation is idempotent and runs on demand.
+- Registry reads now prefer scoped active-artifact selection first, then load the referenced artifact file.
+- Compatibility fallback only uses `latest.json` when the scoped registry entry or artifact file is unavailable.
+- Active selection is scoped so different customers and CommCells do not overwrite or select each other’s artifacts.
+- The registry layer uses simple SQLite hardening (`foreign_keys`, `busy_timeout`, `WAL`) but does not yet introduce a migration framework.
+- A registry export utility exists for audit/debugging; destructive cleanup is not implemented.
+
+Retention intent for this phase:
+
+- Keep all artifact files by default.
+- Treat `latest.json` only as a compatibility pointer, not the system of record.
+- Future cleanup must not delete active artifacts without explicit operator action.
+
 Discovered sections:
 
 - Access Security

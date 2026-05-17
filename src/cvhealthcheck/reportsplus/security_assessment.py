@@ -4,11 +4,14 @@ import logging
 from typing import Any
 
 from cvhealthcheck.reportsplus.checklist import normalize_check, normalize_status
-from cvhealthcheck.security_assessment.normalize import (
+from cvhealthcheck.security_assessment.artifact import (
     SECURITY_ASSESSMENT_CATALOG_DIR,
     build_security_assessment_artifact,
     summarize_security_assessment_artifact,
-    write_security_assessment_artifact,
+)
+from cvhealthcheck.security_assessment.service import (
+    load_active_security_assessment_artifact,
+    persist_security_assessment_artifact,
 )
 
 from .catalog import collected_at, read_json, write_json
@@ -40,7 +43,8 @@ def extract_security_assessment(
         sample_limit=sample_limit,
     )
     normalized = normalize_security_assessment(extraction)
-    artifact_paths = write_security_assessment_artifact(normalized)
+    artifact_paths = persist_security_assessment_artifact(normalized).get("artifact_paths", {})
+    normalized = load_active_security_assessment_artifact()
     normalized["artifact"] = artifact_paths["latest"]
     normalized["artifact_paths"] = artifact_paths
     write_json(
@@ -57,10 +61,12 @@ def extract_security_assessment(
 
 def load_security_assessment_artifact() -> dict[str, Any]:
     path = SECURITY_ASSESSMENT_CATALOG_DIR / NORMALIZED_ARTIFACT
-    payload = read_json(NORMALIZED_ARTIFACT, catalog_dir=SECURITY_ASSESSMENT_CATALOG_DIR)
+    payload = load_active_security_assessment_artifact(
+        catalog_dir=SECURITY_ASSESSMENT_CATALOG_DIR
+    )
     logger.info(
         "Loaded Security Assessment artifact path=%s imported_at=%s source_type=%s finding_count=%s first_finding=%s",
-        path,
+        payload.get("file_path") or path,
         payload.get("imported_at"),
         payload.get("source_type"),
         payload.get("finding_count"),
@@ -79,7 +85,7 @@ def security_assessment_status() -> dict[str, Any]:
         }
     return {
         "exists": True,
-        "path": str(SECURITY_ASSESSMENT_CATALOG_DIR / NORMALIZED_ARTIFACT),
+        "path": str(payload.get("file_path") or (SECURITY_ASSESSMENT_CATALOG_DIR / NORMALIZED_ARTIFACT)),
         "collected_at": payload.get("imported_at"),
         "source_type": payload.get("source_type"),
         "report_id": payload.get("source", {}).get("report_id"),
@@ -100,7 +106,7 @@ def security_assessment_quick_hc() -> dict[str, Any]:
     summary = summarize_security_assessment_artifact(payload, SECTION_ORDER)
     return {
         "exists": True,
-        "path": str(SECURITY_ASSESSMENT_CATALOG_DIR / NORMALIZED_ARTIFACT),
+        "path": str(payload.get("file_path") or (SECURITY_ASSESSMENT_CATALOG_DIR / NORMALIZED_ARTIFACT)),
         "collected_at": payload.get("imported_at"),
         "source": payload.get("source", {}),
         "source_type": payload.get("source_type"),
