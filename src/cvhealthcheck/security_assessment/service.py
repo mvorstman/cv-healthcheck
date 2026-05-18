@@ -11,6 +11,7 @@ from uuid import uuid4
 from werkzeug.utils import secure_filename
 
 from cvhealthcheck.reportsplus.catalog import collected_at
+from cvhealthcheck.reportsplus.client import ReportsPlusClient
 
 from .artifact import SECURITY_ASSESSMENT_CATALOG_DIR, write_security_assessment_artifact
 from .import_csv import import_security_assessment_csv
@@ -140,6 +141,26 @@ class SecurityAssessmentService:
                 )
             ],
         }
+
+    def collect_from_rest(
+        self,
+        *,
+        client: ReportsPlusClient | None = None,
+        execute: bool = True,
+    ) -> dict[str, Any]:
+        from cvhealthcheck.reportsplus.security_assessment import (
+            extract_security_assessment,
+        )
+
+        result = extract_security_assessment(client=client, execute=execute)
+        normalized = result.get("normalized", {})
+        if normalized.get("source", {}).get("http_status") == 401:
+            return result
+        if int(normalized.get("finding_count") or 0) <= 0:
+            raise SecurityAssessmentImportError(
+                "REST collection produced no Security Assessment findings."
+            )
+        return result
 
 
 def import_security_assessment_upload(

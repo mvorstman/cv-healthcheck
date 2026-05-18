@@ -7,6 +7,7 @@ from .shared import (
     LicenseSummaryImportError,
     LicenseSummaryService,
     SecurityAssessmentImportError,
+    SecurityAssessmentService,
     _current_token,
     _license_summary_quick_hc,
     _reportsplus_client,
@@ -106,6 +107,38 @@ def quick_hc_security_assessment_import():
             f"{source_type} import completed for {artifact.get('source_file')} with {finding_count} findings.",
             "success",
         )
+    return redirect(url_for("main.quick_hc_security_assessment"))
+
+
+@bp.route("/quick-hc/security-assessment/collect", methods=["POST"])
+@login_required
+def quick_hc_security_assessment_collect():
+    service = SecurityAssessmentService()
+    try:
+        result = service.collect_from_rest(client=_reportsplus_client())
+    except SecurityAssessmentImportError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.quick_hc_security_assessment"))
+    except Exception as exc:
+        flash(f"Security Assessment REST collection failed: {exc}", "error")
+        return redirect(url_for("main.quick_hc_security_assessment"))
+
+    source = result["normalized"].get("source", {})
+    if source.get("http_status") == 401:
+        clear_current_token()
+        return redirect(
+            url_for(
+                "main.login",
+                next=url_for("main.quick_hc_security_assessment"),
+                expired="1",
+            )
+        )
+
+    finding_count = int(result["normalized"].get("finding_count") or 0)
+    flash(
+        f"REST collection completed with {finding_count} findings.",
+        "success",
+    )
     return redirect(url_for("main.quick_hc_security_assessment"))
 
 

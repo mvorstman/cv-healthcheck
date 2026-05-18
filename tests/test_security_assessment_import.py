@@ -3,12 +3,17 @@ from __future__ import annotations
 import io
 import json
 
+from cvhealthcheck.auth.commvault_auth import SESSION_TOKEN_KEY
 from cvhealthcheck.security_assessment.import_csv import parse_security_assessment_csv
 from cvhealthcheck.security_assessment.import_html import parse_security_assessment_html
 from cvhealthcheck.security_assessment.normalize import (
     CANONICAL_FINDING_KEYS,
     build_security_assessment_artifact,
     write_security_assessment_artifact,
+)
+from cvhealthcheck.security_assessment.service import (
+    SecurityAssessmentImportError,
+    SecurityAssessmentService,
 )
 from cvhealthcheck.web.app import create_app
 
@@ -395,7 +400,8 @@ def test_quick_hc_security_assessment_page_shows_standard_import_panel(
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Import Security Assessment" in body
-    assert "Collect via REST: not yet available on Quick HC" in body
+    assert "Collect via REST" in body
+    assert "/quick-hc/security-assessment/collect" in body
     assert "/quick-hc/security-assessment/import" in body
 
 
@@ -419,6 +425,77 @@ def test_quick_hc_security_assessment_upload_imports_html_and_redirects(
     assert "HTML import completed" in body
     assert "Import Security Assessment" in body
     assert "Access Security" in body
+
+
+def test_quick_hc_security_assessment_collect_calls_service_and_redirects(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+
+    called: dict[str, object] = {}
+
+    def fake_collect_from_rest(self, *, client=None, **kwargs):
+        called["client"] = client
+        return {
+            "artifact": str(tmp_path / "catalog" / "latest.json"),
+            "normalized": {
+                "source": {"http_status": 200},
+                "source_type": "rest",
+                "finding_count": 3,
+            },
+        }
+
+    monkeypatch.setattr(
+        SecurityAssessmentService,
+        "collect_from_rest",
+        fake_collect_from_rest,
+    )
+
+    app = create_app()
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session[SESSION_TOKEN_KEY] = "test-token"
+
+    response = client.post(
+        "/quick-hc/security-assessment/collect",
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert called["client"] is not None
+    body = response.get_data(as_text=True)
+    assert "REST collection completed with 3 findings." in body
+
+
+def test_quick_hc_security_assessment_collect_handles_failure(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+
+    def fake_collect_from_rest(self, *, client=None, **kwargs):
+        raise SecurityAssessmentImportError("REST collection produced no Security Assessment findings.")
+
+    monkeypatch.setattr(
+        SecurityAssessmentService,
+        "collect_from_rest",
+        fake_collect_from_rest,
+    )
+
+    app = create_app()
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session[SESSION_TOKEN_KEY] = "test-token"
+
+    response = client.post(
+        "/quick-hc/security-assessment/collect",
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert (
+        "REST collection produced no Security Assessment findings."
+        in response.get_data(as_text=True)
+    )
 
 
 def test_flask_rest_refresh_redirects_to_single_artifact_render_path(

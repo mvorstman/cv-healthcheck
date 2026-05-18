@@ -13,8 +13,7 @@
 
   {% with
     report_name="Security Assessment",
-    collect_action=None,
-    collect_unavailable_message="not yet available on Quick HC; use the Development page for live REST refresh.",
+    collect_action=url_for('main.quick_hc_security_assessment_collect'),
     upload_action=url_for('main.quick_hc_security_assessment_import'),
     file_input_id="assessment_file",
     file_input_name="assessment_file",
@@ -25,10 +24,8 @@
 
   {% if not assessment.exists or not assessment.summary %}
     <p class="notice">
-      No Security Assessment artifact is available yet. Use the Development page
-      to refresh report 336 from Reports Plus.
+      No Security Assessment artifact is available yet. Collect via REST or import a CSV/HTML export.
     </p>
-    <p><a href="{{ url_for('main.reportsplus_security_assessment') }}">Open Development view</a></p>
   {% else %}
     {% set summary = assessment.summary %}
     {% set counters = summary.counters %}
