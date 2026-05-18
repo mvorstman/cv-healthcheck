@@ -29,22 +29,26 @@
   {% else %}
     {% set summary = assessment.summary %}
     {% set counters = summary.counters %}
+    {% set source = assessment.source or {} %}
 
-    <dl id="source-metadata">
-      <dt>Collected</dt>
-      <dd>{{ assessment.collected_at or "unknown" }}</dd>
-      <dt>Source</dt>
-      <dd>
-        {{ (assessment.source_type or "unknown") | upper }}
-        {% if assessment.source.report_id %}
-          / {{ assessment.source.report_name or "Security Assessment" }} / report {{ assessment.source.report_id or "336" }}
-        {% elif assessment.source.raw_file_path %}
-          / <code>{{ assessment.source.raw_file_path }}</code>
+    <section class="metadata-card">
+      <div class="section-heading">
+        <h3>Source Metadata</h3>
+      </div>
+      <dl id="source-metadata">
+        <dt>Source</dt>
+        <dd>{{ (assessment.source_type or "unknown") | upper }}</dd>
+        <dt>Imported at</dt>
+        <dd>{{ assessment.collected_at or "N/A" }}</dd>
+        {% if source.report_name or source.report_id %}
+          <dt>Report</dt>
+          <dd>
+            {{ source.report_name or "Security Assessment" }}
+            {% if source.report_id %}(report {{ source.report_id }}){% endif %}
+          </dd>
         {% endif %}
-      </dd>
-      <dt>Artifact</dt>
-      <dd><code>{{ assessment.path }}</code></dd>
-    </dl>
+      </dl>
+    </section>
 
     <div class="status-summary">
       <div class="status-card status-critical">
@@ -71,7 +75,7 @@
 
     <h3>Items Requiring Attention</h3>
     {% if summary.highlights %}
-      <table>
+      <table class="compact-table">
         <thead>
           <tr>
             <th>Section</th>
@@ -100,7 +104,7 @@
     <h3>Detailed Checks</h3>
     {% for section in summary.sections %}
       <h4>{{ section.name }}</h4>
-      <table>
+      <table class="compact-table">
         <thead>
           <tr>
             <th>Parameter</th>

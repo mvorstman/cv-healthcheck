@@ -3,12 +3,68 @@
 {% block content %}
 <section>
   <h2>{{ report.title }}</h2>
-  <p>A basic customer-facing summary built from the current Quick HC artifacts.</p>
-  <p><a href="{{ url_for('main.quick_hc_report_builder') }}">Open Report Builder</a></p>
+  <p>A customer-facing summary assembled from the current Quick HC artifacts.</p>
+
+  {% set customer_id = report.environment.customer_id if report.environment.customer_id and report.environment.customer_id != "unknown_customer" else None %}
+  {% set commcell_id = report.environment.commcell_id if report.environment.commcell_id and report.environment.commcell_id != "unknown_commcell" else None %}
+  {% set commcell_name = report.environment.commcell_name if report.environment.commcell_name and report.environment.commcell_name != "Unknown CommCell" else None %}
+
+  <section class="metadata-card">
+    <div class="section-heading">
+      <h3>Report Options</h3>
+      <p class="helper-text">Adjust the included sections before rendering a tailored version.</p>
+    </div>
+    <p><a href="{{ url_for('main.quick_hc_report_builder') }}">Open Report Builder</a></p>
+  </section>
+
+  <section class="metadata-card">
+    <div class="section-heading">
+      <h3>Source Metadata</h3>
+    </div>
+    <dl id="source-metadata">
+      <dt>Generated at</dt>
+      <dd>{{ report.generated_at or "N/A" }}</dd>
+      {% if customer_id %}
+        <dt>Customer ID</dt>
+        <dd><code>{{ customer_id }}</code></dd>
+      {% endif %}
+      {% if commcell_id %}
+        <dt>CommCell ID</dt>
+        <dd><code>{{ commcell_id }}</code></dd>
+      {% endif %}
+      {% if commcell_name %}
+        <dt>CommCell Name</dt>
+        <dd>{{ commcell_name }}</dd>
+      {% endif %}
+    </dl>
+  </section>
+
+  <div class="status-summary">
+    <div class="status-card">
+      <strong>{{ report.security_assessment.total_checks if report.security_assessment.available else 0 }}</strong>
+      <span>Security checks</span>
+    </div>
+    <div class="status-card status-critical">
+      <strong>{{ report.security_assessment.critical if report.security_assessment.available else 0 }}</strong>
+      <span>Critical findings</span>
+    </div>
+    <div class="status-card status-warning">
+      <strong>{{ report.security_assessment.warning if report.security_assessment.available else 0 }}</strong>
+      <span>Warning findings</span>
+    </div>
+    <div class="status-card">
+      <strong>{{ report.license_summary.workload_summary_section_count if report.license_summary.available else 0 }}</strong>
+      <span>Workload sections</span>
+    </div>
+    <div class="status-card">
+      <strong>{{ report.evidence | length }}</strong>
+      <span>Artifact sources</span>
+    </div>
+  </div>
 
   {% if report.environment.rows %}
     <h3>Environment</h3>
-    <table>
+    <table class="compact-table">
       <tbody>
         {% for row in report.environment.rows %}
           <tr><th>{{ row.label }}</th><td>{{ row.value or "Not collected yet" }}</td></tr>
@@ -20,7 +76,7 @@
   <h3>Security Assessment</h3>
   {% if report.security_assessment.available and report.security_assessment.has_content %}
     {% if report.security_assessment.show_summary %}
-      <table>
+      <table class="compact-table">
         <tbody>
           <tr><th>Total checks</th><td>{{ report.security_assessment.total_checks }}</td></tr>
           <tr><th>Critical</th><td>{{ report.security_assessment.critical }}</td></tr>
@@ -65,7 +121,7 @@
   <h3>License Summary</h3>
   {% if report.license_summary.available and report.license_summary.has_content %}
     {% if report.license_summary.show_summary %}
-      <table>
+      <table class="compact-table">
         <tbody>
           <tr><th>Source Type</th><td>{{ (report.license_summary.source_type or "unknown") | upper }}</td></tr>
           <tr><th>Imported At</th><td>{{ report.license_summary.imported_at or "Not collected yet" }}</td></tr>
@@ -164,7 +220,7 @@
 
   <h3>Evidence / Sources</h3>
   {% if report.evidence %}
-    <table>
+    <table class="compact-table">
       <thead>
         <tr>
           <th>Artifact Type</th>

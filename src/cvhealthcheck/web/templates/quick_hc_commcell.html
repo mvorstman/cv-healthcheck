@@ -3,47 +3,64 @@
 {% block content %}
 <section>
   <h2>CommCell Identity / Version</h2>
+  <p>Customer-facing identity and platform details for the connected CommCell.</p>
   {% set identity = result.identity %}
   {% set source = result.source %}
 
-  <dl>
-    <dt>HTTP status</dt>
-    <dd>{{ result.http_status }}{% if result.ok %} OK{% endif %}</dd>
-    <dt>Artifact</dt>
-    <dd><code>{{ result.artifact or "not written" }}</code></dd>
-    <dt>Collected</dt>
-    <dd>{{ result.collected_at }}</dd>
-    <dt>Source endpoint</dt>
-    <dd>{{ source.method }} <code>{{ source.endpoint }}</code></dd>
-    <dt>Authentication</dt>
-    <dd>{{ source.auth }}</dd>
-  </dl>
+  <section class="metadata-card">
+    <div class="section-heading">
+      <h3>Source Metadata</h3>
+    </div>
+    <dl id="source-metadata">
+      <dt>Source</dt>
+      <dd>{{ source.method }} <code>{{ source.endpoint }}</code></dd>
+      <dt>Collected at</dt>
+      <dd>{{ result.collected_at or "N/A" }}</dd>
+      <dt>Authentication</dt>
+      <dd>{{ source.auth or "N/A" }}</dd>
+    </dl>
+  </section>
 
-  <h3>Normalized Fields</h3>
-  <table>
+  <div class="status-summary">
+    <div class="status-card">
+      <strong>{{ result.http_status or "N/A" }}</strong>
+      <span>HTTP status</span>
+    </div>
+    <div class="status-card">
+      <strong>{{ identity.releaseId or "N/A" }}</strong>
+      <span>Release ID</span>
+    </div>
+    <div class="status-card">
+      <strong>{{ identity.osType or "N/A" }}</strong>
+      <span>Platform</span>
+    </div>
+  </div>
+
+  <h3>CommCell Details</h3>
+  <table class="compact-table">
     <tbody>
       <tr>
-        <th>hostName</th>
+        <th>Host Name</th>
         <td>{{ identity.hostName or "" }}</td>
       </tr>
       <tr>
-        <th>csGUID</th>
+        <th>CommCell GUID</th>
         <td>{{ identity.csGUID or "" }}</td>
       </tr>
       <tr>
-        <th>csVersionInfo</th>
+        <th>Version</th>
         <td>{{ identity.csVersionInfo or "" }}</td>
       </tr>
       <tr>
-        <th>releaseId</th>
+        <th>Release ID</th>
         <td>{{ identity.releaseId or "" }}</td>
       </tr>
       <tr>
-        <th>osType</th>
+        <th>Platform</th>
         <td>{{ identity.osType or "" }}</td>
       </tr>
       <tr>
-        <th>timeZone</th>
+        <th>Time Zone</th>
         <td>{{ identity.timeZone or "" }}</td>
       </tr>
     </tbody>
