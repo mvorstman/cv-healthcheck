@@ -13,6 +13,10 @@ from cvhealthcheck.security_assessment.models import (
     ReportStream,
 )
 
+LICENSE_SUMMARY_SCHEMA_VERSION = 1
+LICENSE_SUMMARY_ARTIFACT_VERSION = "1.0"
+LICENSE_SUMMARY_COLLECTOR_VERSION = "1.0"
+
 
 def _require_text(value: str | None, field_name: str) -> str:
     text = str(value or "").strip()
@@ -212,6 +216,9 @@ class LicenseSummaryArtifact:
     agent_feature_licenses: list[AgentFeatureLicense]
     workload_summary_sections: list[WorkloadSummarySection]
     source: dict[str, Any]
+    schema_version: int = LICENSE_SUMMARY_SCHEMA_VERSION
+    artifact_version: str = LICENSE_SUMMARY_ARTIFACT_VERSION
+    collector_version: str = LICENSE_SUMMARY_COLLECTOR_VERSION
     source_file: str | None = None
     generated_on: str | None = None
     customer_id: str | None = None
@@ -247,6 +254,8 @@ class LicenseSummaryArtifact:
         object.__setattr__(self, "artifact_type", _require_text(self.artifact_type, "artifact_type"))
         object.__setattr__(self, "source_type", _require_text(self.source_type, "source_type"))
         object.__setattr__(self, "imported_at", _ensure_isoish_timestamp(self.imported_at, "imported_at"))
+        object.__setattr__(self, "artifact_version", _require_text(self.artifact_version, "artifact_version"))
+        object.__setattr__(self, "collector_version", _require_text(self.collector_version, "collector_version"))
         object.__setattr__(self, "source_file", _optional_text(self.source_file))
         object.__setattr__(self, "generated_on", _optional_text(self.generated_on))
         object.__setattr__(self, "customer_id", _optional_text(self.customer_id))
@@ -277,6 +286,9 @@ class LicenseSummaryArtifact:
     def to_dict(self) -> dict[str, Any]:
         return {
             "artifact_type": self.artifact_type,
+            "schema_version": self.schema_version,
+            "artifact_version": self.artifact_version,
+            "collector_version": self.collector_version,
             "artifact_id": self.artifact_id,
             "import_run_id": self.import_run_id,
             "source_type": self.source_type,
@@ -323,6 +335,13 @@ class LicenseSummaryArtifact:
     def from_dict(cls, payload: dict[str, Any]) -> "LicenseSummaryArtifact":
         return cls(
             artifact_type=str(payload.get("artifact_type") or ""),
+            schema_version=int(payload.get("schema_version") or LICENSE_SUMMARY_SCHEMA_VERSION),
+            artifact_version=str(
+                payload.get("artifact_version") or LICENSE_SUMMARY_ARTIFACT_VERSION
+            ),
+            collector_version=str(
+                payload.get("collector_version") or LICENSE_SUMMARY_COLLECTOR_VERSION
+            ),
             artifact_id=payload.get("artifact_id"),
             import_run_id=payload.get("import_run_id"),
             source_type=str(payload.get("source_type") or ""),

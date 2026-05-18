@@ -9,7 +9,7 @@ from requests import Response, Session
 from urllib3.exceptions import InsecureRequestWarning
 
 from .auth import load_token
-from .config import Settings, load_settings
+from .config import Settings, load_settings, warn_if_ssl_verification_disabled
 
 
 class ConfigurationError(RuntimeError):
@@ -43,6 +43,7 @@ class CommvaultApiClient:
         self.session = session or requests.Session()
 
         if not self.settings.verify_ssl:
+            warn_if_ssl_verification_disabled(self.settings, component=self.__class__.__name__)
             requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
     @property

@@ -2,6 +2,18 @@
 
 ## 2026-05-18
 
+- Merged the Security Assessment registry refactor and the full License Summary stack into `main`, then started a dedicated hardening pass instead of adding more report features.
+- Split the Flask route surface into focused modules under `src/cvhealthcheck/web/routes/` so Quick HC, Security Assessment, development views, metrics, and Reports Plus handlers are no longer concentrated in one large route file.
+- Kept all existing URLs and templates stable during the route split; the change is organizational only and routes still stay thin over service-layer logic.
+- Added explicit artifact version fields to the Security Assessment and License Summary canonical models:
+  `schema_version`,
+  `artifact_version`,
+  and `collector_version`.
+- Kept backward compatibility for previously persisted artifacts by defaulting missing version fields during model load instead of forcing a migration.
+- Changed SSL verification behavior so `CV_VERIFY_SSL` now defaults to enabled rather than disabled.
+- Added explicit warning logging when SSL verification is disabled so insecure lab-only behavior is visible at client creation/login time rather than silent.
+- Added focused regression coverage for route registration after the split, unchanged Quick HC/report URLs, artifact version fields, backward-compatible artifact loads, and SSL default/warning behavior.
+
 - Extended the License Summary canonical artifact to preserve the existing detail tables and add `workload_summary_sections[]` for category/workload summary tables.
 - Added canonical workload/category summary support for the discovered License Summary sections:
   `Capacity Licenses`,

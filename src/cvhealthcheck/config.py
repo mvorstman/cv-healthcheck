@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import os
+import logging
 from dataclasses import dataclass
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def _as_bool(value: str | None, default: bool) -> bool:
@@ -15,7 +18,7 @@ def _as_bool(value: str | None, default: bool) -> bool:
 class Settings:
     base_url: str
     token_path: Path
-    verify_ssl: bool = False
+    verify_ssl: bool = True
     timeout_seconds: float = 30.0
 
 
@@ -26,7 +29,7 @@ def project_root() -> Path:
 def load_settings() -> Settings:
     base_url = os.getenv("CV_BASE_URL", "").rstrip("/")
     token_path = Path(os.getenv("CV_TOKEN_FILE") or os.getenv("CV_TOKEN_PATH", ".token"))
-    verify_ssl = _as_bool(os.getenv("CV_VERIFY_SSL"), default=False)
+    verify_ssl = _as_bool(os.getenv("CV_VERIFY_SSL"), default=True)
     timeout_seconds = float(os.getenv("CV_TIMEOUT") or os.getenv("CV_TIMEOUT_SECONDS", "30"))
 
     return Settings(
@@ -34,4 +37,14 @@ def load_settings() -> Settings:
         token_path=token_path,
         verify_ssl=verify_ssl,
         timeout_seconds=timeout_seconds,
+    )
+
+
+def warn_if_ssl_verification_disabled(settings: Settings, *, component: str) -> None:
+    if settings.verify_ssl:
+        return
+    logger.warning(
+        "SSL certificate verification is disabled for %s. "
+        "Set CV_VERIFY_SSL=true unless this is an isolated lab environment.",
+        component,
     )

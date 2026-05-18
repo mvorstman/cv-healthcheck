@@ -5,6 +5,10 @@ from typing import Any
 
 from .normalize import CANONICAL_FINDING_KEYS, DEFAULT_STATUS_KEYS
 
+SECURITY_ASSESSMENT_SCHEMA_VERSION = 1
+SECURITY_ASSESSMENT_ARTIFACT_VERSION = "1.0"
+SECURITY_ASSESSMENT_COLLECTOR_VERSION = "1.0"
+
 
 def _require_text(value: str | None, field_name: str) -> str:
     text = str(value or "").strip()
@@ -286,6 +290,9 @@ class SecurityAssessmentArtifact:
     sections: list[str]
     findings: list[CanonicalFinding]
     source: dict[str, Any]
+    schema_version: int = SECURITY_ASSESSMENT_SCHEMA_VERSION
+    artifact_version: str = SECURITY_ASSESSMENT_ARTIFACT_VERSION
+    collector_version: str = SECURITY_ASSESSMENT_COLLECTOR_VERSION
     source_file: str | None = None
     generated_on: str | None = None
     artifact_id: str | None = None
@@ -315,6 +322,8 @@ class SecurityAssessmentArtifact:
         object.__setattr__(self, "artifact_type", _require_text(self.artifact_type, "artifact_type"))
         object.__setattr__(self, "source_type", _require_text(self.source_type, "source_type"))
         object.__setattr__(self, "imported_at", _ensure_isoish_timestamp(self.imported_at, "imported_at"))
+        object.__setattr__(self, "artifact_version", _require_text(self.artifact_version, "artifact_version"))
+        object.__setattr__(self, "collector_version", _require_text(self.collector_version, "collector_version"))
         object.__setattr__(self, "source_file", _optional_text(self.source_file))
         object.__setattr__(self, "generated_on", _optional_text(self.generated_on))
         object.__setattr__(self, "artifact_id", _optional_text(self.artifact_id))
@@ -343,6 +352,9 @@ class SecurityAssessmentArtifact:
     def to_dict(self) -> dict[str, Any]:
         return {
             "artifact_type": self.artifact_type,
+            "schema_version": self.schema_version,
+            "artifact_version": self.artifact_version,
+            "collector_version": self.collector_version,
             "artifact_id": self.artifact_id,
             "import_run_id": self.import_run_id,
             "customer_id": self.customer_id,
@@ -398,6 +410,15 @@ class SecurityAssessmentArtifact:
         return cls(
             artifact_type=str(payload.get("artifact_type") or ""),
             source_type=str(payload.get("source_type") or ""),
+            schema_version=int(
+                payload.get("schema_version") or SECURITY_ASSESSMENT_SCHEMA_VERSION
+            ),
+            artifact_version=str(
+                payload.get("artifact_version") or SECURITY_ASSESSMENT_ARTIFACT_VERSION
+            ),
+            collector_version=str(
+                payload.get("collector_version") or SECURITY_ASSESSMENT_COLLECTOR_VERSION
+            ),
             source_file=payload.get("source_file"),
             file_path=payload.get("file_path"),
             is_active=bool(payload.get("is_active", True)),

@@ -7,7 +7,7 @@ import requests
 from flask import has_request_context, session
 from urllib3.exceptions import InsecureRequestWarning
 
-from cvhealthcheck.config import load_settings
+from cvhealthcheck.config import load_settings, warn_if_ssl_verification_disabled
 
 SESSION_TOKEN_KEY = "commvault_token"
 
@@ -25,6 +25,7 @@ def login_to_commvault(base_url: str, username: str, password: str) -> str:
         raise AuthError("Username and password are required.")
 
     if not settings.verify_ssl:
+        warn_if_ssl_verification_disabled(settings, component="Commvault login")
         requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
     password_b64 = base64.b64encode(password.encode("utf-8")).decode("ascii")

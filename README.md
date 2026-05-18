@@ -296,11 +296,13 @@ or:
 
 It may also contain a JSON `refresh_token`; current lab probes and Reports Plus calls use `access_token`.
 
-SSL verification is disabled by default for lab usage. Enable it with:
+SSL verification is enabled by default. Disable it only for isolated lab usage:
 
 ```bash
-export CV_VERIFY_SSL=true
+export CV_VERIFY_SSL=false
 ```
+
+When `CV_VERIFY_SSL=false`, the clients now log a warning so insecure lab behavior is not silent.
 
 ## Lab Environment Connection Setup
 
@@ -310,7 +312,7 @@ The lab Command Center and Web Server are available at:
 https://192.168.182.129:4433
 ```
 
-Use the direct IP for Rocky VM testing. The gateway name is `gw02`, but DNS resolution for `gw02` may fail from Rocky. The lab uses a self-signed certificate, so SSL verification is disabled for local lab work. The known lab version is Commvault v11.40.
+Use the direct IP for Rocky VM testing. The gateway name is `gw02`, but DNS resolution for `gw02` may fail from Rocky. The lab uses a self-signed certificate, so local lab work may require explicitly setting `CV_VERIFY_SSL=false`. The known lab version is Commvault v11.40.
 
 Create a user-local environment file:
 

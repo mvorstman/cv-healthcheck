@@ -85,6 +85,18 @@ Status: started.
 - First subject: CommCell Identity / Version from `GET /commandcenter/api/CommServ`.
 - Normalize CommCell identity fields for later rule-engine consumption without adding health scoring.
 
+## Current Foundation Hardening
+
+Status: started.
+
+- Keep the current user-facing URLs and templates stable while improving internal maintainability.
+- Split the Flask route layer into focused modules instead of growing one monolithic route file.
+- Standardize artifact version metadata across canonical artifact types.
+- Keep existing persisted artifacts readable without forcing a migration yet.
+- Make SSL verification default to enabled and require explicit opt-out for self-signed lab environments.
+- Emit clear warnings when insecure SSL mode is used.
+- Add focused regression coverage around route registration, key page availability, artifact version fields, and SSL behavior.
+
 ## Near-Term Follow-Up: Security Assessment Multi-Source Stabilization
 
 Status: active.
