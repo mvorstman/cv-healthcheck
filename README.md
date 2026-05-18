@@ -199,6 +199,43 @@ http://127.0.0.1:5001/reportsplus/security-assessment
 
 Current unresolved issue: imported HTML and CSV artifacts appear to render correctly when REST is unavailable, but noisy text may still appear when the REST source is active. The remaining defect is believed to be in REST/live source interaction, source precedence, stale artifact selection, or an alternate render/load path rather than the offline import normalization pipeline itself.
 
+## License Summary Artifact Pipeline
+
+License Summary now has a separate artifact pipeline built on the same registry-backed persistence pattern used by Security Assessment.
+
+Supported sources are:
+
+- CSV export import
+- HTML export import
+- XLSX API viewer recording import
+- REST dataset extraction through Reports Plus report 206
+
+The current implementation is backend-focused and does not add a new user-facing dashboard. It normalizes the observed License Summary report sections:
+
+- Other Licenses - current usage details
+- Agent and Feature Licenses - current usage details
+
+Current package layout:
+
+- `models.py`: canonical `LicenseSummaryArtifact`, `OtherLicense`, and `AgentFeatureLicense` models
+- `import_csv.py`: multi-section CSV parsing
+- `import_html.py`: HTML table extraction by validated header shape
+- `collect_rest.py`: REST report 206 normalization plus XLSX recording import
+- `validate.py`: canonical row validity filters
+- `artifact.py`: artifact construction and compatibility writes
+- `service.py`: upload orchestration and registry-backed read path
+
+Current outputs include:
+
+```text
+data/imports/license_summary/artifact_registry.sqlite3
+data/catalog/license_summary/<artifact_id>.json
+data/catalog/license_summary/latest.json
+data/catalog/license_summary/latest_<source_type>.json
+```
+
+The License Summary canonical artifact currently focuses on acquisition, normalization, provenance, and persistence only. No scoring, compliance rules, recommendations, or trend analytics are implemented yet.
+
 ## Metric Charts
 
 Historical metric pages use Chart.js through a reusable server-side payload pattern:

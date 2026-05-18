@@ -18,6 +18,7 @@ data/imports/**/*.json
 data/imports/**/*.csv
 data/imports/**/*.htm
 data/imports/**/*.html
+data/imports/**/*.xlsx
 data/imports/**/*.sqlite
 data/imports/**/*.sqlite3
 data/imports/**/*.sqlite3-shm

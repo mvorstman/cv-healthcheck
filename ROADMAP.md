@@ -100,6 +100,18 @@ Status: active.
 - Preserve all artifact files by default and design future retention/cleanup as an explicit, non-destructive operator action.
 - Keep export/audit tooling lightweight while the registry model settles; no heavy migration framework yet.
 
+## Near-Term Follow-Up: License Summary Artifact Foundation
+
+Status: started.
+
+- Keep License Summary backend-only for now; no dashboard or scoring layer yet.
+- Normalize CSV export, HTML export, XLSX API viewer recordings, and live Reports Plus report 206 extraction into one canonical artifact.
+- Reuse the artifact registry/read-path pattern already established for Security Assessment.
+- Preserve customer and CommCell scoping in registry selection and persistence.
+- Treat `latest.json` as compatibility/cache only; prefer registry-backed reads internally.
+- Keep raw dataset evidence and source metadata attached for later provenance and parity checks.
+- Defer scoring, compliance rules, recommendations, and trend analytics.
+
 ## Foundation Milestone: Persistent Artifact Registry
 
 Status: started.
