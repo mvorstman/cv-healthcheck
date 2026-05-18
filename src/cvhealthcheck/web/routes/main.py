@@ -627,6 +627,33 @@ def quick_hc_license_summary_import():
     return redirect(url_for("main.quick_hc_license_summary"))
 
 
+@bp.route("/quick-hc/license-summary/collect", methods=["POST"])
+@login_required
+def quick_hc_license_summary_collect():
+    service = LicenseSummaryService()
+    try:
+        result = service.collect_from_rest(client=_reportsplus_client())
+    except LicenseSummaryImportError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.quick_hc_license_summary"))
+    except Exception as exc:
+        flash(f"License Summary REST collection failed: {exc}", "error")
+        return redirect(url_for("main.quick_hc_license_summary"))
+
+    source = result["normalized"].get("source", {})
+    if source.get("http_status") == 401:
+        clear_current_token()
+        return redirect(url_for("main.login", next=url_for("main.quick_hc_license_summary"), expired="1"))
+
+    other_count = len(result["normalized"].get("other_licenses") or [])
+    agent_count = len(result["normalized"].get("agent_feature_licenses") or [])
+    flash(
+        f"REST collection completed with {other_count} other licenses and {agent_count} agent/feature licenses.",
+        "success",
+    )
+    return redirect(url_for("main.quick_hc_license_summary"))
+
+
 @bp.route("/reportsplus/reports")
 @login_required
 def reportsplus_reports():

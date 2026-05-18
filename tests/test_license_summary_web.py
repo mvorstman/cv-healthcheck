@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 
 from cvhealthcheck.license_summary.import_csv import parse_license_summary_csv
+from cvhealthcheck.auth.commvault_auth import SESSION_TOKEN_KEY
 from cvhealthcheck.license_summary.service import persist_license_summary_artifact
 from cvhealthcheck.web.app import create_app
 
@@ -187,3 +188,68 @@ def test_quick_hc_license_summary_upload_rejects_unsupported_type(tmp_path, monk
 
     assert response.status_code == 200
     assert "Unsupported file type" in response.get_data(as_text=True)
+
+
+def test_quick_hc_license_summary_collect_calls_service_and_redirects(tmp_path, monkeypatch) -> None:
+    import cvhealthcheck.license_summary.service as license_summary_service_module
+    import cvhealthcheck.license_summary.artifact as license_summary_artifact_module
+
+    monkeypatch.setattr(
+        license_summary_service_module,
+        "LICENSE_SUMMARY_REGISTRY_PATH",
+        tmp_path / "registry.sqlite3",
+    )
+    monkeypatch.setattr(
+        license_summary_service_module,
+        "LICENSE_SUMMARY_CATALOG_DIR",
+        tmp_path / "catalog",
+    )
+    monkeypatch.setattr(
+        license_summary_artifact_module,
+        "LICENSE_SUMMARY_CATALOG_DIR",
+        tmp_path / "catalog",
+    )
+
+    called: dict[str, object] = {}
+
+    def fake_collect_from_rest(self, *, client=None, **kwargs):
+        called["client"] = client
+        return {
+            "artifact": str(tmp_path / "catalog" / "latest.json"),
+            "normalized": {
+                "source": {"http_status": 200},
+                "other_licenses": [{"license": "Cloud Storage"}],
+                "agent_feature_licenses": [{"license": "Virtual Server"}],
+            },
+        }
+
+    monkeypatch.setattr(
+        license_summary_service_module.LicenseSummaryService,
+        "collect_from_rest",
+        fake_collect_from_rest,
+    )
+
+    app = create_app()
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session[SESSION_TOKEN_KEY] = "test-token"
+
+    response = client.post(
+        "/quick-hc/license-summary/collect",
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert called["client"] is not None
+    body = response.get_data(as_text=True)
+    assert "REST collection completed" in body
+
+
+def test_quick_hc_license_summary_collect_requires_login() -> None:
+    app = create_app()
+    client = app.test_client()
+
+    response = client.post("/quick-hc/license-summary/collect")
+
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]

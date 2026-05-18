@@ -4,6 +4,7 @@ from io import BytesIO
 import zipfile
 
 from cvhealthcheck.license_summary.collect_rest import (
+    collect_license_summary_rest,
     normalize_license_summary_rest_extraction,
     parse_license_summary_xlsx_recording,
 )
@@ -233,6 +234,72 @@ def test_license_summary_registry_write_and_registry_first_read(tmp_path) -> Non
     assert loaded["loaded_from_path"] == persisted["file_path"]
     assert current["commcell_name"] == "CommServe A"
     assert len(current["other_licenses"]) == 2
+
+
+def test_license_summary_service_collect_from_rest_persists_registry_artifact(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    collected = {
+        "extraction": {
+            "summary": {
+                "report_http_status": 200,
+                "report_name": "License summary",
+            }
+        },
+        "normalized": {
+            "artifact_type": "license_summary",
+            "source_type": "rest",
+            "imported_at": "2026-05-18T09:15:00+00:00",
+            "generated_on": "2026-05-18T09:15:00+00:00",
+            "source": {
+                "report_id": "206",
+                "report_name": "License summary",
+                "http_status": 200,
+                "ok": True,
+            },
+            "other_licenses": [
+                {
+                    "license": "Cloud Storage",
+                    "available_total": 100,
+                    "used": 40,
+                    "unit": None,
+                    "raw_available_total": "100",
+                    "raw_used": "40",
+                    "raw_fields": {},
+                }
+            ],
+            "agent_feature_licenses": [
+                {
+                    "license": "Virtual Server",
+                    "permanent_total": 50,
+                    "permanent_used": 12,
+                    "term_total": 10,
+                    "term_used": 3,
+                    "client": "Client A",
+                    "agent": "Agent A",
+                    "install_date": "2026-05-01",
+                    "raw_fields": {},
+                }
+            ],
+        },
+    }
+
+    import cvhealthcheck.license_summary.service as service_module
+
+    monkeypatch.setattr(service_module, "collect_license_summary_rest", lambda **kwargs: collected)
+
+    service = LicenseSummaryService(
+        catalog_dir=tmp_path / "catalog",
+        registry_path=tmp_path / "registry.sqlite3",
+    )
+    result = service.collect_from_rest()
+    current = service.get_current()
+
+    assert result["normalized"]["source_type"] == "rest"
+    assert result["normalized"]["artifact_id"] == current["artifact_id"]
+    assert current["source"]["report_id"] == "206"
+    assert len(current["other_licenses"]) == 1
 
 
 def _build_xlsx(rows: list[list[str]]) -> bytes:

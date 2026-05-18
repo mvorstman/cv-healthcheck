@@ -6,6 +6,7 @@ from typing import Any
 import xml.etree.ElementTree as ET
 import zipfile
 
+from cvhealthcheck.reportsplus.client import ReportsPlusClient
 from cvhealthcheck.reportsplus.extract_report import extract_report
 
 from .artifact import build_license_summary_artifact, write_license_summary_artifact
@@ -17,11 +18,17 @@ LICENSE_SUMMARY_REPORT_ID = "206"
 
 def collect_license_summary_rest(
     *,
+    client: ReportsPlusClient | None = None,
     execute: bool = True,
     sample_limit: int = 500,
     write_artifact: bool = True,
 ) -> dict[str, Any]:
-    extraction = extract_report(LICENSE_SUMMARY_REPORT_ID, execute=execute, sample_limit=sample_limit)
+    extraction = extract_report(
+        LICENSE_SUMMARY_REPORT_ID,
+        client=client,
+        execute=execute,
+        sample_limit=sample_limit,
+    )
     artifact = normalize_license_summary_rest_extraction(extraction)
     if write_artifact:
         artifact["artifact_paths"] = write_license_summary_artifact(artifact)
