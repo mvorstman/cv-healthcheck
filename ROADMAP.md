@@ -104,13 +104,27 @@ Status: active.
 
 Status: started.
 
-- Keep License Summary backend-only for now; no dashboard or scoring layer yet.
+- Keep License Summary minimal in Quick HC; no scoring, recommendations, charts, or broader dashboard redesign.
 - Normalize CSV export, HTML export, XLSX API viewer recordings, and live Reports Plus report 206 extraction into one canonical artifact.
 - Reuse the artifact registry/read-path pattern already established for Security Assessment.
 - Preserve customer and CommCell scoping in registry selection and persistence.
 - Treat `latest.json` as compatibility/cache only; prefer registry-backed reads internally.
 - Keep raw dataset evidence and source metadata attached for later provenance and parity checks.
+- Support both logical License Summary data families in the canonical artifact:
+  detail/current-usage tables and workload/category summary sections.
+- Preserve the missing-values policy:
+  do not fabricate absent sections,
+  do not guess `license_expiry`,
+  and render only sections that return real rows in the current CommCell.
+- Continue using page context plus field/header shape for report 206 discovery; do not hardcode environment-specific dataset GUIDs.
 - Defer scoring, compliance rules, recommendations, and trend analytics.
+
+## Future Research: Commvault Report Definitions
+
+- Treat raw Commvault report-definition exports such as `Licensesummary.xml` as sensitive research inputs.
+- Do not commit customer or environment-specific XML unless it has been explicitly sanitized and approved.
+- Analyze XML report definitions on a separate research branch when needed.
+- Investigate whether XML exports can become the basis for a generic Commvault report-definition parser covering pages, widgets, datasets, parameters, GUID relationships, and section layout.
 
 ## Foundation Milestone: Persistent Artifact Registry
 
