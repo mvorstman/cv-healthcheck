@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h2>{{ report.title }}</h2>
+  <p>A basic customer-facing summary built from the current Quick HC artifacts.</p>
+
+  <h3>Environment</h3>
+  <table>
+    <tbody>
+      <tr><th>Customer ID</th><td>{{ report.environment.customer_id or "Not collected yet" }}</td></tr>
+      <tr><th>CommCell ID</th><td>{{ report.environment.commcell_id or "Not collected yet" }}</td></tr>
+      <tr><th>CommCell Name</th><td>{{ report.environment.commcell_name or "Not collected yet" }}</td></tr>
+      <tr><th>Generated At</th><td>{{ report.environment.generated_at }}</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Security Assessment</h3>
+  {% if report.security_assessment.available %}
+    <table>
+      <tbody>
+        <tr><th>Total checks</th><td>{{ report.security_assessment.total_checks }}</td></tr>
+        <tr><th>Critical</th><td>{{ report.security_assessment.critical }}</td></tr>
+        <tr><th>Warning</th><td>{{ report.security_assessment.warning }}</td></tr>
+        <tr><th>Info</th><td>{{ report.security_assessment.info }}</td></tr>
+        <tr><th>Good</th><td>{{ report.security_assessment.good }}</td></tr>
+        <tr><th>Source Type</th><td>{{ (report.security_assessment.source_type or "unknown") | upper }}</td></tr>
+        <tr><th>Imported At</th><td>{{ report.security_assessment.imported_at or "Not collected yet" }}</td></tr>
+        <tr><th>Generated On</th><td>{{ report.security_assessment.generated_on or "Not collected yet" }}</td></tr>
+        <tr><th>Detail Page</th><td><a href="{{ report.security_assessment.detail_url }}">View Security Assessment</a></td></tr>
+      </tbody>
+    </table>
+  {% else %}
+    <p>{{ report.security_assessment.message }}</p>
+    <p><a href="{{ report.security_assessment.detail_url }}">Open Security Assessment</a></p>
+  {% endif %}
+
+  <h3>License Summary</h3>
+  {% if report.license_summary.available %}
+    <table>
+      <tbody>
+        <tr><th>Source Type</th><td>{{ (report.license_summary.source_type or "unknown") | upper }}</td></tr>
+        <tr><th>Imported At</th><td>{{ report.license_summary.imported_at or "Not collected yet" }}</td></tr>
+        <tr><th>Generated On</th><td>{{ report.license_summary.generated_on or "Not collected yet" }}</td></tr>
+        <tr><th>License Expiry</th><td>{{ report.license_summary.license_expiry or "N/A" }}</td></tr>
+        <tr><th>Workload Summary Sections</th><td>{{ report.license_summary.workload_summary_section_count }}</td></tr>
+        <tr><th>Other License Rows</th><td>{{ report.license_summary.other_license_row_count }}</td></tr>
+        <tr><th>Agent/Feature License Rows</th><td>{{ report.license_summary.agent_feature_license_row_count }}</td></tr>
+        <tr><th>Detail Page</th><td><a href="{{ report.license_summary.detail_url }}">View License Summary</a></td></tr>
+      </tbody>
+    </table>
+  {% else %}
+    <p>{{ report.license_summary.message }}</p>
+    <p><a href="{{ report.license_summary.detail_url }}">Open License Summary</a></p>
+  {% endif %}
+
+  <h3>Evidence / Sources</h3>
+  {% if report.evidence %}
+    <table>
+      <thead>
+        <tr>
+          <th>Artifact Type</th>
+          <th>Source Type</th>
+          <th>Imported At</th>
+          <th>Generated On</th>
+          <th>Loaded From</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in report.evidence %}
+          <tr>
+            <td>{{ item.artifact_type }}</td>
+            <td>{{ (item.source_type or "unknown") | upper }}</td>
+            <td>{{ item.imported_at or "Not collected yet" }}</td>
+            <td>{{ item.generated_on or "Not collected yet" }}</td>
+            <td><code>{{ item.loaded_from_path or "Not collected yet" }}</code></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>Not collected yet</p>
+  {% endif %}
+</section>
+{% endblock %}

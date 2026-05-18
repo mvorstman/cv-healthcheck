@@ -2,6 +2,17 @@
 
 ## 2026-05-18
 
+- Added a basic Quick HC HTML report output at `/quick-hc/report`.
+- Kept the report page assembly-only: it loads the current Security Assessment and License Summary artifacts through their existing service layers rather than reading artifact files directly in the route.
+- Added a small `quickhc/report_service.py` layer that builds a simple combined report view model with:
+  environment identifiers,
+  source metadata,
+  timestamps,
+  Security Assessment counters,
+  and License Summary summary counts.
+- Kept missing-artifact behavior graceful: the report shows `Not collected yet` instead of failing when one or both artifacts are absent.
+- Added regression coverage for the report route with no artifacts, Security Assessment only, License Summary only, combined rendering, and service delegation.
+
 - Merged the Security Assessment registry refactor and the full License Summary stack into `main`, then started a dedicated hardening pass instead of adding more report features.
 - Split the Flask route surface into focused modules under `src/cvhealthcheck/web/routes/` so Quick HC, Security Assessment, development views, metrics, and Reports Plus handlers are no longer concentrated in one large route file.
 - Kept all existing URLs and templates stable during the route split; the change is organizational only and routes still stay thin over service-layer logic.

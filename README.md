@@ -43,6 +43,7 @@ Current Quick HC items:
 - CommCell Identity / Version from REST.
 - Client Growth and Capacity License metric pages from Reports Plus / Metrics artifacts.
 - Security Assessment from Reports Plus report 336.
+- A basic HTML Quick HealthCheck report page that summarizes the current Security Assessment and License Summary artifacts.
 
 Phase 3.0 started with CommCell Identity / Version from:
 
@@ -70,7 +71,10 @@ Flask UI:
 http://127.0.0.1:5001/quick-hc
 http://127.0.0.1:5001/quick-hc/commcell
 http://127.0.0.1:5001/quick-hc/security-assessment
+http://127.0.0.1:5001/quick-hc/report
 ```
+
+The Quick HC report page is intentionally minimal. It assembles the current Security Assessment and License Summary artifacts through their service layers and renders a simple HTML summary with environment identifiers, evidence timestamps, and links back to the underlying detail pages. It does not add scoring, recommendations, charts, or PDF output yet.
 
 ## Reports Plus Security Assessment
 

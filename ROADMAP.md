@@ -84,6 +84,7 @@ Status: started.
 - Persist latest REST collection artifacts under `data/catalog/rest/`.
 - First subject: CommCell Identity / Version from `GET /commandcenter/api/CommServ`.
 - Normalize CommCell identity fields for later rule-engine consumption without adding health scoring.
+- Add a basic assembled HTML HealthCheck report page over existing artifacts before introducing scoring, recommendations, charts, or PDF generation.
 
 ## Current Foundation Hardening
 

@@ -28,6 +28,7 @@ from .shared import (
     to_pretty_json,
     url_for,
 )
+from cvhealthcheck.quickhc import QuickHcReportService
 
 
 @bp.route("/quick-hc")
@@ -37,6 +38,15 @@ def quick_hc():
         commcell_status=catalog_status("commserv.json", catalog_dir=Path("data/catalog/rest")),
         security_assessment=security_assessment_quick_hc(),
         license_summary=_license_summary_quick_hc(),
+    )
+
+
+@bp.route("/quick-hc/report")
+def quick_hc_report():
+    report = QuickHcReportService().build_report()
+    return render_template(
+        "quick_hc_report.html",
+        report=report,
     )
 
 
