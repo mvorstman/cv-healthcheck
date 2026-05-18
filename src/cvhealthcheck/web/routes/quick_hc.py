@@ -30,6 +30,7 @@ from .shared import (
     url_for,
 )
 from cvhealthcheck.quickhc import QuickHcReportService
+from cvhealthcheck.quickhc.report_service import REPORT_SELECTION_IDS
 
 
 @bp.route("/quick-hc")
@@ -45,6 +46,32 @@ def quick_hc():
 @bp.route("/quick-hc/report")
 def quick_hc_report():
     report = QuickHcReportService().build_report()
+    return render_template(
+        "quick_hc_report.html",
+        report=report,
+    )
+
+
+@bp.route("/quick-hc/report/builder")
+def quick_hc_report_builder():
+    builder = QuickHcReportService().build_builder()
+    return render_template(
+        "quick_hc_report_builder.html",
+        builder=builder,
+    )
+
+
+@bp.route("/quick-hc/report/builder/render", methods=["POST"])
+def quick_hc_report_builder_render():
+    selection_ids = {
+        item
+        for item in request.form.getlist("selection_ids")
+        if isinstance(item, str) and item.strip() in REPORT_SELECTION_IDS
+    }
+    report = QuickHcReportService().build_report(
+        selection_ids,
+        default_to_all=False,
+    )
     return render_template(
         "quick_hc_report.html",
         report=report,

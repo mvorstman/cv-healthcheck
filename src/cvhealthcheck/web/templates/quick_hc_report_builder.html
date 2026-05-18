@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h2>{{ builder.title }}</h2>
+  <p>Select which sections should appear in the customer-facing Quick HC report.</p>
+
+  {% if not builder.has_artifacts %}
+    <p class="notice">No current Quick HC artifacts are available yet.</p>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('main.quick_hc_report_builder_render') }}">
+    {% for group in builder.groups %}
+      <section class="metadata-card">
+        <div class="section-heading">
+          <h3>{{ group.title }}</h3>
+        </div>
+        {% if group["items"] %}
+          <div class="builder-list">
+            {% for item in group["items"] %}
+              <div class="builder-item">
+                <label class="builder-checkbox">
+                  <input type="checkbox" name="selection_ids" value="{{ item.id }}" {% if item.checked %}checked{% endif %}>
+                  <span><strong>{{ item.label }}</strong></span>
+                </label>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="helper-text">Not collected yet.</p>
+        {% endif %}
+      </section>
+    {% endfor %}
+    <button type="submit">Render Report</button>
+  </form>
+</section>
+{% endblock %}

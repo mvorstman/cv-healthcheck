@@ -231,3 +231,158 @@ def test_quick_hc_report_route_uses_service(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert called["used"] is True
+
+
+def test_quick_hc_report_builder_loads_without_artifacts(tmp_path, monkeypatch) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+
+    app = create_app()
+
+    response = app.test_client().get("/quick-hc/report/builder")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Quick HealthCheck Report Builder" in body
+    assert "No current Quick HC artifacts are available yet." in body
+
+
+def test_quick_hc_report_builder_shows_checkboxes_when_artifacts_exist(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+
+    security_artifact = build_security_assessment_artifact(
+        [
+            {
+                "section": "Access Security",
+                "parameter": "MFA enabled",
+                "status": "Critical",
+                "remarks": "Missing for admin users",
+                "action": "Enable MFA",
+            }
+        ],
+        source_type="rest",
+        source={"report_id": "336"},
+    )
+    persist_security_assessment_artifact(
+        security_artifact,
+        catalog_dir=tmp_path / "security_catalog",
+        registry_path=tmp_path / "security_registry.sqlite3",
+    )
+    license_artifact = parse_license_summary_csv(
+        LICENSE_CSV_SAMPLE,
+        source_file="/tmp/license-summary.csv",
+    )
+    persist_license_summary_artifact(
+        license_artifact,
+        catalog_dir=tmp_path / "license_catalog",
+        registry_path=tmp_path / "license_registry.sqlite3",
+    )
+
+    app = create_app()
+    response = app.test_client().get("/quick-hc/report/builder")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'value="environment"' in body
+    assert 'value="security_assessment_summary"' in body
+    assert 'value="security_assessment_findings"' in body
+    assert 'value="license_summary_metadata"' in body
+    assert 'value="license_summary_workload"' in body
+    assert 'value="license_summary_details"' in body
+    assert 'value="row.license_summary.other_licenses.0"' not in body
+
+
+def test_quick_hc_report_builder_post_selected_sections_renders_only_selected_sections(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+
+    security_artifact = build_security_assessment_artifact(
+        [
+            {
+                "section": "Access Security",
+                "parameter": "MFA enabled",
+                "status": "Critical",
+                "remarks": "Missing for admin users",
+                "action": "Enable MFA",
+            },
+            {
+                "section": "Auditing",
+                "parameter": "Audit retention",
+                "status": "Info",
+                "remarks": "30 days",
+                "action": "Review retention",
+            },
+        ],
+        source_type="rest",
+        source={"report_id": "336"},
+    )
+    persist_security_assessment_artifact(
+        security_artifact,
+        catalog_dir=tmp_path / "security_catalog",
+        registry_path=tmp_path / "security_registry.sqlite3",
+    )
+    license_artifact = parse_license_summary_csv(
+        LICENSE_CSV_SAMPLE,
+        source_file="/tmp/license-summary.csv",
+    )
+    persist_license_summary_artifact(
+        license_artifact,
+        catalog_dir=tmp_path / "license_catalog",
+        registry_path=tmp_path / "license_registry.sqlite3",
+    )
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/report/builder/render",
+        data={
+            "selection_ids": [
+                "environment",
+                "security_assessment_findings",
+                "license_summary_details",
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Customer ID" in body
+    assert "MFA enabled" in body
+    assert "Audit retention" in body
+    assert "Cloud Storage" in body
+    assert "Virtual Server" in body
+    assert "Workload Summary Sections" not in body
+
+
+def test_quick_hc_report_builder_excludes_unchecked_sections(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+
+    license_artifact = parse_license_summary_csv(
+        LICENSE_CSV_SAMPLE,
+        source_file="/tmp/license-summary.csv",
+    )
+    persist_license_summary_artifact(
+        license_artifact,
+        catalog_dir=tmp_path / "license_catalog",
+        registry_path=tmp_path / "license_registry.sqlite3",
+    )
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/report/builder/render",
+        data={"selection_ids": ["license_summary_metadata"]},
+    )
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "License Summary" in body
+    assert "Workload Summary Sections" in body
+    assert "Cloud Storage" not in body
+    assert "Virtual Server" not in body
