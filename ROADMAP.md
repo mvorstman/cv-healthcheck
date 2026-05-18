@@ -89,6 +89,7 @@ Status: started.
 
 Status: active.
 
+- Complete the transition from compatibility-first `latest.json` reads to registry-driven active artifact reads everywhere.
 - Resolve the remaining REST/source precedence issue affecting Security Assessment rendering.
 - Finalize the canonical artifact render path so REST, HTML, and CSV all load through one consistent selection path.
 - Complete end-to-end ingestion validation across live REST collection, HTML import, CSV import, persistence, and Flask rendering.
@@ -96,6 +97,29 @@ Status: active.
 - Validate REST normalization parity against HTML and CSV canonical artifacts to confirm equivalent field-level output.
 - Install and standardize `pytest` plus required runtime/development dependencies in the local environment so regression coverage can run consistently.
 - Continue expanding regression coverage for noisy exports and source-selection edge cases.
+- Preserve all artifact files by default and design future retention/cleanup as an explicit, non-destructive operator action.
+- Keep export/audit tooling lightweight while the registry model settles; no heavy migration framework yet.
+
+## Foundation Milestone: Persistent Artifact Registry
+
+Status: started.
+
+- Keep the existing Flask Development interface stable while replacing the backend artifact foundation underneath it.
+- Treat `latest.json` as a temporary compatibility layer, not the long-term source of truth.
+- Persist each Security Assessment artifact as a uniquely addressable file plus a SQLite registry record.
+- Support customer, CommCell, engagement, report stream, report run, and import-run identity in the artifact model even before the reporting/evaluation engine exists.
+- Support multiple recurring report runs on the same day through `report_run_id`, `executed_at`, and optional `run_sequence`.
+- Keep active-artifact selection scoped so customers and CommCells cannot select each other’s artifacts.
+
+## Foundation Milestone: Read-Path Migration and Historical Retrieval
+
+Status: started.
+
+- Prefer registry-backed reads internally and treat `latest.json` as compatibility/cache only.
+- Expose service-layer methods for current artifact, artifact history, and artifact lookup by artifact/run identifiers.
+- Support historical browsing by customer, CommCell, import run, and report run.
+- Keep any history UI additive and debug-oriented until the backend contracts settle.
+- Track retention/provenance metadata now, but defer destructive cleanup and retention enforcement.
 
 ## Future Architecture: Evidence Provenance and Confidence
 

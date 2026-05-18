@@ -296,12 +296,29 @@ def test_flask_page_uses_imported_artifact_when_present(tmp_path, monkeypatch) -
     )
     write_security_assessment_artifact(artifact, catalog_dir=tmp_path)
 
+    import cvhealthcheck.security_assessment.artifact as artifact_module
     import cvhealthcheck.reportsplus.security_assessment as security_assessment_module
+    import cvhealthcheck.security_assessment.service as service_module
 
+    monkeypatch.setattr(
+        artifact_module,
+        "SECURITY_ASSESSMENT_CATALOG_DIR",
+        tmp_path,
+    )
     monkeypatch.setattr(
         security_assessment_module,
         "SECURITY_ASSESSMENT_CATALOG_DIR",
         tmp_path,
+    )
+    monkeypatch.setattr(
+        service_module,
+        "SECURITY_ASSESSMENT_CATALOG_DIR",
+        tmp_path,
+    )
+    monkeypatch.setattr(
+        service_module,
+        "SECURITY_ASSESSMENT_REGISTRY_PATH",
+        tmp_path / "registry.sqlite3",
     )
 
     app = create_app()
@@ -469,11 +486,16 @@ def test_flask_upload_rejects_empty_findings(tmp_path, monkeypatch) -> None:
 def _patch_security_assessment_paths(tmp_path, monkeypatch) -> None:
     catalog_dir = tmp_path / "catalog"
     imports_dir = tmp_path / "imports"
+    registry_path = tmp_path / "registry.sqlite3"
 
+    import cvhealthcheck.security_assessment.artifact as artifact_module
     import cvhealthcheck.reportsplus.security_assessment as security_assessment_module
     import cvhealthcheck.security_assessment.normalize as normalize_module
     import cvhealthcheck.security_assessment.service as service_module
 
+    monkeypatch.setattr(artifact_module, "SECURITY_ASSESSMENT_CATALOG_DIR", catalog_dir)
     monkeypatch.setattr(normalize_module, "SECURITY_ASSESSMENT_CATALOG_DIR", catalog_dir)
     monkeypatch.setattr(security_assessment_module, "SECURITY_ASSESSMENT_CATALOG_DIR", catalog_dir)
     monkeypatch.setattr(service_module, "SECURITY_ASSESSMENT_IMPORTS_DIR", imports_dir)
+    monkeypatch.setattr(service_module, "SECURITY_ASSESSMENT_CATALOG_DIR", catalog_dir)
+    monkeypatch.setattr(service_module, "SECURITY_ASSESSMENT_REGISTRY_PATH", registry_path)

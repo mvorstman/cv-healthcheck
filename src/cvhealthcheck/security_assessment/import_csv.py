@@ -5,7 +5,7 @@ from io import StringIO
 from pathlib import Path
 from typing import Any
 
-from .normalize import build_security_assessment_artifact, write_security_assessment_artifact
+from .artifact import build_security_assessment_artifact, write_security_assessment_artifact
 
 EXPECTED_HEADERS = ["Parameter", "Status", "Remarks", "Action"]
 
@@ -39,16 +39,17 @@ def parse_security_assessment_csv(
         values = [value.replace("\r\n", "\n").replace("\r", "\n") for value in row]
         trimmed = [value.strip() for value in values]
         non_empty = [value for value in trimmed if value]
+        joined_non_empty = ", ".join(non_empty)
         if not non_empty:
             continue
 
-        if len(non_empty) == 1 and non_empty[0] == "Security Assessment":
+        if joined_non_empty == "Security Assessment":
             title = non_empty[0]
             in_table = False
             continue
 
-        if len(non_empty) == 1 and non_empty[0].startswith("Generated on:"):
-            generated_on = non_empty[0].split(":", 1)[1].strip() or None
+        if joined_non_empty.startswith("Generated on:"):
+            generated_on = joined_non_empty.split(":", 1)[1].strip() or None
             in_table = False
             continue
 
