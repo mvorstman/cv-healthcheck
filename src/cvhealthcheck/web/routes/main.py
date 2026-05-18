@@ -142,6 +142,16 @@ def _inventory_message(result) -> str | None:
     return None
 
 
+def _security_assessment_registry_filters() -> dict[str, str | None]:
+    return {
+        "customer_id": request.args.get("customer_id", "").strip() or None,
+        "commcell_id": request.args.get("commcell_id", "").strip() or None,
+        "source_type": request.args.get("source_type", "").strip() or None,
+        "engagement_id": request.args.get("engagement_id", "").strip() or None,
+        "report_stream_id": request.args.get("report_stream_id", "").strip() or None,
+    }
+
+
 def _month_records(metric: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(
         [
@@ -455,6 +465,7 @@ def index():
 
 
 @bp.route("/development")
+@login_required
 def development():
     return render_template("development.html")
 
@@ -716,6 +727,7 @@ def security_assessment_import():
 
 
 @bp.route("/security-assessment/history")
+@login_required
 def security_assessment_history():
     service = SecurityAssessmentService()
     artifact_id = request.args.get("artifact_id", "").strip() or None
@@ -731,27 +743,50 @@ def security_assessment_history():
             "artifact": payload,
         }
     else:
-        response_payload = service.get_history(
-            customer_id=request.args.get("customer_id", "").strip() or None,
-            commcell_id=request.args.get("commcell_id", "").strip() or None,
-            source_type=request.args.get("source_type", "").strip() or None,
-            engagement_id=request.args.get("engagement_id", "").strip() or None,
-            report_stream_id=request.args.get("report_stream_id", "").strip() or None,
-        )
+        response_payload = service.get_history(**_security_assessment_registry_filters())
+    response_payload["internal_only"] = True
     response = make_response(to_pretty_json(response_payload))
     response.mimetype = "application/json"
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
     return response
 
 
 @bp.route("/security-assessment/registry-export")
+@login_required
 def security_assessment_registry_export():
     response = make_response(
         to_pretty_json(
-            export_security_assessment_registry()
+            {
+                "internal_only": True,
+                **export_security_assessment_registry(),
+            }
         )
     )
     response.mimetype = "application/json"
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
     return response
+
+
+@bp.route("/development/security-assessment-registry")
+@login_required
+def security_assessment_registry_view():
+    service = SecurityAssessmentService()
+    filters = _security_assessment_registry_filters()
+    history = service.get_history(**filters)
+    history_url = url_for(
+        "main.security_assessment_history",
+        **{key: value for key, value in filters.items() if value},
+    )
+    return render_template(
+        "security_assessment_registry_history.html",
+        filters=filters,
+        artifacts=history["artifacts"],
+        import_runs=history["import_runs"],
+        report_runs=history["report_runs"],
+        history_url=history_url,
+    )
 
 
 def _finding_preview(findings: Any) -> str:

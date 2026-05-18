@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h2>Security Assessment Registry</h2>
+  <p>Internal debug/admin view for registry-backed Security Assessment history. This page is read-only.</p>
+
+  <form method="get" action="{{ url_for('main.security_assessment_registry_view') }}">
+    <label for="customer_id">
+      Customer ID
+      <input id="customer_id" type="text" name="customer_id" value="{{ filters.customer_id or '' }}">
+    </label>
+    <label for="commcell_id">
+      CommCell ID
+      <input id="commcell_id" type="text" name="commcell_id" value="{{ filters.commcell_id or '' }}">
+    </label>
+    <label for="source_type">
+      Source Type
+      <input id="source_type" type="text" name="source_type" value="{{ filters.source_type or '' }}">
+    </label>
+    <label for="engagement_id">
+      Engagement ID
+      <input id="engagement_id" type="text" name="engagement_id" value="{{ filters.engagement_id or '' }}">
+    </label>
+    <label for="report_stream_id">
+      Report Stream ID
+      <input id="report_stream_id" type="text" name="report_stream_id" value="{{ filters.report_stream_id or '' }}">
+    </label>
+    <button type="submit">Filter</button>
+  </form>
+
+  <p>
+    JSON endpoints:
+    <a href="{{ history_url }}">history</a>
+    |
+    <a href="{{ url_for('main.security_assessment_registry_export') }}">registry export</a>
+  </p>
+
+  <h3>Artifacts</h3>
+  {% if artifacts %}
+    <table>
+      <thead>
+        <tr>
+          <th>artifact_id</th>
+          <th>customer_id</th>
+          <th>commcell_id</th>
+          <th>source_type</th>
+          <th>artifact_type</th>
+          <th>imported_at</th>
+          <th>executed_at</th>
+          <th>report_stream_id</th>
+          <th>report_run_id</th>
+          <th>is_active</th>
+          <th>file_path</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for artifact in artifacts %}
+          <tr>
+            <td><code>{{ artifact.artifact_id }}</code></td>
+            <td><code>{{ artifact.customer_id }}</code></td>
+            <td><code>{{ artifact.commcell_id }}</code></td>
+            <td>{{ artifact.source_type }}</td>
+            <td>{{ artifact.artifact_type }}</td>
+            <td>{{ artifact.imported_at or "" }}</td>
+            <td>{{ artifact.executed_at or "" }}</td>
+            <td><code>{{ artifact.report_stream_id or "" }}</code></td>
+            <td><code>{{ artifact.report_run_id or "" }}</code></td>
+            <td>{{ "yes" if artifact.is_active else "no" }}</td>
+            <td><code>{{ artifact.file_path }}</code></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="notice">No registry artifacts matched the current filter.</p>
+  {% endif %}
+
+  <h3>Import Runs</h3>
+  <p>{{ import_runs | length }} import runs in scope.</p>
+
+  <h3>Report Runs</h3>
+  <p>{{ report_runs | length }} report runs in scope.</p>
+</section>
+{% endblock %}

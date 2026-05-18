@@ -25,6 +25,7 @@ from cvhealthcheck.security_assessment.validate import (
     filter_valid_findings,
     is_valid_canonical_finding,
 )
+from cvhealthcheck.auth.commvault_auth import SESSION_TOKEN_KEY
 
 
 def test_canonical_finding_validation_accepts_expected_shape() -> None:
@@ -661,15 +662,105 @@ def test_hidden_history_and_registry_export_endpoints_work(tmp_path, monkeypatch
     monkeypatch.setattr(artifact_module, "SECURITY_ASSESSMENT_CATALOG_DIR", tmp_path / "catalog")
 
     app = create_app()
-    history_response = app.test_client().get("/security-assessment/history")
-    artifact_response = app.test_client().get(
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session[SESSION_TOKEN_KEY] = "test-token"
+
+    history_response = client.get("/security-assessment/history")
+    artifact_response = client.get(
         f"/security-assessment/history?artifact_id={persisted['artifact_id']}"
     )
-    export_response = app.test_client().get("/security-assessment/registry-export")
+    export_response = client.get("/security-assessment/registry-export")
 
     assert history_response.status_code == 200
     assert '"artifacts"' in history_response.get_data(as_text=True)
+    assert '"internal_only": true' in history_response.get_data(as_text=True)
     assert artifact_response.status_code == 200
     assert persisted["artifact_id"] in artifact_response.get_data(as_text=True)
     assert export_response.status_code == 200
     assert '"record_count"' in export_response.get_data(as_text=True)
+
+
+def test_internal_registry_routes_require_login(tmp_path, monkeypatch) -> None:
+    artifact = build_security_assessment_artifact(
+        [
+            {
+                "section": "Auditing",
+                "parameter": "Audit retention",
+                "status": "Info",
+                "remarks": "30 days",
+                "action": "Review retention",
+            }
+        ],
+        source_type="csv",
+    )
+    persist_security_assessment_artifact(
+        artifact,
+        catalog_dir=tmp_path / "catalog",
+        registry_path=tmp_path / "registry.sqlite3",
+    )
+
+    import cvhealthcheck.security_assessment.service as service_module
+    import cvhealthcheck.reportsplus.security_assessment as security_assessment_module
+    import cvhealthcheck.security_assessment.artifact as artifact_module
+
+    monkeypatch.setattr(service_module, "SECURITY_ASSESSMENT_REGISTRY_PATH", tmp_path / "registry.sqlite3")
+    monkeypatch.setattr(service_module, "SECURITY_ASSESSMENT_CATALOG_DIR", tmp_path / "catalog")
+    monkeypatch.setattr(security_assessment_module, "SECURITY_ASSESSMENT_CATALOG_DIR", tmp_path / "catalog")
+    monkeypatch.setattr(artifact_module, "SECURITY_ASSESSMENT_CATALOG_DIR", tmp_path / "catalog")
+
+    app = create_app()
+    client = app.test_client()
+
+    history_response = client.get("/security-assessment/history")
+    export_response = client.get("/security-assessment/registry-export")
+    viewer_response = client.get("/development/security-assessment-registry")
+
+    assert history_response.status_code == 302
+    assert "/login" in history_response.headers["Location"]
+    assert export_response.status_code == 302
+    assert "/login" in export_response.headers["Location"]
+    assert viewer_response.status_code == 302
+    assert "/login" in viewer_response.headers["Location"]
+
+
+def test_internal_registry_view_renders_artifact_table(tmp_path, monkeypatch) -> None:
+    artifact = build_security_assessment_artifact(
+        [
+            {
+                "section": "Auditing",
+                "parameter": "Audit retention",
+                "status": "Info",
+                "remarks": "30 days",
+                "action": "Review retention",
+            }
+        ],
+        source_type="csv",
+    )
+    persisted = persist_security_assessment_artifact(
+        artifact,
+        catalog_dir=tmp_path / "catalog",
+        registry_path=tmp_path / "registry.sqlite3",
+    )
+
+    import cvhealthcheck.security_assessment.service as service_module
+    import cvhealthcheck.reportsplus.security_assessment as security_assessment_module
+    import cvhealthcheck.security_assessment.artifact as artifact_module
+
+    monkeypatch.setattr(service_module, "SECURITY_ASSESSMENT_REGISTRY_PATH", tmp_path / "registry.sqlite3")
+    monkeypatch.setattr(service_module, "SECURITY_ASSESSMENT_CATALOG_DIR", tmp_path / "catalog")
+    monkeypatch.setattr(security_assessment_module, "SECURITY_ASSESSMENT_CATALOG_DIR", tmp_path / "catalog")
+    monkeypatch.setattr(artifact_module, "SECURITY_ASSESSMENT_CATALOG_DIR", tmp_path / "catalog")
+
+    app = create_app()
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session[SESSION_TOKEN_KEY] = "test-token"
+
+    response = client.get("/development/security-assessment-registry?source_type=csv")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Internal debug/admin view" in body
+    assert persisted["artifact_id"] in body
+    assert persisted["file_path"] in body

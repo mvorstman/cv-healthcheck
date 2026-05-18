@@ -11,6 +11,7 @@
   and `get_artifact(...)`.
 - Reduced internal dependence on `latest.json` by preferring registry-backed artifact reads in service code while preserving `latest.json` as compatibility fallback only.
 - Added hidden/debug history and registry export endpoints without changing the visible Security Assessment page flow.
+- Tightened the hidden Security Assessment history/export endpoints behind login and added a small internal registry viewer from the Development page.
 - Added retention/provenance metadata fields:
   `created_at`,
   `last_accessed_at`,

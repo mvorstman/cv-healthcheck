@@ -148,9 +148,12 @@ Historical/read-path foundation added on top of the registry layer:
 - Registry helpers now support listing artifacts, fetching the latest artifact within scope, fetching the active artifact within scope, and listing report/import runs.
 - Service-layer reads now prefer registry-backed artifact loading over `latest.json`.
 - A lightweight `SecurityAssessmentService` exposes current-state, history, and artifact-by-id/run retrieval methods for future UI and reporting use.
-- Hidden debug/history endpoints exist without changing the visible page flow:
+- Hidden internal/debug history tooling exists without changing the visible page flow:
+  the JSON endpoints require an authenticated session and remain read-only.
   `/security-assessment/history`
   `/security-assessment/registry-export`
+- A simple internal viewer is available from the Development page at
+  `/development/security-assessment-registry`.
 
 Additional metadata now tracked for artifacts/import runs:
 
