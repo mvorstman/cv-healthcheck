@@ -2,6 +2,31 @@
 
 ## 2026-05-18
 
+- Extended the License Summary canonical artifact to preserve the existing detail tables and add `workload_summary_sections[]` for category/workload summary tables.
+- Added canonical workload/category summary support for the discovered License Summary sections:
+  `Capacity Licenses`,
+  `Operating Instance Licenses`,
+  `Virtualization Licenses`,
+  `User Licenses`,
+  `Data Insights Licenses`,
+  `Air Gap Protect Licenses`,
+  and summary-page `Other Licenses`.
+- Kept CSV and HTML parsing section-based and added summary-table detection by validated header shape without replacing the existing detail-table support.
+- Extended live REST collection for Reports Plus report 206 so it now gathers both:
+  page-level detail datasets for
+  `Other Licenses - current usage details`
+  and
+  `Agent and Feature Licenses - current usage details`,
+  plus summary-page category datasets when they execute successfully.
+- Preserved the rule that only sections with real returned rows are rendered or persisted; missing or failing upstream summary datasets are not fabricated.
+- Added masked registration-code handling in License Summary metadata and intentionally avoided persisting unmasked registration codes.
+- Updated the Quick HC License Summary page to render workload summary sections separately from the existing detail tables.
+- Confirmed current live behavior in the lab CommCell:
+  some summary datasets are partially available,
+  sections such as `Operating Instance Licenses`, `Data Insights Licenses`, and `Other Licenses` currently render,
+  `Capacity Licenses` may be absent because the upstream dataset fails in this CommCell,
+  and `license_expiry` remains unset when report 206 does not return it.
+- Added tests for workload summary parsing, detail-table preservation, masked metadata handling, missing `license_expiry`, and Quick HC rendering.
 - Added a new `src/cvhealthcheck/license_summary/` package for License Summary artifact ingestion.
 - Implemented canonical License Summary models for artifact, other-license rows, and agent/feature-license rows.
 - Added CSV parsing that handles report title/generated timestamp metadata plus independently parsed section tables.
