@@ -140,12 +140,77 @@ class AgentFeatureLicense:
 
 
 @dataclass(frozen=True)
+class WorkloadSummaryRow:
+    license: str
+    entitlement_value: str | None
+    used: str | None
+    usage_percent: str | None = None
+    status: str | None = None
+    raw_fields: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "license", _require_text(self.license, "license"))
+        object.__setattr__(self, "entitlement_value", _optional_text(self.entitlement_value))
+        object.__setattr__(self, "used", _optional_text(self.used))
+        object.__setattr__(self, "usage_percent", _optional_text(self.usage_percent))
+        object.__setattr__(self, "status", _optional_text(self.status))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "license": self.license,
+            "entitlement_value": self.entitlement_value,
+            "used": self.used,
+            "usage_percent": self.usage_percent,
+            "status": self.status,
+            "raw_fields": dict(self.raw_fields),
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "WorkloadSummaryRow":
+        return cls(
+            license=str(payload.get("license") or ""),
+            entitlement_value=payload.get("entitlement_value"),
+            used=payload.get("used"),
+            usage_percent=payload.get("usage_percent"),
+            status=payload.get("status"),
+            raw_fields=dict(payload.get("raw_fields") or {}),
+        )
+
+
+@dataclass(frozen=True)
+class WorkloadSummarySection:
+    section_name: str
+    rows: list[WorkloadSummaryRow]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "section_name", _require_text(self.section_name, "section_name"))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "section_name": self.section_name,
+            "rows": [row.to_dict() for row in self.rows],
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "WorkloadSummarySection":
+        return cls(
+            section_name=str(payload.get("section_name") or ""),
+            rows=[
+                WorkloadSummaryRow.from_dict(item)
+                for item in payload.get("rows") or []
+                if isinstance(item, dict)
+            ],
+        )
+
+
+@dataclass(frozen=True)
 class LicenseSummaryArtifact:
     artifact_type: str
     source_type: str
     imported_at: str
     other_licenses: list[OtherLicense]
     agent_feature_licenses: list[AgentFeatureLicense]
+    workload_summary_sections: list[WorkloadSummarySection]
     source: dict[str, Any]
     source_file: str | None = None
     generated_on: str | None = None
@@ -153,6 +218,7 @@ class LicenseSummaryArtifact:
     commcell_id: str | None = None
     commcell_name: str | None = None
     commcell_version: str | None = None
+    masked_registration_code: str | None = None
     timezone: str | None = None
     last_collection_time: str | None = None
     license_expiry: str | None = None
@@ -187,6 +253,7 @@ class LicenseSummaryArtifact:
         object.__setattr__(self, "commcell_id", _optional_text(self.commcell_id))
         object.__setattr__(self, "commcell_name", _optional_text(self.commcell_name))
         object.__setattr__(self, "commcell_version", _optional_text(self.commcell_version))
+        object.__setattr__(self, "masked_registration_code", _optional_text(self.masked_registration_code))
         object.__setattr__(self, "timezone", _optional_text(self.timezone))
         object.__setattr__(self, "last_collection_time", _optional_text(self.last_collection_time))
         object.__setattr__(self, "license_expiry", _optional_text(self.license_expiry))
@@ -222,6 +289,7 @@ class LicenseSummaryArtifact:
             "commcell_id": self.commcell_id,
             "commcell_name": self.commcell_name,
             "commcell_version": self.commcell_version,
+            "masked_registration_code": self.masked_registration_code,
             "timezone": self.timezone,
             "last_collection_time": self.last_collection_time,
             "license_expiry": self.license_expiry,
@@ -241,6 +309,9 @@ class LicenseSummaryArtifact:
             "other_licenses": [license_item.to_dict() for license_item in self.other_licenses],
             "agent_feature_licenses": [
                 license_item.to_dict() for license_item in self.agent_feature_licenses
+            ],
+            "workload_summary_sections": [
+                section.to_dict() for section in self.workload_summary_sections
             ],
             "source": dict(self.source),
             "artifacts": dict(self.artifacts),
@@ -264,6 +335,7 @@ class LicenseSummaryArtifact:
             commcell_id=payload.get("commcell_id"),
             commcell_name=payload.get("commcell_name"),
             commcell_version=payload.get("commcell_version"),
+            masked_registration_code=payload.get("masked_registration_code"),
             timezone=payload.get("timezone"),
             last_collection_time=payload.get("last_collection_time"),
             license_expiry=payload.get("license_expiry"),
@@ -290,6 +362,11 @@ class LicenseSummaryArtifact:
                 for item in payload.get("agent_feature_licenses") or []
                 if isinstance(item, dict)
             ],
+            workload_summary_sections=[
+                WorkloadSummarySection.from_dict(item)
+                for item in payload.get("workload_summary_sections") or []
+                if isinstance(item, dict)
+            ],
             source=dict(payload.get("source") or {}),
             artifacts=dict(payload.get("artifacts") or {}),
             datasets=list(payload.get("datasets") or []),
@@ -308,4 +385,6 @@ __all__ = [
     "OtherLicense",
     "ReportRun",
     "ReportStream",
+    "WorkloadSummaryRow",
+    "WorkloadSummarySection",
 ]

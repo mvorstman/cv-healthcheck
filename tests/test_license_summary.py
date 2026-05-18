@@ -23,12 +23,18 @@ CSV_SAMPLE = """\
 License summary
 Generated on: May 18, 2026 09:15:00 AM
 CommCell Name,CommServe A
+CommCell ID,2
+Registration Code,ABCD-1234-EFGH-5678
 CommCell Version,11.36
 Timezone,UTC
 Last Collection Time,2026-05-18T08:55:00+00:00
 License Expiry,2027-01-01
 Last Generation Time,2026-05-18T09:00:00+00:00
 Last Application Time,2026-05-17T21:00:00+00:00
+
+Capacity Licenses
+License,Available Total (TB),Permanent Purchased (TB),Term Purchased (TB),Used (TB),Used %,Summary
+Backup and Recovery,100,100,0,0.00,0%,0%
 
 Other Licenses - current usage details
 License,Available Total,Used
@@ -49,12 +55,26 @@ HTML_SAMPLE = """\
     <h1>License summary</h1>
     <div>Generated on: May 18, 2026 09:15:00 AM</div>
     <div>CommCell Name: CommServe A</div>
+    <div>CommCell ID: 2</div>
+    <div>Registration Code: ABCD-1234-EFGH-5678</div>
     <div>CommCell Version: 11.36</div>
     <div>Timezone: UTC</div>
     <div>Last Collection Time: 2026-05-18T08:55:00+00:00</div>
     <div>License Expiry: 2027-01-01</div>
     <div>Last Generation Time: 2026-05-18T09:00:00+00:00</div>
     <div>Last Application Time: 2026-05-17T21:00:00+00:00</div>
+    <h2>Capacity Licenses</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>License</th><th>Available Total (TB)</th><th>Permanent Purchased (TB)</th><th>Term Purchased (TB)</th>
+          <th>Used (TB)</th><th>Used %</th><th>Summary</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Backup and Recovery</td><td>100</td><td>100</td><td>0</td><td>0.00</td><td>0%</td><td>0%</td></tr>
+      </tbody>
+    </table>
     <h2>Other Licenses - current usage details</h2>
     <table>
       <thead>
@@ -89,10 +109,15 @@ def test_parse_license_summary_csv_extracts_sections_and_metadata() -> None:
     assert artifact["source_type"] == "csv"
     assert artifact["generated_on"] == "May 18, 2026 09:15:00 AM"
     assert artifact["commcell_name"] == "CommServe A"
+    assert artifact["commcell_id"] == "2"
     assert artifact["commcell_version"] == "11.36"
+    assert artifact["masked_registration_code"] == "ABCD***********5678"
     assert artifact["timezone"] == "UTC"
     assert artifact["last_collection_time"] == "2026-05-18T08:55:00+00:00"
     assert artifact["license_expiry"] == "2027-01-01"
+    assert len(artifact["workload_summary_sections"]) == 1
+    assert artifact["workload_summary_sections"][0]["section_name"] == "Capacity Licenses"
+    assert artifact["workload_summary_sections"][0]["rows"][0]["license"] == "Backup and Recovery"
     assert len(artifact["other_licenses"]) == 2
     assert len(artifact["agent_feature_licenses"]) == 2
     assert artifact["other_licenses"][1]["unit"] == "TB"
@@ -106,6 +131,9 @@ def test_parse_license_summary_html_extracts_canonical_records() -> None:
     assert artifact["source_type"] == "html"
     assert artifact["generated_on"] == "May 18, 2026 09:15:00 AM"
     assert artifact["commcell_name"] == "CommServe A"
+    assert artifact["masked_registration_code"] == "ABCD***********5678"
+    assert len(artifact["workload_summary_sections"]) == 1
+    assert artifact["workload_summary_sections"][0]["rows"][0]["usage_percent"] == "0%"
     assert len(artifact["other_licenses"]) == 2
     assert len(artifact["agent_feature_licenses"]) == 1
     assert artifact["other_licenses"][0]["available_total"] == 100
@@ -120,6 +148,10 @@ def test_parse_license_summary_xlsx_recording_extracts_rest_artifact() -> None:
             ["CommCell Name", "CommServe A"],
             ["CommCell Version", "11.36"],
             ["Timezone", "UTC"],
+            [],
+            ["Capacity Licenses"],
+            ["License", "Available Total (TB)", "Permanent Purchased (TB)", "Term Purchased (TB)", "Used (TB)", "Used %", "Summary"],
+            ["Backup and Recovery", "100", "100", "0", "0.00", "0%", "0%"],
             [],
             ["Other Licenses - current usage details"],
             ["License", "Available Total", "Used"],
@@ -146,6 +178,7 @@ def test_parse_license_summary_xlsx_recording_extracts_rest_artifact() -> None:
     assert artifact["source_type"] == "rest"
     assert artifact["generated_on"] == "May 18, 2026 09:15:00 AM"
     assert artifact["commcell_name"] == "CommServe A"
+    assert len(artifact["workload_summary_sections"]) == 1
     assert len(artifact["other_licenses"]) == 1
     assert len(artifact["agent_feature_licenses"]) == 1
 
@@ -161,10 +194,24 @@ def test_normalize_license_summary_rest_extraction_builds_canonical_lists() -> N
         },
         "artifacts": {"metadata": "/tmp/report_206_metadata.json"},
         "datasets": [
+            {"kind": "summary", "section_name": "Capacity Licenses", "dataset_name": "GetLicenseSummaryCapacityV3"},
             {"dataset_name": "Other Licenses - current usage details"},
             {"dataset_name": "Agent and Feature Licenses - current usage details"},
         ],
         "executions": [
+            {
+                "status": "EXECUTABLE",
+                "sample_rows": [
+                    {
+                        "Dial": "Backup and Recovery",
+                        "LicUsageType": 100031,
+                        "Purchased": "100",
+                        "Usage": "0.00",
+                        "Used %": "0%",
+                        "Summary": "0%",
+                    }
+                ],
+            },
             {
                 "status": "EXECUTABLE",
                 "sample_rows": [
@@ -194,6 +241,8 @@ def test_normalize_license_summary_rest_extraction_builds_canonical_lists() -> N
 
     assert artifact["artifact_type"] == "license_summary"
     assert artifact["source_type"] == "rest"
+    assert len(artifact["workload_summary_sections"]) == 1
+    assert artifact["workload_summary_sections"][0]["section_name"] == "Capacity Licenses"
     assert len(artifact["other_licenses"]) == 2
     assert len(artifact["agent_feature_licenses"]) == 1
     assert artifact["other_licenses"][1]["unit"] == "TB"
@@ -478,6 +527,21 @@ def test_license_summary_service_collect_from_rest_persists_registry_artifact(
                     "raw_fields": {},
                 }
             ],
+            "workload_summary_sections": [
+                {
+                    "section_name": "Capacity Licenses",
+                    "rows": [
+                        {
+                            "license": "Backup and Recovery",
+                            "entitlement_value": "100 TB",
+                            "used": "0 TB",
+                            "usage_percent": "0%",
+                            "status": "0%",
+                            "raw_fields": {},
+                        }
+                    ],
+                }
+            ],
         },
     }
 
@@ -495,6 +559,8 @@ def test_license_summary_service_collect_from_rest_persists_registry_artifact(
     assert result["normalized"]["source_type"] == "rest"
     assert result["normalized"]["artifact_id"] == current["artifact_id"]
     assert current["source"]["report_id"] == "206"
+    assert current["license_expiry"] is None
+    assert len(current["workload_summary_sections"]) == 1
     assert len(current["other_licenses"]) == 1
 
 

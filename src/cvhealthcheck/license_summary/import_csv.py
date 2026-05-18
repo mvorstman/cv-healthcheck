@@ -9,11 +9,13 @@ from .artifact import build_license_summary_artifact, write_license_summary_arti
 from .normalize import (
     AGENT_FEATURE_SECTION,
     OTHER_LICENSE_SECTION,
+    SUMMARY_SECTION_NAMES,
     classify_header,
     clean_text,
     extract_metadata_from_row,
     normalize_agent_feature_record,
     normalize_other_license_record,
+    normalize_workload_summary_record,
 )
 
 
@@ -56,8 +58,11 @@ def _artifact_from_rows(
     metadata: dict[str, Any] = {}
     other_licenses: list[dict[str, Any]] = []
     agent_feature_licenses: list[dict[str, Any]] = []
+    workload_summary_sections: list[dict[str, Any]] = []
     active_table: str | None = None
     active_headers: list[str] = []
+    active_section_name: str | None = None
+    summary_sections_by_name: dict[str, list[dict[str, Any]]] = {}
 
     for row in rows:
         trimmed = [clean_text(value) for value in row]
@@ -79,7 +84,12 @@ def _artifact_from_rows(
             active_table = None
             active_headers = []
             continue
-        if len(non_empty) == 1 and non_empty[0] in {OTHER_LICENSE_SECTION, AGENT_FEATURE_SECTION}:
+        if len(non_empty) == 1 and non_empty[0] in {
+            OTHER_LICENSE_SECTION,
+            AGENT_FEATURE_SECTION,
+            *SUMMARY_SECTION_NAMES,
+        }:
+            active_section_name = non_empty[0]
             active_table = None
             active_headers = []
             continue
@@ -102,6 +112,15 @@ def _artifact_from_rows(
             other_licenses.append(normalize_other_license_record(record))
         elif active_table == "agent":
             agent_feature_licenses.append(normalize_agent_feature_record(record))
+        elif active_table == "summary" and active_section_name in SUMMARY_SECTION_NAMES:
+            normalized = normalize_workload_summary_record(record)
+            if normalized:
+                summary_sections_by_name.setdefault(active_section_name, []).append(normalized)
+
+    for section_name, section_rows in summary_sections_by_name.items():
+        workload_summary_sections.append(
+            {"section_name": section_name, "rows": section_rows}
+        )
 
     return build_license_summary_artifact(
         source_type=source_type,
@@ -111,4 +130,5 @@ def _artifact_from_rows(
         metadata=metadata,
         other_licenses=other_licenses,
         agent_feature_licenses=agent_feature_licenses,
+        workload_summary_sections=workload_summary_sections,
     )

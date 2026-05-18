@@ -12,8 +12,11 @@ from cvhealthcheck.reportsplus.inventory import parse_content_field
 from .artifact import build_license_summary_artifact, write_license_summary_artifact
 from .import_csv import _artifact_from_rows
 from .normalize import (
+    SUMMARY_SECTION_NAMES,
+    mask_registration_code,
     normalize_agent_feature_record,
     normalize_other_license_record,
+    normalize_workload_summary_record,
     parse_number,
 )
 
@@ -86,6 +89,7 @@ def collect_license_summary_rest(
         raise ValueError("License Summary detail page was not found in report 206.")
 
     dataset_specs = _license_summary_dataset_specs(page)
+    summary_specs = _license_summary_summary_specs(definition)
     org_spec = _required_dataset_spec(dataset_specs, "organization")
     other_spec = _required_dataset_spec(dataset_specs, "other")
     agent_spec = _required_dataset_spec(dataset_specs, "agent")
@@ -118,6 +122,15 @@ def collect_license_summary_rest(
         org_guid_candidates,
         sample_limit=sample_limit,
     )
+    summary_executions = [
+        _execute_dataset_spec(
+            reports_client,
+            spec,
+            parameters={},
+            sample_limit=sample_limit,
+        )
+        for spec in summary_specs
+    ]
 
     execution_by_kind = {
         "organization": organization_execution,
@@ -125,6 +138,7 @@ def collect_license_summary_rest(
         "other": other_execution,
         "agent": agent_execution,
     }
+    all_dataset_specs = [*dataset_specs, *summary_specs]
     extraction = {
         "report_id": LICENSE_SUMMARY_REPORT_ID,
         "report": {
@@ -135,10 +149,12 @@ def collect_license_summary_rest(
             "error": report.error,
         },
         "definition": definition,
-        "datasets": dataset_specs,
+        "datasets": all_dataset_specs,
         "executions": [
             execution_by_kind.get(str(spec.get("kind") or ""), {})
-            for spec in dataset_specs
+            if str(spec.get("kind") or "") in execution_by_kind
+            else summary_executions[summary_specs.index(spec)]
+            for spec in all_dataset_specs
         ],
         "summary": {
             "report_id": LICENSE_SUMMARY_REPORT_ID,
@@ -164,6 +180,8 @@ def normalize_license_summary_rest_extraction(extraction: dict[str, Any]) -> dic
     executions = extraction.get("executions", [])
     other_licenses: list[dict[str, Any]] = []
     agent_feature_licenses: list[dict[str, Any]] = []
+    workload_summary_sections: list[dict[str, Any]] = []
+    summary_rows_by_section: dict[str, list[dict[str, Any]]] = {}
     metadata = _metadata_from_execution_rows(executions)
     for mapping, execution in zip(datasets, executions, strict=False):
         if execution.get("status") != "EXECUTABLE":
@@ -176,6 +194,16 @@ def normalize_license_summary_rest_extraction(extraction: dict[str, Any]) -> dic
         if header_kind == "agent":
             agent_feature_licenses.extend(_normalize_live_agent_feature_row(row) for row in rows if isinstance(row, dict))
             continue
+        if header_kind == "summary":
+            section_name = str(mapping.get("section_name") or execution.get("section_name") or "").strip()
+            if section_name:
+                for row in rows:
+                    if not isinstance(row, dict):
+                        continue
+                    normalized = _normalize_live_workload_summary_row(row)
+                    if normalized:
+                        summary_rows_by_section.setdefault(section_name, []).append(normalized)
+            continue
 
         normalized_rows = [_normalize_rest_row(row) for row in rows if isinstance(row, dict)]
         dataset_name = str(mapping.get("dataset_name") or execution.get("dataset_name") or "")
@@ -184,6 +212,9 @@ def normalize_license_summary_rest_extraction(extraction: dict[str, Any]) -> dic
             other_licenses.extend(normalize_other_license_record(row) for row in normalized_rows)
         elif legacy_kind == "agent":
             agent_feature_licenses.extend(normalize_agent_feature_record(row) for row in normalized_rows)
+
+    for section_name, rows in summary_rows_by_section.items():
+        workload_summary_sections.append({"section_name": section_name, "rows": rows})
 
     return build_license_summary_artifact(
         source_type="rest",
@@ -198,6 +229,7 @@ def normalize_license_summary_rest_extraction(extraction: dict[str, Any]) -> dic
         metadata=metadata,
         other_licenses=other_licenses,
         agent_feature_licenses=agent_feature_licenses,
+        workload_summary_sections=workload_summary_sections,
         extra={
             "artifacts": extraction.get("artifacts", {}),
             "datasets": datasets,
@@ -272,6 +304,8 @@ def _metadata_from_execution_rows(executions: list[dict[str, Any]]) -> dict[str,
                     metadata.setdefault("commcell_id", str(value))
                 elif lowered == "data source" and value:
                     metadata.setdefault("commcell_name", value)
+                elif lowered == "registrationcode" and value:
+                    metadata.setdefault("masked_registration_code", mask_registration_code(value))
     return metadata
 
 
@@ -322,6 +356,42 @@ def _license_summary_dataset_specs(page: dict[str, Any]) -> list[dict[str, Any]]
                 ],
             }
         )
+    return specs
+
+
+def _license_summary_summary_specs(definition: Any) -> list[dict[str, Any]]:
+    specs: list[dict[str, Any]] = []
+    if not isinstance(definition, dict):
+        return specs
+    for page in definition.get("pages", []):
+        if not isinstance(page, dict):
+            continue
+        components = (
+            page.get("body", {}).get("reportComponents", [])
+            if isinstance(page.get("body"), dict)
+            else []
+        )
+        for component in components:
+            if not isinstance(component, dict):
+                continue
+            title = str(component.get("title", {}).get("text") or "").strip()
+            if title not in SUMMARY_SECTION_NAMES:
+                continue
+            dataset = component.get("dataSet")
+            if not isinstance(dataset, dict):
+                continue
+            dataset_guid = dataset.get("dataSetGuid") or dataset.get("datasetGuid")
+            if not dataset_guid:
+                continue
+            specs.append(
+                {
+                    "kind": "summary",
+                    "section_name": title,
+                    "dataset_guid": str(dataset_guid),
+                    "dataset_name": dataset.get("dataSetName"),
+                    "parameter_names": [],
+                }
+            )
     return specs
 
 
@@ -505,6 +575,22 @@ def _normalize_live_agent_feature_row(row: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
+def _normalize_live_workload_summary_row(row: dict[str, Any]) -> dict[str, Any]:
+    license_usage_type = parse_number(row.get("LicUsageType"))
+    normalized = normalize_workload_summary_record(
+        {
+            "License": row.get("Dial") or row.get("License"),
+            "Available Total": _format_other_license_value(row.get("Purchased"), license_usage_type),
+            "Used": _format_other_license_value(row.get("Usage"), license_usage_type),
+            "Used %": _format_usage_percent(row.get("Used %")),
+            "Summary": _stringify_numeric_or_unlimited(row.get("Summary")),
+        }
+    )
+    if normalized:
+        normalized["raw_fields"] = dict(row)
+    return normalized
+
+
 def _format_other_license_value(value: Any, license_usage_type: int | None) -> str:
     number = _stringify_numeric_or_unlimited(value)
     unit = _license_usage_unit(license_usage_type)
@@ -537,6 +623,17 @@ def _license_usage_unit(license_usage_type: int | None) -> str | None:
     if license_usage_type in {100019, 100033}:
         return "instances"
     return None
+
+
+def _format_usage_percent(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, (int, float)):
+        if float(value).is_integer():
+            return f"{int(value)}%"
+        return f"{value}%"
+    text = str(value).strip()
+    return text if text.endswith("%") else f"{text}%"
 
 
 def _report_name(data: Any) -> str | None:

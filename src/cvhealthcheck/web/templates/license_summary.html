@@ -45,8 +45,39 @@
       <dt>CommCell Name</dt>
       <dd>{{ artifact.commcell_name or "unknown" }}</dd>
       <dt>License Expiry</dt>
-      <dd>{{ artifact.license_expiry or "unknown" }}</dd>
+      <dd>{{ artifact.license_expiry or "N/A" }}</dd>
     </dl>
+
+    <h3>Workload Summary Sections</h3>
+    {% if artifact.workload_summary_sections %}
+      {% for section in artifact.workload_summary_sections %}
+        <h4>{{ section.section_name }}</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>License</th>
+              <th>Entitlement / Available</th>
+              <th>Used</th>
+              <th>Used %</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in section.rows %}
+              <tr>
+                <td>{{ row.license }}</td>
+                <td>{{ row.entitlement_value or "" }}</td>
+                <td>{{ row.used or "" }}</td>
+                <td>{{ row.usage_percent or "" }}</td>
+                <td>{{ row.status or "" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endfor %}
+    {% else %}
+      <p class="notice">No workload summary sections are available.</p>
+    {% endif %}
 
     <h3>Other Licenses</h3>
     {% if artifact.other_licenses %}

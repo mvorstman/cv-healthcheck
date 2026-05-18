@@ -12,7 +12,10 @@ CSV_SAMPLE = """\
 License summary
 Generated on: May 18, 2026 09:15:00 AM
 CommCell Name,CommServe A
-License Expiry,2027-01-01
+
+Capacity Licenses
+License,Available Total (TB),Permanent Purchased (TB),Term Purchased (TB),Used (TB),Used %,Summary
+Backup and Recovery,100,100,0,0.00,0%,0%
 
 Other Licenses - current usage details
 License,Available Total,Used
@@ -62,9 +65,11 @@ def test_quick_hc_license_summary_page_renders_registry_backed_artifact(tmp_path
     assert "Collect via REST" in body
     assert "Import License Summary" in body
     assert "CommServe A" in body
+    assert "Capacity Licenses" in body
+    assert "Backup and Recovery" in body
     assert "Cloud Storage" in body
     assert "Virtual Server" in body
-    assert "2027-01-01" in body
+    assert "N/A" in body
 
 
 def test_quick_hc_index_includes_license_summary_link(tmp_path, monkeypatch) -> None:
@@ -149,6 +154,7 @@ def test_quick_hc_license_summary_upload_imports_csv_and_redirects(tmp_path, mon
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "import completed" in body
+    assert "Backup and Recovery" in body
     assert "Cloud Storage" in body
     assert "Virtual Server" in body
 
@@ -220,6 +226,12 @@ def test_quick_hc_license_summary_collect_calls_service_and_redirects(tmp_path, 
             "artifact": str(tmp_path / "catalog" / "latest.json"),
             "normalized": {
                 "source": {"http_status": 200},
+                "workload_summary_sections": [
+                    {
+                        "section_name": "Capacity Licenses",
+                        "rows": [{"license": "Backup and Recovery"}],
+                    }
+                ],
                 "other_licenses": [{"license": "Cloud Storage"}],
                 "agent_feature_licenses": [{"license": "Virtual Server"}],
             },
@@ -245,6 +257,43 @@ def test_quick_hc_license_summary_collect_calls_service_and_redirects(tmp_path, 
     assert called["client"] is not None
     body = response.get_data(as_text=True)
     assert "REST collection completed" in body
+
+
+def test_quick_hc_license_summary_page_renders_na_for_missing_license_expiry(tmp_path, monkeypatch) -> None:
+    artifact = parse_license_summary_csv(CSV_SAMPLE, source_file="/tmp/license-summary.csv")
+    artifact["license_expiry"] = None
+    persist_license_summary_artifact(
+        artifact,
+        catalog_dir=tmp_path / "catalog",
+        registry_path=tmp_path / "registry.sqlite3",
+    )
+
+    import cvhealthcheck.license_summary.service as license_summary_service_module
+    import cvhealthcheck.license_summary.artifact as license_summary_artifact_module
+
+    monkeypatch.setattr(
+        license_summary_service_module,
+        "LICENSE_SUMMARY_REGISTRY_PATH",
+        tmp_path / "registry.sqlite3",
+    )
+    monkeypatch.setattr(
+        license_summary_service_module,
+        "LICENSE_SUMMARY_CATALOG_DIR",
+        tmp_path / "catalog",
+    )
+    monkeypatch.setattr(
+        license_summary_artifact_module,
+        "LICENSE_SUMMARY_CATALOG_DIR",
+        tmp_path / "catalog",
+    )
+
+    app = create_app()
+    client = app.test_client()
+
+    response = client.get("/quick-hc/license-summary")
+
+    assert response.status_code == 200
+    assert "N/A" in response.get_data(as_text=True)
 
 
 def test_quick_hc_license_summary_collect_requires_login() -> None:
