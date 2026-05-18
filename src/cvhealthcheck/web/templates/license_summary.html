@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h2>License Summary</h2>
+  <p>Quick HC read-only view over the registry-backed License Summary artifact.</p>
+
+  {% if not artifact %}
+    <p class="notice">
+      No License Summary artifact is available yet.
+    </p>
+    <p>
+      Use the existing artifact pipeline to import CSV, HTML, XLSX, or collect report 206 data first.
+    </p>
+  {% else %}
+    <dl>
+      <dt>Source</dt>
+      <dd>{{ (artifact.source_type or "unknown") | upper }}</dd>
+      <dt>Imported at</dt>
+      <dd>{{ artifact.imported_at or "unknown" }}</dd>
+      <dt>Generated on</dt>
+      <dd>{{ artifact.generated_on or "unknown" }}</dd>
+      <dt>Customer ID</dt>
+      <dd><code>{{ artifact.customer_id or "unknown" }}</code></dd>
+      <dt>CommCell ID</dt>
+      <dd><code>{{ artifact.commcell_id or "unknown" }}</code></dd>
+      <dt>CommCell Name</dt>
+      <dd>{{ artifact.commcell_name or "unknown" }}</dd>
+      <dt>License Expiry</dt>
+      <dd>{{ artifact.license_expiry or "unknown" }}</dd>
+    </dl>
+
+    <h3>Other Licenses</h3>
+    {% if artifact.other_licenses %}
+      <table>
+        <thead>
+          <tr>
+            <th>License</th>
+            <th>Available Total</th>
+            <th>Used</th>
+            <th>Unit</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in artifact.other_licenses %}
+            <tr>
+              <td>{{ item.license }}</td>
+              <td>{{ item.available_total if item.available_total is not none else (item.raw_available_total or "") }}</td>
+              <td>{{ item.used if item.used is not none else (item.raw_used or "") }}</td>
+              <td>{{ item.unit or "" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="notice">No Other Licenses rows are available.</p>
+    {% endif %}
+
+    <h3>Agent and Feature Licenses</h3>
+    {% if artifact.agent_feature_licenses %}
+      <table>
+        <thead>
+          <tr>
+            <th>License</th>
+            <th>Permanent Total</th>
+            <th>Permanent Used</th>
+            <th>Term Total</th>
+            <th>Term Used</th>
+            <th>Client</th>
+            <th>Agent</th>
+            <th>Install Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in artifact.agent_feature_licenses %}
+            <tr>
+              <td>{{ item.license }}</td>
+              <td>{{ item.permanent_total if item.permanent_total is not none else "" }}</td>
+              <td>{{ item.permanent_used if item.permanent_used is not none else "" }}</td>
+              <td>{{ item.term_total if item.term_total is not none else "" }}</td>
+              <td>{{ item.term_used if item.term_used is not none else "" }}</td>
+              <td>{{ item.client or "" }}</td>
+              <td>{{ item.agent or "" }}</td>
+              <td>{{ item.install_date or "" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="notice">No Agent and Feature Licenses rows are available.</p>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}
