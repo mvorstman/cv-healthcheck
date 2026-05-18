@@ -62,6 +62,25 @@
           {% endif %}
         </td>
       </tr>
+      <tr>
+        <td><a href="{{ url_for('main.quick_hc_license_summary') }}">License Summary</a></td>
+        <td>
+          {% if license_summary.exists %}
+            {{ (license_summary.source_type or "unknown") | upper }}
+          {% else %}
+            Reports Plus report 206 / import
+          {% endif %}
+        </td>
+        <td><code>{{ license_summary.path }}</code></td>
+        <td>
+          {% if license_summary.exists %}
+            {{ license_summary.other_count }} other licenses,
+            {{ license_summary.agent_feature_count }} agent/feature licenses
+          {% else %}
+            not collected
+          {% endif %}
+        </td>
+      </tr>
     </tbody>
   </table>
 </section>
