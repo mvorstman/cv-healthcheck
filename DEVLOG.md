@@ -1,5 +1,20 @@
 # Development Log
 
+## 2026-05-18
+
+- Added a new `src/cvhealthcheck/license_summary/` package for License Summary artifact ingestion.
+- Implemented canonical License Summary models for artifact, other-license rows, and agent/feature-license rows.
+- Added CSV parsing that handles report title/generated timestamp metadata plus independently parsed section tables.
+- Added HTML parsing that extracts License Summary tables by validated header shape.
+- Added REST normalization for Reports Plus report 206 on top of the generic report extraction helper.
+- Added XLSX API viewer recording import support for offline REST-recorded evidence without adding a new dependency.
+- Added registry-backed artifact persistence and registry-first active artifact loading for `artifact_type=license_summary`.
+- Preserved the existing Security Assessment UI flow; no new visible dashboard was introduced.
+- Added tests for CSV import, HTML import, XLSX REST-recording import, REST extraction normalization, generated timestamp parsing, and registry write/read behavior.
+- Confirmed validation passes:
+  `venv/bin/python -m compileall src tests`
+  `venv/bin/python -m pytest`
+
 ## 2026-05-17
 
 - Added the next read-path migration layer on top of the Security Assessment registry foundation.
