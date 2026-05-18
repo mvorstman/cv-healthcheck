@@ -35,21 +35,6 @@
     {% set commcell_id = artifact.commcell_id if artifact.commcell_id and artifact.commcell_id != "unknown_commcell" else None %}
     {% set commcell_name = artifact.commcell_name if artifact.commcell_name and artifact.commcell_name != "Unknown CommCell" else None %}
 
-    <div class="status-summary">
-      <div class="status-card">
-        <strong>{{ (artifact.workload_summary_sections or []) | length }}</strong>
-        <span>Workload sections</span>
-      </div>
-      <div class="status-card">
-        <strong>{{ (artifact.other_licenses or []) | length }}</strong>
-        <span>Other license rows</span>
-      </div>
-      <div class="status-card">
-        <strong>{{ (artifact.agent_feature_licenses or []) | length }}</strong>
-        <span>Agent/feature rows</span>
-      </div>
-    </div>
-
     <section class="metadata-card">
       <div class="section-heading">
         <h3>Source Metadata</h3>
@@ -77,6 +62,21 @@
         <dd>{{ artifact.license_expiry or "N/A" }}</dd>
       </dl>
     </section>
+
+    <div class="status-summary">
+      <div class="status-card">
+        <strong>{{ (artifact.workload_summary_sections or []) | length }}</strong>
+        <span>Workload sections</span>
+      </div>
+      <div class="status-card">
+        <strong>{{ (artifact.other_licenses or []) | length }}</strong>
+        <span>Other license rows</span>
+      </div>
+      <div class="status-card">
+        <strong>{{ (artifact.agent_feature_licenses or []) | length }}</strong>
+        <span>Agent/feature rows</span>
+      </div>
+    </div>
 
     <h3>Workload Summary Sections</h3>
     {% if artifact.workload_summary_sections %}
