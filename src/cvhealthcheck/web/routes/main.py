@@ -27,7 +27,11 @@ from cvhealthcheck.auth import (
 )
 from cvhealthcheck.config import load_settings
 from cvhealthcheck.labreadiness.evaluator import assess_lab_readiness
-from cvhealthcheck.license_summary import LicenseSummaryService
+from cvhealthcheck.license_summary import (
+    LicenseSummaryImportError,
+    LicenseSummaryService,
+    import_license_summary_upload,
+)
 from cvhealthcheck.metrics import (
     get_capacity_license_usage,
     get_client_count_history,
@@ -66,6 +70,7 @@ from cvhealthcheck.security_assessment.service import (
 bp = Blueprint("main", __name__)
 F = TypeVar("F", bound=Callable)
 logger = logging.getLogger(__name__)
+LICENSE_SUMMARY_UPLOAD_EXTENSIONS = {".csv", ".htm", ".html"}
 
 
 def login_required(view: F) -> F:
@@ -578,10 +583,48 @@ def quick_hc_license_summary():
         artifact = LicenseSummaryService().get_current()
     except FileNotFoundError:
         pass
+    flashes = [
+        {"category": category, "message": text}
+        for category, text in get_flashed_messages(with_categories=True)
+    ]
     return render_template(
         "license_summary.html",
         artifact=artifact,
+        flashes=flashes,
     )
+
+
+@bp.route("/quick-hc/license-summary/import", methods=["POST"])
+def quick_hc_license_summary_import():
+    upload = request.files.get("license_summary_file")
+    filename = (upload.filename if upload else "") or ""
+    if not filename:
+        flash("No file selected.", "error")
+        return redirect(url_for("main.quick_hc_license_summary"))
+
+    suffix = Path(filename).suffix.lower()
+    if suffix not in LICENSE_SUMMARY_UPLOAD_EXTENSIONS:
+        flash("Unsupported file type. Upload a License Summary CSV or HTML export.", "error")
+        return redirect(url_for("main.quick_hc_license_summary"))
+
+    try:
+        artifact = import_license_summary_upload(
+            upload.stream,
+            original_filename=filename,
+        )
+    except LicenseSummaryImportError as exc:
+        flash(str(exc), "error")
+    except Exception as exc:
+        flash(f"License Summary import failed: {exc}", "error")
+    else:
+        source_type = str(artifact.get("source_type") or "unknown").upper()
+        other_count = len(artifact.get("other_licenses") or [])
+        agent_count = len(artifact.get("agent_feature_licenses") or [])
+        flash(
+            f"{source_type} import completed for {artifact.get('source_file')} with {other_count} other licenses and {agent_count} agent/feature licenses.",
+            "success",
+        )
+    return redirect(url_for("main.quick_hc_license_summary"))
 
 
 @bp.route("/reportsplus/reports")

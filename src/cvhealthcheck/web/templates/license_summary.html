@@ -5,12 +5,28 @@
   <h2>License Summary</h2>
   <p>Quick HC read-only view over the registry-backed License Summary artifact.</p>
 
+  {% if flashes %}
+    {% for flash in flashes %}
+      <p class="{{ 'error' if flash.category == 'error' else 'notice' }}">{{ flash.message }}</p>
+    {% endfor %}
+  {% endif %}
+
+  <h3>Import</h3>
+  <form method="post" action="{{ url_for('main.quick_hc_license_summary_import') }}" enctype="multipart/form-data">
+    <label for="license_summary_file">
+      License Summary file
+      <input id="license_summary_file" type="file" name="license_summary_file" accept=".html,.htm,.csv">
+    </label>
+    <p class="helper-text">Upload a License Summary CSV or HTML export.</p>
+    <button type="submit">Import License Summary</button>
+  </form>
+
   {% if not artifact %}
     <p class="notice">
       No License Summary artifact is available yet.
     </p>
     <p>
-      Use the existing artifact pipeline to import CSV, HTML, XLSX, or collect report 206 data first.
+      Use the existing artifact pipeline to import CSV or HTML evidence first.
     </p>
   {% else %}
     <dl>
