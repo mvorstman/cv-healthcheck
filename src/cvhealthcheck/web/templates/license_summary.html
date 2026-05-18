@@ -3,7 +3,7 @@
 {% block content %}
 <section>
   <h2>License Summary</h2>
-  <p>Quick HC read-only view over the registry-backed License Summary artifact.</p>
+  <p>Overview of purchased and used Commvault licenses.</p>
 
   {% if flashes %}
     {% for flash in flashes %}
@@ -31,28 +31,58 @@
       Use the existing artifact pipeline to import CSV or HTML evidence first.
     </p>
   {% else %}
-    <dl id="source-metadata">
-      <dt>Source</dt>
-      <dd>{{ (artifact.source_type or "unknown") | upper }}</dd>
-      <dt>Imported at</dt>
-      <dd>{{ artifact.imported_at or "unknown" }}</dd>
-      <dt>Generated on</dt>
-      <dd>{{ artifact.generated_on or "unknown" }}</dd>
-      <dt>Customer ID</dt>
-      <dd><code>{{ artifact.customer_id or "unknown" }}</code></dd>
-      <dt>CommCell ID</dt>
-      <dd><code>{{ artifact.commcell_id or "unknown" }}</code></dd>
-      <dt>CommCell Name</dt>
-      <dd>{{ artifact.commcell_name or "unknown" }}</dd>
-      <dt>License Expiry</dt>
-      <dd>{{ artifact.license_expiry or "N/A" }}</dd>
-    </dl>
+    {% set customer_id = artifact.customer_id if artifact.customer_id and artifact.customer_id != "unknown_customer" else None %}
+    {% set commcell_id = artifact.commcell_id if artifact.commcell_id and artifact.commcell_id != "unknown_commcell" else None %}
+    {% set commcell_name = artifact.commcell_name if artifact.commcell_name and artifact.commcell_name != "Unknown CommCell" else None %}
+
+    <div class="status-summary">
+      <div class="status-card">
+        <strong>{{ (artifact.workload_summary_sections or []) | length }}</strong>
+        <span>Workload sections</span>
+      </div>
+      <div class="status-card">
+        <strong>{{ (artifact.other_licenses or []) | length }}</strong>
+        <span>Other license rows</span>
+      </div>
+      <div class="status-card">
+        <strong>{{ (artifact.agent_feature_licenses or []) | length }}</strong>
+        <span>Agent/feature rows</span>
+      </div>
+    </div>
+
+    <section class="metadata-card">
+      <div class="section-heading">
+        <h3>Source Metadata</h3>
+      </div>
+      <dl id="source-metadata">
+        <dt>Source</dt>
+        <dd>{{ (artifact.source_type or "unknown") | upper }}</dd>
+        <dt>Imported at</dt>
+        <dd>{{ artifact.imported_at or "N/A" }}</dd>
+        <dt>Generated on</dt>
+        <dd>{{ artifact.generated_on or "N/A" }}</dd>
+        {% if customer_id %}
+          <dt>Customer ID</dt>
+          <dd><code>{{ customer_id }}</code></dd>
+        {% endif %}
+        {% if commcell_id %}
+          <dt>CommCell ID</dt>
+          <dd><code>{{ commcell_id }}</code></dd>
+        {% endif %}
+        {% if commcell_name %}
+          <dt>CommCell Name</dt>
+          <dd>{{ commcell_name }}</dd>
+        {% endif %}
+        <dt>License Expiry</dt>
+        <dd>{{ artifact.license_expiry or "N/A" }}</dd>
+      </dl>
+    </section>
 
     <h3>Workload Summary Sections</h3>
     {% if artifact.workload_summary_sections %}
       {% for section in artifact.workload_summary_sections %}
         <h4>{{ section.section_name }}</h4>
-        <table>
+        <table class="compact-table">
           <thead>
             <tr>
               <th>License</th>
@@ -81,7 +111,7 @@
 
     <h3>Other Licenses</h3>
     {% if artifact.other_licenses %}
-      <table>
+      <table class="compact-table">
         <thead>
           <tr>
             <th>License</th>
@@ -107,7 +137,7 @@
 
     <h3>Agent and Feature Licenses</h3>
     {% if artifact.agent_feature_licenses %}
-      <table>
+      <table class="compact-table">
         <thead>
           <tr>
             <th>License</th>
