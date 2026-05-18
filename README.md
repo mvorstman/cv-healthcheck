@@ -210,14 +210,26 @@ Supported sources are:
 - XLSX API viewer recording import
 - REST dataset extraction through Reports Plus report 206
 
-The current implementation is backend-focused and does not add a new user-facing dashboard. It normalizes the observed License Summary report sections:
+The current implementation is now exposed through the existing Quick HC License Summary page without redesigning the broader application. It preserves the existing detail tables and also supports workload/category summary sections when they are present in imports or returned by live REST collection.
+
+Observed detail-table sections:
 
 - Other Licenses - current usage details
 - Agent and Feature Licenses - current usage details
 
+Observed workload/category summary sections:
+
+- Capacity Licenses
+- Operating Instance Licenses
+- Virtualization Licenses
+- User Licenses
+- Data Insights Licenses
+- Air Gap Protect Licenses
+- Other Licenses
+
 Current package layout:
 
-- `models.py`: canonical `LicenseSummaryArtifact`, `OtherLicense`, and `AgentFeatureLicense` models
+- `models.py`: canonical `LicenseSummaryArtifact`, `OtherLicense`, `AgentFeatureLicense`, and workload-summary models
 - `import_csv.py`: multi-section CSV parsing
 - `import_html.py`: HTML table extraction by validated header shape
 - `collect_rest.py`: REST report 206 normalization plus XLSX recording import
@@ -233,6 +245,14 @@ data/catalog/license_summary/<artifact_id>.json
 data/catalog/license_summary/latest.json
 data/catalog/license_summary/latest_<source_type>.json
 ```
+
+Current Quick HC behavior:
+
+- The page renders workload summary sections separately from the existing detail tables.
+- Live REST collection discovers summary/category datasets dynamically from report 206 and renders only sections with real returned rows.
+- Some summary datasets may be unavailable or fail in a given CommCell; the UI intentionally omits those sections instead of fabricating them.
+- In the current lab CommCell, sections such as `Operating Instance Licenses`, `Data Insights Licenses`, and `Other Licenses` render from live REST collection, while `Capacity Licenses` may be absent because the upstream dataset fails there.
+- `license_expiry` remains `N/A` in the UI when report 206 does not return a value.
 
 The License Summary canonical artifact currently focuses on acquisition, normalization, provenance, and persistence only. No scoring, compliance rules, recommendations, or trend analytics are implemented yet.
 

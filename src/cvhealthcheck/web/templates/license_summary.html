@@ -11,15 +11,17 @@
     {% endfor %}
   {% endif %}
 
-  <h3>Import</h3>
-  <form method="post" action="{{ url_for('main.quick_hc_license_summary_import') }}" enctype="multipart/form-data">
-    <label for="license_summary_file">
-      License Summary file
-      <input id="license_summary_file" type="file" name="license_summary_file" accept=".html,.htm,.csv">
-    </label>
-    <p class="helper-text">Upload a License Summary CSV or HTML export.</p>
-    <button type="submit">Import License Summary</button>
-  </form>
+  {% with
+    report_name="License Summary",
+    collect_action=url_for('main.quick_hc_license_summary_collect'),
+    collect_label="Collect via REST",
+    upload_action=url_for('main.quick_hc_license_summary_import'),
+    file_input_id="license_summary_file",
+    file_input_name="license_summary_file",
+    upload_accept=".html,.htm,.csv"
+  %}
+    {% include "partials/report_import_panel.html" %}
+  {% endwith %}
 
   {% if not artifact %}
     <p class="notice">
@@ -29,7 +31,7 @@
       Use the existing artifact pipeline to import CSV or HTML evidence first.
     </p>
   {% else %}
-    <dl>
+    <dl id="source-metadata">
       <dt>Source</dt>
       <dd>{{ (artifact.source_type or "unknown") | upper }}</dd>
       <dt>Imported at</dt>
@@ -43,8 +45,39 @@
       <dt>CommCell Name</dt>
       <dd>{{ artifact.commcell_name or "unknown" }}</dd>
       <dt>License Expiry</dt>
-      <dd>{{ artifact.license_expiry or "unknown" }}</dd>
+      <dd>{{ artifact.license_expiry or "N/A" }}</dd>
     </dl>
+
+    <h3>Workload Summary Sections</h3>
+    {% if artifact.workload_summary_sections %}
+      {% for section in artifact.workload_summary_sections %}
+        <h4>{{ section.section_name }}</h4>
+        <table>
+          <thead>
+            <tr>
+              <th>License</th>
+              <th>Entitlement / Available</th>
+              <th>Used</th>
+              <th>Used %</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in section.rows %}
+              <tr>
+                <td>{{ row.license }}</td>
+                <td>{{ row.entitlement_value or "" }}</td>
+                <td>{{ row.used or "" }}</td>
+                <td>{{ row.usage_percent or "" }}</td>
+                <td>{{ row.status or "" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endfor %}
+    {% else %}
+      <p class="notice">No workload summary sections are available.</p>
+    {% endif %}
 
     <h3>Other Licenses</h3>
     {% if artifact.other_licenses %}

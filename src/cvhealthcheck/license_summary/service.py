@@ -11,10 +11,11 @@ from uuid import uuid4
 from werkzeug.utils import secure_filename
 
 from cvhealthcheck.reportsplus.catalog import collected_at
+from cvhealthcheck.reportsplus.client import ReportsPlusClient
 from cvhealthcheck.security_assessment.registry import SecurityAssessmentArtifactRegistry
 
 from .artifact import LICENSE_SUMMARY_CATALOG_DIR, write_license_summary_artifact
-from .collect_rest import import_license_summary_xlsx_recording
+from .collect_rest import collect_license_summary_rest, import_license_summary_xlsx_recording
 from .import_csv import import_license_summary_csv
 from .import_html import import_license_summary_html
 from .models import (
@@ -71,7 +72,7 @@ class LicenseSummaryService:
         engagement_context: EngagementContext | None = None,
         report_stream: ReportStream | None = None,
         source_type: str | None = None,
-    ) -> dict[str, Any]:
+        ) -> dict[str, Any]:
         return load_active_license_summary_artifact(
             catalog_dir=self.catalog_dir,
             registry_path=self.registry_path,
@@ -81,6 +82,50 @@ class LicenseSummaryService:
             report_stream=report_stream,
             source_type=source_type,
         )
+
+    def collect_from_rest(
+        self,
+        *,
+        client: ReportsPlusClient | None = None,
+        customer_context: CustomerContext | None = None,
+        commcell_context: CommCellContext | None = None,
+        engagement_context: EngagementContext | None = None,
+        report_stream: ReportStream | None = None,
+        report_run: ReportRun | None = None,
+        imported_by: str | None = None,
+    ) -> dict[str, Any]:
+        collected = collect_license_summary_rest(
+            client=client,
+            write_artifact=False,
+        )
+        normalized = collected["normalized"]
+        if normalized.get("source", {}).get("http_status") == 401:
+            return {
+                "extraction": collected["extraction"],
+                "normalized": normalized,
+                "artifact": normalized.get("artifact_paths", {}).get("latest"),
+            }
+        if not normalized.get("other_licenses") and not normalized.get("agent_feature_licenses"):
+            raise LicenseSummaryImportError(
+                "REST collection produced no License Summary rows."
+            )
+        persisted = persist_license_summary_artifact(
+            normalized,
+            catalog_dir=self.catalog_dir,
+            registry_path=self.registry_path,
+            customer_context=customer_context,
+            commcell_context=commcell_context,
+            engagement_context=engagement_context,
+            report_stream=report_stream,
+            report_run=report_run,
+            imported_by=imported_by,
+            import_method="rest",
+        )
+        return {
+            "extraction": collected["extraction"],
+            "normalized": persisted,
+            "artifact": persisted.get("artifact_paths", {}).get("latest"),
+        }
 
 
 def import_license_summary_upload(

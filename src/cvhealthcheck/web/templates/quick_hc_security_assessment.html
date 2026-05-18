@@ -5,6 +5,24 @@
   <h2>Security Assessment</h2>
   <p>Customer-facing summary of Commvault Security Assessment report checks.</p>
 
+  {% if flashes %}
+    {% for flash in flashes %}
+      <p class="{{ 'error' if flash.category == 'error' else 'notice' }}">{{ flash.message }}</p>
+    {% endfor %}
+  {% endif %}
+
+  {% with
+    report_name="Security Assessment",
+    collect_action=None,
+    collect_unavailable_message="not yet available on Quick HC; use the Development page for live REST refresh.",
+    upload_action=url_for('main.quick_hc_security_assessment_import'),
+    file_input_id="assessment_file",
+    file_input_name="assessment_file",
+    upload_accept=".html,.htm,.csv"
+  %}
+    {% include "partials/report_import_panel.html" %}
+  {% endwith %}
+
   {% if not assessment.exists or not assessment.summary %}
     <p class="notice">
       No Security Assessment artifact is available yet. Use the Development page
@@ -15,7 +33,7 @@
     {% set summary = assessment.summary %}
     {% set counters = summary.counters %}
 
-    <dl>
+    <dl id="source-metadata">
       <dt>Collected</dt>
       <dd>{{ assessment.collected_at or "unknown" }}</dd>
       <dt>Source</dt>

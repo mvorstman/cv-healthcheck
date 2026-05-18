@@ -9,12 +9,14 @@ from bs4.element import Tag
 
 from .artifact import build_license_summary_artifact, write_license_summary_artifact
 from .normalize import (
+    SUMMARY_SECTION_NAMES,
     classify_header,
     clean_text,
     extract_metadata_from_row,
     normalize_agent_feature_record,
     normalize_header,
     normalize_other_license_record,
+    normalize_workload_summary_record,
 )
 
 
@@ -51,11 +53,14 @@ def parse_license_summary_html(
 
     other_licenses: list[dict[str, Any]] = []
     agent_feature_licenses: list[dict[str, Any]] = []
+    workload_summary_sections: list[dict[str, Any]] = []
+    summary_sections_by_name: dict[str, list[dict[str, Any]]] = {}
     for table in soup.find_all("table"):
         headers = _table_headers(table)
         table_kind = classify_header(headers)
         if table_kind is None:
             continue
+        section_name = _table_section_name(table)
         tbody = table.find("tbody") or table
         for row in tbody.find_all("tr", recursive=False):
             cells = row.find_all(["td", "th"], recursive=False)
@@ -72,8 +77,17 @@ def parse_license_summary_html(
             }
             if table_kind == "other":
                 other_licenses.append(normalize_other_license_record(record))
-            else:
+            elif table_kind == "agent":
                 agent_feature_licenses.append(normalize_agent_feature_record(record))
+            elif section_name in SUMMARY_SECTION_NAMES:
+                normalized = normalize_workload_summary_record(record)
+                if normalized:
+                    summary_sections_by_name.setdefault(section_name, []).append(normalized)
+
+    for section_name, section_rows in summary_sections_by_name.items():
+        workload_summary_sections.append(
+            {"section_name": section_name, "rows": section_rows}
+        )
 
     return build_license_summary_artifact(
         source_type="html",
@@ -83,6 +97,7 @@ def parse_license_summary_html(
         metadata=metadata,
         other_licenses=other_licenses,
         agent_feature_licenses=agent_feature_licenses,
+        workload_summary_sections=workload_summary_sections,
     )
 
 
@@ -108,6 +123,14 @@ def _table_headers(table: Tag) -> list[str]:
     if first_row is None:
         return []
     return [_cell_text(cell) for cell in first_row.find_all(["th", "td"], recursive=False)]
+
+
+def _table_section_name(table: Tag) -> str | None:
+    previous = table.find_previous(["h1", "h2", "h3", "h4", "h5", "h6", "p", "div"])
+    if previous is None:
+        return None
+    text = clean_text(previous.get_text(" ", strip=True))
+    return text or None
 
 
 def _cell_text(cell: Tag) -> str:

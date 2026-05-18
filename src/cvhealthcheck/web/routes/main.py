@@ -570,10 +570,42 @@ def quick_hc_commcell():
 
 @bp.route("/quick-hc/security-assessment")
 def quick_hc_security_assessment():
+    flashes = [
+        {"category": category, "message": text}
+        for category, text in get_flashed_messages(with_categories=True)
+    ]
     return render_template(
         "quick_hc_security_assessment.html",
         assessment=security_assessment_quick_hc(),
+        flashes=flashes,
     )
+
+
+@bp.route("/quick-hc/security-assessment/import", methods=["POST"])
+def quick_hc_security_assessment_import():
+    upload = request.files.get("assessment_file")
+    filename = (upload.filename if upload else "") or ""
+    if not filename:
+        flash("No file selected.", "error")
+        return redirect(url_for("main.quick_hc_security_assessment"))
+
+    try:
+        artifact = import_security_assessment_upload(
+            upload.stream,
+            original_filename=filename,
+        )
+    except SecurityAssessmentImportError as exc:
+        flash(str(exc), "error")
+    except Exception as exc:
+        flash(f"Security Assessment import failed: {exc}", "error")
+    else:
+        source_type = str(artifact.get("source_type") or "unknown").upper()
+        finding_count = int(artifact.get("finding_count") or 0)
+        flash(
+            f"{source_type} import completed for {artifact.get('source_file')} with {finding_count} findings.",
+            "success",
+        )
+    return redirect(url_for("main.quick_hc_security_assessment"))
 
 
 @bp.route("/quick-hc/license-summary")
@@ -624,6 +656,33 @@ def quick_hc_license_summary_import():
             f"{source_type} import completed for {artifact.get('source_file')} with {other_count} other licenses and {agent_count} agent/feature licenses.",
             "success",
         )
+    return redirect(url_for("main.quick_hc_license_summary"))
+
+
+@bp.route("/quick-hc/license-summary/collect", methods=["POST"])
+@login_required
+def quick_hc_license_summary_collect():
+    service = LicenseSummaryService()
+    try:
+        result = service.collect_from_rest(client=_reportsplus_client())
+    except LicenseSummaryImportError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.quick_hc_license_summary"))
+    except Exception as exc:
+        flash(f"License Summary REST collection failed: {exc}", "error")
+        return redirect(url_for("main.quick_hc_license_summary"))
+
+    source = result["normalized"].get("source", {})
+    if source.get("http_status") == 401:
+        clear_current_token()
+        return redirect(url_for("main.login", next=url_for("main.quick_hc_license_summary"), expired="1"))
+
+    other_count = len(result["normalized"].get("other_licenses") or [])
+    agent_count = len(result["normalized"].get("agent_feature_licenses") or [])
+    flash(
+        f"REST collection completed with {other_count} other licenses and {agent_count} agent/feature licenses.",
+        "success",
+    )
     return redirect(url_for("main.quick_hc_license_summary"))
 
 

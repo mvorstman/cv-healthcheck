@@ -10,6 +10,7 @@ from .models import LicenseSummaryArtifact
 from .validate import (
     filter_valid_agent_feature_licenses,
     filter_valid_other_licenses,
+    filter_valid_workload_summary_sections,
 )
 
 LICENSE_SUMMARY_CATALOG_DIR = CATALOG_DIR / "license_summary"
@@ -21,6 +22,7 @@ def build_license_summary_artifact(
     source_type: str,
     other_licenses: list[dict[str, Any]],
     agent_feature_licenses: list[dict[str, Any]],
+    workload_summary_sections: list[dict[str, Any]] | None = None,
     source_file: str | None = None,
     imported_at: str | None = None,
     generated_on: str | None = None,
@@ -38,6 +40,7 @@ def build_license_summary_artifact(
         commcell_id=metadata.get("commcell_id") if metadata else None,
         commcell_name=metadata.get("commcell_name") if metadata else None,
         commcell_version=metadata.get("commcell_version") if metadata else None,
+        masked_registration_code=metadata.get("masked_registration_code") if metadata else None,
         timezone=metadata.get("timezone") if metadata else None,
         last_collection_time=metadata.get("last_collection_time") if metadata else None,
         license_expiry=metadata.get("license_expiry") if metadata else None,
@@ -45,6 +48,9 @@ def build_license_summary_artifact(
         last_application_time=metadata.get("last_application_time") if metadata else None,
         other_licenses=filter_valid_other_licenses(other_licenses),
         agent_feature_licenses=filter_valid_agent_feature_licenses(agent_feature_licenses),
+        workload_summary_sections=filter_valid_workload_summary_sections(
+            workload_summary_sections or []
+        ),
         source=dict(source or {}),
         source_metadata=dict((extra or {}).get("source_metadata") or {}),
         artifacts=dict((extra or {}).get("artifacts") or {}),
