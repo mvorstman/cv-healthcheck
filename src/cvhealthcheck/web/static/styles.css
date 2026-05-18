@@ -69,39 +69,53 @@ section {
 }
 
 .import-panel {
-  border: 1px solid #d8dde3;
+  border: 1px solid #dbe1e8;
   border-radius: 8px;
   background: #f8fafc;
-  margin: 1rem 0 1.25rem;
-  padding: 1rem;
-}
-
-.import-panel-grid {
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-}
-
-.import-panel-card {
-  border: 1px solid #d8dde3;
-  border-radius: 6px;
-  background: #fff;
-  padding: 0.9rem;
-}
-
-.import-panel-inline {
-  display: flex;
-  justify-content: space-between;
-  align-items: end;
-  gap: 1rem;
+  margin: 0.85rem 0 1rem;
+  padding: 0.75rem 0.85rem;
 }
 
 .metadata-card {
   border: 1px solid #d8dde3;
   border-radius: 8px;
   background: #f8fafc;
-  margin: 1rem 0 1.5rem;
-  padding: 1rem;
+  margin: 0.85rem 0 1.15rem;
+  padding: 0.85rem 1rem;
+}
+
+.import-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.import-toolbar-form {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  max-width: none;
+}
+
+.import-toolbar-action {
+  flex: 0 0 auto;
+}
+
+.import-toolbar-upload {
+  flex: 1 1 420px;
+}
+
+.toolbar-file-input {
+  min-width: 0;
+  flex: 1 1 280px;
+  background: #fff;
+}
+
+.import-toolbar-help {
+  margin-top: 0.4rem;
+  font-size: 0.9rem;
 }
 
 .chart-panel {
@@ -223,6 +237,7 @@ label {
 .helper-text {
   margin: 0;
   color: #4b5563;
+  font-size: 0.92rem;
 }
 
 input,
@@ -235,7 +250,7 @@ input,
 textarea {
   border: 1px solid #b8c0ca;
   border-radius: 4px;
-  padding: 0.5rem;
+  padding: 0.45rem 0.5rem;
 }
 
 button {
@@ -244,7 +259,9 @@ button {
   border-radius: 4px;
   background: #2457a6;
   color: #fff;
-  padding: 0.55rem 0.85rem;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.95rem;
+  line-height: 1.2;
   cursor: pointer;
 }
 
@@ -291,13 +308,41 @@ th {
   padding: 0.75rem;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 @media (max-width: 720px) {
   dl {
     grid-template-columns: 1fr;
   }
 
-  .section-heading,
-  .import-panel-inline {
+  .section-heading {
     display: grid;
+  }
+
+  .import-toolbar {
+    align-items: stretch;
+  }
+
+  .import-toolbar-form {
+    width: 100%;
+  }
+
+  .import-toolbar-upload {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar-file-input {
+    width: 100%;
   }
 }
