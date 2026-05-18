@@ -1,0 +1,24 @@
+<h3>Import</h3>
+
+{% if collect_action %}
+  <form method="post" action="{{ collect_action }}">
+    <button type="submit">{{ collect_label or "Collect via REST" }}</button>
+  </form>
+{% elif collect_unavailable_message %}
+  <p class="notice">Collect via REST: {{ collect_unavailable_message }}</p>
+{% endif %}
+
+{% if upload_action %}
+  <form method="post" action="{{ upload_action }}" enctype="multipart/form-data">
+    <label for="{{ file_input_id }}">
+      {{ report_name }} file
+      <input id="{{ file_input_id }}" type="file" name="{{ file_input_name }}" accept="{{ upload_accept }}">
+    </label>
+    <p class="helper-text">Upload a {{ report_name }} CSV or HTML export.</p>
+    <button type="submit">Import {{ report_name }}</button>
+  </form>
+{% elif upload_unavailable_message %}
+  <p class="notice">File upload: {{ upload_unavailable_message }}</p>
+{% endif %}
+
+<p class="helper-text">Source metadata appears below.</p>

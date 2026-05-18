@@ -59,6 +59,8 @@ def test_quick_hc_license_summary_page_renders_registry_backed_artifact(tmp_path
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "License Summary" in body
+    assert "Collect via REST" in body
+    assert "Import License Summary" in body
     assert "CommServe A" in body
     assert "Cloud Storage" in body
     assert "Virtual Server" in body

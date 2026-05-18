@@ -378,6 +378,49 @@ def test_flask_upload_imports_csv_and_redirects(tmp_path, monkeypatch) -> None:
     assert len(saved_files) == 1
 
 
+def test_quick_hc_security_assessment_page_shows_standard_import_panel(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+
+    artifact = parse_security_assessment_csv(
+        CSV_SAMPLE,
+        source_file="/tmp/security-assessment.csv",
+    )
+    write_security_assessment_artifact(artifact, catalog_dir=tmp_path / "catalog")
+
+    app = create_app()
+    response = app.test_client().get("/quick-hc/security-assessment")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Import Security Assessment" in body
+    assert "Collect via REST: not yet available on Quick HC" in body
+    assert "/quick-hc/security-assessment/import" in body
+
+
+def test_quick_hc_security_assessment_upload_imports_html_and_redirects(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/security-assessment/import",
+        data={
+            "assessment_file": (io.BytesIO(HTML_SAMPLE.encode("utf-8")), "assessment.html")
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "HTML import completed" in body
+    assert "Import Security Assessment" in body
+    assert "Access Security" in body
+
+
 def test_flask_rest_refresh_redirects_to_single_artifact_render_path(
     tmp_path, monkeypatch
 ) -> None:
