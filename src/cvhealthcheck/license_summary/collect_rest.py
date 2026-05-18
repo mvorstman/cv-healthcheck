@@ -7,28 +7,147 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 from cvhealthcheck.reportsplus.client import ReportsPlusClient
-from cvhealthcheck.reportsplus.extract_report import extract_report
+from cvhealthcheck.reportsplus.inventory import parse_content_field
 
 from .artifact import build_license_summary_artifact, write_license_summary_artifact
 from .import_csv import _artifact_from_rows
-from .normalize import normalize_agent_feature_record, normalize_other_license_record
+from .normalize import (
+    normalize_agent_feature_record,
+    normalize_other_license_record,
+    parse_number,
+)
 
 LICENSE_SUMMARY_REPORT_ID = "206"
+OTHER_LICENSE_SECTION_TITLE = "Other Licenses - current usage details"
+AGENT_FEATURE_SECTION_TITLE = "Agent and Feature Licenses - current usage details"
 
 
 def collect_license_summary_rest(
     *,
     client: ReportsPlusClient | None = None,
-    execute: bool = True,
     sample_limit: int = 500,
     write_artifact: bool = True,
 ) -> dict[str, Any]:
-    extraction = extract_report(
-        LICENSE_SUMMARY_REPORT_ID,
-        client=client,
-        execute=execute,
+    reports_client = client or ReportsPlusClient()
+    report = reports_client.get_report(LICENSE_SUMMARY_REPORT_ID)
+    if not report.ok:
+        artifact = build_license_summary_artifact(
+            source_type="rest",
+            generated_on=None,
+            source={
+                "report_id": LICENSE_SUMMARY_REPORT_ID,
+                "report_name": "License summary",
+                "source_endpoint": report.url,
+                "http_status": report.status_code,
+                "ok": report.ok,
+                "error": report.error,
+            },
+            metadata={},
+            other_licenses=[],
+            agent_feature_licenses=[],
+            extra={
+                "datasets": [],
+                "source_metadata": {
+                    "report_id": LICENSE_SUMMARY_REPORT_ID,
+                    "executions": [],
+                },
+            },
+        )
+        if write_artifact:
+            artifact["artifact_paths"] = write_license_summary_artifact(artifact)
+        extraction = {
+            "report_id": LICENSE_SUMMARY_REPORT_ID,
+            "report": {
+                "ok": report.ok,
+                "http_status": report.status_code,
+                "url": report.url,
+                "data": report.data,
+                "error": report.error,
+            },
+            "definition": None,
+            "datasets": [],
+            "executions": [],
+            "summary": {
+                "report_id": LICENSE_SUMMARY_REPORT_ID,
+                "report_name": "License summary",
+                "report_ok": report.ok,
+                "report_http_status": report.status_code,
+                "collected_at": None,
+            },
+        }
+        return {
+            "extraction": extraction,
+            "normalized": artifact,
+            "artifact": artifact.get("artifact_paths", {}).get("latest"),
+        }
+    definition = parse_content_field(report.data)
+    page = _find_license_summary_page(definition)
+    if page is None:
+        raise ValueError("License Summary detail page was not found in report 206.")
+
+    dataset_specs = _license_summary_dataset_specs(page)
+    org_spec = _required_dataset_spec(dataset_specs, "organization")
+    other_spec = _required_dataset_spec(dataset_specs, "other")
+    agent_spec = _required_dataset_spec(dataset_specs, "agent")
+    metadata_spec = _required_dataset_spec(dataset_specs, "metadata")
+
+    organization_execution = _execute_dataset_spec(
+        reports_client,
+        org_spec,
+        parameters={},
         sample_limit=sample_limit,
     )
+    org_rows = organization_execution.get("sample_rows") or []
+    org_guid_candidates = _organization_guid_candidates(org_rows)
+
+    metadata_execution = _execute_with_guid_candidates(
+        reports_client,
+        metadata_spec,
+        org_guid_candidates,
+        sample_limit=sample_limit,
+    )
+    other_execution = _execute_with_guid_candidates(
+        reports_client,
+        other_spec,
+        org_guid_candidates,
+        sample_limit=sample_limit,
+    )
+    agent_execution = _execute_with_guid_candidates(
+        reports_client,
+        agent_spec,
+        org_guid_candidates,
+        sample_limit=sample_limit,
+    )
+
+    execution_by_kind = {
+        "organization": organization_execution,
+        "metadata": metadata_execution,
+        "other": other_execution,
+        "agent": agent_execution,
+    }
+    extraction = {
+        "report_id": LICENSE_SUMMARY_REPORT_ID,
+        "report": {
+            "ok": report.ok,
+            "http_status": report.status_code,
+            "url": report.url,
+            "data": report.data,
+            "error": report.error,
+        },
+        "definition": definition,
+        "datasets": dataset_specs,
+        "executions": [
+            execution_by_kind.get(str(spec.get("kind") or ""), {})
+            for spec in dataset_specs
+        ],
+        "summary": {
+            "report_id": LICENSE_SUMMARY_REPORT_ID,
+            "report_name": _report_name(report.data) or "License summary",
+            "report_ok": report.ok,
+            "report_http_status": report.status_code,
+            "collected_at": metadata_execution.get("collected_at"),
+        },
+    }
     artifact = normalize_license_summary_rest_extraction(extraction)
     if write_artifact:
         artifact["artifact_paths"] = write_license_summary_artifact(artifact)
@@ -50,12 +169,20 @@ def normalize_license_summary_rest_extraction(extraction: dict[str, Any]) -> dic
         if execution.get("status") != "EXECUTABLE":
             continue
         rows = execution.get("sample_rows") or []
+        header_kind = str(mapping.get("kind") or execution.get("kind") or "")
+        if header_kind == "other":
+            other_licenses.extend(_normalize_live_other_license_row(row) for row in rows if isinstance(row, dict))
+            continue
+        if header_kind == "agent":
+            agent_feature_licenses.extend(_normalize_live_agent_feature_row(row) for row in rows if isinstance(row, dict))
+            continue
+
         normalized_rows = [_normalize_rest_row(row) for row in rows if isinstance(row, dict)]
         dataset_name = str(mapping.get("dataset_name") or execution.get("dataset_name") or "")
-        header_kind = _rest_dataset_kind(dataset_name, normalized_rows)
-        if header_kind == "other":
+        legacy_kind = _rest_dataset_kind(dataset_name, normalized_rows)
+        if legacy_kind == "other":
             other_licenses.extend(normalize_other_license_record(row) for row in normalized_rows)
-        elif header_kind == "agent":
+        elif legacy_kind == "agent":
             agent_feature_licenses.extend(normalize_agent_feature_record(row) for row in normalized_rows)
 
     return build_license_summary_artifact(
@@ -125,7 +252,11 @@ def _metadata_from_execution_rows(executions: list[dict[str, Any]]) -> dict[str,
                     metadata.setdefault("commcell_name", value)
                 elif lowered == "commcell version" and value:
                     metadata.setdefault("commcell_version", value)
+                elif lowered == "version" and value:
+                    metadata.setdefault("commcell_version", value)
                 elif lowered == "timezone" and value:
+                    metadata.setdefault("timezone", value)
+                elif lowered == "time zone" and value:
                     metadata.setdefault("timezone", value)
                 elif lowered == "last collection time" and value:
                     metadata.setdefault("last_collection_time", value)
@@ -135,7 +266,289 @@ def _metadata_from_execution_rows(executions: list[dict[str, Any]]) -> dict[str,
                     metadata.setdefault("last_generation_time", value)
                 elif lowered == "last application time" and value:
                     metadata.setdefault("last_application_time", value)
+                elif lowered == "commcell" and value:
+                    metadata.setdefault("commcell_name", value)
+                elif lowered == "commcellid" and value:
+                    metadata.setdefault("commcell_id", str(value))
+                elif lowered == "data source" and value:
+                    metadata.setdefault("commcell_name", value)
     return metadata
+
+
+def _find_license_summary_page(definition: Any) -> dict[str, Any] | None:
+    if not isinstance(definition, dict):
+        return None
+    for page in definition.get("pages", []):
+        if not isinstance(page, dict):
+            continue
+        components = (
+            page.get("body", {}).get("reportComponents", [])
+            if isinstance(page.get("body"), dict)
+            else []
+        )
+        titles = {
+            str(component.get("title", {}).get("text") or "").strip()
+            for component in components
+            if isinstance(component, dict)
+        }
+        if {
+            OTHER_LICENSE_SECTION_TITLE,
+            AGENT_FEATURE_SECTION_TITLE,
+        }.issubset(titles):
+            return page
+    return None
+
+
+def _license_summary_dataset_specs(page: dict[str, Any]) -> list[dict[str, Any]]:
+    specs: list[dict[str, Any]] = []
+    datasets = page.get("dataSets", {}).get("dataSet", [])
+    for dataset in datasets:
+        if not isinstance(dataset, dict):
+            continue
+        fields = _dataset_fields(dataset)
+        kind = _page_dataset_kind(fields)
+        if kind is None:
+            continue
+        specs.append(
+            {
+                "kind": kind,
+                "dataset_guid": dataset.get("guid"),
+                "dataset_name": dataset.get("dataSet", {}).get("dataSetName"),
+                "fields": fields,
+                "parameter_names": [
+                    str(parameter.get("name"))
+                    for parameter in dataset.get("GetOperation", {}).get("parameters", [])
+                    if isinstance(parameter, dict) and parameter.get("name")
+                ],
+            }
+        )
+    return specs
+
+
+def _dataset_fields(dataset: dict[str, Any]) -> list[str]:
+    fields = dataset.get("fields")
+    names: list[str] = []
+    if not isinstance(fields, list):
+        return names
+    for field in fields:
+        if not isinstance(field, dict):
+            continue
+        name = field.get("name") or field.get("dataField")
+        if name:
+            names.append(str(name))
+    return names
+
+
+def _page_dataset_kind(fields: list[str]) -> str | None:
+    field_set = set(fields)
+    if {"OrgGUID", "Organization"}.issubset(field_set):
+        return "organization"
+    if {"Last Collection Time", "License Expiry"}.issubset(field_set):
+        return "metadata"
+    if {"Dial", "Purchased", "PermTotal", "Eval", "Usage"}.issubset(field_set):
+        return "other"
+    if {
+        "License",
+        "Permanent Total",
+        "Permanent Used",
+        "Evaluation Total",
+        "Evaluation Used",
+        "Client",
+        "Agent",
+    }.issubset(field_set):
+        return "agent"
+    return None
+
+
+def _required_dataset_spec(specs: list[dict[str, Any]], kind: str) -> dict[str, Any]:
+    for spec in specs:
+        if spec.get("kind") == kind:
+            return spec
+    raise ValueError(f"License Summary report is missing the {kind} dataset definition.")
+
+
+def _execute_with_guid_candidates(
+    client: ReportsPlusClient,
+    spec: dict[str, Any],
+    guid_candidates: list[str],
+    *,
+    sample_limit: int,
+) -> dict[str, Any]:
+    parameter_name = _guid_parameter_name(spec)
+    if parameter_name is None:
+        return _execute_dataset_spec(client, spec, parameters={}, sample_limit=sample_limit)
+
+    attempts: list[dict[str, Any]] = []
+    for guid in guid_candidates:
+        execution = _execute_dataset_spec(
+            client,
+            spec,
+            parameters={f"parameter.{parameter_name}": guid},
+            sample_limit=sample_limit,
+        )
+        attempts.append(execution)
+        if execution.get("sample_rows"):
+            execution["attempts"] = [_attempt_summary(item) for item in attempts]
+            return execution
+    if attempts:
+        attempts[-1]["attempts"] = [_attempt_summary(item) for item in attempts]
+        return attempts[-1]
+    return _execute_dataset_spec(client, spec, parameters={}, sample_limit=sample_limit)
+
+
+def _guid_parameter_name(spec: dict[str, Any]) -> str | None:
+    parameter_names = spec.get("parameter_names") or []
+    for name in parameter_names:
+        if str(name).upper() == "GUID":
+            return str(name)
+    return str(parameter_names[0]) if parameter_names else None
+
+
+def _execute_dataset_spec(
+    client: ReportsPlusClient,
+    spec: dict[str, Any],
+    *,
+    parameters: dict[str, str],
+    sample_limit: int,
+) -> dict[str, Any]:
+    dataset_guid = str(spec.get("dataset_guid") or "")
+    result = client.get_dataset_data(
+        dataset_guid,
+        parameters=parameters,
+        limit=sample_limit,
+    )
+    rows = _rows_from_payload(result.data) if result.ok else []
+    return {
+        "kind": spec.get("kind"),
+        "dataset_guid": dataset_guid,
+        "dataset_name": spec.get("dataset_name"),
+        "status": "EXECUTABLE" if result.ok else "FAILS",
+        "http_status": result.status_code,
+        "record_count": len(rows),
+        "sample_rows": rows[:sample_limit],
+        "parameters": parameters,
+        "error": result.error,
+        "collected_at": result.data.get("timestamp") if isinstance(result.data, dict) else None,
+        "raw_data": result.data,
+    }
+
+
+def _rows_from_payload(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return [row for row in payload if isinstance(row, dict)]
+    if isinstance(payload, dict):
+        for key in ("records", "rows", "data"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return [row for row in value if isinstance(row, dict)]
+        for value in payload.values():
+            if isinstance(value, list) and all(isinstance(row, dict) for row in value):
+                return value
+    return []
+
+
+def _attempt_summary(execution: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "dataset_guid": execution.get("dataset_guid"),
+        "dataset_name": execution.get("dataset_name"),
+        "http_status": execution.get("http_status"),
+        "record_count": execution.get("record_count"),
+        "parameters": dict(execution.get("parameters") or {}),
+        "error": execution.get("error"),
+    }
+
+
+def _organization_guid_candidates(rows: list[dict[str, Any]]) -> list[str]:
+    preferred: list[str] = []
+    fallback: list[str] = []
+    for row in rows:
+        guid = str(row.get("OrgGUID") or "").strip()
+        if not guid or guid in preferred or guid in fallback:
+            continue
+        organization = str(row.get("Organization") or "").strip().lower()
+        if guid == "-1" or organization == "commcell":
+            preferred.append(guid)
+        else:
+            fallback.append(guid)
+    return preferred + fallback
+
+
+def _normalize_live_other_license_row(row: dict[str, Any]) -> dict[str, Any]:
+    license_usage_type = parse_number(row.get("LicUsageType"))
+    available_total = _format_other_license_value(row.get("Purchased"), license_usage_type)
+    used = _format_other_license_value(row.get("Usage"), license_usage_type)
+    record = normalize_other_license_record(
+        {
+            "License": row.get("Dial"),
+            "Available Total": available_total,
+            "Used": used,
+        }
+    )
+    record["raw_fields"] = dict(row)
+    return record
+
+
+def _normalize_live_agent_feature_row(row: dict[str, Any]) -> dict[str, Any]:
+    record = normalize_agent_feature_record(
+        {
+            "License": row.get("License"),
+            "Permanent Total": _stringify_numeric_or_unlimited(row.get("Permanent Total")),
+            "Permanent Used": row.get("Permanent Used"),
+            "Term Total": _stringify_numeric_or_unlimited(row.get("Evaluation Total")),
+            "Term Used": row.get("Evaluation Used"),
+            "Client": row.get("Client"),
+            "Agent": row.get("Agent"),
+            "Install Date": row.get("Install Date"),
+        }
+    )
+    record["raw_fields"] = dict(row)
+    return record
+
+
+def _format_other_license_value(value: Any, license_usage_type: int | None) -> str:
+    number = _stringify_numeric_or_unlimited(value)
+    unit = _license_usage_unit(license_usage_type)
+    return f"{number} {unit}".strip() if unit else number
+
+
+def _stringify_numeric_or_unlimited(value: Any) -> str:
+    number = parse_number(value)
+    if number == -1:
+        return "Unlimited"
+    if number is not None:
+        return str(number)
+    text = "" if value is None else str(value).strip()
+    return text
+
+
+def _license_usage_unit(license_usage_type: int | None) -> str | None:
+    if license_usage_type in {100031, 100016, 100015, -1}:
+        return "TB"
+    if license_usage_type in {200003, 100027, 200001, 100021}:
+        return "VMs"
+    if license_usage_type in {100030, 200002, 100029, 200017}:
+        return "clients"
+    if license_usage_type in {100026, 100025}:
+        return "users"
+    if license_usage_type == 100017:
+        return "millions"
+    if license_usage_type == 200016:
+        return "source VMs"
+    if license_usage_type in {100019, 100033}:
+        return "instances"
+    return None
+
+
+def _report_name(data: Any) -> str | None:
+    if isinstance(data, dict):
+        nested = data.get("report")
+        if isinstance(nested, dict):
+            value = nested.get("customReportName") or nested.get("reportName")
+            if value:
+                return str(value)
+        value = data.get("reportName") or data.get("customReportName") or data.get("name")
+        return str(value) if value else None
+    return None
 
 
 def _rest_dataset_kind(dataset_name: str, rows: list[dict[str, Any]]) -> str | None:

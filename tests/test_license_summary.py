@@ -3,6 +3,7 @@ from __future__ import annotations
 from io import BytesIO
 import zipfile
 
+from cvhealthcheck.api_client import ApiResult
 from cvhealthcheck.license_summary.collect_rest import (
     collect_license_summary_rest,
     normalize_license_summary_rest_extraction,
@@ -197,6 +198,201 @@ def test_normalize_license_summary_rest_extraction_builds_canonical_lists() -> N
     assert len(artifact["agent_feature_licenses"]) == 1
     assert artifact["other_licenses"][1]["unit"] == "TB"
     assert artifact["source"]["report_id"] == "206"
+
+
+def test_collect_license_summary_rest_uses_page_dataset_definitions_for_live_report() -> None:
+    page = {
+        "body": {
+            "reportComponents": [
+                {"title": {"text": "Other Licenses - current usage details"}},
+                {"title": {"text": "Agent and Feature Licenses - current usage details"}},
+            ]
+        },
+        "dataSets": {
+            "dataSet": [
+                {
+                    "guid": "outer-other-guid",
+                    "GetOperation": {"parameters": [{"name": "GUID", "values": ["=input.orgGUID"]}]},
+                    "dataSet": {"dataSetGuid": "inner-other-guid", "dataSetName": "usageBasedLicenses"},
+                    "fields": [
+                        {"name": "Data Source"},
+                        {"name": "LicUsageType"},
+                        {"name": "Dial"},
+                        {"name": "Purchased"},
+                        {"name": "PermTotal"},
+                        {"name": "Eval"},
+                        {"name": "Usage"},
+                        {"name": "TermDate"},
+                        {"name": "EvalExpiryDate"},
+                    ],
+                },
+                {
+                    "guid": "outer-agent-guid",
+                    "GetOperation": {"parameters": [{"name": "GUID", "values": ["=input.orgGUID"]}]},
+                    "dataSet": {"dataSetGuid": "inner-agent-guid", "dataSetName": "agentFeatureLicenses"},
+                    "fields": [
+                        {"name": "License"},
+                        {"name": "Permanent Total"},
+                        {"name": "Permanent Used"},
+                        {"name": "Evaluation Total"},
+                        {"name": "Evaluation Used"},
+                        {"name": "Client"},
+                        {"name": "Agent"},
+                        {"name": "Install Date"},
+                    ],
+                },
+                {
+                    "guid": "outer-meta-guid",
+                    "GetOperation": {"parameters": [{"name": "GUID", "values": ["=input.orgGUID"]}]},
+                    "dataSet": {"dataSetGuid": "inner-meta-guid", "dataSetName": "lastCollection"},
+                    "fields": [
+                        {"name": "Last Collection Time"},
+                        {"name": "License Expiry"},
+                        {"name": "CommCell"},
+                        {"name": "Version"},
+                        {"name": "TimeZone"},
+                    ],
+                },
+                {
+                    "guid": "outer-org-guid",
+                    "GetOperation": {},
+                    "dataSet": {"dataSetGuid": "inner-org-guid", "dataSetName": "organization"},
+                    "fields": [
+                        {"name": "OrgGUID"},
+                        {"name": "Organization"},
+                    ],
+                },
+            ]
+        },
+    }
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict[str, str]]] = []
+
+        def get_report(self, report_id_or_guid: str) -> ApiResult:
+            return ApiResult(
+                ok=True,
+                status_code=200,
+                url=f"/reports/{report_id_or_guid}",
+                data={"reportName": "License summary", "pages": [page]},
+                text="",
+            )
+
+        def get_dataset_data(
+            self,
+            dataset_guid: str,
+            *,
+            parameters: dict[str, str] | None = None,
+            limit: int | None = None,
+            **_: object,
+        ) -> ApiResult:
+            params = parameters or {}
+            self.calls.append((dataset_guid, params))
+            timestamp = "2026-05-18T09:15:00+00:00"
+            if dataset_guid == "outer-org-guid":
+                return ApiResult(
+                    ok=True,
+                    status_code=200,
+                    url=f"/datasets/{dataset_guid}/data",
+                    data={
+                        "timestamp": timestamp,
+                        "records": [{"OrgGUID": "-1", "Organization": "Commcell"}],
+                    },
+                    text="",
+                )
+            if params != {"parameter.GUID": "-1"}:
+                return ApiResult(
+                    ok=False,
+                    status_code=400,
+                    url=f"/datasets/{dataset_guid}/data",
+                    data=None,
+                    text="bad params",
+                    error="bad params",
+                )
+            payloads = {
+                "outer-other-guid": {
+                    "timestamp": timestamp,
+                    "records": [
+                        {
+                            "Dial": "Advanced VM",
+                            "LicUsageType": 200003,
+                            "Purchased": 0,
+                            "PermTotal": 0,
+                            "Eval": 0,
+                            "Usage": 0,
+                            "TermDate": "Jan 1, 1970, 12:00:00 AM",
+                            "EvalExpiryDate": "01 Jan 1970",
+                        }
+                    ],
+                },
+                "outer-agent-guid": {
+                    "timestamp": timestamp,
+                    "records": [
+                        {
+                            "License": "Server File System",
+                            "Permanent Total": -1,
+                            "Permanent Used": 4,
+                            "Evaluation Total": 0,
+                            "Evaluation Used": 0,
+                            "Client": "dev02",
+                            "Agent": "Windows File System",
+                            "Install Date": "Apr 23, 2026, 03:17:48 PM",
+                        }
+                    ],
+                },
+                "outer-meta-guid": {
+                    "timestamp": timestamp,
+                    "records": [
+                        {
+                            "Last Collection Time": "2026-05-18T08:55:00+00:00",
+                            "License Expiry": "2027-05-19",
+                            "CommCell": "CommServe A",
+                            "Version": "11.36",
+                            "TimeZone": "UTC",
+                        }
+                    ],
+                },
+            }
+            payload = payloads.get(dataset_guid)
+            if payload is None:
+                return ApiResult(
+                    ok=False,
+                    status_code=404,
+                    url=f"/datasets/{dataset_guid}/data",
+                    data=None,
+                    text="not found",
+                    error="not found",
+                )
+            return ApiResult(
+                ok=True,
+                status_code=200,
+                url=f"/datasets/{dataset_guid}/data",
+                data=payload,
+                text="",
+            )
+
+    client = FakeClient()
+
+    collected = collect_license_summary_rest(client=client, write_artifact=False)
+    artifact = collected["normalized"]
+
+    assert artifact["generated_on"] == "2026-05-18T09:15:00+00:00"
+    assert artifact["commcell_name"] == "CommServe A"
+    assert artifact["commcell_version"] == "11.36"
+    assert artifact["license_expiry"] == "2027-05-19"
+    assert len(artifact["other_licenses"]) == 1
+    assert artifact["other_licenses"][0]["license"] == "Advanced VM"
+    assert artifact["other_licenses"][0]["raw_available_total"] == "0 VMs"
+    assert artifact["other_licenses"][0]["raw_used"] == "0 VMs"
+    assert len(artifact["agent_feature_licenses"]) == 1
+    assert artifact["agent_feature_licenses"][0]["license"] == "Server File System"
+    assert [guid for guid, _ in client.calls] == [
+        "outer-org-guid",
+        "outer-meta-guid",
+        "outer-other-guid",
+        "outer-agent-guid",
+    ]
 
 
 def test_license_summary_registry_write_and_registry_first_read(tmp_path) -> None:

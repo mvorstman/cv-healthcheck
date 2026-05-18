@@ -98,8 +98,19 @@ class LicenseSummaryService:
             client=client,
             write_artifact=False,
         )
+        normalized = collected["normalized"]
+        if normalized.get("source", {}).get("http_status") == 401:
+            return {
+                "extraction": collected["extraction"],
+                "normalized": normalized,
+                "artifact": normalized.get("artifact_paths", {}).get("latest"),
+            }
+        if not normalized.get("other_licenses") and not normalized.get("agent_feature_licenses"):
+            raise LicenseSummaryImportError(
+                "REST collection produced no License Summary rows."
+            )
         persisted = persist_license_summary_artifact(
-            collected["normalized"],
+            normalized,
             catalog_dir=self.catalog_dir,
             registry_path=self.registry_path,
             customer_context=customer_context,
