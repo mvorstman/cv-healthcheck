@@ -208,6 +208,68 @@ def _license_summary_quick_hc() -> dict[str, Any]:
     }
 
 
+def _client_growth_quick_hc() -> dict[str, Any]:
+    try:
+        summary = get_client_growth_summary(live=False)
+    except FileNotFoundError:
+        return {
+            "exists": False,
+            "source_label": "Reports Plus / Metrics",
+            "summary": "Not collected yet",
+        }
+
+    records = list(summary.get("records") or [])
+    latest = records[-1] if records else {}
+    return {
+        "exists": True,
+        "source_label": "Reports Plus / Metrics",
+        "record_count": int(summary.get("record_count") or 0),
+        "history_range": summary.get("history_range"),
+        "latest_month": latest.get("month"),
+        "latest_total_clients": latest.get("total_clients"),
+        "latest_added": latest.get("added"),
+        "latest_removed": latest.get("removed"),
+        "summary": (
+            f"{latest.get('month')}: {latest.get('total_clients') or 0} total clients, "
+            f"{latest.get('added') or 0} added, {latest.get('removed') or 0} removed"
+            if latest
+            else "No summary rows are available."
+        ),
+    }
+
+
+def _capacity_license_quick_hc() -> dict[str, Any]:
+    try:
+        metric = get_capacity_license_usage(live=False)
+    except FileNotFoundError:
+        return {
+            "exists": False,
+            "source_label": "Reports Plus / Metrics",
+            "summary": "Not collected yet",
+        }
+
+    records = list(metric.get("records") or [])
+    latest_month = metric.get("history_range", {}).get("end") if metric.get("history_range") else None
+    latest_records = [row for row in records if row.get("month") == latest_month]
+    total_used = sum(float(row.get("used_capacity") or 0) for row in latest_records)
+    total_purchased = sum(float(row.get("purchased_capacity") or 0) for row in latest_records)
+    return {
+        "exists": True,
+        "source_label": "Reports Plus / Metrics",
+        "record_count": int(metric.get("record_count") or 0),
+        "history_range": metric.get("history_range"),
+        "latest_month": latest_month,
+        "entity_count": len(latest_records),
+        "total_used": total_used,
+        "total_purchased": total_purchased,
+        "summary": (
+            f"{latest_month}: {len(latest_records)} entities, {total_used:.2f} used of {total_purchased:.2f}"
+            if latest_month and latest_records
+            else "No capacity rows are available."
+        ),
+    }
+
+
 def _client_count_chart(metric: dict[str, Any]) -> dict[str, Any] | None:
     records = _month_records(metric)
     if not records:

@@ -49,6 +49,14 @@
       <span>Workload sections</span>
     </div>
     <div class="status-card">
+      <strong>{{ report.client_growth.record_count if report.client_growth.available else 0 }}</strong>
+      <span>Client growth rows</span>
+    </div>
+    <div class="status-card">
+      <strong>{{ report.capacity_license.record_count if report.capacity_license.available else 0 }}</strong>
+      <span>Capacity rows</span>
+    </div>
+    <div class="status-card">
       <strong>{{ report.evidence | length }}</strong>
       <span>Artifact sources</span>
     </div>
@@ -211,6 +219,74 @@
     {% else %}
       <p>{{ report.license_summary.message }}</p>
       <p><a href="{{ report.license_summary.detail_url }}">Open License Summary</a></p>
+    {% endif %}
+  {% endif %}
+
+  {% if report.client_growth.requested %}
+    <h3>Client Growth</h3>
+    {% if report.client_growth.available and report.client_growth.has_content %}
+      <table class="compact-table">
+        <tbody>
+          <tr><th>Source Type</th><td>{{ (report.client_growth.source_type or "unknown") | upper }}</td></tr>
+          <tr><th>Imported At</th><td>{{ report.client_growth.imported_at or "Not collected yet" }}</td></tr>
+          <tr><th>History Range</th><td>{% if report.client_growth.history_range %}{{ report.client_growth.history_range.start }} to {{ report.client_growth.history_range.end }}{% else %}Not collected yet{% endif %}</td></tr>
+          <tr><th>Record Count</th><td>{{ report.client_growth.record_count }}</td></tr>
+          <tr><th>Detail Page</th><td><a href="{{ report.client_growth.detail_url }}">View Client Growth</a></td></tr>
+        </tbody>
+      </table>
+      {% if report.client_growth.latest_record %}
+        <h4>Latest Summary</h4>
+        <table class="compact-table">
+          <tbody>
+            <tr><th>Month</th><td>{{ report.client_growth.latest_record.month or "Not collected yet" }}</td></tr>
+            <tr><th>Total Clients</th><td>{{ report.client_growth.latest_record.total_clients if report.client_growth.latest_record.total_clients is not none else "" }}</td></tr>
+            <tr><th>Added</th><td>{{ report.client_growth.latest_record.added if report.client_growth.latest_record.added is not none else "" }}</td></tr>
+            <tr><th>Removed</th><td>{{ report.client_growth.latest_record.removed if report.client_growth.latest_record.removed is not none else "" }}</td></tr>
+          </tbody>
+        </table>
+      {% endif %}
+    {% else %}
+      <p>{{ report.client_growth.message }}</p>
+      <p><a href="{{ report.client_growth.detail_url }}">Open Client Growth</a></p>
+    {% endif %}
+  {% endif %}
+
+  {% if report.capacity_license.requested %}
+    <h3>Capacity License</h3>
+    {% if report.capacity_license.available and report.capacity_license.has_content %}
+      <table class="compact-table">
+        <tbody>
+          <tr><th>Source Type</th><td>{{ (report.capacity_license.source_type or "unknown") | upper }}</td></tr>
+          <tr><th>Imported At</th><td>{{ report.capacity_license.imported_at or "Not collected yet" }}</td></tr>
+          <tr><th>Latest Month</th><td>{{ report.capacity_license.latest_month or "Not collected yet" }}</td></tr>
+          <tr><th>Record Count</th><td>{{ report.capacity_license.record_count }}</td></tr>
+          <tr><th>Detail Page</th><td><a href="{{ report.capacity_license.detail_url }}">View Capacity License</a></td></tr>
+        </tbody>
+      </table>
+      {% if report.capacity_license.latest_rows %}
+        <h4>Latest Capacity Summary</h4>
+        <table class="compact-table">
+          <thead>
+            <tr>
+              <th>Entity</th>
+              <th>Used Capacity</th>
+              <th>Purchased Capacity</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in report.capacity_license.latest_rows %}
+              <tr>
+                <td>{{ row.entity_name or "" }}</td>
+                <td>{{ row.used_capacity if row.used_capacity is not none else "" }}</td>
+                <td>{{ row.purchased_capacity if row.purchased_capacity is not none else "" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    {% else %}
+      <p>{{ report.capacity_license.message }}</p>
+      <p><a href="{{ report.capacity_license.detail_url }}">Open Capacity License</a></p>
     {% endif %}
   {% endif %}
 

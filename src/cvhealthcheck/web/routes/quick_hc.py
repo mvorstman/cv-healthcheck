@@ -8,6 +8,8 @@ from .shared import (
     LicenseSummaryService,
     SecurityAssessmentImportError,
     SecurityAssessmentService,
+    _capacity_license_quick_hc,
+    _client_growth_quick_hc,
     _current_token,
     _license_summary_quick_hc,
     _reportsplus_client,
@@ -40,6 +42,8 @@ def quick_hc():
         commcell_status=catalog_status("commserv.json", catalog_dir=Path("data/catalog/rest")),
         security_assessment=security_assessment_quick_hc(),
         license_summary=_license_summary_quick_hc(),
+        client_growth=_client_growth_quick_hc(),
+        capacity_license=_capacity_license_quick_hc(),
         selected_report_sections=REPORT_SELECTION_IDS,
     )
 

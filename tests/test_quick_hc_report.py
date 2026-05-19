@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from cvhealthcheck.license_summary.import_csv import parse_license_summary_csv
@@ -72,6 +73,62 @@ def _patch_license_summary_paths(tmp_path, monkeypatch) -> None:
         "LICENSE_SUMMARY_CATALOG_DIR",
         tmp_path / "license_catalog",
     )
+
+
+def _patch_metrics_paths(tmp_path, monkeypatch) -> Path:
+    import cvhealthcheck.metrics.common as metrics_common_module
+
+    metrics_dir = tmp_path / "metrics_catalog"
+    monkeypatch.setattr(
+        metrics_common_module,
+        "METRICS_CATALOG_DIR",
+        metrics_dir,
+    )
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+    return metrics_dir
+
+
+def _write_metric_artifact(metrics_dir: Path, name: str, payload: dict) -> None:
+    (metrics_dir / f"{name}.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+CLIENT_GROWTH_ARTIFACT = {
+    "collected_at": "2026-05-18T21:00:00Z",
+    "source": {
+        "report_id": "318",
+        "dataset_id": "2281",
+        "dataset_guid": "8ac30a77-3de2-4968-86c1-ade4b02c85a4",
+        "dataset_name": "Client Growth Summary",
+        "widget_name": "Summary",
+    },
+    "http_status": 200,
+    "ok": True,
+    "record_count": 2,
+    "history_range": {"start": "2026-04", "end": "2026-05", "points": 2},
+    "records": [
+        {"month": "2026-04", "total_clients": 120, "added": 4, "removed": 1, "data_source": "CommServe A"},
+        {"month": "2026-05", "total_clients": 125, "added": 7, "removed": 2, "data_source": "CommServe A"},
+    ],
+}
+
+CAPACITY_LICENSE_ARTIFACT = {
+    "collected_at": "2026-05-18T21:05:00Z",
+    "source": {
+        "report_id": "318",
+        "dataset_id": "2266",
+        "dataset_guid": "43c5c8f8-5864-48de-8153-f85a91abd93a",
+        "dataset_name": "Capacity License Usage",
+        "widget_name": "Capacity License Usage",
+    },
+    "http_status": 200,
+    "ok": True,
+    "record_count": 2,
+    "history_range": {"start": "2026-05", "end": "2026-05", "points": 1},
+    "records": [
+        {"month": "2026-05", "entity_name": "CommServe A", "used_capacity": 18.5, "purchased_capacity": 40.0, "data_source": "CommServe A"},
+        {"month": "2026-05", "entity_name": "CommServe B", "used_capacity": 11.0, "purchased_capacity": 20.0, "data_source": "CommServe B"},
+    ],
+}
 
 
 def test_quick_hc_report_route_loads_without_artifacts() -> None:
@@ -218,8 +275,26 @@ def test_quick_hc_report_route_uses_service(monkeypatch) -> None:
             },
             "license_summary": {
                 "available": False,
+                "requested": False,
+                "has_content": False,
                 "message": "Not collected yet",
                 "detail_url": "/quick-hc/license-summary",
+            },
+            "client_growth": {
+                "available": False,
+                "requested": False,
+                "has_content": False,
+                "record_count": 0,
+                "message": "Not collected yet",
+                "detail_url": "/metrics/client-growth",
+            },
+            "capacity_license": {
+                "available": False,
+                "requested": False,
+                "has_content": False,
+                "record_count": 0,
+                "message": "Not collected yet",
+                "detail_url": "/metrics/capacity-license",
             },
             "evidence": [],
         }
@@ -238,6 +313,7 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
 ) -> None:
     _patch_security_assessment_paths(tmp_path, monkeypatch)
     _patch_license_summary_paths(tmp_path, monkeypatch)
+    _patch_metrics_paths(tmp_path, monkeypatch)
 
     app = create_app()
 
@@ -249,6 +325,11 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert 'value="environment"' in body
     assert 'value="security_assessment"' in body
     assert 'value="license_summary"' in body
+    assert 'value="client_growth"' in body
+    assert 'value="capacity_license"' in body
+    assert "CommCell Details" in body
+    assert "Client Growth" in body
+    assert "Capacity License" in body
     assert "Generate/View Customer Report" in body
 
 
@@ -337,6 +418,73 @@ def test_quick_hc_report_post_security_assessment_only_excludes_license_summary(
     assert "License Summary" not in body
     assert "Cloud Storage" not in body
     assert "Virtual Server" not in body
+
+
+def test_quick_hc_report_post_client_growth_only_excludes_other_optional_subjects(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+    metrics_dir = _patch_metrics_paths(tmp_path, monkeypatch)
+    _write_metric_artifact(metrics_dir, "client_growth_summary", CLIENT_GROWTH_ARTIFACT)
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/report",
+        data={"selection_ids": ["client_growth"]},
+    )
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Client Growth" in body
+    assert "2026-05" in body
+    assert "125" in body
+    assert "Security Assessment" not in body
+    assert "License Summary" not in body
+    assert "Capacity License" not in body
+
+
+def test_quick_hc_report_post_capacity_license_only_excludes_other_optional_subjects(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+    metrics_dir = _patch_metrics_paths(tmp_path, monkeypatch)
+    _write_metric_artifact(metrics_dir, "capacity_license_usage", CAPACITY_LICENSE_ARTIFACT)
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/report",
+        data={"selection_ids": ["capacity_license"]},
+    )
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Capacity License" in body
+    assert "CommServe A" in body
+    assert "CommServe B" in body
+    assert "Security Assessment" not in body
+    assert "License Summary" not in body
+    assert "Client Growth" not in body
+
+
+def test_quick_hc_report_selected_missing_metric_subject_renders_gracefully(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+    _patch_metrics_paths(tmp_path, monkeypatch)
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/report",
+        data={"selection_ids": ["client_growth"]},
+    )
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Client Growth" in body
+    assert "Not collected yet" in body
 
 
 def test_quick_hc_report_builder_route_removed() -> None:

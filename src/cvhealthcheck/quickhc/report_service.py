@@ -5,6 +5,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 from cvhealthcheck.license_summary.service import LicenseSummaryService
+from cvhealthcheck.metrics import (
+    get_capacity_license_usage,
+    get_client_growth_summary,
+)
 from cvhealthcheck.reportsplus.security_assessment import (
     SECTION_ORDER,
     summarize_security_assessment_artifact,
@@ -14,6 +18,8 @@ from cvhealthcheck.security_assessment.service import SecurityAssessmentService
 ENVIRONMENT_SELECTION_ID = "environment"
 SECURITY_ASSESSMENT_SELECTION_ID = "security_assessment"
 LICENSE_SUMMARY_SELECTION_ID = "license_summary"
+CLIENT_GROWTH_SELECTION_ID = "client_growth"
+CAPACITY_LICENSE_SELECTION_ID = "capacity_license"
 SECURITY_ASSESSMENT_SUMMARY_SECTION_ID = "security_assessment_summary"
 SECURITY_ASSESSMENT_FINDINGS_SECTION_ID = "security_assessment_findings"
 LICENSE_SUMMARY_METADATA_SECTION_ID = "license_summary_metadata"
@@ -23,6 +29,8 @@ REPORT_SELECTION_IDS = {
     ENVIRONMENT_SELECTION_ID,
     SECURITY_ASSESSMENT_SELECTION_ID,
     LICENSE_SUMMARY_SELECTION_ID,
+    CLIENT_GROWTH_SELECTION_ID,
+    CAPACITY_LICENSE_SELECTION_ID,
 }
 
 
@@ -73,6 +81,8 @@ class QuickHcReportService:
     def _build_full_report(self) -> dict[str, Any]:
         security_assessment = self._build_security_assessment_section()
         license_summary = self._build_license_summary_section()
+        client_growth = self._build_client_growth_section()
+        capacity_license = self._build_capacity_license_section()
         environment = self._build_environment(
             security_assessment.get("artifact"),
             license_summary.get("artifact"),
@@ -82,6 +92,8 @@ class QuickHcReportService:
             for item in (
                 security_assessment.get("evidence"),
                 license_summary.get("evidence"),
+                client_growth.get("evidence"),
+                capacity_license.get("evidence"),
             )
             if item is not None
         ]
@@ -91,6 +103,8 @@ class QuickHcReportService:
             "environment": environment,
             "security_assessment": security_assessment,
             "license_summary": license_summary,
+            "client_growth": client_growth,
+            "capacity_license": capacity_license,
             "evidence": evidence,
         }
 
@@ -295,6 +309,90 @@ class QuickHcReportService:
             "rows": rows,
         }
 
+    def _build_client_growth_section(self) -> dict[str, Any]:
+        try:
+            artifact = get_client_growth_summary(live=False)
+        except FileNotFoundError:
+            return {
+                "available": False,
+                "requested": False,
+                "title": "Client Growth",
+                "message": "Not collected yet",
+                "detail_url": "/metrics/client-growth",
+                "evidence": None,
+                "record_count": 0,
+                "history_range": None,
+                "latest_record": None,
+                "rows": [],
+            }
+
+        records = list(artifact.get("records") or [])
+        latest_record = records[-1] if records else None
+        return {
+            "available": True,
+            "requested": False,
+            "title": "Client Growth",
+            "message": "Not collected yet",
+            "detail_url": "/metrics/client-growth",
+            "source_type": "metric_artifact",
+            "imported_at": artifact.get("collected_at"),
+            "generated_on": None,
+            "record_count": int(artifact.get("record_count") or 0),
+            "history_range": artifact.get("history_range"),
+            "latest_record": latest_record,
+            "rows": records,
+            "evidence": ReportEvidence(
+                artifact_type="client_growth",
+                source_type="metric_artifact",
+                imported_at=artifact.get("collected_at"),
+                generated_on=None,
+                loaded_from_path=None,
+            ).to_dict(),
+        }
+
+    def _build_capacity_license_section(self) -> dict[str, Any]:
+        try:
+            artifact = get_capacity_license_usage(live=False)
+        except FileNotFoundError:
+            return {
+                "available": False,
+                "requested": False,
+                "title": "Capacity License",
+                "message": "Not collected yet",
+                "detail_url": "/metrics/capacity-license",
+                "evidence": None,
+                "record_count": 0,
+                "history_range": None,
+                "latest_month": None,
+                "latest_rows": [],
+            }
+
+        records = list(artifact.get("records") or [])
+        history_range = artifact.get("history_range")
+        latest_month = history_range.get("end") if isinstance(history_range, dict) else None
+        latest_rows = [row for row in records if row.get("month") == latest_month]
+        return {
+            "available": True,
+            "requested": False,
+            "title": "Capacity License",
+            "message": "Not collected yet",
+            "detail_url": "/metrics/capacity-license",
+            "source_type": "metric_artifact",
+            "imported_at": artifact.get("collected_at"),
+            "generated_on": None,
+            "record_count": int(artifact.get("record_count") or 0),
+            "history_range": history_range,
+            "latest_month": latest_month,
+            "latest_rows": latest_rows,
+            "evidence": ReportEvidence(
+                artifact_type="capacity_license",
+                source_type="metric_artifact",
+                imported_at=artifact.get("collected_at"),
+                generated_on=None,
+                loaded_from_path=None,
+            ).to_dict(),
+        }
+
     def _filter_report(
         self,
         report: dict[str, Any],
@@ -329,12 +427,24 @@ class QuickHcReportService:
             LICENSE_SUMMARY_SELECTION_ID in subject_selection_ids,
             effective_selection_ids,
         )
+        filtered_client_growth = self._filter_simple_section(
+            report["client_growth"],
+            CLIENT_GROWTH_SELECTION_ID in subject_selection_ids,
+        )
+        filtered_capacity_license = self._filter_simple_section(
+            report["capacity_license"],
+            CAPACITY_LICENSE_SELECTION_ID in subject_selection_ids,
+        )
 
         evidence = []
         if filtered_security.get("has_content") and filtered_security.get("evidence"):
             evidence.append(filtered_security["evidence"])
         if filtered_license.get("has_content") and filtered_license.get("evidence"):
             evidence.append(filtered_license["evidence"])
+        if filtered_client_growth.get("has_content") and filtered_client_growth.get("evidence"):
+            evidence.append(filtered_client_growth["evidence"])
+        if filtered_capacity_license.get("has_content") and filtered_capacity_license.get("evidence"):
+            evidence.append(filtered_capacity_license["evidence"])
 
         return {
             "title": report["title"],
@@ -342,6 +452,8 @@ class QuickHcReportService:
             "environment": filtered_environment,
             "security_assessment": filtered_security,
             "license_summary": filtered_license,
+            "client_growth": filtered_client_growth,
+            "capacity_license": filtered_capacity_license,
             "evidence": evidence,
         }
 
@@ -420,6 +532,18 @@ class QuickHcReportService:
             "visible_agent_feature_rows": (
                 list(section.get("agent_feature_rows", [])) if show_details else []
             ),
+            "has_content": has_content,
+        }
+
+    def _filter_simple_section(
+        self,
+        section: dict[str, Any],
+        requested: bool,
+    ) -> dict[str, Any]:
+        has_content = bool(requested and section.get("available"))
+        return {
+            **section,
+            "requested": requested,
             "has_content": has_content,
         }
 
