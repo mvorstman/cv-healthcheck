@@ -134,6 +134,56 @@ The next extraction step is now in place on the overview template as well: the r
 
 Because Quick HC now depends on a registry-first metadata contract, dedicated integrity tests now verify tile IDs, section IDs, required tile metadata, default-selection safety, and alignment between the registry and report-service selection constants before any renderer abstraction is introduced.
 
+### Quick HC Framework
+
+Current Quick HC framework structure:
+
+```text
+src/cvhealthcheck/quickhc/
+  models.py
+  registry.py
+  report_service.py
+
+src/cvhealthcheck/web/templates/
+  quick_hc.html
+  partials/
+    quickhc_tile.html
+    quickhc_section_card.html
+    quickhc/previews/
+      commcell.html
+      security_assessment.html
+      license_summary.html
+      client_growth.html
+      capacity_license.html
+```
+
+The current registry layer uses two shared dataclasses:
+
+- `TileDefinition`: subject-level metadata such as tile ID, title, subtitle, source type, service name, artifact type, preview renderer name, report renderer name, and detail endpoint.
+- `SectionDefinition`: nested report-section metadata such as stable section ID, label, default-selection flag, and logical renderer names.
+
+Current boundaries are intentional:
+
+- `quickhc/models.py`: shared Quick HC metadata models only.
+- `quickhc/registry.py`: the single source of truth for tile IDs, section IDs, labels, subtitles, default selections, and logical renderer names.
+- `quickhc/report_service.py`: backend report composition and filtering only.
+- `web/routes/quick_hc.py`: thin route layer that passes already-shaped data into templates.
+- `web/templates/quick_hc.html`: top-level overview composition only.
+- `web/templates/partials/quickhc_tile.html`: reusable outer tile shell.
+- `web/templates/partials/quickhc_section_card.html`: reusable nested section-card shell.
+- `web/templates/partials/quickhc/previews/*.html`: subject-specific preview bodies only.
+
+The current extension model for future tiles is:
+
+1. Add or update `TileDefinition` and `SectionDefinition` entries in `quickhc/registry.py`.
+2. Keep `report_service.py` as the backend source of filtered report data.
+3. Add a subject preview partial when a new overview subject needs one.
+4. Wire preview rendering explicitly rather than dynamically until renderer orchestration is formalized.
+
+The next logical phase is controlled renderer orchestration. That should use an explicit renderer mapping between logical renderer names and concrete template/handler functions, rather than direct dynamic Jinja includes.
+
+Longer term, the same registry-first model is intended to align Quick HC with broader orchestration surfaces such as scheduled reporting, future MCP-driven report assembly, and eventually multi-surface report composition without duplicating tile metadata in each layer.
+
 ### Current Limitations
 
 - no PDF export yet

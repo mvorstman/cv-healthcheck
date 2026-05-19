@@ -102,6 +102,25 @@ Current Phase 3 capabilities:
 - Preview decomposition now covers all current Quick HC subjects through explicit preview partials, so the next step can focus on preview orchestration rather than further structural extraction.
 - Registry integrity tests are now in place so future renderer orchestration work can rely on tile/section metadata staying aligned with report-service selection contracts.
 
+Current Quick HC framework milestone:
+
+- `quickhc/models.py` defines shared Quick HC metadata dataclasses.
+- `quickhc/registry.py` is the source of truth for tiles, sections, IDs, labels, default selections, and logical renderer names.
+- `quickhc/report_service.py` remains responsible for backend report composition and filtering.
+- `quick_hc.html` now acts as a thin composition template over shared partials.
+- `partials/quickhc_tile.html` and `partials/quickhc_section_card.html` provide reusable structural shells.
+- `partials/quickhc/previews/*.html` now contain explicit per-subject preview bodies for all current Quick HC subjects.
+
+Next logical phase:
+
+- Introduce controlled renderer orchestration through an explicit renderer mapping layer.
+- Keep avoiding direct dynamic Jinja template resolution from registry values until the orchestration contract is explicit and testable.
+- Preserve current route thinness and keep report filtering in Python rather than moving it into templates.
+
+Longer-term alignment:
+
+- Reuse the Quick HC registry as the metadata foundation for future MCP-driven composition, scheduled reporting, and additional reporting surfaces.
+
 Current known limitations:
 
 - no PDF export yet

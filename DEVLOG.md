@@ -22,6 +22,12 @@
 
 ## 2026-05-20
 
+- Closed the structural Quick HC framework extraction milestone for the current subject set.
+- The registry/data side now consists of `quickhc/models.py`, `quickhc/registry.py`, and `quickhc/report_service.py`.
+- The overview/template side now consists of `quick_hc.html`, shared tile and section-card partials, and explicit per-subject preview partials for CommCell, Security Assessment, License Summary, Client Growth, and Capacity License.
+- Captured the current architectural boundary: registry owns metadata, report service owns filtering/composition, routes stay thin, and templates remain presentation-only.
+- Marked the next phase as controlled renderer orchestration through an explicit mapping layer instead of direct dynamic Jinja template resolution.
+- Recorded the longer-term direction that the Quick HC registry is intended to align with future MCP-driven and scheduled report orchestration.
 - Added `tests/test_quickhc_registry.py` to lock down Quick HC registry integrity before renderer abstraction work.
 - The new coverage verifies unique tile/section IDs, tile metadata completeness, per-tile section ownership, and alignment between registry-derived selection metadata and the report-service constants consumed by the current UI/report flow.
 - Extracted the Capacity License Quick HC preview body into `web/templates/partials/quickhc/previews/capacity_license.html` and kept it explicitly included from `quick_hc.html`.
