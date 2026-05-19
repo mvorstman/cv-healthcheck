@@ -328,8 +328,9 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Customer Report" in body
-    assert '<details class="metadata-card quickhc-subject-card"' in body
+    assert '<details class="metadata-card quickhc-subject-card" open>' in body
     assert '<summary class="quickhc-subject-summary">' in body
+    assert 'class="quickhc-chevron"' in body
     assert 'value="environment"' in body
     assert 'value="environment.metadata"' in body
     assert 'value="security_assessment"' in body

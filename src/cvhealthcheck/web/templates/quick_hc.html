@@ -15,12 +15,14 @@
     </section>
 
     <div class="quickhc-subject-grid">
-      <details class="metadata-card quickhc-subject-card">
+      <details class="metadata-card quickhc-subject-card" open>
         <summary class="quickhc-subject-summary">
           <div class="quickhc-subject-head">
+            <span class="quickhc-chevron" aria-hidden="true"></span>
             <div class="quickhc-subject-copy">
               <h3>CommCell Details</h3>
               <p class="helper-text">Environment and identity details used in the report header.</p>
+              <p class="quickhc-subject-caption">Quick HC environment metadata.</p>
             </div>
             <span class="badge badge-good">Available</span>
           </div>
@@ -39,12 +41,6 @@
               <a href="{{ url_for('main.quick_hc_commcell') }}">View details</a>
             </p>
           </div>
-          <dl class="quickhc-card-details">
-            <dt>Source</dt>
-            <dd>Quick HC environment metadata</dd>
-            <dt>Status</dt>
-            <dd>Available for customer-facing report generation.</dd>
-          </dl>
         </summary>
 
         <div class="quickhc-subject-body">
@@ -68,9 +64,18 @@
       <details class="metadata-card quickhc-subject-card">
         <summary class="quickhc-subject-summary">
           <div class="quickhc-subject-head">
+            <span class="quickhc-chevron" aria-hidden="true"></span>
             <div class="quickhc-subject-copy">
               <h3>Security Assessment</h3>
               <p class="helper-text">Security posture summary and actionable findings.</p>
+              <p class="quickhc-subject-caption">
+                {% if security_assessment.exists and security_assessment.summary %}
+                  {% set counters = security_assessment.summary.counters %}
+                  {{ counters["Critical"] }} critical, {{ counters["Warning"] }} warning, {{ counters["Info"] }} info, {{ counters["Good"] }} good
+                {% else %}
+                  No current Security Assessment artifact is available.
+                {% endif %}
+              </p>
             </div>
             {% if security_assessment.exists and security_assessment.summary %}
               <span class="badge badge-good">Available</span>
@@ -93,25 +98,6 @@
               <a href="{{ url_for('main.quick_hc_security_assessment') }}">View details</a>
             </p>
           </div>
-          <dl class="quickhc-card-details">
-            <dt>Source</dt>
-            <dd>
-              {% if security_assessment.exists %}
-                {{ (security_assessment.source_type or "unknown") | upper }}
-              {% else %}
-                Reports Plus report 336
-              {% endif %}
-            </dd>
-            <dt>Summary</dt>
-            <dd>
-              {% if security_assessment.exists and security_assessment.summary %}
-                {% set counters = security_assessment.summary.counters %}
-                {{ counters["Critical"] }} critical, {{ counters["Warning"] }} warning, {{ counters["Info"] }} info, {{ counters["Good"] }} good
-              {% else %}
-                No current Security Assessment artifact is available.
-              {% endif %}
-            </dd>
-          </dl>
         </summary>
 
         <div class="quickhc-subject-body">
@@ -135,9 +121,17 @@
       <details class="metadata-card quickhc-subject-card">
         <summary class="quickhc-subject-summary">
           <div class="quickhc-subject-head">
+            <span class="quickhc-chevron" aria-hidden="true"></span>
             <div class="quickhc-subject-copy">
               <h3>License Summary</h3>
               <p class="helper-text">License consumption summary for customer-facing reporting.</p>
+              <p class="quickhc-subject-caption">
+                {% if license_summary.exists %}
+                  {{ license_summary.other_count }} other licenses, {{ license_summary.agent_feature_count }} agent/feature licenses
+                {% else %}
+                  No current License Summary artifact is available.
+                {% endif %}
+              </p>
             </div>
             {% if license_summary.exists %}
               <span class="badge badge-good">Available</span>
@@ -160,24 +154,6 @@
               <a href="{{ url_for('main.quick_hc_license_summary') }}">View details</a>
             </p>
           </div>
-          <dl class="quickhc-card-details">
-            <dt>Source</dt>
-            <dd>
-              {% if license_summary.exists %}
-                {{ (license_summary.source_type or "unknown") | upper }}
-              {% else %}
-                Reports Plus report 206 / import
-              {% endif %}
-            </dd>
-            <dt>Summary</dt>
-            <dd>
-              {% if license_summary.exists %}
-                {{ license_summary.other_count }} other licenses, {{ license_summary.agent_feature_count }} agent/feature licenses
-              {% else %}
-                No current License Summary artifact is available.
-              {% endif %}
-            </dd>
-          </dl>
         </summary>
 
         <div class="quickhc-subject-body">
@@ -201,9 +177,11 @@
       <details class="metadata-card quickhc-subject-card">
         <summary class="quickhc-subject-summary">
           <div class="quickhc-subject-head">
+            <span class="quickhc-chevron" aria-hidden="true"></span>
             <div class="quickhc-subject-copy">
               <h3>Client Growth</h3>
               <p class="helper-text">Client count change summary from the current Quick HC metric artifact.</p>
+              <p class="quickhc-subject-caption">{{ client_growth.summary }}</p>
             </div>
             {% if client_growth.exists %}
               <span class="badge badge-good">Available</span>
@@ -226,12 +204,6 @@
               <a href="{{ url_for('main.metrics_client_growth') }}">View details</a>
             </p>
           </div>
-          <dl class="quickhc-card-details">
-            <dt>Source</dt>
-            <dd>{{ client_growth.source_label }}</dd>
-            <dt>Summary</dt>
-            <dd>{{ client_growth.summary }}</dd>
-          </dl>
         </summary>
 
         <div class="quickhc-subject-body">
@@ -255,9 +227,11 @@
       <details class="metadata-card quickhc-subject-card">
         <summary class="quickhc-subject-summary">
           <div class="quickhc-subject-head">
+            <span class="quickhc-chevron" aria-hidden="true"></span>
             <div class="quickhc-subject-copy">
               <h3>Capacity License</h3>
               <p class="helper-text">Capacity usage summary from the current Quick HC metric artifact.</p>
+              <p class="quickhc-subject-caption">{{ capacity_license.summary }}</p>
             </div>
             {% if capacity_license.exists %}
               <span class="badge badge-good">Available</span>
@@ -280,12 +254,6 @@
               <a href="{{ url_for('main.metrics_capacity_license') }}">View details</a>
             </p>
           </div>
-          <dl class="quickhc-card-details">
-            <dt>Source</dt>
-            <dd>{{ capacity_license.source_label }}</dd>
-            <dt>Summary</dt>
-            <dd>{{ capacity_license.summary }}</dd>
-          </dl>
         </summary>
 
         <div class="quickhc-subject-body">
