@@ -11,115 +11,43 @@ from cvhealthcheck.metrics import (
     get_capacity_license_usage,
     get_client_growth_summary,
 )
+from cvhealthcheck.quickhc.registry import (
+    CAPACITY_LICENSE_SELECTION_ID,
+    CAPACITY_LICENSE_SUMMARY_SECTION_ID,
+    CAPACITY_LICENSE_TABLE_SECTION_ID,
+    CLIENT_GROWTH_CHART_SECTION_ID,
+    CLIENT_GROWTH_MONTHLY_TABLE_SECTION_ID,
+    CLIENT_GROWTH_SELECTION_ID,
+    CLIENT_GROWTH_SUMMARY_SECTION_ID,
+    ENVIRONMENT_METADATA_SECTION_ID,
+    ENVIRONMENT_SELECTION_ID,
+    LICENSE_SUMMARY_AGENT_FEATURE_LICENSES_SECTION_ID,
+    LICENSE_SUMMARY_METADATA_SECTION_ID,
+    LICENSE_SUMMARY_OTHER_LICENSES_SECTION_ID,
+    LICENSE_SUMMARY_SELECTION_ID,
+    LICENSE_SUMMARY_WORKLOAD_SECTION_ID,
+    QUICK_HC_SECTION_IDS,
+    QUICK_HC_SELECTION_IDS,
+    QUICK_HC_SUBJECT_IDS,
+    SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
+    SECURITY_ASSESSMENT_HIGHLIGHTS_SECTION_ID,
+    SECURITY_ASSESSMENT_SELECTION_ID,
+    SECURITY_ASSESSMENT_SUMMARY_SECTION_ID,
+    report_overview_default_selection_ids,
+    report_subsection_options,
+)
 from cvhealthcheck.reportsplus.security_assessment import (
     SECTION_ORDER,
     summarize_security_assessment_artifact,
 )
 from cvhealthcheck.security_assessment.service import SecurityAssessmentService
 
-ENVIRONMENT_SELECTION_ID = "environment"
-SECURITY_ASSESSMENT_SELECTION_ID = "security_assessment"
-LICENSE_SUMMARY_SELECTION_ID = "license_summary"
-CLIENT_GROWTH_SELECTION_ID = "client_growth"
-CAPACITY_LICENSE_SELECTION_ID = "capacity_license"
-
-ENVIRONMENT_METADATA_SECTION_ID = "environment.metadata"
-SECURITY_ASSESSMENT_SUMMARY_SECTION_ID = "security_assessment.summary"
-SECURITY_ASSESSMENT_HIGHLIGHTS_SECTION_ID = "security_assessment.highlights"
-SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID = "security_assessment.all_findings"
-LICENSE_SUMMARY_METADATA_SECTION_ID = "license_summary.metadata"
-LICENSE_SUMMARY_WORKLOAD_SECTION_ID = "license_summary.workload_sections"
-LICENSE_SUMMARY_OTHER_LICENSES_SECTION_ID = "license_summary.other_licenses"
-LICENSE_SUMMARY_AGENT_FEATURE_LICENSES_SECTION_ID = (
-    "license_summary.agent_feature_licenses"
-)
-CLIENT_GROWTH_SUMMARY_SECTION_ID = "client_growth.summary"
-CLIENT_GROWTH_CHART_SECTION_ID = "client_growth.chart"
-CLIENT_GROWTH_MONTHLY_TABLE_SECTION_ID = "client_growth.monthly_table"
-CAPACITY_LICENSE_SUMMARY_SECTION_ID = "capacity_license.summary"
-CAPACITY_LICENSE_TABLE_SECTION_ID = "capacity_license.table"
-
-REPORT_SUBJECT_IDS = {
-    ENVIRONMENT_SELECTION_ID,
-    SECURITY_ASSESSMENT_SELECTION_ID,
-    LICENSE_SUMMARY_SELECTION_ID,
-    CLIENT_GROWTH_SELECTION_ID,
-    CAPACITY_LICENSE_SELECTION_ID,
-}
-
-REPORT_SUBSECTION_OPTIONS: dict[str, tuple[dict[str, str], ...]] = {
-    ENVIRONMENT_SELECTION_ID: (
-        {
-            "id": ENVIRONMENT_METADATA_SECTION_ID,
-            "label": "Environment metadata",
-        },
-    ),
-    SECURITY_ASSESSMENT_SELECTION_ID: (
-        {
-            "id": SECURITY_ASSESSMENT_SUMMARY_SECTION_ID,
-            "label": "Summary counters",
-        },
-        {
-            "id": SECURITY_ASSESSMENT_HIGHLIGHTS_SECTION_ID,
-            "label": "Critical / Warning findings",
-        },
-        {
-            "id": SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
-            "label": "Info / Good findings",
-        },
-    ),
-    LICENSE_SUMMARY_SELECTION_ID: (
-        {
-            "id": LICENSE_SUMMARY_METADATA_SECTION_ID,
-            "label": "Summary metadata",
-        },
-        {
-            "id": LICENSE_SUMMARY_WORKLOAD_SECTION_ID,
-            "label": "Workload Summary Sections",
-        },
-        {
-            "id": LICENSE_SUMMARY_OTHER_LICENSES_SECTION_ID,
-            "label": "Other Licenses table",
-        },
-        {
-            "id": LICENSE_SUMMARY_AGENT_FEATURE_LICENSES_SECTION_ID,
-            "label": "Agent / Feature Licenses table",
-        },
-    ),
-    CLIENT_GROWTH_SELECTION_ID: (
-        {
-            "id": CLIENT_GROWTH_SUMMARY_SECTION_ID,
-            "label": "Summary metrics",
-        },
-        {
-            "id": CLIENT_GROWTH_CHART_SECTION_ID,
-            "label": "Client Growth chart",
-        },
-        {
-            "id": CLIENT_GROWTH_MONTHLY_TABLE_SECTION_ID,
-            "label": "Monthly summary table",
-        },
-    ),
-    CAPACITY_LICENSE_SELECTION_ID: (
-        {
-            "id": CAPACITY_LICENSE_SUMMARY_SECTION_ID,
-            "label": "Summary",
-        },
-        {
-            "id": CAPACITY_LICENSE_TABLE_SECTION_ID,
-            "label": "Usage/details table",
-        },
-    ),
-}
-
-REPORT_SECTION_IDS = {
-    option["id"]
-    for options in REPORT_SUBSECTION_OPTIONS.values()
-    for option in options
-}
-REPORT_SELECTION_IDS = REPORT_SUBJECT_IDS | REPORT_SECTION_IDS
-REPORT_OVERVIEW_DEFAULT_SELECTION_IDS = REPORT_SELECTION_IDS
-REPORT_DEFAULT_SUBJECT_SELECTION_IDS = REPORT_SUBJECT_IDS
+REPORT_SUBJECT_IDS = QUICK_HC_SUBJECT_IDS
+REPORT_SUBSECTION_OPTIONS = report_subsection_options()
+REPORT_SECTION_IDS = QUICK_HC_SECTION_IDS
+REPORT_SELECTION_IDS = QUICK_HC_SELECTION_IDS
+REPORT_OVERVIEW_DEFAULT_SELECTION_IDS = report_overview_default_selection_ids()
+REPORT_DEFAULT_SUBJECT_SELECTION_IDS = QUICK_HC_SUBJECT_IDS
 
 
 @dataclass(frozen=True)

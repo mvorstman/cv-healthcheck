@@ -96,6 +96,7 @@ Current Phase 3 capabilities:
 - Client Growth now includes a professional Chart.js visualization in the customer-facing report.
 - License Summary now includes workload/category sections plus compact usage visualization where that presentation fits the data.
 - The shell navigation direction is now stabilized around a sidebar-first flow with `Connect to CS`, `Status`, `Quick HC`, and `Development`, plus a lightweight Back action in the topbar.
+- Quick HC metadata extraction has started through shared tile/section dataclasses and a registry-first architecture so future subjects can be added incrementally without a full route/template rewrite.
 
 Current known limitations:
 

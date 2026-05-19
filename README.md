@@ -128,6 +128,8 @@ The shell now exposes the connection/login route through the sidebar as `Connect
 
 Quick HC itself now uses full-width expandable subject tiles, per-section cards, nested include/exclude controls, and theme-aware customer-facing previews.
 
+The current refactor direction is registry-first rather than renderer-first. Quick HC tile and section metadata is beginning to move into shared dataclasses and a central registry so new subjects can be added with less duplication across routes, templates, and report composition code, while preserving the existing customer-facing UX.
+
 ### Current Limitations
 
 - no PDF export yet

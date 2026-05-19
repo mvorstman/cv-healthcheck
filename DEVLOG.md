@@ -22,6 +22,10 @@
 
 ## 2026-05-20
 
+- Started the first Quick HC tile-framework refactor step without changing current customer-facing behavior.
+- Added shared Quick HC dataclasses in `quickhc/models.py` and a central tile registry in `quickhc/registry.py`.
+- Moved tile and section metadata into the registry so selection IDs, labels, titles, subtitles, and detail endpoints have a single source of truth.
+- Rewired `quickhc/report_service.py` selection metadata to derive from the registry while keeping the existing filtering, routes, and templates functionally unchanged.
 - Refined the product-shell navigation after the initial app-shell rollout.
 - Reordered the sidebar so the connection entry point now appears first as `Connect to CS`, followed by `Status`, `Quick HC`, and `Development`.
 - Renamed the visible login navigation label from `Login` to `Connect to CS` without changing authentication behavior or routes.
