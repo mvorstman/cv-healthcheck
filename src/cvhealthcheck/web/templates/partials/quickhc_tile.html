@@ -1,0 +1,37 @@
+{% macro render_quickhc_tile(tile, include_checked, badge_label, badge_class, detail_href, is_open=False) -%}
+  <details class="metadata-card quickhc-subject-card" {% if is_open %}open{% endif %}>
+    <summary class="quickhc-subject-summary">
+      <div class="quickhc-subject-head">
+        <span class="quickhc-chevron" aria-hidden="true"></span>
+        <div class="quickhc-subject-copy">
+          <h3>{{ tile.title }}</h3>
+          <p class="helper-text">{{ tile.subtitle }}</p>
+        </div>
+        <div class="quickhc-subject-head-right">
+          <span class="badge {{ badge_class }}">{{ badge_label }}</span>
+          {% if detail_href %}
+            <a href="{{ detail_href }}" class="quickhc-details-link" onclick="event.stopPropagation()">Details →</a>
+          {% endif %}
+        </div>
+      </div>
+    </summary>
+    <div class="quickhc-subject-meta">
+      <label class="quickhc-include-toggle" for="selection-{{ tile.id | replace('.', '-') }}">
+        <input
+          id="selection-{{ tile.id | replace('.', '-') }}"
+          type="checkbox"
+          name="selection_ids"
+          value="{{ tile.id }}"
+          data-subject-toggle="{{ tile.id }}"
+          {% if include_checked %}checked{% endif %}
+        >
+        <span>Include</span>
+      </label>
+    </div>
+    <div class="quickhc-subject-body">
+      <div class="quickhc-selection-block" data-selection-block="{{ tile.id }}">
+        {{ caller() }}
+      </div>
+    </div>
+  </details>
+{%- endmacro %}

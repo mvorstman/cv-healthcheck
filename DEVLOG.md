@@ -22,6 +22,8 @@
 
 ## 2026-05-20
 
+- Extracted the repeated outer Quick HC subject-card shell into `web/templates/partials/quickhc_tile.html`.
+- Updated `/quick-hc` to pass registry tile metadata into the route and render each existing subject through the shared tile shell while keeping section preview bodies and report behavior unchanged.
 - Started the first Quick HC tile-framework refactor step without changing current customer-facing behavior.
 - Added shared Quick HC dataclasses in `quickhc/models.py` and a central tile registry in `quickhc/registry.py`.
 - Moved tile and section metadata into the registry so selection IDs, labels, titles, subtitles, and detail endpoints have a single source of truth.

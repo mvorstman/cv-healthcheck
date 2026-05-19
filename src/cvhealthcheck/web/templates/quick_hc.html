@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/quickhc_tile.html" import render_quickhc_tile %}
 
 {% macro section_card(subject_id, option_id, label, checked, meta_text="") -%}
   <div class="quickhc-section-card" data-section-card>
@@ -58,101 +59,51 @@
     </section>
 
     <div class="quickhc-subject-grid">
-      <details class="metadata-card quickhc-subject-card" open>
-        <summary class="quickhc-subject-summary">
-          <div class="quickhc-subject-head">
-            <span class="quickhc-chevron" aria-hidden="true"></span>
-            <div class="quickhc-subject-copy">
-              <h3>CommCell Details</h3>
-              <p class="helper-text">Platform identity and environment context for the customer-facing summary.</p>
-            </div>
-            <div class="quickhc-subject-head-right">
-              <span class="badge badge-good">Available</span>
-              <a href="{{ url_for('main.quick_hc_commcell') }}" class="quickhc-details-link" onclick="event.stopPropagation()">Details →</a>
-            </div>
-          </div>
-        </summary>
-        <div class="quickhc-subject-meta">
-          <label class="quickhc-include-toggle" for="selection-environment">
-            <input
-              id="selection-environment"
-              type="checkbox"
-              name="selection_ids"
-              value="environment"
-              data-subject-toggle="environment"
-              {% if "environment" in selected_report_sections %}checked{% endif %}
-            >
-            <span>Include</span>
-          </label>
-        </div>
-
-        <div class="quickhc-subject-body">
-          <div class="quickhc-selection-block" data-selection-block="environment">
-            {% call section_card("environment", "environment.metadata", "Environment metadata", "environment.metadata" in selected_report_sections, "CommCell profile") %}
-              <div class="quickhc-section-preview">
-                {% if commcell_preview.exists %}
-                  <div class="quickhc-preview-grid">
-                    <div class="quickhc-preview-item">
-                      <span class="quickhc-preview-label">CommCell Name</span>
-                      <strong>{{ commcell_preview.commcell_name or "Not collected yet" }}</strong>
-                    </div>
-                    <div class="quickhc-preview-item">
-                      <span class="quickhc-preview-label">CommCell ID</span>
-                      <strong>{{ commcell_preview.commcell_id or "Not collected yet" }}</strong>
-                    </div>
-                    <div class="quickhc-preview-item">
-                      <span class="quickhc-preview-label">Version</span>
-                      <strong>{{ commcell_preview.version or "Not collected yet" }}</strong>
-                    </div>
-                    <div class="quickhc-preview-item">
-                      <span class="quickhc-preview-label">Time Zone</span>
-                      <strong>{{ commcell_preview.timezone or "Not collected yet" }}</strong>
-                    </div>
-                  </div>
-                {% else %}
-                  <p class="quickhc-empty-state">CommCell details have not been collected yet.</p>
-                {% endif %}
+      {% set environment_tile = quick_hc_tiles["environment"] %}
+      {% call render_quickhc_tile(
+        environment_tile,
+        "environment" in selected_report_sections,
+        "Available",
+        "badge-good",
+        url_for(environment_tile.detail_endpoint),
+        is_open=True,
+      ) %}
+        {% call section_card("environment", "environment.metadata", "Environment metadata", "environment.metadata" in selected_report_sections, "CommCell profile") %}
+          <div class="quickhc-section-preview">
+            {% if commcell_preview.exists %}
+              <div class="quickhc-preview-grid">
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">CommCell Name</span>
+                  <strong>{{ commcell_preview.commcell_name or "Not collected yet" }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">CommCell ID</span>
+                  <strong>{{ commcell_preview.commcell_id or "Not collected yet" }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Version</span>
+                  <strong>{{ commcell_preview.version or "Not collected yet" }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Time Zone</span>
+                  <strong>{{ commcell_preview.timezone or "Not collected yet" }}</strong>
+                </div>
               </div>
-            {% endcall %}
+            {% else %}
+              <p class="quickhc-empty-state">CommCell details have not been collected yet.</p>
+            {% endif %}
           </div>
-        </div>
-      </details>
+        {% endcall %}
+      {% endcall %}
 
-      <details class="metadata-card quickhc-subject-card">
-        <summary class="quickhc-subject-summary">
-          <div class="quickhc-subject-head">
-            <span class="quickhc-chevron" aria-hidden="true"></span>
-            <div class="quickhc-subject-copy">
-              <h3>Security Assessment</h3>
-              <p class="helper-text">Posture summary with emphasis on the most important findings to address.</p>
-            </div>
-            <div class="quickhc-subject-head-right">
-              {% if security_assessment.exists and security_assessment.summary %}
-                <span class="badge badge-good">Available</span>
-              {% else %}
-                <span class="badge badge-warning">Not collected</span>
-              {% endif %}
-              <a href="{{ url_for('main.quick_hc_security_assessment') }}" class="quickhc-details-link" onclick="event.stopPropagation()">Details →</a>
-            </div>
-          </div>
-        </summary>
-        <div class="quickhc-subject-meta">
-          <label class="quickhc-include-toggle" for="selection-security-assessment">
-            <input
-              id="selection-security-assessment"
-              type="checkbox"
-              name="selection_ids"
-              value="security_assessment"
-              data-subject-toggle="security_assessment"
-              {% if "security_assessment" in selected_report_sections %}checked{% endif %}
-            >
-            <span>Include</span>
-          </label>
-        </div>
-
-        <div class="quickhc-subject-body">
-          <div class="quickhc-selection-block" data-selection-block="security_assessment">
-
+      {% set security_tile = quick_hc_tiles["security_assessment"] %}
+      {% call render_quickhc_tile(
+        security_tile,
+        "security_assessment" in selected_report_sections,
+        "Available" if security_assessment.exists and security_assessment.summary else "Not collected",
+        "badge-good" if security_assessment.exists and security_assessment.summary else "badge-warning",
+        url_for(security_tile.detail_endpoint),
+      ) %}
             {% call section_card("security_assessment", "security_assessment.summary", "Summary counters", "security_assessment.summary" in selected_report_sections, (security_assessment.summary.counters["Total checks"] ~ " checks") if security_assessment.exists and security_assessment.summary else "Overview") %}
               <div class="quickhc-section-preview">
                 {% if security_assessment.exists and security_assessment.summary %}
@@ -221,44 +172,16 @@
                 {% endif %}
               </div>
             {% endcall %}
-          </div>
-        </div>
-      </details>
+      {% endcall %}
 
-      <details class="metadata-card quickhc-subject-card">
-        <summary class="quickhc-subject-summary">
-          <div class="quickhc-subject-head">
-            <span class="quickhc-chevron" aria-hidden="true"></span>
-            <div class="quickhc-subject-copy">
-              <h3>License Summary</h3>
-              <p class="helper-text">Consumption snapshot across workloads, other licenses, and agent or feature usage.</p>
-            </div>
-            <div class="quickhc-subject-head-right">
-              {% if license_summary.exists %}
-                <span class="badge badge-good">Available</span>
-              {% else %}
-                <span class="badge badge-warning">Not collected</span>
-              {% endif %}
-              <a href="{{ url_for('main.quick_hc_license_summary') }}" class="quickhc-details-link" onclick="event.stopPropagation()">Details →</a>
-            </div>
-          </div>
-        </summary>
-        <div class="quickhc-subject-meta">
-          <label class="quickhc-include-toggle" for="selection-license-summary">
-            <input
-              id="selection-license-summary"
-              type="checkbox"
-              name="selection_ids"
-              value="license_summary"
-              data-subject-toggle="license_summary"
-              {% if "license_summary" in selected_report_sections %}checked{% endif %}
-            >
-            <span>Include</span>
-          </label>
-        </div>
-
-        <div class="quickhc-subject-body">
-          <div class="quickhc-selection-block" data-selection-block="license_summary">
+      {% set license_tile = quick_hc_tiles["license_summary"] %}
+      {% call render_quickhc_tile(
+        license_tile,
+        "license_summary" in selected_report_sections,
+        "Available" if license_summary.exists else "Not collected",
+        "badge-good" if license_summary.exists else "badge-warning",
+        url_for(license_tile.detail_endpoint),
+      ) %}
 
             {% call section_card("license_summary", "license_summary.metadata", "Summary metadata", "license_summary.metadata" in selected_report_sections, "Source and dates") %}
               <div class="quickhc-section-preview">
@@ -377,46 +300,18 @@
                 {% endif %}
               </div>
             {% endcall %}
-          </div>
-        </div>
-      </details>
+      {% endcall %}
 
-      <details class="metadata-card quickhc-subject-card">
-        <summary class="quickhc-subject-summary">
-          <div class="quickhc-subject-head">
-            <span class="quickhc-chevron" aria-hidden="true"></span>
-            <div class="quickhc-subject-copy">
-              <h3>Client Growth</h3>
-              <p class="helper-text">Trend snapshot showing recent protected client count and change over time.</p>
-            </div>
-            <div class="quickhc-subject-head-right">
-              {% if client_growth.exists %}
-                <span class="badge badge-good">Available</span>
-              {% else %}
-                <span class="badge badge-warning">Not collected</span>
-              {% endif %}
-              <a href="{{ url_for('main.metrics_client_growth') }}" class="quickhc-details-link" onclick="event.stopPropagation()">Details →</a>
-            </div>
-          </div>
-        </summary>
-        <div class="quickhc-subject-meta">
-          <label class="quickhc-include-toggle" for="selection-client-growth">
-            <input
-              id="selection-client-growth"
-              type="checkbox"
-              name="selection_ids"
-              value="client_growth"
-              data-subject-toggle="client_growth"
-              {% if "client_growth" in selected_report_sections %}checked{% endif %}
-            >
-            <span>Include</span>
-          </label>
-        </div>
-
-        <div class="quickhc-subject-body">
-          <div class="quickhc-selection-block" data-selection-block="client_growth">
-            {% set history = client_growth.history_range or {} %}
-            {% set starting_total = (client_growth.latest_total_clients or 0) - ((client_growth.latest_added or 0) - (client_growth.latest_removed or 0)) %}
+      {% set client_growth_tile = quick_hc_tiles["client_growth"] %}
+      {% set history = client_growth.history_range or {} %}
+      {% set starting_total = (client_growth.latest_total_clients or 0) - ((client_growth.latest_added or 0) - (client_growth.latest_removed or 0)) %}
+      {% call render_quickhc_tile(
+        client_growth_tile,
+        "client_growth" in selected_report_sections,
+        "Available" if client_growth.exists else "Not collected",
+        "badge-good" if client_growth.exists else "badge-warning",
+        url_for(client_growth_tile.detail_endpoint),
+      ) %}
 
             {% call section_card("client_growth", "client_growth.summary", "Summary metrics", "client_growth.summary" in selected_report_sections, (client_growth.latest_total_clients ~ " total clients") if client_growth.exists and client_growth.latest_total_clients is not none else "Overview") %}
               <div class="quickhc-section-preview">
@@ -476,44 +371,16 @@
                 {% endif %}
               </div>
             {% endcall %}
-          </div>
-        </div>
-      </details>
+      {% endcall %}
 
-      <details class="metadata-card quickhc-subject-card">
-        <summary class="quickhc-subject-summary">
-          <div class="quickhc-subject-head">
-            <span class="quickhc-chevron" aria-hidden="true"></span>
-            <div class="quickhc-subject-copy">
-              <h3>Capacity Licenses</h3>
-              <p class="helper-text">Capacity utilization summary for the latest available reporting period.</p>
-            </div>
-            <div class="quickhc-subject-head-right">
-              {% if capacity_license.exists %}
-                <span class="badge badge-good">Available</span>
-              {% else %}
-                <span class="badge badge-warning">Not collected</span>
-              {% endif %}
-              <a href="{{ url_for('main.metrics_capacity_license') }}" class="quickhc-details-link" onclick="event.stopPropagation()">Details →</a>
-            </div>
-          </div>
-        </summary>
-        <div class="quickhc-subject-meta">
-          <label class="quickhc-include-toggle" for="selection-capacity-license">
-            <input
-              id="selection-capacity-license"
-              type="checkbox"
-              name="selection_ids"
-              value="capacity_license"
-              data-subject-toggle="capacity_license"
-              {% if "capacity_license" in selected_report_sections %}checked{% endif %}
-            >
-            <span>Include</span>
-          </label>
-        </div>
-
-        <div class="quickhc-subject-body">
-          <div class="quickhc-selection-block" data-selection-block="capacity_license">
+      {% set capacity_tile = quick_hc_tiles["capacity_license"] %}
+      {% call render_quickhc_tile(
+        capacity_tile,
+        "capacity_license" in selected_report_sections,
+        "Available" if capacity_license.exists else "Not collected",
+        "badge-good" if capacity_license.exists else "badge-warning",
+        url_for(capacity_tile.detail_endpoint),
+      ) %}
 
             {% call section_card("capacity_license", "capacity_license.summary", "Summary", "capacity_license.summary" in selected_report_sections, (capacity_license.latest_month or "Latest period")) %}
               <div class="quickhc-section-preview">
@@ -541,9 +408,7 @@
                 {% endif %}
               </div>
             {% endcall %}
-          </div>
-        </div>
-      </details>
+      {% endcall %}
     </div>
   </form>
 

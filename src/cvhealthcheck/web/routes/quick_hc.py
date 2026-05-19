@@ -33,6 +33,7 @@ from .shared import (
     url_for,
 )
 from cvhealthcheck.quickhc import QuickHcReportService
+from cvhealthcheck.quickhc.registry import QUICK_HC_TILE_BY_ID
 from cvhealthcheck.quickhc.report_service import (
     REPORT_OVERVIEW_DEFAULT_SELECTION_IDS,
     REPORT_SELECTION_IDS,
@@ -50,6 +51,7 @@ def quick_hc():
         license_summary=_license_summary_quick_hc(),
         client_growth=_client_growth_quick_hc(),
         capacity_license=_capacity_license_quick_hc(),
+        quick_hc_tiles=QUICK_HC_TILE_BY_ID,
         selected_report_sections=REPORT_OVERVIEW_DEFAULT_SELECTION_IDS,
         report_subsection_options=REPORT_SUBSECTION_OPTIONS,
     )
