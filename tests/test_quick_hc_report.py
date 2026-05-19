@@ -437,8 +437,20 @@ def test_quick_hc_report_post_client_growth_only_excludes_other_optional_subject
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Client Growth" in body
-    assert "2026-05" in body
+    assert "Client Count Trend" in body
+    assert "Latest Total Clients" in body
+    assert "Net Growth Over Period" in body
+    assert "Monthly Summary" in body
     assert "125" in body
+    assert "2026-04 to 2026-05" in body
+    assert "polyline" in body
+    assert "dataset_guid" not in body
+    assert "Source report" not in body
+    assert "Source dataset" not in body
+    assert "Source widget" not in body
+    assert "HTTP status" not in body
+    assert "Normalized fields" not in body
+    assert "Sample rows" not in body
     assert "Security Assessment" not in body
     assert "License Summary" not in body
     assert "Capacity License" not in body
@@ -485,6 +497,7 @@ def test_quick_hc_report_selected_missing_metric_subject_renders_gracefully(
     body = response.get_data(as_text=True)
     assert "Client Growth" in body
     assert "Not collected yet" in body
+    assert "Latest Total Clients" not in body
 
 
 def test_quick_hc_report_builder_route_removed() -> None:

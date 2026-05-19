@@ -327,19 +327,30 @@ class QuickHcReportService:
             }
 
         records = list(artifact.get("records") or [])
+        period_start = records[0] if records else None
         latest_record = records[-1] if records else None
+        latest_total_clients = _coerce_int(latest_record.get("total_clients")) if latest_record else None
+        starting_total_clients = _coerce_int(period_start.get("total_clients")) if period_start else None
+        net_growth = (
+            latest_total_clients - starting_total_clients
+            if latest_total_clients is not None and starting_total_clients is not None
+            else None
+        )
         return {
             "available": True,
             "requested": False,
             "title": "Client Growth",
+            "description": "Client Growth summarizes how the protected client count has changed over the recorded period.",
             "message": "Not collected yet",
             "detail_url": "/metrics/client-growth",
-            "source_type": "metric_artifact",
             "imported_at": artifact.get("collected_at"),
-            "generated_on": None,
             "record_count": int(artifact.get("record_count") or 0),
             "history_range": artifact.get("history_range"),
             "latest_record": latest_record,
+            "latest_total_clients": latest_total_clients,
+            "starting_total_clients": starting_total_clients,
+            "net_growth": net_growth,
+            "chart_points": _line_chart_points(records, value_key="total_clients"),
             "rows": records,
             "evidence": ReportEvidence(
                 artifact_type="client_growth",
@@ -597,6 +608,49 @@ def _first_value(*payloads: dict[str, Any] | None, key: str) -> str | None:
         if value not in (None, ""):
             return str(value)
     return None
+
+
+def _coerce_int(value: Any) -> int | None:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if value in (None, ""):
+        return None
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _line_chart_points(
+    records: list[dict[str, Any]],
+    *,
+    value_key: str,
+    width: int = 420,
+    height: int = 160,
+    padding: int = 16,
+) -> str:
+    values = [_coerce_int(record.get(value_key)) for record in records]
+    numeric_values = [value for value in values if value is not None]
+    if len(numeric_values) < 2:
+        return ""
+
+    min_value = min(numeric_values)
+    max_value = max(numeric_values)
+    value_span = max(max_value - min_value, 1)
+    usable_width = max(width - (padding * 2), 1)
+    usable_height = max(height - (padding * 2), 1)
+    points: list[str] = []
+
+    for index, value in enumerate(values):
+        if value is None:
+            continue
+        x = padding + (usable_width * index / max(len(values) - 1, 1))
+        y = padding + usable_height - ((value - min_value) / value_span * usable_height)
+        points.append(f"{x:.1f},{y:.1f}")
+
+    return " ".join(points)
 
 
 def _now_iso() -> str:

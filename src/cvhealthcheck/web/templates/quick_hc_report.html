@@ -225,23 +225,50 @@
   {% if report.client_growth.requested %}
     <h3>Client Growth</h3>
     {% if report.client_growth.available and report.client_growth.has_content %}
+      <p>{{ report.client_growth.description }}</p>
       <table class="compact-table">
         <tbody>
-          <tr><th>Source Type</th><td>{{ (report.client_growth.source_type or "unknown") | upper }}</td></tr>
-          <tr><th>Imported At</th><td>{{ report.client_growth.imported_at or "Not collected yet" }}</td></tr>
+          <tr><th>Latest Total Clients</th><td>{{ report.client_growth.latest_total_clients if report.client_growth.latest_total_clients is not none else "Not collected yet" }}</td></tr>
+          <tr><th>Net Growth Over Period</th><td>{% if report.client_growth.net_growth is not none %}{{ report.client_growth.net_growth }}{% else %}Not collected yet{% endif %}</td></tr>
           <tr><th>History Range</th><td>{% if report.client_growth.history_range %}{{ report.client_growth.history_range.start }} to {{ report.client_growth.history_range.end }}{% else %}Not collected yet{% endif %}</td></tr>
-          <tr><th>Record Count</th><td>{{ report.client_growth.record_count }}</td></tr>
-          <tr><th>Detail Page</th><td><a href="{{ report.client_growth.detail_url }}">View Client Growth</a></td></tr>
+          <tr><th>Last Collected</th><td>{{ report.client_growth.imported_at or "Not collected yet" }}</td></tr>
         </tbody>
       </table>
-      {% if report.client_growth.latest_record %}
-        <h4>Latest Summary</h4>
+      {% if report.client_growth.chart_points %}
+        <div class="chart-panel">
+          <h4>Client Count Trend</h4>
+          <svg viewBox="0 0 420 160" role="img" aria-label="Client count trend over time" class="simple-chart">
+            <polyline
+              fill="none"
+              stroke="#2457a6"
+              stroke-width="3"
+              stroke-linejoin="round"
+              stroke-linecap="round"
+              points="{{ report.client_growth.chart_points }}"
+            ></polyline>
+          </svg>
+        </div>
+      {% endif %}
+      {% if report.client_growth.rows %}
+        <h4>Monthly Summary</h4>
         <table class="compact-table">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>Added</th>
+              <th>Removed</th>
+              <th>Total Clients</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><th>Month</th><td>{{ report.client_growth.latest_record.month or "Not collected yet" }}</td></tr>
-            <tr><th>Total Clients</th><td>{{ report.client_growth.latest_record.total_clients if report.client_growth.latest_record.total_clients is not none else "" }}</td></tr>
-            <tr><th>Added</th><td>{{ report.client_growth.latest_record.added if report.client_growth.latest_record.added is not none else "" }}</td></tr>
-            <tr><th>Removed</th><td>{{ report.client_growth.latest_record.removed if report.client_growth.latest_record.removed is not none else "" }}</td></tr>
+            {% for row in report.client_growth.rows %}
+              <tr>
+                <td>{{ row.month or "" }}</td>
+                <td>{{ row.added if row.added is not none else "" }}</td>
+                <td>{{ row.removed if row.removed is not none else "" }}</td>
+                <td>{{ row.total_clients if row.total_clients is not none else "" }}</td>
+              </tr>
+            {% endfor %}
           </tbody>
         </table>
       {% endif %}
