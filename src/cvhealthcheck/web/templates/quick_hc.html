@@ -1,160 +1,194 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section>
+<section class="quickhc-dashboard">
   <h2>Quick HC</h2>
-  <p>Quick HealthCheck provides a fast, read-only way to gather customer-facing operational summaries.</p>
+  <p>Quick HealthCheck provides a fast, read-only way to assemble customer-facing operational summaries.</p>
 
-  <form method="post" action="{{ url_for('main.quick_hc_report') }}">
-    <div class="section-heading">
-      <h3>Customer Report Subjects</h3>
-      <p class="helper-text">Choose which subjects to include in the customer-facing report.</p>
-    </div>
-
-    <section class="metadata-card">
-      <label class="report-selection-card" for="selection-environment">
-        <input
-          id="selection-environment"
-          type="checkbox"
-          name="selection_ids"
-          value="environment"
-          {% if "environment" in selected_report_sections %}checked{% endif %}
-        >
-        <span>
-          <strong>Include CommCell details in customer-facing report</strong>
-          <small class="helper-text">
-            Uses the current environment metadata for customer, CommCell, and report timing details.
-          </small>
-        </span>
-      </label>
+  <form method="post" action="{{ url_for('main.quick_hc_report') }}" class="quickhc-report-form">
+    <section class="metadata-card quickhc-report-card">
+      <div class="section-heading">
+        <h3>Customer Report</h3>
+        <button type="submit">Generate/View Customer Report</button>
+      </div>
+      <p class="helper-text">Select the subjects below to include in the customer-facing report. Detail pages remain available separately for deeper review.</p>
     </section>
 
-    <section class="metadata-card">
-      <div class="section-heading">
-        <h3><a href="{{ url_for('main.quick_hc_security_assessment') }}">Security Assessment</a></h3>
-      </div>
-      <label class="report-selection-card" for="selection-security-assessment">
-        <input
-          id="selection-security-assessment"
-          type="checkbox"
-          name="selection_ids"
-          value="security_assessment"
-          {% if "security_assessment" in selected_report_sections %}checked{% endif %}
-        >
-        <span>
-          <strong>Include Security Assessment in customer-facing report</strong>
-          <small class="helper-text">
-            Adds the Security Assessment summary and findings when an artifact is available.
-          </small>
-        </span>
-      </label>
-      <dl>
-        <dt>Source</dt>
-        <dd>
-          {% if security_assessment.exists %}
-            {{ (security_assessment.source_type or "unknown") | upper }}
-          {% else %}
-            Reports Plus / Metrics report 336
-          {% endif %}
-        </dd>
-        <dt>Latest artifact</dt>
-        <dd><code>{{ security_assessment.path }}</code></dd>
-        <dt>Status</dt>
-        <dd>
+    <div class="quickhc-subject-grid">
+      <section class="metadata-card quickhc-subject-card">
+        <div class="quickhc-subject-head">
+          <div>
+            <h3>CommCell Details</h3>
+            <p class="helper-text">Environment and identity details used in the report header.</p>
+          </div>
+          <span class="badge badge-good">Available</span>
+        </div>
+
+        <div class="quickhc-subject-body">
+          <label class="quickhc-include-toggle" for="selection-environment">
+            <input
+              id="selection-environment"
+              type="checkbox"
+              name="selection_ids"
+              value="environment"
+              {% if "environment" in selected_report_sections %}checked{% endif %}
+            >
+            <span>Include</span>
+          </label>
+
+          <dl class="quickhc-card-details">
+            <dt>Source</dt>
+            <dd>Quick HC environment metadata</dd>
+            <dt>Status</dt>
+            <dd>Available for customer-facing report generation.</dd>
+          </dl>
+
+          <p class="quickhc-card-link">
+            <a href="{{ url_for('main.quick_hc_commcell') }}">View details</a>
+          </p>
+        </div>
+      </section>
+
+      <section class="metadata-card quickhc-subject-card">
+        <div class="quickhc-subject-head">
+          <div>
+            <h3>Security Assessment</h3>
+            <p class="helper-text">Security posture summary and actionable findings.</p>
+          </div>
           {% if security_assessment.exists and security_assessment.summary %}
-            {% set counters = security_assessment.summary.counters %}
-            {{ counters["Critical"] }} critical,
-            {{ counters["Warning"] }} warning,
-            {{ counters["Info"] }} info,
-            {{ counters["Good"] }} good
+            <span class="badge badge-good">Available</span>
           {% else %}
-            not collected
+            <span class="badge badge-warning">Not collected</span>
           {% endif %}
-        </dd>
-      </dl>
-    </section>
+        </div>
 
-    <section class="metadata-card">
-      <div class="section-heading">
-        <h3><a href="{{ url_for('main.quick_hc_license_summary') }}">License Summary</a></h3>
-      </div>
-      <label class="report-selection-card" for="selection-license-summary">
-        <input
-          id="selection-license-summary"
-          type="checkbox"
-          name="selection_ids"
-          value="license_summary"
-          {% if "license_summary" in selected_report_sections %}checked{% endif %}
-        >
-        <span>
-          <strong>Include License Summary in customer-facing report</strong>
-          <small class="helper-text">
-            Adds the License Summary metadata, workload sections, and detail tables when an artifact is available.
-          </small>
-        </span>
-      </label>
-      <dl>
-        <dt>Source</dt>
-        <dd>
-          {% if license_summary.exists %}
-            {{ (license_summary.source_type or "unknown") | upper }}
-          {% else %}
-            Reports Plus report 206 / import
-          {% endif %}
-        </dd>
-        <dt>Latest artifact</dt>
-        <dd><code>{{ license_summary.path }}</code></dd>
-        <dt>Status</dt>
-        <dd>
-          {% if license_summary.exists %}
-            {{ license_summary.other_count }} other licenses,
-            {{ license_summary.agent_feature_count }} agent/feature licenses
-          {% else %}
-            not collected
-          {% endif %}
-        </dd>
-      </dl>
-    </section>
+        <div class="quickhc-subject-body">
+          <label class="quickhc-include-toggle" for="selection-security-assessment">
+            <input
+              id="selection-security-assessment"
+              type="checkbox"
+              name="selection_ids"
+              value="security_assessment"
+              {% if "security_assessment" in selected_report_sections %}checked{% endif %}
+            >
+            <span>Include</span>
+          </label>
 
-    <button type="submit">Generate/View Customer Report</button>
+          <dl class="quickhc-card-details">
+            <dt>Source</dt>
+            <dd>
+              {% if security_assessment.exists %}
+                {{ (security_assessment.source_type or "unknown") | upper }}
+              {% else %}
+                Reports Plus report 336
+              {% endif %}
+            </dd>
+            <dt>Summary</dt>
+            <dd>
+              {% if security_assessment.exists and security_assessment.summary %}
+                {% set counters = security_assessment.summary.counters %}
+                {{ counters["Critical"] }} critical, {{ counters["Warning"] }} warning, {{ counters["Info"] }} info, {{ counters["Good"] }} good
+              {% else %}
+                No current Security Assessment artifact is available.
+              {% endif %}
+            </dd>
+          </dl>
+
+          <p class="quickhc-card-link">
+            <a href="{{ url_for('main.quick_hc_security_assessment') }}">View details</a>
+          </p>
+        </div>
+      </section>
+
+      <section class="metadata-card quickhc-subject-card">
+        <div class="quickhc-subject-head">
+          <div>
+            <h3>License Summary</h3>
+            <p class="helper-text">License consumption summary for customer-facing reporting.</p>
+          </div>
+          {% if license_summary.exists %}
+            <span class="badge badge-good">Available</span>
+          {% else %}
+            <span class="badge badge-warning">Not collected</span>
+          {% endif %}
+        </div>
+
+        <div class="quickhc-subject-body">
+          <label class="quickhc-include-toggle" for="selection-license-summary">
+            <input
+              id="selection-license-summary"
+              type="checkbox"
+              name="selection_ids"
+              value="license_summary"
+              {% if "license_summary" in selected_report_sections %}checked{% endif %}
+            >
+            <span>Include</span>
+          </label>
+
+          <dl class="quickhc-card-details">
+            <dt>Source</dt>
+            <dd>
+              {% if license_summary.exists %}
+                {{ (license_summary.source_type or "unknown") | upper }}
+              {% else %}
+                Reports Plus report 206 / import
+              {% endif %}
+            </dd>
+            <dt>Summary</dt>
+            <dd>
+              {% if license_summary.exists %}
+                {{ license_summary.other_count }} other licenses, {{ license_summary.agent_feature_count }} agent/feature licenses
+              {% else %}
+                No current License Summary artifact is available.
+              {% endif %}
+            </dd>
+          </dl>
+
+          <p class="quickhc-card-link">
+            <a href="{{ url_for('main.quick_hc_license_summary') }}">View details</a>
+          </p>
+        </div>
+      </section>
+    </div>
   </form>
 
-  <h3>Other Operational Views</h3>
-  <table class="compact-table">
-    <thead>
-      <tr>
-        <th>Subject</th>
-        <th>Source</th>
-        <th>Latest artifact</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><a href="{{ url_for('main.quick_hc_commcell') }}">CommCell Identity / Version</a></td>
-        <td><code>GET /commandcenter/api/CommServ</code></td>
-        <td><code>{{ commcell_status.path }}</code></td>
-        <td>
-          {% if commcell_status.exists %}
-            collected {{ commcell_status.collected_at or "unknown" }}
-          {% else %}
-            not collected
-          {% endif %}
-        </td>
-      </tr>
-      <tr>
-        <td><a href="{{ url_for('main.metrics_client_growth') }}">Client Growth</a></td>
-        <td>Reports Plus / Metrics</td>
-        <td>Report 318 extraction artifacts</td>
-        <td>available when extracted</td>
-      </tr>
-      <tr>
-        <td><a href="{{ url_for('main.metrics_capacity_license') }}">Capacity License</a></td>
-        <td>Reports Plus / Metrics</td>
-        <td>Report 318 extraction artifacts</td>
-        <td>available when extracted</td>
-      </tr>
-    </tbody>
-  </table>
+  <section class="metadata-card quickhc-secondary">
+    <div class="section-heading">
+      <h3>Other Operational Views</h3>
+      <p class="helper-text">Secondary views for internal follow-up and supporting analysis.</p>
+    </div>
+    <table class="compact-table">
+      <thead>
+        <tr>
+          <th>Subject</th>
+          <th>Source</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><a href="{{ url_for('main.quick_hc_commcell') }}">CommCell Identity / Version</a></td>
+          <td><code>GET /commandcenter/api/CommServ</code></td>
+          <td>
+            {% if commcell_status.exists %}
+              collected {{ commcell_status.collected_at or "unknown" }}
+            {% else %}
+              not collected
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td><a href="{{ url_for('main.metrics_client_growth') }}">Client Growth</a></td>
+          <td>Reports Plus / Metrics</td>
+          <td>available when extracted</td>
+        </tr>
+        <tr>
+          <td><a href="{{ url_for('main.metrics_capacity_license') }}">Capacity License</a></td>
+          <td>Reports Plus / Metrics</td>
+          <td>available when extracted</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
 </section>
 {% endblock %}

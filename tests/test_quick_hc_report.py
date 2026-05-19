@@ -245,7 +245,7 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "Customer Report Subjects" in body
+    assert "Customer Report" in body
     assert 'value="environment"' in body
     assert 'value="security_assessment"' in body
     assert 'value="license_summary"' in body
