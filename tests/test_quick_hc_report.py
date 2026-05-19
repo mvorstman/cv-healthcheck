@@ -331,6 +331,17 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert '<details class="metadata-card quickhc-subject-card" open>' in body
     assert '<summary class="quickhc-subject-summary">' in body
     assert 'class="quickhc-chevron"' in body
+    assert 'data-quickhc-form' in body
+    assert 'data-subject-toggle="environment"' in body
+    assert 'data-subject-toggle="security_assessment"' in body
+    assert 'data-subject-toggle="license_summary"' in body
+    assert 'data-subject-toggle="client_growth"' in body
+    assert 'data-subject-toggle="capacity_license"' in body
+    assert 'data-subject-child="environment"' in body
+    assert 'data-subject-child="security_assessment"' in body
+    assert 'data-subject-child="license_summary"' in body
+    assert 'data-subject-child="client_growth"' in body
+    assert 'data-subject-child="capacity_license"' in body
     assert 'value="environment"' in body
     assert 'value="environment.metadata"' in body
     assert 'value="security_assessment"' in body
@@ -353,6 +364,9 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert "Client Growth" in body
     assert "Capacity License" in body
     assert "Generate/View Customer Report" in body
+    license_selection_idx = body.index('data-selection-block="license_summary"')
+    license_preview_idx = body.index("<h4>Subject Preview</h4>", license_selection_idx)
+    assert license_selection_idx < license_preview_idx
 
 
 def test_quick_hc_report_post_license_summary_only_excludes_security_assessment(
