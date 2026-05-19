@@ -139,6 +139,8 @@ def test_quick_hc_report_route_loads_without_artifacts() -> None:
     body = response.get_data(as_text=True)
     assert "Quick HealthCheck Report" in body
     assert body.count("Not collected yet") >= 2
+    assert "Evidence / Sources" not in body
+    assert "Artifact sources" not in body
 
 
 def test_quick_hc_report_includes_security_assessment_summary(tmp_path, monkeypatch) -> None:
@@ -252,6 +254,10 @@ def test_quick_hc_report_route_renders_both_summaries_when_artifacts_exist(
     assert "View Security Assessment" in body
     assert "View License Summary" in body
     assert "Cloud Storage" not in body
+    assert "Evidence / Sources" not in body
+    assert "Artifact sources" not in body
+    assert "data/catalog/" not in body
+    assert "/tmp/" not in body
 
 
 def test_quick_hc_report_route_uses_service(monkeypatch) -> None:
@@ -453,6 +459,10 @@ def test_quick_hc_report_post_client_growth_only_excludes_other_optional_subject
     assert "HTTP status" not in body
     assert "Normalized fields" not in body
     assert "Sample rows" not in body
+    assert "Evidence / Sources" not in body
+    assert "Artifact sources" not in body
+    assert "data/catalog/" not in body
+    assert "/tmp/" not in body
     assert "Security Assessment" not in body
     assert "License Summary" not in body
     assert "Capacity License" not in body
