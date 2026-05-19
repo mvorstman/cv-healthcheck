@@ -56,72 +56,18 @@
         url_for(security_tile.detail_endpoint),
       ) %}
             {% call section_card("security_assessment", "security_assessment.summary", "Summary counters", "security_assessment.summary" in selected_report_sections, (security_assessment.summary.counters["Total checks"] ~ " checks") if security_assessment.exists and security_assessment.summary else "Overview") %}
-              <div class="quickhc-section-preview">
-                {% if security_assessment.exists and security_assessment.summary %}
-                  {% set counters = security_assessment.summary.counters %}
-                  <div class="quickhc-preview-inline">
-                    <span>Critical {{ counters["Critical"] }}</span>
-                    <span>Warning {{ counters["Warning"] }}</span>
-                    <span>Info {{ counters["Info"] }}</span>
-                    <span>Good {{ counters["Good"] }}</span>
-                    <span>Total checks {{ counters["Total checks"] }}</span>
-                  </div>
-                {% else %}
-                  <p class="quickhc-empty-state">Security Assessment data has not been collected yet.</p>
-                {% endif %}
-              </div>
+              {% set security_preview_section = "summary" %}
+              {% include "partials/quickhc/previews/security_assessment.html" %}
             {% endcall %}
 
             {% call section_card("security_assessment", "security_assessment.highlights", "Critical / Warning highlights", "security_assessment.highlights" in selected_report_sections, "Priority findings") %}
-              <div class="quickhc-section-preview">
-                {% if security_assessment.exists and security_assessment.summary %}
-                  {% set ns = namespace(count=0) %}
-                  <div class="quickhc-highlight-cards">
-                    {% for section in security_assessment.summary.sections %}
-                      {% for row in section.checks %}
-                        {% if row.status in ["Critical", "Warning"] and ns.count < 4 %}
-                          <article class="quickhc-highlight-card">
-                            <span class="badge {% if row.status == 'Critical' %}badge-critical{% else %}badge-warning{% endif %}">{{ row.status }}</span>
-                            <strong>{{ row.parameter }}</strong>
-                            <p>{{ row.remarks or "No additional remarks provided." }}</p>
-                          </article>
-                          {% set ns.count = ns.count + 1 %}
-                        {% endif %}
-                      {% endfor %}
-                    {% endfor %}
-                  </div>
-                  {% if ns.count == 0 %}
-                    <p class="quickhc-empty-state">No critical or warning highlights are currently present.</p>
-                  {% endif %}
-                {% else %}
-                  <p class="quickhc-empty-state">Security Assessment data has not been collected yet.</p>
-                {% endif %}
-              </div>
+              {% set security_preview_section = "highlights" %}
+              {% include "partials/quickhc/previews/security_assessment.html" %}
             {% endcall %}
 
             {% call section_card("security_assessment", "security_assessment.all_findings", "Info / Good findings", "security_assessment.all_findings" in selected_report_sections, "Informational checks") %}
-              <div class="quickhc-section-preview">
-                {% if security_assessment.exists and security_assessment.summary %}
-                  {% set counters = security_assessment.summary.counters %}
-                  {% set ns = namespace(names=[]) %}
-                  {% for section in security_assessment.summary.sections %}
-                    {% for row in section.checks %}
-                      {% if row.status in ["Info", "Good"] and ns.names | length < 3 %}
-                        {% set ns.names = ns.names + [row.parameter] %}
-                      {% endif %}
-                    {% endfor %}
-                  {% endfor %}
-                  <div class="quickhc-preview-inline">
-                    <span>Info {{ counters["Info"] }}</span>
-                    <span>Good {{ counters["Good"] }}</span>
-                  </div>
-                  {% if ns.names %}
-                    <p class="quickhc-preview-text">{{ ns.names | join(" • ") }}</p>
-                  {% endif %}
-                {% else %}
-                  <p class="quickhc-empty-state">Security Assessment data has not been collected yet.</p>
-                {% endif %}
-              </div>
+              {% set security_preview_section = "all_findings" %}
+              {% include "partials/quickhc/previews/security_assessment.html" %}
             {% endcall %}
       {% endcall %}
 

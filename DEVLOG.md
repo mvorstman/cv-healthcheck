@@ -22,6 +22,8 @@
 
 ## 2026-05-20
 
+- Extracted the Security Assessment Quick HC preview body into `web/templates/partials/quickhc/previews/security_assessment.html` and kept it explicitly included from `quick_hc.html`.
+- Moved the Security Assessment summary, critical/warning highlights, and info/good preview bodies into that partial without changing section-card wrappers, selection behavior, or customer report output.
 - Started preview-level Quick HC decomposition by extracting the CommCell section body into `web/templates/partials/quickhc/previews/commcell.html`.
 - Kept the new preview partial explicitly included from `quick_hc.html` instead of introducing dynamic renderer resolution, so the change stays low-risk and behavior-preserving.
 - Extracted the reusable Quick HC section-card macro into `web/templates/partials/quickhc_section_card.html` and updated `quick_hc.html` to import it instead of defining the wrapper inline.
