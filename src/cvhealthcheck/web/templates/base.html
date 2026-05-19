@@ -24,6 +24,10 @@
         </div>
         {% set ep = request.endpoint or '' %}
         <nav class="sidebar-nav">
+          <a href="{{ url_for('main.login') }}"
+             class="sidebar-link{% if ep == 'main.login' %} is-active{% endif %}">
+            Connect to CS
+          </a>
           <a href="{{ url_for('main.index') }}"
              class="sidebar-link{% if ep in ('main.index', 'main.lab_readiness', 'main.api_test') %} is-active{% endif %}">
             Status
@@ -46,7 +50,9 @@
       <div class="main">
         <div class="topbar">
           <div class="topbar-left">
-            <a href="{{ url_for('main.login') }}" class="topbar-link">Login</a>
+            <button type="button" class="topbar-link topbar-back-button" data-shell-back>
+              ← Back
+            </button>
           </div>
           <div class="topbar-right">
             <div class="quickhc-theme-toggle" data-theme-toggle>
@@ -66,6 +72,17 @@
       (function () {
         var themeKey = 'quickhc-theme-v1';
         var buttons = Array.from(document.querySelectorAll('[data-theme-toggle] [data-theme-choice]'));
+        var backButton = document.querySelector('[data-shell-back]');
+
+        if (backButton) {
+          backButton.addEventListener('click', function () {
+            if (window.history.length > 1) {
+              window.history.back();
+              return;
+            }
+            window.location.href = '/quick-hc';
+          });
+        }
 
         var syncButtons = function (theme) {
           for (var i = 0; i < buttons.length; i++) {

@@ -211,6 +211,10 @@ h5 {
 }
 
 .topbar-link {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
   font-size: 0.875rem;
   color: var(--text-secondary);
   text-decoration: none;
@@ -221,6 +225,10 @@ h5 {
 .topbar-link:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+.topbar-back-button {
+  font-weight: 500;
 }
 
 /* === Theme toggle === */
