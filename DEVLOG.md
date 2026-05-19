@@ -22,6 +22,8 @@
 
 ## 2026-05-20
 
+- Extracted the License Summary Quick HC preview body into `web/templates/partials/quickhc/previews/license_summary.html` and kept it explicitly included from `quick_hc.html`.
+- Moved the License Summary metadata, workload-sections, other-licenses, and agent-feature preview bodies into that partial without changing report filtering, section IDs, or customer report output.
 - Extracted the Security Assessment Quick HC preview body into `web/templates/partials/quickhc/previews/security_assessment.html` and kept it explicitly included from `quick_hc.html`.
 - Moved the Security Assessment summary, critical/warning highlights, and info/good preview bodies into that partial without changing section-card wrappers, selection behavior, or customer report output.
 - Started preview-level Quick HC decomposition by extracting the CommCell section body into `web/templates/partials/quickhc/previews/commcell.html`.
