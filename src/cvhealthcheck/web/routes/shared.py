@@ -195,6 +195,8 @@ def _license_summary_quick_hc() -> dict[str, Any]:
             "path": "data/catalog/license_summary/latest.json",
         }
     workload_sections = list(payload.get("workload_summary_sections") or [])
+    other_licenses = list(payload.get("other_licenses") or [])
+    agent_feature_licenses = list(payload.get("agent_feature_licenses") or [])
     return {
         "exists": True,
         "path": str(payload.get("file_path") or "data/catalog/license_summary/latest.json"),
@@ -211,8 +213,18 @@ def _license_summary_quick_hc() -> dict[str, Any]:
             for section in workload_sections
             if str(section.get("section_name") or "").strip()
         ],
-        "other_count": len(payload.get("other_licenses") or []),
-        "agent_feature_count": len(payload.get("agent_feature_licenses") or []),
+        "other_count": len(other_licenses),
+        "other_license_names": [
+            str(item.get("license") or "")
+            for item in other_licenses
+            if str(item.get("license") or "").strip()
+        ],
+        "agent_feature_count": len(agent_feature_licenses),
+        "agent_feature_examples": [
+            str(item.get("license") or "")
+            for item in agent_feature_licenses
+            if str(item.get("license") or "").strip()
+        ],
     }
 
 

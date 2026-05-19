@@ -342,6 +342,15 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert 'data-subject-child="license_summary"' in body
     assert 'data-subject-child="client_growth"' in body
     assert 'data-subject-child="capacity_license"' in body
+    assert 'value="security_assessment.highlights"' in body
+    security_highlights_idx = body.index('value="security_assessment.highlights"')
+    security_preview_idx = body.index('class="quickhc-highlight-cards"', security_highlights_idx)
+    assert security_highlights_idx < security_preview_idx
+    assert 'class="quickhc-section-preview"' in body
+    assert 'value="license_summary.metadata"' in body
+    license_metadata_idx = body.index('value="license_summary.metadata"')
+    license_metadata_preview_idx = body.index('class="quickhc-section-preview"', license_metadata_idx)
+    assert license_metadata_idx < license_metadata_preview_idx
     assert 'value="environment"' in body
     assert 'value="environment.metadata"' in body
     assert 'value="security_assessment"' in body
@@ -364,9 +373,10 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert "Client Growth" in body
     assert "Capacity License" in body
     assert "Generate/View Customer Report" in body
-    license_selection_idx = body.index('data-selection-block="license_summary"')
-    license_preview_idx = body.index("<h4>Subject Preview</h4>", license_selection_idx)
-    assert license_selection_idx < license_preview_idx
+    assert "dataset_guid" not in body
+    assert "HTTP status" not in body
+    assert "data/catalog/" not in body
+    assert "/tmp/" not in body
 
 
 def test_quick_hc_report_post_license_summary_only_excludes_security_assessment(

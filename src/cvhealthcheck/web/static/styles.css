@@ -472,6 +472,11 @@ label {
   padding-top: 0;
 }
 
+.quickhc-section-option {
+  display: grid;
+  gap: 0.45rem;
+}
+
 .quickhc-subsection-toggle {
   display: inline-flex;
   align-items: center;
@@ -496,6 +501,54 @@ label {
 .quickhc-subsection-toggle:has(input[type="checkbox"]:disabled) {
   background: #f8fafc;
   border-color: #e2e8f0;
+}
+
+.quickhc-section-preview {
+  display: grid;
+  gap: 0.55rem;
+  margin-left: 1.85rem;
+  padding: 0.7rem 0.8rem;
+  border-left: 2px solid #cbd5e1;
+  background: #f8fafc;
+  border-radius: 0 8px 8px 0;
+}
+
+.quickhc-preview-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.55rem;
+}
+
+.quickhc-preview-inline span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid #dbe3ec;
+  color: #334155;
+  font-size: 0.88rem;
+}
+
+.quickhc-highlight-cards {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.quickhc-highlight-card {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #dbe3ec;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.quickhc-highlight-card p {
+  margin: 0;
+  color: #475569;
 }
 
 .quickhc-card-details {
