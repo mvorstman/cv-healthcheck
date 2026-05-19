@@ -22,6 +22,8 @@
 
 ## 2026-05-20
 
+- Extracted the reusable Quick HC section-card macro into `web/templates/partials/quickhc_section_card.html` and updated `quick_hc.html` to import it instead of defining the wrapper inline.
+- Kept all current section preview bodies, selection behavior, localStorage behavior, and customer report output unchanged while reducing template duplication another step.
 - Extracted the repeated outer Quick HC subject-card shell into `web/templates/partials/quickhc_tile.html`.
 - Updated `/quick-hc` to pass registry tile metadata into the route and render each existing subject through the shared tile shell while keeping section preview bodies and report behavior unchanged.
 - Started the first Quick HC tile-framework refactor step without changing current customer-facing behavior.
