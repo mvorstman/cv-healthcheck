@@ -615,6 +615,11 @@ def test_quick_hc_report_renders_license_summary_usage_visualization(
     assert 'class="usage-summary-bar-fill"' in body
     assert "40%" in body
     assert "License not purchased" in body
+    agent_table_idx = body.index("<h4>Agent and Feature Licenses</h4>")
+    agent_client_agent_idx = body.index("<th>Client / Agent</th>", agent_table_idx)
+    agent_status_idx = body.index("<th>Status</th>", agent_table_idx)
+    assert agent_table_idx < agent_client_agent_idx < agent_status_idx
+    assert body.find('class="usage-summary-bar"', agent_table_idx, body.index("</table>", agent_table_idx)) == -1
     assert "dataset_guid" not in body
     assert "HTTP status" not in body
     assert "data/catalog/" not in body

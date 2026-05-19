@@ -252,11 +252,10 @@
             <thead>
               <tr>
                 <th>License</th>
+                <th>Client / Agent</th>
                 <th>Available Total</th>
                 <th>Used</th>
-                <th>Summary</th>
-                <th>Client</th>
-                <th>Agent</th>
+                <th>Status</th>
                 <th>Install Date</th>
               </tr>
             </thead>
@@ -264,11 +263,16 @@
               {% for row in report.license_summary.visible_agent_feature_rows %}
                 <tr>
                   <td>{{ row.license }}</td>
+                  <td>
+                    {% if row.client and row.agent %}
+                      {{ row.client }} / {{ row.agent }}
+                    {% else %}
+                      {{ row.client or row.agent or "" }}
+                    {% endif %}
+                  </td>
                   <td>{{ row.available_display or "" }}</td>
                   <td>{{ row.used_display or "" }}</td>
-                  <td>{{ usage_summary_cell(row) }}</td>
-                  <td>{{ row.client or "" }}</td>
-                  <td>{{ row.agent or "" }}</td>
+                  <td>{{ row.usage_status or "" }}</td>
                   <td>{{ row.install_date or "" }}</td>
                 </tr>
               {% endfor %}
