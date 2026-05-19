@@ -7,17 +7,16 @@
     <dt>Base URL</dt>
     <dd>{{ base_url or "not configured" }}</dd>
     <dt>Token loaded</dt>
-    <dd>{{ "yes" if token_loaded else "no" }}</dd>
+    <dd data-status="{{ 'good' if token_loaded else 'bad' }}">{{ "yes" if token_loaded else "no" }}</dd>
     <dt>SSL verification</dt>
-    <dd>{{ "enabled" if verify_ssl else "disabled" }}</dd>
+    <dd data-status="{{ 'good' if verify_ssl else 'bad' }}">{{ "enabled" if verify_ssl else "disabled" }}</dd>
     <dt>API reachable</dt>
-    <dd>{{ "yes" if api_reachable else "no" }}</dd>
+    <dd data-status="{{ 'good' if api_reachable else 'bad' }}">{{ "yes" if api_reachable else "no" }}</dd>
     <dt>API status</dt>
-    <dd>{{ api_status_code or "not checked" }}</dd>
+    <dd data-status="{{ 'good' if api_status_code == 200 else ('bad' if api_status_code else '') }}">{{ api_status_code or "not checked" }}</dd>
   </dl>
   {% if api_error %}
     <pre>{{ api_error }}</pre>
   {% endif %}
 </section>
 {% endblock %}
-

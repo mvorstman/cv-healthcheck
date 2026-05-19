@@ -5,22 +5,89 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>cv-healthcheck</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script>
+      (function () {
+        var theme = localStorage.getItem('quickhc-theme-v1');
+        if (theme === 'dark' || theme === 'light') {
+          document.documentElement.dataset.theme = theme;
+        } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          document.documentElement.dataset.theme = 'dark';
+        }
+      })();
+    </script>
   </head>
   <body>
-    <header>
-      <h1>cv-healthcheck</h1>
-      <nav>
-        <a href="{{ url_for('main.login') }}">Login</a>
-        <form method="post" action="{{ url_for('main.logout') }}">
-          <button type="submit">Logout</button>
-        </form>
-        <a href="{{ url_for('main.quick_hc') }}">Quick HC</a>
-        <a href="{{ url_for('main.development') }}">Development</a>
-      </nav>
-    </header>
-    <main>
-      {% block content %}{% endblock %}
-    </main>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-top">
+          <span class="sidebar-wordmark">cv&#8209;healthcheck</span>
+        </div>
+        {% set ep = request.endpoint or '' %}
+        <nav class="sidebar-nav">
+          <a href="{{ url_for('main.index') }}"
+             class="sidebar-link{% if ep in ('main.index', 'main.lab_readiness', 'main.api_test') %} is-active{% endif %}">
+            Status
+          </a>
+          <a href="{{ url_for('main.quick_hc') }}"
+             class="sidebar-link{% if 'quick_hc' in ep or 'metrics_' in ep %} is-active{% endif %}">
+            Quick HC
+          </a>
+          <a href="{{ url_for('main.development') }}"
+             class="sidebar-link{% if 'development' in ep or 'security_assessment_registry' in ep %} is-active{% endif %}">
+            Development
+          </a>
+        </nav>
+        <div class="sidebar-footer">
+          <form method="post" action="{{ url_for('main.logout') }}">
+            <button type="submit" class="sidebar-logout">Sign out</button>
+          </form>
+        </div>
+      </aside>
+      <div class="main">
+        <div class="topbar">
+          <div class="topbar-left">
+            <a href="{{ url_for('main.login') }}" class="topbar-link">Login</a>
+          </div>
+          <div class="topbar-right">
+            <div class="quickhc-theme-toggle" data-theme-toggle>
+              <span class="quickhc-theme-label">Theme</span>
+              <button type="button" class="quickhc-theme-button" data-theme-choice="light">Light</button>
+              <button type="button" class="quickhc-theme-button" data-theme-choice="dark">Dark</button>
+            </div>
+          </div>
+        </div>
+        <div class="content">
+          {% block content %}{% endblock %}
+        </div>
+      </div>
+    </div>
     {% block scripts %}{% endblock %}
+    <script>
+      (function () {
+        var themeKey = 'quickhc-theme-v1';
+        var buttons = Array.from(document.querySelectorAll('[data-theme-toggle] [data-theme-choice]'));
+
+        var syncButtons = function (theme) {
+          for (var i = 0; i < buttons.length; i++) {
+            buttons[i].dataset.active = String(buttons[i].dataset.themeChoice === theme);
+          }
+        };
+
+        var current = document.documentElement.dataset.theme || 'light';
+        syncButtons(current);
+
+        for (var i = 0; i < buttons.length; i++) {
+          (function (btn) {
+            btn.addEventListener('click', function () {
+              var theme = btn.dataset.themeChoice;
+              if (theme !== 'light' && theme !== 'dark') return;
+              document.documentElement.dataset.theme = theme;
+              localStorage.setItem(themeKey, theme);
+              syncButtons(theme);
+            });
+          })(buttons[i]);
+        }
+      })();
+    </script>
   </body>
 </html>

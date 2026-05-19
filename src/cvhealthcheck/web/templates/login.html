@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section>
-  <h2>Commvault Login</h2>
+<section class="login-card">
+  <p class="login-appname">cv-healthcheck</p>
+  <p class="login-subtitle">Commvault Health Check Platform</p>
   {% if base_url %}
-    <p>Base URL: {{ base_url }}</p>
+    <p class="helper-text" style="text-align:center;margin-bottom:1rem">{{ base_url }}</p>
   {% else %}
-    <p>CV_BASE_URL is not configured.</p>
+    <p class="helper-text" style="text-align:center;margin-bottom:1rem">CV_BASE_URL is not configured.</p>
   {% endif %}
   {% if error %}
     <p class="error">{{ error }}</p>
@@ -21,7 +22,7 @@
       <label for="password">Password</label>
       <input id="password" name="password" type="password" autocomplete="current-password" required>
     </div>
-    <button type="submit">Login</button>
+    <button type="submit" class="login-submit">Login</button>
   </form>
 </section>
 {% endblock %}

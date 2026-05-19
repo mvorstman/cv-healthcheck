@@ -32,12 +32,14 @@
   <div class="quickhc-page-head">
     <div>
       <h2>Quick HC</h2>
-      <p>Quick HealthCheck provides a fast, read-only way to assemble customer-facing operational summaries.</p>
-    </div>
-    <div class="quickhc-theme-toggle" data-theme-toggle>
-      <span class="quickhc-theme-label">Theme</span>
-      <button type="button" class="quickhc-theme-button" data-theme-choice="light">Light</button>
-      <button type="button" class="quickhc-theme-button" data-theme-choice="dark">Dark</button>
+      <p class="helper-text">Quick HealthCheck provides a fast, read-only way to assemble customer-facing operational summaries.</p>
+      <div class="quickhc-kpi-row">
+        <span class="quickhc-kpi-chip quickhc-kpi-chip--{{ 'good' if commcell_preview.exists else 'warn' }}">CommCell</span>
+        <span class="quickhc-kpi-chip quickhc-kpi-chip--{{ 'good' if security_assessment.exists else 'warn' }}">Security</span>
+        <span class="quickhc-kpi-chip quickhc-kpi-chip--{{ 'good' if license_summary.exists else 'warn' }}">Licenses</span>
+        <span class="quickhc-kpi-chip quickhc-kpi-chip--{{ 'good' if client_growth.exists else 'warn' }}">Client Growth</span>
+        <span class="quickhc-kpi-chip quickhc-kpi-chip--{{ 'good' if capacity_license.exists else 'warn' }}">Capacity</span>
+      </div>
     </div>
   </div>
 
@@ -64,29 +66,28 @@
               <h3>CommCell Details</h3>
               <p class="helper-text">Platform identity and environment context for the customer-facing summary.</p>
             </div>
-            <span class="badge badge-good">Available</span>
-          </div>
-          <div class="quickhc-subject-meta">
-            <label class="quickhc-include-toggle" for="selection-environment">
-              <input
-                id="selection-environment"
-                type="checkbox"
-                name="selection_ids"
-                value="environment"
-                data-subject-toggle="environment"
-                {% if "environment" in selected_report_sections %}checked{% endif %}
-              >
-              <span>Include</span>
-            </label>
-            <p class="quickhc-card-link">
-              <a href="{{ url_for('main.quick_hc_commcell') }}">View details</a>
-            </p>
+            <div class="quickhc-subject-head-right">
+              <span class="badge badge-good">Available</span>
+              <a href="{{ url_for('main.quick_hc_commcell') }}" class="quickhc-details-link" onclick="event.stopPropagation()">Details →</a>
+            </div>
           </div>
         </summary>
+        <div class="quickhc-subject-meta">
+          <label class="quickhc-include-toggle" for="selection-environment">
+            <input
+              id="selection-environment"
+              type="checkbox"
+              name="selection_ids"
+              value="environment"
+              data-subject-toggle="environment"
+              {% if "environment" in selected_report_sections %}checked{% endif %}
+            >
+            <span>Include</span>
+          </label>
+        </div>
 
         <div class="quickhc-subject-body">
           <div class="quickhc-selection-block" data-selection-block="environment">
-            <p class="quickhc-selection-label">Include in customer report</p>
             {% call section_card("environment", "environment.metadata", "Environment metadata", "environment.metadata" in selected_report_sections, "CommCell profile") %}
               <div class="quickhc-section-preview">
                 {% if commcell_preview.exists %}
@@ -125,33 +126,32 @@
               <h3>Security Assessment</h3>
               <p class="helper-text">Posture summary with emphasis on the most important findings to address.</p>
             </div>
-            {% if security_assessment.exists and security_assessment.summary %}
-              <span class="badge badge-good">Available</span>
-            {% else %}
-              <span class="badge badge-warning">Not collected</span>
-            {% endif %}
-          </div>
-          <div class="quickhc-subject-meta">
-            <label class="quickhc-include-toggle" for="selection-security-assessment">
-              <input
-                id="selection-security-assessment"
-                type="checkbox"
-                name="selection_ids"
-                value="security_assessment"
-                data-subject-toggle="security_assessment"
-                {% if "security_assessment" in selected_report_sections %}checked{% endif %}
-              >
-              <span>Include</span>
-            </label>
-            <p class="quickhc-card-link">
-              <a href="{{ url_for('main.quick_hc_security_assessment') }}">View details</a>
-            </p>
+            <div class="quickhc-subject-head-right">
+              {% if security_assessment.exists and security_assessment.summary %}
+                <span class="badge badge-good">Available</span>
+              {% else %}
+                <span class="badge badge-warning">Not collected</span>
+              {% endif %}
+              <a href="{{ url_for('main.quick_hc_security_assessment') }}" class="quickhc-details-link" onclick="event.stopPropagation()">Details →</a>
+            </div>
           </div>
         </summary>
+        <div class="quickhc-subject-meta">
+          <label class="quickhc-include-toggle" for="selection-security-assessment">
+            <input
+              id="selection-security-assessment"
+              type="checkbox"
+              name="selection_ids"
+              value="security_assessment"
+              data-subject-toggle="security_assessment"
+              {% if "security_assessment" in selected_report_sections %}checked{% endif %}
+            >
+            <span>Include</span>
+          </label>
+        </div>
 
         <div class="quickhc-subject-body">
           <div class="quickhc-selection-block" data-selection-block="security_assessment">
-            <p class="quickhc-selection-label">Include in customer report</p>
 
             {% call section_card("security_assessment", "security_assessment.summary", "Summary counters", "security_assessment.summary" in selected_report_sections, (security_assessment.summary.counters["Total checks"] ~ " checks") if security_assessment.exists and security_assessment.summary else "Overview") %}
               <div class="quickhc-section-preview">
@@ -233,33 +233,32 @@
               <h3>License Summary</h3>
               <p class="helper-text">Consumption snapshot across workloads, other licenses, and agent or feature usage.</p>
             </div>
-            {% if license_summary.exists %}
-              <span class="badge badge-good">Available</span>
-            {% else %}
-              <span class="badge badge-warning">Not collected</span>
-            {% endif %}
-          </div>
-          <div class="quickhc-subject-meta">
-            <label class="quickhc-include-toggle" for="selection-license-summary">
-              <input
-                id="selection-license-summary"
-                type="checkbox"
-                name="selection_ids"
-                value="license_summary"
-                data-subject-toggle="license_summary"
-                {% if "license_summary" in selected_report_sections %}checked{% endif %}
-              >
-              <span>Include</span>
-            </label>
-            <p class="quickhc-card-link">
-              <a href="{{ url_for('main.quick_hc_license_summary') }}">View details</a>
-            </p>
+            <div class="quickhc-subject-head-right">
+              {% if license_summary.exists %}
+                <span class="badge badge-good">Available</span>
+              {% else %}
+                <span class="badge badge-warning">Not collected</span>
+              {% endif %}
+              <a href="{{ url_for('main.quick_hc_license_summary') }}" class="quickhc-details-link" onclick="event.stopPropagation()">Details →</a>
+            </div>
           </div>
         </summary>
+        <div class="quickhc-subject-meta">
+          <label class="quickhc-include-toggle" for="selection-license-summary">
+            <input
+              id="selection-license-summary"
+              type="checkbox"
+              name="selection_ids"
+              value="license_summary"
+              data-subject-toggle="license_summary"
+              {% if "license_summary" in selected_report_sections %}checked{% endif %}
+            >
+            <span>Include</span>
+          </label>
+        </div>
 
         <div class="quickhc-subject-body">
           <div class="quickhc-selection-block" data-selection-block="license_summary">
-            <p class="quickhc-selection-label">Include in customer report</p>
 
             {% call section_card("license_summary", "license_summary.metadata", "Summary metadata", "license_summary.metadata" in selected_report_sections, "Source and dates") %}
               <div class="quickhc-section-preview">
@@ -390,33 +389,32 @@
               <h3>Client Growth</h3>
               <p class="helper-text">Trend snapshot showing recent protected client count and change over time.</p>
             </div>
-            {% if client_growth.exists %}
-              <span class="badge badge-good">Available</span>
-            {% else %}
-              <span class="badge badge-warning">Not collected</span>
-            {% endif %}
-          </div>
-          <div class="quickhc-subject-meta">
-            <label class="quickhc-include-toggle" for="selection-client-growth">
-              <input
-                id="selection-client-growth"
-                type="checkbox"
-                name="selection_ids"
-                value="client_growth"
-                data-subject-toggle="client_growth"
-                {% if "client_growth" in selected_report_sections %}checked{% endif %}
-              >
-              <span>Include</span>
-            </label>
-            <p class="quickhc-card-link">
-              <a href="{{ url_for('main.metrics_client_growth') }}">View details</a>
-            </p>
+            <div class="quickhc-subject-head-right">
+              {% if client_growth.exists %}
+                <span class="badge badge-good">Available</span>
+              {% else %}
+                <span class="badge badge-warning">Not collected</span>
+              {% endif %}
+              <a href="{{ url_for('main.metrics_client_growth') }}" class="quickhc-details-link" onclick="event.stopPropagation()">Details →</a>
+            </div>
           </div>
         </summary>
+        <div class="quickhc-subject-meta">
+          <label class="quickhc-include-toggle" for="selection-client-growth">
+            <input
+              id="selection-client-growth"
+              type="checkbox"
+              name="selection_ids"
+              value="client_growth"
+              data-subject-toggle="client_growth"
+              {% if "client_growth" in selected_report_sections %}checked{% endif %}
+            >
+            <span>Include</span>
+          </label>
+        </div>
 
         <div class="quickhc-subject-body">
           <div class="quickhc-selection-block" data-selection-block="client_growth">
-            <p class="quickhc-selection-label">Include in customer report</p>
             {% set history = client_growth.history_range or {} %}
             {% set starting_total = (client_growth.latest_total_clients or 0) - ((client_growth.latest_added or 0) - (client_growth.latest_removed or 0)) %}
 
@@ -487,36 +485,35 @@
           <div class="quickhc-subject-head">
             <span class="quickhc-chevron" aria-hidden="true"></span>
             <div class="quickhc-subject-copy">
-              <h3>Capacity License</h3>
+              <h3>Capacity Licenses</h3>
               <p class="helper-text">Capacity utilization summary for the latest available reporting period.</p>
             </div>
-            {% if capacity_license.exists %}
-              <span class="badge badge-good">Available</span>
-            {% else %}
-              <span class="badge badge-warning">Not collected</span>
-            {% endif %}
-          </div>
-          <div class="quickhc-subject-meta">
-            <label class="quickhc-include-toggle" for="selection-capacity-license">
-              <input
-                id="selection-capacity-license"
-                type="checkbox"
-                name="selection_ids"
-                value="capacity_license"
-                data-subject-toggle="capacity_license"
-                {% if "capacity_license" in selected_report_sections %}checked{% endif %}
-              >
-              <span>Include</span>
-            </label>
-            <p class="quickhc-card-link">
-              <a href="{{ url_for('main.metrics_capacity_license') }}">View details</a>
-            </p>
+            <div class="quickhc-subject-head-right">
+              {% if capacity_license.exists %}
+                <span class="badge badge-good">Available</span>
+              {% else %}
+                <span class="badge badge-warning">Not collected</span>
+              {% endif %}
+              <a href="{{ url_for('main.metrics_capacity_license') }}" class="quickhc-details-link" onclick="event.stopPropagation()">Details →</a>
+            </div>
           </div>
         </summary>
+        <div class="quickhc-subject-meta">
+          <label class="quickhc-include-toggle" for="selection-capacity-license">
+            <input
+              id="selection-capacity-license"
+              type="checkbox"
+              name="selection_ids"
+              value="capacity_license"
+              data-subject-toggle="capacity_license"
+              {% if "capacity_license" in selected_report_sections %}checked{% endif %}
+            >
+            <span>Include</span>
+          </label>
+        </div>
 
         <div class="quickhc-subject-body">
           <div class="quickhc-selection-block" data-selection-block="capacity_license">
-            <p class="quickhc-selection-label">Include in customer report</p>
 
             {% call section_card("capacity_license", "capacity_license.summary", "Summary", "capacity_license.summary" in selected_report_sections, (capacity_license.latest_month or "Latest period")) %}
               <div class="quickhc-section-preview">
@@ -550,7 +547,7 @@
     </div>
   </form>
 
-  <section class="metadata-card quickhc-secondary">
+  <section class="metadata-card quickhc-secondary quickhc-secondary--internal">
     <div class="section-heading">
       <h3>Other Operational Views</h3>
       <p class="helper-text">Secondary views for internal follow-up and supporting analysis.</p>
@@ -570,33 +567,12 @@
       }
 
       const storageKey = "quickhc-report-selections-v1";
-      const themeStorageKey = "quickhc-theme-v1";
       const selectionInputs = Array.from(
         form.querySelectorAll('input[type="checkbox"][name="selection_ids"]')
       );
       const parentInputs = Array.from(
         form.querySelectorAll('input[type="checkbox"][data-subject-toggle]')
       );
-      const themeButtons = Array.from(
-        dashboard.querySelectorAll("[data-theme-choice]")
-      );
-
-      const applyTheme = (theme) => {
-        dashboard.dataset.theme = theme;
-        for (const button of themeButtons) {
-          button.dataset.active = String(button.dataset.themeChoice === theme);
-        }
-      };
-
-      const loadTheme = () => {
-        const savedTheme = window.localStorage.getItem(themeStorageKey);
-        if (savedTheme === "light" || savedTheme === "dark") {
-          return savedTheme;
-        }
-        return window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-      };
 
       const loadSavedState = () => {
         try {
@@ -665,7 +641,6 @@
 
       restoreState();
       saveState();
-      applyTheme(loadTheme());
 
       for (const parent of parentInputs) {
         parent.addEventListener("change", () => {
@@ -681,23 +656,6 @@
           continue;
         }
         input.addEventListener("change", saveState);
-      }
-
-      for (const button of themeButtons) {
-        button.addEventListener("click", () => {
-          const theme = button.dataset.themeChoice;
-          if (theme !== "light" && theme !== "dark") {
-            return;
-          }
-          window.localStorage.setItem(themeStorageKey, theme);
-          applyTheme(theme);
-        });
-      }
-
-      for (const interactive of form.querySelectorAll(".quickhc-subject-summary label, .quickhc-subject-summary input, .quickhc-subject-summary a")) {
-        interactive.addEventListener("click", (event) => {
-          event.stopPropagation();
-        });
       }
     })();
   </script>

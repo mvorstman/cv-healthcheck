@@ -161,7 +161,10 @@ def test_quick_hc_report_route_loads_without_artifacts() -> None:
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Quick HealthCheck Report" in body
-    assert body.count("Not collected yet") >= 2
+    assert "Environment" in body
+    assert "Security Assessment" in body
+    assert "License Summary" in body
+    assert "Not collected yet" in body
     assert "Evidence / Sources" not in body
     assert "Artifact sources" not in body
 
