@@ -76,7 +76,7 @@ Status: started.
 
 ## Phase 3.0: Quick HC Foundation
 
-Status: started.
+Status: active.
 
 - Add a Quick HC section to the Flask UI.
 - Keep Quick HC fast, read-only, low impact, and API-first.
@@ -85,6 +85,24 @@ Status: started.
 - First subject: CommCell Identity / Version from `GET /commandcenter/api/CommServ`.
 - Normalize CommCell identity fields for later rule-engine consumption without adding health scoring.
 - Add a basic assembled HTML HealthCheck report page over existing artifacts before introducing scoring, recommendations, charts, or PDF generation.
+
+Current Phase 3 capabilities:
+
+- Quick HC now acts as the main customer-facing report-composition surface.
+- Supported Quick HC subjects are CommCell Details, Security Assessment, License Summary, Client Growth, and Capacity Licenses.
+- Each subject supports expandable overview tiles, customer-facing previews, include/exclude controls, and nested section/table selection.
+- `/quick-hc/report` now renders selected subjects and selected sections only.
+- Customer-facing output intentionally strips artifact paths, dataset GUIDs, HTTP status fields, and raw/debug extraction metadata.
+- Client Growth now includes a professional Chart.js visualization in the customer-facing report.
+- License Summary now includes workload/category sections plus compact usage visualization where that presentation fits the data.
+
+Current known limitations:
+
+- no PDF export yet
+- no persisted report profiles yet
+- no scoring or recommendations yet
+- UI selection persistence currently uses localStorage only
+- runtime artifacts remain outside git and are not part of the repository state
 
 ## Current Foundation Hardening
 

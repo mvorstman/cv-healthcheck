@@ -1,5 +1,25 @@
 # Development Log
 
+## 2026-05-19
+
+- Promoted Quick HC from a simple summary page into the main customer-facing report-composition surface.
+- Added `QuickHcReportService` to assemble CommCell Details, Security Assessment, License Summary, Client Growth, and Capacity Licenses into one filtered report view model.
+- Added subject-level and section-level selection IDs so `/quick-hc/report` can render only the selected subjects and nested sections without pushing core filtering logic into the templates.
+- Redesigned `/quick-hc` around expandable full-width subject tiles with customer-facing previews, nested section cards, and parent include/exclude behavior that cascades to child sections.
+- Added browser-side selection persistence with `localStorage`; subject and section selections now survive page reloads without adding server-side profiles or database state.
+- Hid evidence paths, dataset GUIDs, HTTP status values, and raw/debug extraction metadata from the customer-facing Quick HC report output.
+- Added customer-facing report rendering for:
+  Security Assessment counters and highlight sections,
+  License Summary workload and detail sections,
+  Client Growth summary/chart/table output,
+  and Capacity Licenses summary/table output.
+- Added License Summary usage visualization for workload and other-license rows with compact usage bars and graceful `License not purchased` handling where capacity is zero.
+- Kept Agent / Feature Licenses as a compact table without progress-bar visuals after validating that usage bars made that section noisier.
+- Added REST collection support to the Quick HC Security Assessment page while preserving upload import support.
+- Added REST collection support to the Quick HC License Summary page while preserving CSV/HTML upload import support.
+- Improved `start.sh` so it stops any process already listening on port `5001` before starting Flask again.
+- Added broad regression coverage for Quick HC overview rendering, section selection behavior, subject omission behavior, default report rendering, Security Assessment import/collect flows, Client Growth chart output, and License Summary usage rendering.
+
 ## 2026-05-18
 
 - Added a basic Quick HC HTML report output at `/quick-hc/report`.

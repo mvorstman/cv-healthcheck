@@ -30,20 +30,30 @@ The central cv-healthcheck/reporting platform must not assume direct access to c
 
 ## Quick HC Foundation
 
-Quick HC is the fast, read-only path for customer-facing healthcheck output. The Flask UI intentionally stays simple:
+Quick HC is now the main customer-facing report-composition surface for cv-healthcheck.
 
-- Login / Logout
-- Quick HC
-- Development
+The product split is intentional:
 
-Quick HC contains finished or useful healthcheck items. Development contains raw/debug/API/report exploration pages, including lab readiness, Reports Plus inventory, report extraction, dataset execution, and validation views.
+- Quick HC is the customer-facing composition layer.
+- Development holds raw/debug/API/report exploration pages, including lab readiness, Reports Plus inventory, report extraction, dataset execution, registry views, and validation tools.
 
-Current Quick HC items:
+Current Quick HC subjects:
 
-- CommCell Identity / Version from REST.
-- Client Growth and Capacity License metric pages from Reports Plus / Metrics artifacts.
-- Security Assessment from Reports Plus report 336.
-- A basic HTML Quick HealthCheck report page that summarizes the current Security Assessment and License Summary artifacts.
+- CommCell Details
+- Security Assessment
+- License Summary
+- Client Growth
+- Capacity Licenses
+
+Each subject now supports:
+
+- an expandable tile on `/quick-hc`
+- customer-facing preview content in the tile body
+- a parent include/exclude control
+- nested section or table selection for report composition
+- composition into `/quick-hc/report`
+
+The Quick HC overview is the place where the user decides which subjects and sections appear in the customer-facing report. Selections are currently remembered in the browser with `localStorage`; there is no server-side saved profile or database persistence for report layouts yet.
 
 Phase 3.0 started with CommCell Identity / Version from:
 
@@ -71,10 +81,57 @@ Flask UI:
 http://127.0.0.1:5001/quick-hc
 http://127.0.0.1:5001/quick-hc/commcell
 http://127.0.0.1:5001/quick-hc/security-assessment
+http://127.0.0.1:5001/quick-hc/license-summary
 http://127.0.0.1:5001/quick-hc/report
 ```
 
-The Quick HC report page is intentionally minimal. It assembles the current Security Assessment and License Summary artifacts through their service layers and renders a simple HTML summary with environment identifiers, evidence timestamps, and links back to the underlying detail pages. It does not add scoring, recommendations, charts, or PDF output yet.
+### Customer-Facing Report Composition
+
+`/quick-hc/report` now renders only the selected subjects and selected nested sections. The composition pipeline is assembled through `QuickHcReportService` and keeps the core filtering logic out of Jinja templates.
+
+Current report output capabilities include:
+
+- CommCell Details environment metadata
+- Security Assessment summary counters
+- Security Assessment critical or warning highlight output
+- Security Assessment optional all-findings section
+- License Summary workload sections
+- License Summary other-license detail tables with compact usage summaries
+- License Summary agent or feature detail tables without progress bars
+- Client Growth summary metrics
+- Client Growth Chart.js history visualization
+- Client Growth monthly summary table
+- Capacity Licenses summary and latest table inclusion
+
+Customer-facing report rules:
+
+- no artifact paths
+- no dataset GUIDs
+- no HTTP status values
+- no raw/debug extraction fields
+- evidence and source metadata stay internal only
+
+### UI Foundation
+
+The current UI foundation work is moving the Flask surface from isolated pages to a cleaner product shell:
+
+- app shell layout with sidebar and topbar
+- active navigation states
+- global design tokens
+- global light/dark theme toggle with persisted preference
+- responsive shell behavior
+- visual separation between customer-facing Quick HC pages and internal/development pages
+
+Quick HC itself now uses full-width expandable subject tiles, per-section cards, nested include/exclude controls, and theme-aware customer-facing previews.
+
+### Current Limitations
+
+- no PDF export yet
+- no persisted report profiles yet
+- no scoring or recommendations yet
+- localStorage is currently used for UI selection persistence
+- runtime artifacts remain outside git
+- evidence provenance is intentionally kept out of the customer-facing report output
 
 ## Reports Plus Security Assessment
 
