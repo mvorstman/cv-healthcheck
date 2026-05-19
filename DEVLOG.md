@@ -22,6 +22,8 @@
 
 ## 2026-05-20
 
+- Extracted the Capacity License Quick HC preview body into `web/templates/partials/quickhc/previews/capacity_license.html` and kept it explicitly included from `quick_hc.html`.
+- Moved the Capacity License summary and usage/details preview bodies into that partial without changing section IDs, localStorage behavior, report filtering, or customer report output.
 - Extracted the Client Growth Quick HC preview body into `web/templates/partials/quickhc/previews/client_growth.html` and kept it explicitly included from `quick_hc.html`.
 - Moved the Client Growth summary, chart-preview text, and monthly-table preview bodies into that partial without changing section IDs, localStorage behavior, or customer report output.
 - Extracted the License Summary Quick HC preview body into `web/templates/partials/quickhc/previews/license_summary.html` and kept it explicitly included from `quick_hc.html`.

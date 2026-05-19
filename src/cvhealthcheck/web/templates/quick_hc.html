@@ -138,30 +138,13 @@
       ) %}
 
             {% call section_card("capacity_license", "capacity_license.summary", "Summary", "capacity_license.summary" in selected_report_sections, (capacity_license.latest_month or "Latest period")) %}
-              <div class="quickhc-section-preview">
-                {% if capacity_license.exists %}
-                  <div class="quickhc-preview-inline">
-                    <span>Used {{ "%.2f"|format(capacity_license.total_used or 0) }}</span>
-                    <span>Licensed {{ "%.2f"|format(capacity_license.total_purchased or 0) }}</span>
-                    <span>{{ capacity_license.latest_month or "Not collected yet" }}</span>
-                  </div>
-                {% else %}
-                  <p class="quickhc-empty-state">Capacity License data has not been collected yet.</p>
-                {% endif %}
-              </div>
+              {% set capacity_license_preview_section = "summary" %}
+              {% include "partials/quickhc/previews/capacity_license.html" %}
             {% endcall %}
 
             {% call section_card("capacity_license", "capacity_license.table", "Usage/details table", "capacity_license.table" in selected_report_sections, (capacity_license.entity_count ~ " entities") if capacity_license.exists else "Preview") %}
-              <div class="quickhc-section-preview">
-                {% if capacity_license.exists %}
-                  <div class="quickhc-preview-inline">
-                    <span>{{ capacity_license.entity_count }} entities summarized</span>
-                    <span>{{ capacity_license.summary }}</span>
-                  </div>
-                {% else %}
-                  <p class="quickhc-empty-state">Capacity License data has not been collected yet.</p>
-                {% endif %}
-              </div>
+              {% set capacity_license_preview_section = "table" %}
+              {% include "partials/quickhc/previews/capacity_license.html" %}
             {% endcall %}
       {% endcall %}
     </div>
