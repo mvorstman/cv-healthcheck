@@ -322,6 +322,25 @@ label {
   margin: 0;
 }
 
+.quickhc-subsections {
+  display: grid;
+  gap: 0.35rem;
+  padding-left: 1.4rem;
+}
+
+.quickhc-subsection-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: max-content;
+  color: #334155;
+  font-size: 0.92rem;
+}
+
+.quickhc-subsection-toggle input[type="checkbox"] {
+  margin: 0;
+}
+
 .quickhc-card-details {
   grid-template-columns: 78px minmax(0, 1fr);
   gap: 0.35rem 0.85rem;

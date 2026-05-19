@@ -20,18 +20,104 @@ SECURITY_ASSESSMENT_SELECTION_ID = "security_assessment"
 LICENSE_SUMMARY_SELECTION_ID = "license_summary"
 CLIENT_GROWTH_SELECTION_ID = "client_growth"
 CAPACITY_LICENSE_SELECTION_ID = "capacity_license"
-SECURITY_ASSESSMENT_SUMMARY_SECTION_ID = "security_assessment_summary"
-SECURITY_ASSESSMENT_FINDINGS_SECTION_ID = "security_assessment_findings"
-LICENSE_SUMMARY_METADATA_SECTION_ID = "license_summary_metadata"
-LICENSE_SUMMARY_WORKLOAD_SECTION_ID = "license_summary_workload"
-LICENSE_SUMMARY_DETAILS_SECTION_ID = "license_summary_details"
-REPORT_SELECTION_IDS = {
+
+ENVIRONMENT_METADATA_SECTION_ID = "environment.metadata"
+SECURITY_ASSESSMENT_SUMMARY_SECTION_ID = "security_assessment.summary"
+SECURITY_ASSESSMENT_HIGHLIGHTS_SECTION_ID = "security_assessment.highlights"
+SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID = "security_assessment.all_findings"
+LICENSE_SUMMARY_METADATA_SECTION_ID = "license_summary.metadata"
+LICENSE_SUMMARY_WORKLOAD_SECTION_ID = "license_summary.workload_sections"
+LICENSE_SUMMARY_OTHER_LICENSES_SECTION_ID = "license_summary.other_licenses"
+LICENSE_SUMMARY_AGENT_FEATURE_LICENSES_SECTION_ID = (
+    "license_summary.agent_feature_licenses"
+)
+CLIENT_GROWTH_SUMMARY_SECTION_ID = "client_growth.summary"
+CLIENT_GROWTH_CHART_SECTION_ID = "client_growth.chart"
+CLIENT_GROWTH_MONTHLY_TABLE_SECTION_ID = "client_growth.monthly_table"
+CAPACITY_LICENSE_SUMMARY_SECTION_ID = "capacity_license.summary"
+CAPACITY_LICENSE_TABLE_SECTION_ID = "capacity_license.table"
+
+REPORT_SUBJECT_IDS = {
     ENVIRONMENT_SELECTION_ID,
     SECURITY_ASSESSMENT_SELECTION_ID,
     LICENSE_SUMMARY_SELECTION_ID,
     CLIENT_GROWTH_SELECTION_ID,
     CAPACITY_LICENSE_SELECTION_ID,
 }
+
+REPORT_SUBSECTION_OPTIONS: dict[str, tuple[dict[str, str], ...]] = {
+    ENVIRONMENT_SELECTION_ID: (
+        {
+            "id": ENVIRONMENT_METADATA_SECTION_ID,
+            "label": "Environment metadata",
+        },
+    ),
+    SECURITY_ASSESSMENT_SELECTION_ID: (
+        {
+            "id": SECURITY_ASSESSMENT_SUMMARY_SECTION_ID,
+            "label": "Summary counters",
+        },
+        {
+            "id": SECURITY_ASSESSMENT_HIGHLIGHTS_SECTION_ID,
+            "label": "Critical / Warning findings",
+        },
+        {
+            "id": SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
+            "label": "Info / Good findings",
+        },
+    ),
+    LICENSE_SUMMARY_SELECTION_ID: (
+        {
+            "id": LICENSE_SUMMARY_METADATA_SECTION_ID,
+            "label": "Summary metadata",
+        },
+        {
+            "id": LICENSE_SUMMARY_WORKLOAD_SECTION_ID,
+            "label": "Workload Summary Sections",
+        },
+        {
+            "id": LICENSE_SUMMARY_OTHER_LICENSES_SECTION_ID,
+            "label": "Other Licenses table",
+        },
+        {
+            "id": LICENSE_SUMMARY_AGENT_FEATURE_LICENSES_SECTION_ID,
+            "label": "Agent / Feature Licenses table",
+        },
+    ),
+    CLIENT_GROWTH_SELECTION_ID: (
+        {
+            "id": CLIENT_GROWTH_SUMMARY_SECTION_ID,
+            "label": "Summary metrics",
+        },
+        {
+            "id": CLIENT_GROWTH_CHART_SECTION_ID,
+            "label": "Client Growth chart",
+        },
+        {
+            "id": CLIENT_GROWTH_MONTHLY_TABLE_SECTION_ID,
+            "label": "Monthly summary table",
+        },
+    ),
+    CAPACITY_LICENSE_SELECTION_ID: (
+        {
+            "id": CAPACITY_LICENSE_SUMMARY_SECTION_ID,
+            "label": "Summary",
+        },
+        {
+            "id": CAPACITY_LICENSE_TABLE_SECTION_ID,
+            "label": "Usage/details table",
+        },
+    ),
+}
+
+REPORT_SECTION_IDS = {
+    option["id"]
+    for options in REPORT_SUBSECTION_OPTIONS.values()
+    for option in options
+}
+REPORT_SELECTION_IDS = REPORT_SUBJECT_IDS | REPORT_SECTION_IDS
+REPORT_OVERVIEW_DEFAULT_SELECTION_IDS = REPORT_SELECTION_IDS
+REPORT_DEFAULT_SUBJECT_SELECTION_IDS = REPORT_SUBJECT_IDS
 
 
 @dataclass(frozen=True)
@@ -65,17 +151,21 @@ class QuickHcReportService:
         default_to_all: bool = True,
     ) -> dict[str, Any]:
         report = self._build_full_report()
-        effective_subject_selection_ids = (
-            set(REPORT_SELECTION_IDS)
-            if default_to_all and not selection_ids
-            else set(selection_ids or set())
+        selected_ids = set(selection_ids or set())
+        subject_selection_ids = (
+            set(REPORT_DEFAULT_SUBJECT_SELECTION_IDS)
+            if default_to_all and not selected_ids
+            else selected_ids & REPORT_SUBJECT_IDS
         )
-        expanded_selection_ids = self._expand_subject_selection_ids(selection_ids or set())
+        expanded_selection_ids = (
+            self._default_report_selection_ids(report)
+            if default_to_all and not selected_ids
+            else self._expand_subject_selection_ids(selected_ids)
+        )
         return self._filter_report(
             report,
-            subject_selection_ids=effective_subject_selection_ids,
+            subject_selection_ids=subject_selection_ids,
             selection_ids=expanded_selection_ids,
-            default_to_all=default_to_all,
         )
 
     def _build_full_report(self) -> dict[str, Any]:
@@ -120,26 +210,30 @@ class QuickHcReportService:
                 "artifact": None,
                 "evidence": None,
                 "summary_section_id": SECURITY_ASSESSMENT_SUMMARY_SECTION_ID,
-                "findings_section_id": SECURITY_ASSESSMENT_FINDINGS_SECTION_ID,
+                "highlights_section_id": SECURITY_ASSESSMENT_HIGHLIGHTS_SECTION_ID,
+                "all_findings_section_id": SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
                 "sections": [],
+                "highlight_rows": [],
             }
 
         summary = summarize_security_assessment_artifact(artifact, SECTION_ORDER)
         counters = dict(summary.get("counters") or {})
         sections = []
+        highlight_rows = []
         for section in summary.get("sections", []):
             section_name = str(section.get("name") or "")
             rows = []
             for row in section.get("checks") or []:
-                rows.append(
-                    {
-                        "section": row.get("section"),
-                        "parameter": row.get("parameter"),
-                        "status": row.get("status"),
-                        "remarks": row.get("remarks"),
-                        "action": row.get("action"),
-                    }
-                )
+                normalized_row = {
+                    "section": row.get("section"),
+                    "parameter": row.get("parameter"),
+                    "status": row.get("status"),
+                    "remarks": row.get("remarks"),
+                    "action": row.get("action"),
+                }
+                rows.append(normalized_row)
+                if normalized_row["status"] in {"Critical", "Warning"}:
+                    highlight_rows.append(normalized_row)
             sections.append(
                 {
                     "name": section_name,
@@ -161,11 +255,13 @@ class QuickHcReportService:
             "info": counters.get("Info", 0),
             "good": counters.get("Good", 0),
             "summary_section_id": SECURITY_ASSESSMENT_SUMMARY_SECTION_ID,
-            "findings_section_id": SECURITY_ASSESSMENT_FINDINGS_SECTION_ID,
+            "highlights_section_id": SECURITY_ASSESSMENT_HIGHLIGHTS_SECTION_ID,
+            "all_findings_section_id": SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
             "source_metadata": dict(
                 artifact.get("source_metadata") or artifact.get("source") or {}
             ),
             "sections": sections,
+            "highlight_rows": highlight_rows,
             "evidence": ReportEvidence(
                 artifact_type="security_assessment",
                 source_type=artifact.get("source_type"),
@@ -187,12 +283,13 @@ class QuickHcReportService:
                 "detail_url": "/quick-hc/license-summary",
                 "artifact": None,
                 "evidence": None,
-                "summary_section_id": LICENSE_SUMMARY_METADATA_SECTION_ID,
+                "metadata_section_id": LICENSE_SUMMARY_METADATA_SECTION_ID,
+                "workload_section_id": LICENSE_SUMMARY_WORKLOAD_SECTION_ID,
+                "other_licenses_section_id": LICENSE_SUMMARY_OTHER_LICENSES_SECTION_ID,
+                "agent_feature_section_id": LICENSE_SUMMARY_AGENT_FEATURE_LICENSES_SECTION_ID,
                 "workload_sections": [],
                 "other_license_rows": [],
                 "agent_feature_rows": [],
-                "workload_section_id": LICENSE_SUMMARY_WORKLOAD_SECTION_ID,
-                "details_section_id": LICENSE_SUMMARY_DETAILS_SECTION_ID,
             }
 
         workload_sections = []
@@ -251,7 +348,10 @@ class QuickHcReportService:
             "generated_on": artifact.get("generated_on"),
             "loaded_from_path": artifact.get("loaded_from_path"),
             "license_expiry": artifact.get("license_expiry"),
-            "summary_section_id": LICENSE_SUMMARY_METADATA_SECTION_ID,
+            "metadata_section_id": LICENSE_SUMMARY_METADATA_SECTION_ID,
+            "workload_section_id": LICENSE_SUMMARY_WORKLOAD_SECTION_ID,
+            "other_licenses_section_id": LICENSE_SUMMARY_OTHER_LICENSES_SECTION_ID,
+            "agent_feature_section_id": LICENSE_SUMMARY_AGENT_FEATURE_LICENSES_SECTION_ID,
             "workload_summary_section_count": len(workload_sections),
             "other_license_row_count": len(other_license_rows),
             "agent_feature_license_row_count": len(agent_feature_rows),
@@ -259,8 +359,6 @@ class QuickHcReportService:
                 artifact.get("source_metadata") or artifact.get("source") or {}
             ),
             "workload_sections": workload_sections,
-            "workload_section_id": LICENSE_SUMMARY_WORKLOAD_SECTION_ID,
-            "details_section_id": LICENSE_SUMMARY_DETAILS_SECTION_ID,
             "other_license_rows": other_license_rows,
             "agent_feature_rows": agent_feature_rows,
             "evidence": ReportEvidence(
@@ -301,7 +399,7 @@ class QuickHcReportService:
             },
         ]
         return {
-            "section_id": ENVIRONMENT_SELECTION_ID,
+            "metadata_section_id": ENVIRONMENT_METADATA_SECTION_ID,
             "customer_id": rows[0]["value"],
             "commcell_id": rows[1]["value"],
             "commcell_name": rows[2]["value"],
@@ -324,13 +422,20 @@ class QuickHcReportService:
                 "history_range": None,
                 "latest_record": None,
                 "rows": [],
+                "summary_section_id": CLIENT_GROWTH_SUMMARY_SECTION_ID,
+                "chart_section_id": CLIENT_GROWTH_CHART_SECTION_ID,
+                "monthly_table_section_id": CLIENT_GROWTH_MONTHLY_TABLE_SECTION_ID,
             }
 
         records = list(artifact.get("records") or [])
         period_start = records[0] if records else None
         latest_record = records[-1] if records else None
-        latest_total_clients = _coerce_int(latest_record.get("total_clients")) if latest_record else None
-        starting_total_clients = _coerce_int(period_start.get("total_clients")) if period_start else None
+        latest_total_clients = (
+            _coerce_int(latest_record.get("total_clients")) if latest_record else None
+        )
+        starting_total_clients = (
+            _coerce_int(period_start.get("total_clients")) if period_start else None
+        )
         net_growth = (
             latest_total_clients - starting_total_clients
             if latest_total_clients is not None and starting_total_clients is not None
@@ -353,6 +458,9 @@ class QuickHcReportService:
             "net_growth": net_growth,
             "chart": chart,
             "rows": records,
+            "summary_section_id": CLIENT_GROWTH_SUMMARY_SECTION_ID,
+            "chart_section_id": CLIENT_GROWTH_CHART_SECTION_ID,
+            "monthly_table_section_id": CLIENT_GROWTH_MONTHLY_TABLE_SECTION_ID,
             "evidence": ReportEvidence(
                 artifact_type="client_growth",
                 source_type="metric_artifact",
@@ -377,6 +485,8 @@ class QuickHcReportService:
                 "history_range": None,
                 "latest_month": None,
                 "latest_rows": [],
+                "summary_section_id": CAPACITY_LICENSE_SUMMARY_SECTION_ID,
+                "table_section_id": CAPACITY_LICENSE_TABLE_SECTION_ID,
             }
 
         records = list(artifact.get("records") or [])
@@ -396,6 +506,8 @@ class QuickHcReportService:
             "history_range": history_range,
             "latest_month": latest_month,
             "latest_rows": latest_rows,
+            "summary_section_id": CAPACITY_LICENSE_SUMMARY_SECTION_ID,
+            "table_section_id": CAPACITY_LICENSE_TABLE_SECTION_ID,
             "evidence": ReportEvidence(
                 artifact_type="capacity_license",
                 source_type="metric_artifact",
@@ -411,41 +523,31 @@ class QuickHcReportService:
         *,
         subject_selection_ids: set[str],
         selection_ids: set[str],
-        default_to_all: bool,
     ) -> dict[str, Any]:
-        effective_selection_ids = (
-            self._default_report_selection_ids(report)
-            if default_to_all and not selection_ids
-            else selection_ids
+        filtered_environment = self._filter_environment(
+            report["environment"],
+            ENVIRONMENT_SELECTION_ID in subject_selection_ids,
+            selection_ids,
         )
-
-        filtered_environment_rows = self._filter_rows_section(
-            report["environment"]["section_id"],
-            report["environment"]["rows"],
-            effective_selection_ids,
-        )
-        filtered_environment = {
-            **report["environment"],
-            **filtered_environment_rows,
-            "requested": ENVIRONMENT_SELECTION_ID in subject_selection_ids,
-        }
         filtered_security = self._filter_security_assessment(
             report["security_assessment"],
             SECURITY_ASSESSMENT_SELECTION_ID in subject_selection_ids,
-            effective_selection_ids,
+            selection_ids,
         )
         filtered_license = self._filter_license_summary(
             report["license_summary"],
             LICENSE_SUMMARY_SELECTION_ID in subject_selection_ids,
-            effective_selection_ids,
+            selection_ids,
         )
-        filtered_client_growth = self._filter_simple_section(
+        filtered_client_growth = self._filter_client_growth(
             report["client_growth"],
             CLIENT_GROWTH_SELECTION_ID in subject_selection_ids,
+            selection_ids,
         )
-        filtered_capacity_license = self._filter_simple_section(
+        filtered_capacity_license = self._filter_capacity_license(
             report["capacity_license"],
             CAPACITY_LICENSE_SELECTION_ID in subject_selection_ids,
+            selection_ids,
         )
 
         evidence = []
@@ -469,38 +571,57 @@ class QuickHcReportService:
             "evidence": evidence,
         }
 
+    def _filter_environment(
+        self,
+        section: dict[str, Any],
+        requested: bool,
+        selection_ids: set[str],
+    ) -> dict[str, Any]:
+        show_metadata = requested and section["metadata_section_id"] in selection_ids
+        return {
+            **section,
+            "requested": requested,
+            "show_metadata": show_metadata,
+            "rows": list(section.get("rows", [])) if show_metadata else [],
+            "has_content": show_metadata,
+        }
+
     def _filter_security_assessment(
         self,
         section: dict[str, Any],
         requested: bool,
         selection_ids: set[str],
     ) -> dict[str, Any]:
+        show_summary = requested and section["summary_section_id"] in selection_ids
+        show_highlights = requested and section["highlights_section_id"] in selection_ids
+        show_all_findings = (
+            requested and section["all_findings_section_id"] in selection_ids
+        )
+
         if not section.get("available"):
             return {
                 **section,
                 "requested": requested,
-                "show_summary": False,
+                "show_summary": show_summary,
+                "show_highlights": show_highlights,
+                "show_all_findings": show_all_findings,
+                "highlight_rows": [],
                 "visible_sections": [],
                 "has_content": False,
             }
 
-        visible_sections = []
-        if section["findings_section_id"] in selection_ids:
-            visible_sections = [
-                {
-                    "name": item["name"],
-                    "rows": item["rows"],
-                }
-                for item in section.get("sections", [])
-            ]
-        show_summary = section["summary_section_id"] in selection_ids
-        has_content = show_summary or bool(visible_sections)
         return {
             **section,
             "requested": requested,
             "show_summary": show_summary,
-            "visible_sections": visible_sections,
-            "has_content": has_content,
+            "show_highlights": show_highlights,
+            "show_all_findings": show_all_findings,
+            "highlight_rows": (
+                list(section.get("highlight_rows", [])) if show_highlights else []
+            ),
+            "visible_sections": list(section.get("sections", [])) if show_all_findings else [],
+            "has_content": requested
+            and any((show_summary, show_highlights, show_all_findings)),
         }
 
     def _filter_license_summary(
@@ -509,68 +630,134 @@ class QuickHcReportService:
         requested: bool,
         selection_ids: set[str],
     ) -> dict[str, Any]:
+        show_summary = requested and section["metadata_section_id"] in selection_ids
+        show_workload_sections = requested and section["workload_section_id"] in selection_ids
+        show_other_licenses = (
+            requested and section["other_licenses_section_id"] in selection_ids
+        )
+        show_agent_feature_licenses = (
+            requested and section["agent_feature_section_id"] in selection_ids
+        )
+
         if not section.get("available"):
             return {
                 **section,
                 "requested": requested,
-                "show_summary": False,
+                "show_summary": show_summary,
+                "show_workload_sections": show_workload_sections,
+                "show_other_licenses": show_other_licenses,
+                "show_agent_feature_licenses": show_agent_feature_licenses,
                 "visible_workload_sections": [],
                 "visible_other_license_rows": [],
                 "visible_agent_feature_rows": [],
                 "has_content": False,
             }
 
-        visible_workload_sections = []
-        if section["workload_section_id"] in selection_ids:
-            visible_workload_sections = list(section.get("workload_sections", []))
-
-        show_details = section["details_section_id"] in selection_ids
-        show_summary = section["summary_section_id"] in selection_ids
-        has_content = any(
-            (
-                show_summary,
-                bool(visible_workload_sections),
-                show_details,
-            )
-        )
         return {
             **section,
             "requested": requested,
             "show_summary": show_summary,
-            "visible_workload_sections": visible_workload_sections,
+            "show_workload_sections": show_workload_sections,
+            "show_other_licenses": show_other_licenses,
+            "show_agent_feature_licenses": show_agent_feature_licenses,
+            "visible_workload_sections": (
+                list(section.get("workload_sections", []))
+                if show_workload_sections
+                else []
+            ),
             "visible_other_license_rows": (
-                list(section.get("other_license_rows", [])) if show_details else []
+                list(section.get("other_license_rows", [])) if show_other_licenses else []
             ),
             "visible_agent_feature_rows": (
-                list(section.get("agent_feature_rows", [])) if show_details else []
+                list(section.get("agent_feature_rows", []))
+                if show_agent_feature_licenses
+                else []
             ),
-            "has_content": has_content,
+            "has_content": requested
+            and any(
+                (
+                    show_summary,
+                    show_workload_sections,
+                    show_other_licenses,
+                    show_agent_feature_licenses,
+                )
+            ),
         }
 
-    def _filter_simple_section(
+    def _filter_client_growth(
         self,
         section: dict[str, Any],
         requested: bool,
+        selection_ids: set[str],
     ) -> dict[str, Any]:
-        has_content = bool(requested and section.get("available"))
+        show_summary = requested and section["summary_section_id"] in selection_ids
+        show_chart = requested and section["chart_section_id"] in selection_ids
+        show_monthly_table = (
+            requested and section["monthly_table_section_id"] in selection_ids
+        )
+        has_content = requested and any((show_summary, show_chart, show_monthly_table))
+
+        if not section.get("available"):
+            return {
+                **section,
+                "requested": requested,
+                "show_summary": show_summary,
+                "show_chart": show_chart,
+                "show_monthly_table": show_monthly_table,
+                "chart": None,
+                "rows": [],
+                "has_content": False,
+            }
+
         return {
             **section,
             "requested": requested,
+            "show_summary": show_summary,
+            "show_chart": show_chart,
+            "show_monthly_table": show_monthly_table,
+            "chart": section.get("chart") if show_chart else None,
+            "rows": list(section.get("rows", [])) if show_monthly_table else [],
             "has_content": has_content,
         }
 
-    def _filter_rows_section(
+    def _filter_capacity_license(
         self,
-        section_id: str,
-        rows: list[dict[str, Any]],
+        section: dict[str, Any],
+        requested: bool,
         selection_ids: set[str],
     ) -> dict[str, Any]:
-        if section_id in selection_ids:
-            return {"visible": True, "rows": rows}
-        return {"visible": False, "rows": []}
+        show_summary = requested and section["summary_section_id"] in selection_ids
+        show_table = requested and section["table_section_id"] in selection_ids
+        has_content = requested and any((show_summary, show_table))
+
+        if not section.get("available"):
+            return {
+                **section,
+                "requested": requested,
+                "show_summary": show_summary,
+                "show_table": show_table,
+                "latest_rows": [],
+                "has_content": False,
+            }
+
+        return {
+            **section,
+            "requested": requested,
+            "show_summary": show_summary,
+            "show_table": show_table,
+            "latest_rows": list(section.get("latest_rows", [])) if show_table else [],
+            "has_content": has_content,
+        }
 
     def _default_report_selection_ids(self, report: dict[str, Any]) -> set[str]:
-        selection_ids: set[str] = {report["environment"]["section_id"]}
+        selection_ids: set[str] = {
+            report["environment"]["metadata_section_id"],
+            CLIENT_GROWTH_SUMMARY_SECTION_ID,
+            CLIENT_GROWTH_CHART_SECTION_ID,
+            CLIENT_GROWTH_MONTHLY_TABLE_SECTION_ID,
+            CAPACITY_LICENSE_SUMMARY_SECTION_ID,
+            CAPACITY_LICENSE_TABLE_SECTION_ID,
+        }
 
         security = report["security_assessment"]
         if security.get("available"):
@@ -578,26 +765,22 @@ class QuickHcReportService:
 
         license_summary = report["license_summary"]
         if license_summary.get("available"):
-            selection_ids.add(license_summary["summary_section_id"])
+            selection_ids.add(license_summary["metadata_section_id"])
+
         return selection_ids
 
     def _expand_subject_selection_ids(self, selection_ids: set[str]) -> set[str]:
-        expanded_selection_ids = set(selection_ids)
-        if SECURITY_ASSESSMENT_SELECTION_ID in selection_ids:
-            expanded_selection_ids.update(
-                {
-                    SECURITY_ASSESSMENT_SUMMARY_SECTION_ID,
-                    SECURITY_ASSESSMENT_FINDINGS_SECTION_ID,
-                }
-            )
-        if LICENSE_SUMMARY_SELECTION_ID in selection_ids:
-            expanded_selection_ids.update(
-                {
-                    LICENSE_SUMMARY_METADATA_SECTION_ID,
-                    LICENSE_SUMMARY_WORKLOAD_SECTION_ID,
-                    LICENSE_SUMMARY_DETAILS_SECTION_ID,
-                }
-            )
+        expanded_selection_ids = set(selection_ids & REPORT_SECTION_IDS)
+        for subject_id, options in REPORT_SUBSECTION_OPTIONS.items():
+            if subject_id not in selection_ids:
+                continue
+            explicit_child_ids = {
+                option["id"] for option in options if option["id"] in selection_ids
+            }
+            if explicit_child_ids:
+                expanded_selection_ids.update(explicit_child_ids)
+                continue
+            expanded_selection_ids.update(option["id"] for option in options)
         return expanded_selection_ids
 
 

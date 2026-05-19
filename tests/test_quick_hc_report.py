@@ -329,10 +329,23 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     body = response.get_data(as_text=True)
     assert "Customer Report" in body
     assert 'value="environment"' in body
+    assert 'value="environment.metadata"' in body
     assert 'value="security_assessment"' in body
+    assert 'value="security_assessment.summary"' in body
+    assert 'value="security_assessment.highlights"' in body
+    assert 'value="security_assessment.all_findings"' in body
     assert 'value="license_summary"' in body
+    assert 'value="license_summary.metadata"' in body
+    assert 'value="license_summary.workload_sections"' in body
+    assert 'value="license_summary.other_licenses"' in body
+    assert 'value="license_summary.agent_feature_licenses"' in body
     assert 'value="client_growth"' in body
+    assert 'value="client_growth.summary"' in body
+    assert 'value="client_growth.chart"' in body
+    assert 'value="client_growth.monthly_table"' in body
     assert 'value="capacity_license"' in body
+    assert 'value="capacity_license.summary"' in body
+    assert 'value="capacity_license.table"' in body
     assert "CommCell Details" in body
     assert "Client Growth" in body
     assert "Capacity License" in body
@@ -426,6 +439,96 @@ def test_quick_hc_report_post_security_assessment_only_excludes_license_summary(
     assert "Virtual Server" not in body
 
 
+def test_quick_hc_report_post_license_summary_workload_only_excludes_detail_tables(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+
+    license_artifact = parse_license_summary_csv(
+        LICENSE_CSV_SAMPLE,
+        source_file="/tmp/license-summary.csv",
+    )
+    persist_license_summary_artifact(
+        license_artifact,
+        catalog_dir=tmp_path / "license_catalog",
+        registry_path=tmp_path / "license_registry.sqlite3",
+    )
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/report",
+        data={
+            "selection_ids": [
+                "license_summary",
+                "license_summary.workload_sections",
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "License Summary" in body
+    assert "Capacity Licenses" in body
+    assert "Other Licenses" not in body
+    assert "Agent and Feature Licenses" not in body
+    assert "Cloud Storage" not in body
+    assert "Virtual Server" not in body
+
+
+def test_quick_hc_report_post_security_assessment_summary_only_excludes_findings(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+
+    security_artifact = build_security_assessment_artifact(
+        [
+            {
+                "section": "Access Security",
+                "parameter": "MFA enabled",
+                "status": "Critical",
+                "remarks": "Missing for admin users",
+                "action": "Enable MFA",
+            },
+            {
+                "section": "Auditing",
+                "parameter": "Audit retention",
+                "status": "Info",
+                "remarks": "30 days",
+                "action": "Review retention",
+            },
+        ],
+        source_type="rest",
+        source={"report_id": "336"},
+    )
+    persist_security_assessment_artifact(
+        security_artifact,
+        catalog_dir=tmp_path / "security_catalog",
+        registry_path=tmp_path / "security_registry.sqlite3",
+    )
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/report",
+        data={
+            "selection_ids": [
+                "security_assessment",
+                "security_assessment.summary",
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Security Assessment" in body
+    assert "Total checks" in body
+    assert "Critical / Warning findings" not in body
+    assert "All findings" not in body
+    assert "MFA enabled" not in body
+    assert "Audit retention" not in body
+
+
 def test_quick_hc_report_post_client_growth_only_excludes_other_optional_subjects(
     tmp_path, monkeypatch
 ) -> None:
@@ -466,6 +569,35 @@ def test_quick_hc_report_post_client_growth_only_excludes_other_optional_subject
     assert "Security Assessment" not in body
     assert "License Summary" not in body
     assert "Capacity License" not in body
+
+
+def test_quick_hc_report_post_client_growth_chart_only_excludes_monthly_table(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+    metrics_dir = _patch_metrics_paths(tmp_path, monkeypatch)
+    _write_metric_artifact(metrics_dir, "client_growth_summary", CLIENT_GROWTH_ARTIFACT)
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/report",
+        data={
+            "selection_ids": [
+                "client_growth",
+                "client_growth.chart",
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Client Growth" in body
+    assert "Client Growth History" in body
+    assert 'id="client-growth-history-chart"' in body
+    assert "Monthly Summary" not in body
+    assert "Latest Total Clients" not in body
+    assert "<th>Month</th>" not in body
 
 
 def test_quick_hc_report_post_capacity_license_only_excludes_other_optional_subjects(
@@ -510,6 +642,99 @@ def test_quick_hc_report_selected_missing_metric_subject_renders_gracefully(
     assert "Client Growth" in body
     assert "Not collected yet" in body
     assert "Latest Total Clients" not in body
+
+
+def test_quick_hc_report_post_unchecked_subject_omits_child_sections(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+
+    security_artifact = build_security_assessment_artifact(
+        [
+            {
+                "section": "Access Security",
+                "parameter": "MFA enabled",
+                "status": "Critical",
+                "remarks": "Missing for admin users",
+                "action": "Enable MFA",
+            }
+        ],
+        source_type="rest",
+        source={"report_id": "336"},
+    )
+    persist_security_assessment_artifact(
+        security_artifact,
+        catalog_dir=tmp_path / "security_catalog",
+        registry_path=tmp_path / "security_registry.sqlite3",
+    )
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/report",
+        data={"selection_ids": ["security_assessment.summary"]},
+    )
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Security Assessment" not in body
+    assert "Total checks" not in body
+
+
+def test_quick_hc_report_get_still_uses_default_sections(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+    metrics_dir = _patch_metrics_paths(tmp_path, monkeypatch)
+
+    security_artifact = build_security_assessment_artifact(
+        [
+            {
+                "section": "Access Security",
+                "parameter": "MFA enabled",
+                "status": "Critical",
+                "remarks": "Missing for admin users",
+                "action": "Enable MFA",
+            }
+        ],
+        source_type="rest",
+        source={"report_id": "336"},
+    )
+    persist_security_assessment_artifact(
+        security_artifact,
+        catalog_dir=tmp_path / "security_catalog",
+        registry_path=tmp_path / "security_registry.sqlite3",
+    )
+    license_artifact = parse_license_summary_csv(
+        LICENSE_CSV_SAMPLE,
+        source_file="/tmp/license-summary.csv",
+    )
+    persist_license_summary_artifact(
+        license_artifact,
+        catalog_dir=tmp_path / "license_catalog",
+        registry_path=tmp_path / "license_registry.sqlite3",
+    )
+    _write_metric_artifact(metrics_dir, "client_growth_summary", CLIENT_GROWTH_ARTIFACT)
+    _write_metric_artifact(metrics_dir, "capacity_license_usage", CAPACITY_LICENSE_ARTIFACT)
+
+    app = create_app()
+    response = app.test_client().get("/quick-hc/report")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Environment" in body
+    assert "Security Assessment" in body
+    assert "Total checks" in body
+    assert "Critical / Warning findings" not in body
+    assert "License Summary" in body
+    assert "Workload Summary Sections" in body
+    assert "Cloud Storage" not in body
+    assert "Virtual Server" not in body
+    assert "Client Growth" in body
+    assert "Monthly Summary" in body
+    assert "Capacity License" in body
+    assert "Latest Capacity Summary" in body
 
 
 def test_quick_hc_report_builder_route_removed() -> None:

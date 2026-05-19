@@ -32,7 +32,11 @@ from .shared import (
     url_for,
 )
 from cvhealthcheck.quickhc import QuickHcReportService
-from cvhealthcheck.quickhc.report_service import REPORT_SELECTION_IDS
+from cvhealthcheck.quickhc.report_service import (
+    REPORT_OVERVIEW_DEFAULT_SELECTION_IDS,
+    REPORT_SELECTION_IDS,
+    REPORT_SUBSECTION_OPTIONS,
+)
 
 
 @bp.route("/quick-hc")
@@ -44,7 +48,8 @@ def quick_hc():
         license_summary=_license_summary_quick_hc(),
         client_growth=_client_growth_quick_hc(),
         capacity_license=_capacity_license_quick_hc(),
-        selected_report_sections=REPORT_SELECTION_IDS,
+        selected_report_sections=REPORT_OVERVIEW_DEFAULT_SELECTION_IDS,
+        report_subsection_options=REPORT_SUBSECTION_OPTIONS,
     )
 
 

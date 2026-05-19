@@ -11,7 +11,7 @@
         <h3>Customer Report</h3>
         <button type="submit">Generate/View Customer Report</button>
       </div>
-      <p class="helper-text">Select the subjects below to include in the customer-facing report. Detail pages remain available separately for deeper review.</p>
+      <p class="helper-text">Select the subjects and report sections to include in the customer-facing report. Detail pages remain available separately for deeper review.</p>
     </section>
 
     <div class="quickhc-subject-grid">
@@ -35,6 +35,21 @@
             >
             <span>Include</span>
           </label>
+
+          <div class="quickhc-subsections" aria-label="CommCell Details sections">
+            {% for option in report_subsection_options["environment"] %}
+              <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
+                <input
+                  id="selection-{{ option.id | replace('.', '-') }}"
+                  type="checkbox"
+                  name="selection_ids"
+                  value="{{ option.id }}"
+                  {% if option.id in selected_report_sections %}checked{% endif %}
+                >
+                <span>{{ option.label }}</span>
+              </label>
+            {% endfor %}
+          </div>
 
           <dl class="quickhc-card-details">
             <dt>Source</dt>
@@ -73,6 +88,21 @@
             >
             <span>Include</span>
           </label>
+
+          <div class="quickhc-subsections" aria-label="Security Assessment sections">
+            {% for option in report_subsection_options["security_assessment"] %}
+              <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
+                <input
+                  id="selection-{{ option.id | replace('.', '-') }}"
+                  type="checkbox"
+                  name="selection_ids"
+                  value="{{ option.id }}"
+                  {% if option.id in selected_report_sections %}checked{% endif %}
+                >
+                <span>{{ option.label }}</span>
+              </label>
+            {% endfor %}
+          </div>
 
           <dl class="quickhc-card-details">
             <dt>Source</dt>
@@ -125,6 +155,21 @@
             <span>Include</span>
           </label>
 
+          <div class="quickhc-subsections" aria-label="License Summary sections">
+            {% for option in report_subsection_options["license_summary"] %}
+              <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
+                <input
+                  id="selection-{{ option.id | replace('.', '-') }}"
+                  type="checkbox"
+                  name="selection_ids"
+                  value="{{ option.id }}"
+                  {% if option.id in selected_report_sections %}checked{% endif %}
+                >
+                <span>{{ option.label }}</span>
+              </label>
+            {% endfor %}
+          </div>
+
           <dl class="quickhc-card-details">
             <dt>Source</dt>
             <dd>
@@ -175,6 +220,21 @@
             <span>Include</span>
           </label>
 
+          <div class="quickhc-subsections" aria-label="Client Growth sections">
+            {% for option in report_subsection_options["client_growth"] %}
+              <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
+                <input
+                  id="selection-{{ option.id | replace('.', '-') }}"
+                  type="checkbox"
+                  name="selection_ids"
+                  value="{{ option.id }}"
+                  {% if option.id in selected_report_sections %}checked{% endif %}
+                >
+                <span>{{ option.label }}</span>
+              </label>
+            {% endfor %}
+          </div>
+
           <dl class="quickhc-card-details">
             <dt>Source</dt>
             <dd>{{ client_growth.source_label }}</dd>
@@ -212,6 +272,21 @@
             >
             <span>Include</span>
           </label>
+
+          <div class="quickhc-subsections" aria-label="Capacity License sections">
+            {% for option in report_subsection_options["capacity_license"] %}
+              <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
+                <input
+                  id="selection-{{ option.id | replace('.', '-') }}"
+                  type="checkbox"
+                  name="selection_ids"
+                  value="{{ option.id }}"
+                  {% if option.id in selected_report_sections %}checked{% endif %}
+                >
+                <span>{{ option.label }}</span>
+              </label>
+            {% endfor %}
+          </div>
 
           <dl class="quickhc-card-details">
             <dt>Source</dt>

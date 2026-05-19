@@ -32,33 +32,41 @@
   </section>
 
   <div class="status-summary">
-    <div class="status-card">
-      <strong>{{ report.security_assessment.total_checks if report.security_assessment.available else 0 }}</strong>
-      <span>Security checks</span>
-    </div>
-    <div class="status-card status-critical">
-      <strong>{{ report.security_assessment.critical if report.security_assessment.available else 0 }}</strong>
-      <span>Critical findings</span>
-    </div>
-    <div class="status-card status-warning">
-      <strong>{{ report.security_assessment.warning if report.security_assessment.available else 0 }}</strong>
-      <span>Warning findings</span>
-    </div>
-    <div class="status-card">
-      <strong>{{ report.license_summary.workload_summary_section_count if report.license_summary.available else 0 }}</strong>
-      <span>Workload sections</span>
-    </div>
-    <div class="status-card">
-      <strong>{{ report.client_growth.record_count if report.client_growth.available else 0 }}</strong>
-      <span>Client growth rows</span>
-    </div>
-    <div class="status-card">
-      <strong>{{ report.capacity_license.record_count if report.capacity_license.available else 0 }}</strong>
-      <span>Capacity rows</span>
-    </div>
+    {% if report.security_assessment.requested and report.security_assessment.show_summary %}
+      <div class="status-card">
+        <strong>{{ report.security_assessment.total_checks if report.security_assessment.available else 0 }}</strong>
+        <span>Security checks</span>
+      </div>
+      <div class="status-card status-critical">
+        <strong>{{ report.security_assessment.critical if report.security_assessment.available else 0 }}</strong>
+        <span>Critical findings</span>
+      </div>
+      <div class="status-card status-warning">
+        <strong>{{ report.security_assessment.warning if report.security_assessment.available else 0 }}</strong>
+        <span>Warning findings</span>
+      </div>
+    {% endif %}
+    {% if report.license_summary.requested and report.license_summary.show_summary %}
+      <div class="status-card">
+        <strong>{{ report.license_summary.workload_summary_section_count if report.license_summary.available else 0 }}</strong>
+        <span>Workload sections</span>
+      </div>
+    {% endif %}
+    {% if report.client_growth.requested and report.client_growth.show_summary %}
+      <div class="status-card">
+        <strong>{{ report.client_growth.record_count if report.client_growth.available else 0 }}</strong>
+        <span>Client growth rows</span>
+      </div>
+    {% endif %}
+    {% if report.capacity_license.requested and report.capacity_license.show_summary %}
+      <div class="status-card">
+        <strong>{{ report.capacity_license.record_count if report.capacity_license.available else 0 }}</strong>
+        <span>Capacity rows</span>
+      </div>
+    {% endif %}
   </div>
 
-  {% if report.environment.rows %}
+  {% if report.environment.requested and report.environment.show_metadata %}
     <h3>Environment</h3>
     <table class="compact-table">
       <tbody>
@@ -87,29 +95,65 @@
           </tbody>
         </table>
       {% endif %}
-      {% for section in report.security_assessment.visible_sections %}
-        <h4>{{ section.name }}</h4>
-        <table class="compact-table">
-          <thead>
-            <tr>
-              <th>Parameter</th>
-              <th>Status</th>
-              <th>Remarks</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in section.rows %}
+      {% if report.security_assessment.show_highlights %}
+        <h4>Critical / Warning findings</h4>
+        {% if report.security_assessment.highlight_rows %}
+          <table class="compact-table">
+            <thead>
               <tr>
-                <td>{{ row.parameter }}</td>
-                <td>{{ row.status }}</td>
-                <td>{{ row.remarks }}</td>
-                <td>{{ row.action }}</td>
+                <th>Section</th>
+                <th>Parameter</th>
+                <th>Status</th>
+                <th>Remarks</th>
+                <th>Action</th>
               </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% endfor %}
+            </thead>
+            <tbody>
+              {% for row in report.security_assessment.highlight_rows %}
+                <tr>
+                  <td>{{ row.section }}</td>
+                  <td>{{ row.parameter }}</td>
+                  <td>{{ row.status }}</td>
+                  <td>{{ row.remarks }}</td>
+                  <td>{{ row.action }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="notice">No critical or warning findings are available.</p>
+        {% endif %}
+      {% endif %}
+      {% if report.security_assessment.show_all_findings %}
+        <h4>All findings</h4>
+        {% if report.security_assessment.visible_sections %}
+          {% for section in report.security_assessment.visible_sections %}
+            <h5>{{ section.name }}</h5>
+            <table class="compact-table">
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Status</th>
+                  <th>Remarks</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in section.rows %}
+                  <tr>
+                    <td>{{ row.parameter }}</td>
+                    <td>{{ row.status }}</td>
+                    <td>{{ row.remarks }}</td>
+                    <td>{{ row.action }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endfor %}
+        {% else %}
+          <p class="notice">No findings are available.</p>
+        {% endif %}
+      {% endif %}
     {% else %}
       <p>{{ report.security_assessment.message }}</p>
       <p><a href="{{ report.security_assessment.detail_url }}">Open Security Assessment</a></p>
@@ -133,84 +177,94 @@
           </tbody>
         </table>
       {% endif %}
-      {% for section in report.license_summary.visible_workload_sections %}
-        <h4>{{ section.section_name }}</h4>
-        <table class="compact-table">
-          <thead>
-            <tr>
-              <th>License</th>
-              <th>Entitlement / Available</th>
-              <th>Used</th>
-              <th>Used %</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in section.rows %}
+      {% if report.license_summary.show_workload_sections %}
+        {% for section in report.license_summary.visible_workload_sections %}
+          <h4>{{ section.section_name }}</h4>
+          <table class="compact-table">
+            <thead>
               <tr>
-                <td>{{ row.license }}</td>
-                <td>{{ row.entitlement_value or "" }}</td>
-                <td>{{ row.used or "" }}</td>
-                <td>{{ row.usage_percent or "" }}</td>
-                <td>{{ row.status or "" }}</td>
+                <th>License</th>
+                <th>Entitlement / Available</th>
+                <th>Used</th>
+                <th>Used %</th>
+                <th>Status</th>
               </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% endfor %}
-      {% if report.license_summary.visible_other_license_rows %}
-        <h4>Other Licenses</h4>
-        <table class="compact-table">
-          <thead>
-            <tr>
-              <th>License</th>
-              <th>Available Total</th>
-              <th>Used</th>
-              <th>Unit</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in report.license_summary.visible_other_license_rows %}
-              <tr>
-                <td>{{ row.license }}</td>
-                <td>{{ row.available_total if row.available_total is not none else (row.raw_available_total or "") }}</td>
-                <td>{{ row.used if row.used is not none else (row.raw_used or "") }}</td>
-                <td>{{ row.unit or "" }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {% for row in section.rows %}
+                <tr>
+                  <td>{{ row.license }}</td>
+                  <td>{{ row.entitlement_value or "" }}</td>
+                  <td>{{ row.used or "" }}</td>
+                  <td>{{ row.usage_percent or "" }}</td>
+                  <td>{{ row.status or "" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endfor %}
       {% endif %}
-      {% if report.license_summary.visible_agent_feature_rows %}
-        <h4>Agent and Feature Licenses</h4>
-        <table class="compact-table">
-          <thead>
-            <tr>
-              <th>License</th>
-              <th>Permanent Total</th>
-              <th>Permanent Used</th>
-              <th>Term Total</th>
-              <th>Term Used</th>
-              <th>Client</th>
-              <th>Agent</th>
-              <th>Install Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for row in report.license_summary.visible_agent_feature_rows %}
+      {% if report.license_summary.show_other_licenses %}
+        <h4>Other Licenses</h4>
+        {% if report.license_summary.visible_other_license_rows %}
+          <table class="compact-table">
+            <thead>
               <tr>
-                <td>{{ row.license }}</td>
-                <td>{{ row.permanent_total if row.permanent_total is not none else "" }}</td>
-                <td>{{ row.permanent_used if row.permanent_used is not none else "" }}</td>
-                <td>{{ row.term_total if row.term_total is not none else "" }}</td>
-                <td>{{ row.term_used if row.term_used is not none else "" }}</td>
-                <td>{{ row.client or "" }}</td>
-                <td>{{ row.agent or "" }}</td>
-                <td>{{ row.install_date or "" }}</td>
+                <th>License</th>
+                <th>Available Total</th>
+                <th>Used</th>
+                <th>Unit</th>
               </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {% for row in report.license_summary.visible_other_license_rows %}
+                <tr>
+                  <td>{{ row.license }}</td>
+                  <td>{{ row.available_total if row.available_total is not none else (row.raw_available_total or "") }}</td>
+                  <td>{{ row.used if row.used is not none else (row.raw_used or "") }}</td>
+                  <td>{{ row.unit or "" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="notice">No other license rows are available.</p>
+        {% endif %}
+      {% endif %}
+      {% if report.license_summary.show_agent_feature_licenses %}
+        <h4>Agent and Feature Licenses</h4>
+        {% if report.license_summary.visible_agent_feature_rows %}
+          <table class="compact-table">
+            <thead>
+              <tr>
+                <th>License</th>
+                <th>Permanent Total</th>
+                <th>Permanent Used</th>
+                <th>Term Total</th>
+                <th>Term Used</th>
+                <th>Client</th>
+                <th>Agent</th>
+                <th>Install Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in report.license_summary.visible_agent_feature_rows %}
+                <tr>
+                  <td>{{ row.license }}</td>
+                  <td>{{ row.permanent_total if row.permanent_total is not none else "" }}</td>
+                  <td>{{ row.permanent_used if row.permanent_used is not none else "" }}</td>
+                  <td>{{ row.term_total if row.term_total is not none else "" }}</td>
+                  <td>{{ row.term_used if row.term_used is not none else "" }}</td>
+                  <td>{{ row.client or "" }}</td>
+                  <td>{{ row.agent or "" }}</td>
+                  <td>{{ row.install_date or "" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="notice">No agent or feature license rows are available.</p>
+        {% endif %}
       {% endif %}
     {% else %}
       <p>{{ report.license_summary.message }}</p>
@@ -221,50 +275,58 @@
   {% if report.client_growth.requested %}
     <h3>Client Growth</h3>
     {% if report.client_growth.available and report.client_growth.has_content %}
-      <p>{{ report.client_growth.description }}</p>
-      <table class="compact-table">
-        <tbody>
-          <tr><th>Latest Total Clients</th><td>{{ report.client_growth.latest_total_clients if report.client_growth.latest_total_clients is not none else "Not collected yet" }}</td></tr>
-          <tr><th>Net Growth Over Period</th><td>{% if report.client_growth.net_growth is not none %}{{ report.client_growth.net_growth }}{% else %}Not collected yet{% endif %}</td></tr>
-          <tr><th>History Range</th><td>{% if report.client_growth.history_range %}{{ report.client_growth.history_range.start }} to {{ report.client_growth.history_range.end }}{% else %}Not collected yet{% endif %}</td></tr>
-          <tr><th>Last Collected</th><td>{{ report.client_growth.imported_at or "Not collected yet" }}</td></tr>
-        </tbody>
-      </table>
-      {% if report.client_growth.chart %}
-        <div class="chart-panel">
-          <div class="chart-frame">
-            <canvas
-              id="{{ report.client_growth.chart.canvas_id }}"
-              aria-label="{{ report.client_growth.chart.title }}"
-              role="img"
-            ></canvas>
-          </div>
-        </div>
-      {% else %}
-        <p class="notice">No trend points are available for Client Growth yet.</p>
-      {% endif %}
-      {% if report.client_growth.rows %}
-        <h4>Monthly Summary</h4>
+      {% if report.client_growth.show_summary %}
+        <p>{{ report.client_growth.description }}</p>
         <table class="compact-table">
-          <thead>
-            <tr>
-              <th>Month</th>
-              <th>Added</th>
-              <th>Removed</th>
-              <th>Total Clients</th>
-            </tr>
-          </thead>
           <tbody>
-            {% for row in report.client_growth.rows %}
-              <tr>
-                <td>{{ row.month or "" }}</td>
-                <td>{{ row.added if row.added is not none else "" }}</td>
-                <td>{{ row.removed if row.removed is not none else "" }}</td>
-                <td>{{ row.total_clients if row.total_clients is not none else "" }}</td>
-              </tr>
-            {% endfor %}
+            <tr><th>Latest Total Clients</th><td>{{ report.client_growth.latest_total_clients if report.client_growth.latest_total_clients is not none else "Not collected yet" }}</td></tr>
+            <tr><th>Net Growth Over Period</th><td>{% if report.client_growth.net_growth is not none %}{{ report.client_growth.net_growth }}{% else %}Not collected yet{% endif %}</td></tr>
+            <tr><th>History Range</th><td>{% if report.client_growth.history_range %}{{ report.client_growth.history_range.start }} to {{ report.client_growth.history_range.end }}{% else %}Not collected yet{% endif %}</td></tr>
+            <tr><th>Last Collected</th><td>{{ report.client_growth.imported_at or "Not collected yet" }}</td></tr>
           </tbody>
         </table>
+      {% endif %}
+      {% if report.client_growth.show_chart %}
+        {% if report.client_growth.chart %}
+          <div class="chart-panel">
+            <div class="chart-frame">
+              <canvas
+                id="{{ report.client_growth.chart.canvas_id }}"
+                aria-label="{{ report.client_growth.chart.title }}"
+                role="img"
+              ></canvas>
+            </div>
+          </div>
+        {% else %}
+          <p class="notice">No trend points are available for Client Growth yet.</p>
+        {% endif %}
+      {% endif %}
+      {% if report.client_growth.show_monthly_table %}
+        {% if report.client_growth.rows %}
+          <h4>Monthly Summary</h4>
+          <table class="compact-table">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Added</th>
+                <th>Removed</th>
+                <th>Total Clients</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in report.client_growth.rows %}
+                <tr>
+                  <td>{{ row.month or "" }}</td>
+                  <td>{{ row.added if row.added is not none else "" }}</td>
+                  <td>{{ row.removed if row.removed is not none else "" }}</td>
+                  <td>{{ row.total_clients if row.total_clients is not none else "" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="notice">No monthly summary rows are available.</p>
+        {% endif %}
       {% endif %}
     {% else %}
       <p>{{ report.client_growth.message }}</p>
@@ -275,35 +337,41 @@
   {% if report.capacity_license.requested %}
     <h3>Capacity License</h3>
     {% if report.capacity_license.available and report.capacity_license.has_content %}
-      <table class="compact-table">
-        <tbody>
-          <tr><th>Source Type</th><td>{{ (report.capacity_license.source_type or "unknown") | upper }}</td></tr>
-          <tr><th>Imported At</th><td>{{ report.capacity_license.imported_at or "Not collected yet" }}</td></tr>
-          <tr><th>Latest Month</th><td>{{ report.capacity_license.latest_month or "Not collected yet" }}</td></tr>
-          <tr><th>Record Count</th><td>{{ report.capacity_license.record_count }}</td></tr>
-          <tr><th>Detail Page</th><td><a href="{{ report.capacity_license.detail_url }}">View Capacity License</a></td></tr>
-        </tbody>
-      </table>
-      {% if report.capacity_license.latest_rows %}
-        <h4>Latest Capacity Summary</h4>
+      {% if report.capacity_license.show_summary %}
         <table class="compact-table">
-          <thead>
-            <tr>
-              <th>Entity</th>
-              <th>Used Capacity</th>
-              <th>Purchased Capacity</th>
-            </tr>
-          </thead>
           <tbody>
-            {% for row in report.capacity_license.latest_rows %}
-              <tr>
-                <td>{{ row.entity_name or "" }}</td>
-                <td>{{ row.used_capacity if row.used_capacity is not none else "" }}</td>
-                <td>{{ row.purchased_capacity if row.purchased_capacity is not none else "" }}</td>
-              </tr>
-            {% endfor %}
+            <tr><th>Source Type</th><td>{{ (report.capacity_license.source_type or "unknown") | upper }}</td></tr>
+            <tr><th>Imported At</th><td>{{ report.capacity_license.imported_at or "Not collected yet" }}</td></tr>
+            <tr><th>Latest Month</th><td>{{ report.capacity_license.latest_month or "Not collected yet" }}</td></tr>
+            <tr><th>Record Count</th><td>{{ report.capacity_license.record_count }}</td></tr>
+            <tr><th>Detail Page</th><td><a href="{{ report.capacity_license.detail_url }}">View Capacity License</a></td></tr>
           </tbody>
         </table>
+      {% endif %}
+      {% if report.capacity_license.show_table %}
+        {% if report.capacity_license.latest_rows %}
+          <h4>Latest Capacity Summary</h4>
+          <table class="compact-table">
+            <thead>
+              <tr>
+                <th>Entity</th>
+                <th>Used Capacity</th>
+                <th>Purchased Capacity</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in report.capacity_license.latest_rows %}
+                <tr>
+                  <td>{{ row.entity_name or "" }}</td>
+                  <td>{{ row.used_capacity if row.used_capacity is not none else "" }}</td>
+                  <td>{{ row.purchased_capacity if row.purchased_capacity is not none else "" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="notice">No capacity usage rows are available.</p>
+        {% endif %}
       {% endif %}
     {% else %}
       <p>{{ report.capacity_license.message }}</p>
@@ -314,7 +382,7 @@
 {% endblock %}
 
 {% block scripts %}
-  {% if report.client_growth.requested and report.client_growth.available and report.client_growth.has_content and report.client_growth.chart %}
+  {% if report.client_growth.requested and report.client_growth.available and report.client_growth.show_chart and report.client_growth.chart %}
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
       const clientGrowthChart = {{ report.client_growth.chart | tojson }};
