@@ -414,6 +414,10 @@ label {
   color: #0f172a;
 }
 
+.quickhc-preview-item span:not(.quickhc-preview-label) {
+  color: #475569;
+}
+
 .quickhc-preview-label {
   color: #475569;
   font-size: 0.82rem;
@@ -549,6 +553,10 @@ label {
 .quickhc-highlight-card p {
   margin: 0;
   color: #475569;
+}
+
+.quickhc-section-option:has(input[type="checkbox"]:disabled) .quickhc-section-preview {
+  opacity: 0.6;
 }
 
 .quickhc-card-details {

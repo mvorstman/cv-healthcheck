@@ -197,6 +197,50 @@ def _license_summary_quick_hc() -> dict[str, Any]:
     workload_sections = list(payload.get("workload_summary_sections") or [])
     other_licenses = list(payload.get("other_licenses") or [])
     agent_feature_licenses = list(payload.get("agent_feature_licenses") or [])
+    workload_section_previews = []
+    for section in workload_sections:
+        rows = list(section.get("rows") or [])
+        preview_names = [
+            str(row.get("license") or "")
+            for row in rows
+            if str(row.get("license") or "").strip()
+        ]
+        workload_section_previews.append(
+            {
+                "section_name": str(section.get("section_name") or ""),
+                "row_count": len(rows),
+                "license_names": preview_names[:3],
+            }
+        )
+
+    other_license_preview_rows = [
+        {
+            "license": item.get("license"),
+            "available_total": item.get("available_total")
+            if item.get("available_total") is not None
+            else item.get("raw_available_total"),
+            "used": item.get("used") if item.get("used") is not None else item.get("raw_used"),
+        }
+        for item in other_licenses[:5]
+    ]
+    agent_feature_preview_rows = [
+        {
+            "license": item.get("license"),
+            "client": item.get("client"),
+            "agent": item.get("agent"),
+            "usage": " / ".join(
+                [
+                    str(value)
+                    for value in (
+                        item.get("permanent_used"),
+                        item.get("term_used"),
+                    )
+                    if value not in (None, "")
+                ]
+            ),
+        }
+        for item in agent_feature_licenses[:5]
+    ]
     return {
         "exists": True,
         "path": str(payload.get("file_path") or "data/catalog/license_summary/latest.json"),
@@ -213,18 +257,26 @@ def _license_summary_quick_hc() -> dict[str, Any]:
             for section in workload_sections
             if str(section.get("section_name") or "").strip()
         ],
+        "workload_section_previews": workload_section_previews[:4],
         "other_count": len(other_licenses),
         "other_license_names": [
             str(item.get("license") or "")
             for item in other_licenses
             if str(item.get("license") or "").strip()
         ],
+        "other_license_preview_rows": other_license_preview_rows,
+        "other_license_more_count": max(len(other_licenses) - len(other_license_preview_rows), 0),
         "agent_feature_count": len(agent_feature_licenses),
         "agent_feature_examples": [
             str(item.get("license") or "")
             for item in agent_feature_licenses
             if str(item.get("license") or "").strip()
         ],
+        "agent_feature_preview_rows": agent_feature_preview_rows,
+        "agent_feature_more_count": max(
+            len(agent_feature_licenses) - len(agent_feature_preview_rows),
+            0,
+        ),
     }
 
 

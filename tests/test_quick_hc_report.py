@@ -351,6 +351,7 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     license_metadata_idx = body.index('value="license_summary.metadata"')
     license_metadata_preview_idx = body.index('class="quickhc-section-preview"', license_metadata_idx)
     assert license_metadata_idx < license_metadata_preview_idx
+    assert "Summary metadata" in body
     assert 'value="environment"' in body
     assert 'value="environment.metadata"' in body
     assert 'value="security_assessment"' in body
@@ -377,6 +378,45 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert "HTTP status" not in body
     assert "data/catalog/" not in body
     assert "/tmp/" not in body
+    assert "registry" not in body.lower()
+
+
+def test_quick_hc_overview_license_summary_previews_real_fields(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+    _patch_metrics_paths(tmp_path, monkeypatch)
+
+    artifact = parse_license_summary_csv(
+        LICENSE_CSV_SAMPLE,
+        source_file="/tmp/license-summary.csv",
+    )
+    persist_license_summary_artifact(
+        artifact,
+        catalog_dir=tmp_path / "license_catalog",
+        registry_path=tmp_path / "license_registry.sqlite3",
+    )
+
+    app = create_app()
+    response = app.test_client().get("/quick-hc")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Summary metadata" in body
+    assert "Source" in body
+    assert "CommCell Name" in body
+    assert "Generated on" in body
+    assert "License expiry" in body
+    assert "Imported at" in body
+    assert "<th>License</th>" in body
+    assert "<th>Available Total</th>" in body
+    assert "<th>Agent</th>" in body
+    assert "Permanent Used / Term Used" in body
+    assert "1 other licenses" in body
+    assert "1 agent/feature licenses" in body
+    assert "dataset_guid" not in body
+    assert "HTTP status" not in body
 
 
 def test_quick_hc_report_post_license_summary_only_excludes_security_assessment(
