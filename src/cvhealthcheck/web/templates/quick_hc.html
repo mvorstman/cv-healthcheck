@@ -15,9 +15,18 @@
 {%- endmacro %}
 
 {% block content %}
-<section class="quickhc-dashboard">
-  <h2>Quick HC</h2>
-  <p>Quick HealthCheck provides a fast, read-only way to assemble customer-facing operational summaries.</p>
+<section class="quickhc-dashboard" data-quickhc-dashboard>
+  <div class="quickhc-page-head">
+    <div>
+      <h2>Quick HC</h2>
+      <p>Quick HealthCheck provides a fast, read-only way to assemble customer-facing operational summaries.</p>
+    </div>
+    <div class="quickhc-theme-toggle" data-theme-toggle>
+      <span class="quickhc-theme-label">Theme</span>
+      <button type="button" class="quickhc-theme-button" data-theme-choice="light">Light</button>
+      <button type="button" class="quickhc-theme-button" data-theme-choice="dark">Dark</button>
+    </div>
+  </div>
 
   <form
     method="post"
@@ -555,17 +564,39 @@
   <script>
     (() => {
       const form = document.querySelector("[data-quickhc-form]");
-      if (!form) {
+      const dashboard = document.querySelector("[data-quickhc-dashboard]");
+      if (!form || !dashboard) {
         return;
       }
 
       const storageKey = "quickhc-report-selections-v1";
+      const themeStorageKey = "quickhc-theme-v1";
       const selectionInputs = Array.from(
         form.querySelectorAll('input[type="checkbox"][name="selection_ids"]')
       );
       const parentInputs = Array.from(
         form.querySelectorAll('input[type="checkbox"][data-subject-toggle]')
       );
+      const themeButtons = Array.from(
+        dashboard.querySelectorAll("[data-theme-choice]")
+      );
+
+      const applyTheme = (theme) => {
+        dashboard.dataset.theme = theme;
+        for (const button of themeButtons) {
+          button.dataset.active = String(button.dataset.themeChoice === theme);
+        }
+      };
+
+      const loadTheme = () => {
+        const savedTheme = window.localStorage.getItem(themeStorageKey);
+        if (savedTheme === "light" || savedTheme === "dark") {
+          return savedTheme;
+        }
+        return window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+      };
 
       const loadSavedState = () => {
         try {
@@ -634,6 +665,7 @@
 
       restoreState();
       saveState();
+      applyTheme(loadTheme());
 
       for (const parent of parentInputs) {
         parent.addEventListener("change", () => {
@@ -649,6 +681,17 @@
           continue;
         }
         input.addEventListener("change", saveState);
+      }
+
+      for (const button of themeButtons) {
+        button.addEventListener("click", () => {
+          const theme = button.dataset.themeChoice;
+          if (theme !== "light" && theme !== "dark") {
+            return;
+          }
+          window.localStorage.setItem(themeStorageKey, theme);
+          applyTheme(theme);
+        });
       }
 
       for (const interactive of form.querySelectorAll(".quickhc-subject-summary label, .quickhc-subject-summary input, .quickhc-subject-summary a")) {

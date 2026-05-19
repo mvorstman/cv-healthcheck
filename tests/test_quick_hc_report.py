@@ -331,6 +331,10 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert '<details class="metadata-card quickhc-subject-card" open>' in body
     assert '<summary class="quickhc-subject-summary">' in body
     assert 'class="quickhc-chevron"' in body
+    assert 'data-quickhc-dashboard' in body
+    assert 'data-theme-toggle' in body
+    assert 'data-theme-choice="light"' in body
+    assert 'data-theme-choice="dark"' in body
     assert 'data-quickhc-form' in body
     assert 'data-subject-toggle="environment"' in body
     assert 'data-subject-toggle="security_assessment"' in body
