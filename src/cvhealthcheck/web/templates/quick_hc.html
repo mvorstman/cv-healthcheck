@@ -15,27 +15,39 @@
     </section>
 
     <div class="quickhc-subject-grid">
-      <section class="metadata-card quickhc-subject-card">
-        <div class="quickhc-subject-head">
-          <div>
-            <h3>CommCell Details</h3>
-            <p class="helper-text">Environment and identity details used in the report header.</p>
+      <details class="metadata-card quickhc-subject-card">
+        <summary class="quickhc-subject-summary">
+          <div class="quickhc-subject-head">
+            <div class="quickhc-subject-copy">
+              <h3>CommCell Details</h3>
+              <p class="helper-text">Environment and identity details used in the report header.</p>
+            </div>
+            <span class="badge badge-good">Available</span>
           </div>
-          <span class="badge badge-good">Available</span>
-        </div>
+          <div class="quickhc-subject-meta">
+            <label class="quickhc-include-toggle" for="selection-environment">
+              <input
+                id="selection-environment"
+                type="checkbox"
+                name="selection_ids"
+                value="environment"
+                {% if "environment" in selected_report_sections %}checked{% endif %}
+              >
+              <span>Include</span>
+            </label>
+            <p class="quickhc-card-link">
+              <a href="{{ url_for('main.quick_hc_commcell') }}">View details</a>
+            </p>
+          </div>
+          <dl class="quickhc-card-details">
+            <dt>Source</dt>
+            <dd>Quick HC environment metadata</dd>
+            <dt>Status</dt>
+            <dd>Available for customer-facing report generation.</dd>
+          </dl>
+        </summary>
 
         <div class="quickhc-subject-body">
-          <label class="quickhc-include-toggle" for="selection-environment">
-            <input
-              id="selection-environment"
-              type="checkbox"
-              name="selection_ids"
-              value="environment"
-              {% if "environment" in selected_report_sections %}checked{% endif %}
-            >
-            <span>Include</span>
-          </label>
-
           <div class="quickhc-subsections" aria-label="CommCell Details sections">
             {% for option in report_subsection_options["environment"] %}
               <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
@@ -50,60 +62,37 @@
               </label>
             {% endfor %}
           </div>
-
-          <dl class="quickhc-card-details">
-            <dt>Source</dt>
-            <dd>Quick HC environment metadata</dd>
-            <dt>Status</dt>
-            <dd>Available for customer-facing report generation.</dd>
-          </dl>
-
-          <p class="quickhc-card-link">
-            <a href="{{ url_for('main.quick_hc_commcell') }}">View details</a>
-          </p>
         </div>
-      </section>
+      </details>
 
-      <section class="metadata-card quickhc-subject-card">
-        <div class="quickhc-subject-head">
-          <div>
-            <h3>Security Assessment</h3>
-            <p class="helper-text">Security posture summary and actionable findings.</p>
+      <details class="metadata-card quickhc-subject-card">
+        <summary class="quickhc-subject-summary">
+          <div class="quickhc-subject-head">
+            <div class="quickhc-subject-copy">
+              <h3>Security Assessment</h3>
+              <p class="helper-text">Security posture summary and actionable findings.</p>
+            </div>
+            {% if security_assessment.exists and security_assessment.summary %}
+              <span class="badge badge-good">Available</span>
+            {% else %}
+              <span class="badge badge-warning">Not collected</span>
+            {% endif %}
           </div>
-          {% if security_assessment.exists and security_assessment.summary %}
-            <span class="badge badge-good">Available</span>
-          {% else %}
-            <span class="badge badge-warning">Not collected</span>
-          {% endif %}
-        </div>
-
-        <div class="quickhc-subject-body">
-          <label class="quickhc-include-toggle" for="selection-security-assessment">
-            <input
-              id="selection-security-assessment"
-              type="checkbox"
-              name="selection_ids"
-              value="security_assessment"
-              {% if "security_assessment" in selected_report_sections %}checked{% endif %}
-            >
-            <span>Include</span>
-          </label>
-
-          <div class="quickhc-subsections" aria-label="Security Assessment sections">
-            {% for option in report_subsection_options["security_assessment"] %}
-              <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
-                <input
-                  id="selection-{{ option.id | replace('.', '-') }}"
-                  type="checkbox"
-                  name="selection_ids"
-                  value="{{ option.id }}"
-                  {% if option.id in selected_report_sections %}checked{% endif %}
-                >
-                <span>{{ option.label }}</span>
-              </label>
-            {% endfor %}
+          <div class="quickhc-subject-meta">
+            <label class="quickhc-include-toggle" for="selection-security-assessment">
+              <input
+                id="selection-security-assessment"
+                type="checkbox"
+                name="selection_ids"
+                value="security_assessment"
+                {% if "security_assessment" in selected_report_sections %}checked{% endif %}
+              >
+              <span>Include</span>
+            </label>
+            <p class="quickhc-card-link">
+              <a href="{{ url_for('main.quick_hc_security_assessment') }}">View details</a>
+            </p>
           </div>
-
           <dl class="quickhc-card-details">
             <dt>Source</dt>
             <dd>
@@ -123,40 +112,11 @@
               {% endif %}
             </dd>
           </dl>
-
-          <p class="quickhc-card-link">
-            <a href="{{ url_for('main.quick_hc_security_assessment') }}">View details</a>
-          </p>
-        </div>
-      </section>
-
-      <section class="metadata-card quickhc-subject-card">
-        <div class="quickhc-subject-head">
-          <div>
-            <h3>License Summary</h3>
-            <p class="helper-text">License consumption summary for customer-facing reporting.</p>
-          </div>
-          {% if license_summary.exists %}
-            <span class="badge badge-good">Available</span>
-          {% else %}
-            <span class="badge badge-warning">Not collected</span>
-          {% endif %}
-        </div>
+        </summary>
 
         <div class="quickhc-subject-body">
-          <label class="quickhc-include-toggle" for="selection-license-summary">
-            <input
-              id="selection-license-summary"
-              type="checkbox"
-              name="selection_ids"
-              value="license_summary"
-              {% if "license_summary" in selected_report_sections %}checked{% endif %}
-            >
-            <span>Include</span>
-          </label>
-
-          <div class="quickhc-subsections" aria-label="License Summary sections">
-            {% for option in report_subsection_options["license_summary"] %}
+          <div class="quickhc-subsections" aria-label="Security Assessment sections">
+            {% for option in report_subsection_options["security_assessment"] %}
               <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
                 <input
                   id="selection-{{ option.id | replace('.', '-') }}"
@@ -169,7 +129,37 @@
               </label>
             {% endfor %}
           </div>
+        </div>
+      </details>
 
+      <details class="metadata-card quickhc-subject-card">
+        <summary class="quickhc-subject-summary">
+          <div class="quickhc-subject-head">
+            <div class="quickhc-subject-copy">
+              <h3>License Summary</h3>
+              <p class="helper-text">License consumption summary for customer-facing reporting.</p>
+            </div>
+            {% if license_summary.exists %}
+              <span class="badge badge-good">Available</span>
+            {% else %}
+              <span class="badge badge-warning">Not collected</span>
+            {% endif %}
+          </div>
+          <div class="quickhc-subject-meta">
+            <label class="quickhc-include-toggle" for="selection-license-summary">
+              <input
+                id="selection-license-summary"
+                type="checkbox"
+                name="selection_ids"
+                value="license_summary"
+                {% if "license_summary" in selected_report_sections %}checked{% endif %}
+              >
+              <span>Include</span>
+            </label>
+            <p class="quickhc-card-link">
+              <a href="{{ url_for('main.quick_hc_license_summary') }}">View details</a>
+            </p>
+          </div>
           <dl class="quickhc-card-details">
             <dt>Source</dt>
             <dd>
@@ -188,38 +178,63 @@
               {% endif %}
             </dd>
           </dl>
-
-          <p class="quickhc-card-link">
-            <a href="{{ url_for('main.quick_hc_license_summary') }}">View details</a>
-          </p>
-        </div>
-      </section>
-
-      <section class="metadata-card quickhc-subject-card">
-        <div class="quickhc-subject-head">
-          <div>
-            <h3>Client Growth</h3>
-            <p class="helper-text">Client count change summary from the current Quick HC metric artifact.</p>
-          </div>
-          {% if client_growth.exists %}
-            <span class="badge badge-good">Available</span>
-          {% else %}
-            <span class="badge badge-warning">Not collected</span>
-          {% endif %}
-        </div>
+        </summary>
 
         <div class="quickhc-subject-body">
-          <label class="quickhc-include-toggle" for="selection-client-growth">
-            <input
-              id="selection-client-growth"
-              type="checkbox"
-              name="selection_ids"
-              value="client_growth"
-              {% if "client_growth" in selected_report_sections %}checked{% endif %}
-            >
-            <span>Include</span>
-          </label>
+          <div class="quickhc-subsections" aria-label="License Summary sections">
+            {% for option in report_subsection_options["license_summary"] %}
+              <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
+                <input
+                  id="selection-{{ option.id | replace('.', '-') }}"
+                  type="checkbox"
+                  name="selection_ids"
+                  value="{{ option.id }}"
+                  {% if option.id in selected_report_sections %}checked{% endif %}
+                >
+                <span>{{ option.label }}</span>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+      </details>
 
+      <details class="metadata-card quickhc-subject-card">
+        <summary class="quickhc-subject-summary">
+          <div class="quickhc-subject-head">
+            <div class="quickhc-subject-copy">
+              <h3>Client Growth</h3>
+              <p class="helper-text">Client count change summary from the current Quick HC metric artifact.</p>
+            </div>
+            {% if client_growth.exists %}
+              <span class="badge badge-good">Available</span>
+            {% else %}
+              <span class="badge badge-warning">Not collected</span>
+            {% endif %}
+          </div>
+          <div class="quickhc-subject-meta">
+            <label class="quickhc-include-toggle" for="selection-client-growth">
+              <input
+                id="selection-client-growth"
+                type="checkbox"
+                name="selection_ids"
+                value="client_growth"
+                {% if "client_growth" in selected_report_sections %}checked{% endif %}
+              >
+              <span>Include</span>
+            </label>
+            <p class="quickhc-card-link">
+              <a href="{{ url_for('main.metrics_client_growth') }}">View details</a>
+            </p>
+          </div>
+          <dl class="quickhc-card-details">
+            <dt>Source</dt>
+            <dd>{{ client_growth.source_label }}</dd>
+            <dt>Summary</dt>
+            <dd>{{ client_growth.summary }}</dd>
+          </dl>
+        </summary>
+
+        <div class="quickhc-subject-body">
           <div class="quickhc-subsections" aria-label="Client Growth sections">
             {% for option in report_subsection_options["client_growth"] %}
               <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
@@ -234,45 +249,46 @@
               </label>
             {% endfor %}
           </div>
+        </div>
+      </details>
 
+      <details class="metadata-card quickhc-subject-card">
+        <summary class="quickhc-subject-summary">
+          <div class="quickhc-subject-head">
+            <div class="quickhc-subject-copy">
+              <h3>Capacity License</h3>
+              <p class="helper-text">Capacity usage summary from the current Quick HC metric artifact.</p>
+            </div>
+            {% if capacity_license.exists %}
+              <span class="badge badge-good">Available</span>
+            {% else %}
+              <span class="badge badge-warning">Not collected</span>
+            {% endif %}
+          </div>
+          <div class="quickhc-subject-meta">
+            <label class="quickhc-include-toggle" for="selection-capacity-license">
+              <input
+                id="selection-capacity-license"
+                type="checkbox"
+                name="selection_ids"
+                value="capacity_license"
+                {% if "capacity_license" in selected_report_sections %}checked{% endif %}
+              >
+              <span>Include</span>
+            </label>
+            <p class="quickhc-card-link">
+              <a href="{{ url_for('main.metrics_capacity_license') }}">View details</a>
+            </p>
+          </div>
           <dl class="quickhc-card-details">
             <dt>Source</dt>
-            <dd>{{ client_growth.source_label }}</dd>
+            <dd>{{ capacity_license.source_label }}</dd>
             <dt>Summary</dt>
-            <dd>{{ client_growth.summary }}</dd>
+            <dd>{{ capacity_license.summary }}</dd>
           </dl>
-
-          <p class="quickhc-card-link">
-            <a href="{{ url_for('main.metrics_client_growth') }}">View details</a>
-          </p>
-        </div>
-      </section>
-
-      <section class="metadata-card quickhc-subject-card">
-        <div class="quickhc-subject-head">
-          <div>
-            <h3>Capacity License</h3>
-            <p class="helper-text">Capacity usage summary from the current Quick HC metric artifact.</p>
-          </div>
-          {% if capacity_license.exists %}
-            <span class="badge badge-good">Available</span>
-          {% else %}
-            <span class="badge badge-warning">Not collected</span>
-          {% endif %}
-        </div>
+        </summary>
 
         <div class="quickhc-subject-body">
-          <label class="quickhc-include-toggle" for="selection-capacity-license">
-            <input
-              id="selection-capacity-license"
-              type="checkbox"
-              name="selection_ids"
-              value="capacity_license"
-              {% if "capacity_license" in selected_report_sections %}checked{% endif %}
-            >
-            <span>Include</span>
-          </label>
-
           <div class="quickhc-subsections" aria-label="Capacity License sections">
             {% for option in report_subsection_options["capacity_license"] %}
               <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
@@ -287,19 +303,8 @@
               </label>
             {% endfor %}
           </div>
-
-          <dl class="quickhc-card-details">
-            <dt>Source</dt>
-            <dd>{{ capacity_license.source_label }}</dd>
-            <dt>Summary</dt>
-            <dd>{{ capacity_license.summary }}</dd>
-          </dl>
-
-          <p class="quickhc-card-link">
-            <a href="{{ url_for('main.metrics_capacity_license') }}">View details</a>
-          </p>
         </div>
-      </section>
+      </details>
     </div>
   </form>
 
