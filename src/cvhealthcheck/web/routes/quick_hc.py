@@ -40,38 +40,24 @@ def quick_hc():
         commcell_status=catalog_status("commserv.json", catalog_dir=Path("data/catalog/rest")),
         security_assessment=security_assessment_quick_hc(),
         license_summary=_license_summary_quick_hc(),
+        selected_report_sections=REPORT_SELECTION_IDS,
     )
 
 
-@bp.route("/quick-hc/report")
+@bp.route("/quick-hc/report", methods=["GET", "POST"])
 def quick_hc_report():
-    report = QuickHcReportService().build_report()
-    return render_template(
-        "quick_hc_report.html",
-        report=report,
-    )
-
-
-@bp.route("/quick-hc/report/builder")
-def quick_hc_report_builder():
-    builder = QuickHcReportService().build_builder()
-    return render_template(
-        "quick_hc_report_builder.html",
-        builder=builder,
-    )
-
-
-@bp.route("/quick-hc/report/builder/render", methods=["POST"])
-def quick_hc_report_builder_render():
-    selection_ids = {
-        item
-        for item in request.form.getlist("selection_ids")
-        if isinstance(item, str) and item.strip() in REPORT_SELECTION_IDS
-    }
-    report = QuickHcReportService().build_report(
-        selection_ids,
-        default_to_all=False,
-    )
+    if request.method == "POST":
+        selection_ids = {
+            item
+            for item in request.form.getlist("selection_ids")
+            if isinstance(item, str) and item.strip() in REPORT_SELECTION_IDS
+        }
+        report = QuickHcReportService().build_report(
+            selection_ids,
+            default_to_all=False,
+        )
+    else:
+        report = QuickHcReportService().build_report()
     return render_template(
         "quick_hc_report.html",
         report=report,

@@ -234,6 +234,28 @@ label {
   font-weight: 700;
 }
 
+.report-selection-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.75rem;
+  font-weight: 400;
+}
+
+.report-selection-card input[type="checkbox"] {
+  margin-top: 0.2rem;
+}
+
+.report-selection-card strong {
+  display: block;
+  font-weight: 700;
+}
+
+.report-selection-card .helper-text {
+  display: block;
+  margin-top: 0.25rem;
+}
+
 .helper-text {
   margin: 0;
   color: #4b5563;

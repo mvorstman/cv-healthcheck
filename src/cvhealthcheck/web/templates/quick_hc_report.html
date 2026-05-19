@@ -11,14 +11,6 @@
 
   <section class="metadata-card">
     <div class="section-heading">
-      <h3>Report Options</h3>
-      <p class="helper-text">Adjust the included sections before rendering a tailored version.</p>
-    </div>
-    <p><a href="{{ url_for('main.quick_hc_report_builder') }}">Open Report Builder</a></p>
-  </section>
-
-  <section class="metadata-card">
-    <div class="section-heading">
       <h3>Source Metadata</h3>
     </div>
     <dl id="source-metadata">
@@ -73,149 +65,153 @@
     </table>
   {% endif %}
 
-  <h3>Security Assessment</h3>
-  {% if report.security_assessment.available and report.security_assessment.has_content %}
-    {% if report.security_assessment.show_summary %}
-      <table class="compact-table">
-        <tbody>
-          <tr><th>Total checks</th><td>{{ report.security_assessment.total_checks }}</td></tr>
-          <tr><th>Critical</th><td>{{ report.security_assessment.critical }}</td></tr>
-          <tr><th>Warning</th><td>{{ report.security_assessment.warning }}</td></tr>
-          <tr><th>Info</th><td>{{ report.security_assessment.info }}</td></tr>
-          <tr><th>Good</th><td>{{ report.security_assessment.good }}</td></tr>
-          <tr><th>Source Type</th><td>{{ (report.security_assessment.source_type or "unknown") | upper }}</td></tr>
-          <tr><th>Imported At</th><td>{{ report.security_assessment.imported_at or "Not collected yet" }}</td></tr>
-          <tr><th>Generated On</th><td>{{ report.security_assessment.generated_on or "Not collected yet" }}</td></tr>
-          <tr><th>Detail Page</th><td><a href="{{ report.security_assessment.detail_url }}">View Security Assessment</a></td></tr>
-        </tbody>
-      </table>
-    {% endif %}
-    {% for section in report.security_assessment.visible_sections %}
-      <h4>{{ section.name }}</h4>
-      <table class="compact-table">
-        <thead>
-          <tr>
-            <th>Parameter</th>
-            <th>Status</th>
-            <th>Remarks</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in section.rows %}
+  {% if report.security_assessment.requested %}
+    <h3>Security Assessment</h3>
+    {% if report.security_assessment.available and report.security_assessment.has_content %}
+      {% if report.security_assessment.show_summary %}
+        <table class="compact-table">
+          <tbody>
+            <tr><th>Total checks</th><td>{{ report.security_assessment.total_checks }}</td></tr>
+            <tr><th>Critical</th><td>{{ report.security_assessment.critical }}</td></tr>
+            <tr><th>Warning</th><td>{{ report.security_assessment.warning }}</td></tr>
+            <tr><th>Info</th><td>{{ report.security_assessment.info }}</td></tr>
+            <tr><th>Good</th><td>{{ report.security_assessment.good }}</td></tr>
+            <tr><th>Source Type</th><td>{{ (report.security_assessment.source_type or "unknown") | upper }}</td></tr>
+            <tr><th>Imported At</th><td>{{ report.security_assessment.imported_at or "Not collected yet" }}</td></tr>
+            <tr><th>Generated On</th><td>{{ report.security_assessment.generated_on or "Not collected yet" }}</td></tr>
+            <tr><th>Detail Page</th><td><a href="{{ report.security_assessment.detail_url }}">View Security Assessment</a></td></tr>
+          </tbody>
+        </table>
+      {% endif %}
+      {% for section in report.security_assessment.visible_sections %}
+        <h4>{{ section.name }}</h4>
+        <table class="compact-table">
+          <thead>
             <tr>
-              <td>{{ row.parameter }}</td>
-              <td>{{ row.status }}</td>
-              <td>{{ row.remarks }}</td>
-              <td>{{ row.action }}</td>
+              <th>Parameter</th>
+              <th>Status</th>
+              <th>Remarks</th>
+              <th>Action</th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% endfor %}
-  {% else %}
-    <p>{{ report.security_assessment.message }}</p>
-    <p><a href="{{ report.security_assessment.detail_url }}">Open Security Assessment</a></p>
+          </thead>
+          <tbody>
+            {% for row in section.rows %}
+              <tr>
+                <td>{{ row.parameter }}</td>
+                <td>{{ row.status }}</td>
+                <td>{{ row.remarks }}</td>
+                <td>{{ row.action }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endfor %}
+    {% else %}
+      <p>{{ report.security_assessment.message }}</p>
+      <p><a href="{{ report.security_assessment.detail_url }}">Open Security Assessment</a></p>
+    {% endif %}
   {% endif %}
 
-  <h3>License Summary</h3>
-  {% if report.license_summary.available and report.license_summary.has_content %}
-    {% if report.license_summary.show_summary %}
-      <table class="compact-table">
-        <tbody>
-          <tr><th>Source Type</th><td>{{ (report.license_summary.source_type or "unknown") | upper }}</td></tr>
-          <tr><th>Imported At</th><td>{{ report.license_summary.imported_at or "Not collected yet" }}</td></tr>
-          <tr><th>Generated On</th><td>{{ report.license_summary.generated_on or "Not collected yet" }}</td></tr>
-          <tr><th>License Expiry</th><td>{{ report.license_summary.license_expiry or "N/A" }}</td></tr>
-          <tr><th>Workload Summary Sections</th><td>{{ report.license_summary.workload_summary_section_count }}</td></tr>
-          <tr><th>Other License Rows</th><td>{{ report.license_summary.other_license_row_count }}</td></tr>
-          <tr><th>Agent/Feature License Rows</th><td>{{ report.license_summary.agent_feature_license_row_count }}</td></tr>
-          <tr><th>Detail Page</th><td><a href="{{ report.license_summary.detail_url }}">View License Summary</a></td></tr>
-        </tbody>
-      </table>
-    {% endif %}
-    {% for section in report.license_summary.visible_workload_sections %}
-      <h4>{{ section.section_name }}</h4>
-      <table class="compact-table">
-        <thead>
-          <tr>
-            <th>License</th>
-            <th>Entitlement / Available</th>
-            <th>Used</th>
-            <th>Used %</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in section.rows %}
+  {% if report.license_summary.requested %}
+    <h3>License Summary</h3>
+    {% if report.license_summary.available and report.license_summary.has_content %}
+      {% if report.license_summary.show_summary %}
+        <table class="compact-table">
+          <tbody>
+            <tr><th>Source Type</th><td>{{ (report.license_summary.source_type or "unknown") | upper }}</td></tr>
+            <tr><th>Imported At</th><td>{{ report.license_summary.imported_at or "Not collected yet" }}</td></tr>
+            <tr><th>Generated On</th><td>{{ report.license_summary.generated_on or "Not collected yet" }}</td></tr>
+            <tr><th>License Expiry</th><td>{{ report.license_summary.license_expiry or "N/A" }}</td></tr>
+            <tr><th>Workload Summary Sections</th><td>{{ report.license_summary.workload_summary_section_count }}</td></tr>
+            <tr><th>Other License Rows</th><td>{{ report.license_summary.other_license_row_count }}</td></tr>
+            <tr><th>Agent/Feature License Rows</th><td>{{ report.license_summary.agent_feature_license_row_count }}</td></tr>
+            <tr><th>Detail Page</th><td><a href="{{ report.license_summary.detail_url }}">View License Summary</a></td></tr>
+          </tbody>
+        </table>
+      {% endif %}
+      {% for section in report.license_summary.visible_workload_sections %}
+        <h4>{{ section.section_name }}</h4>
+        <table class="compact-table">
+          <thead>
             <tr>
-              <td>{{ row.license }}</td>
-              <td>{{ row.entitlement_value or "" }}</td>
-              <td>{{ row.used or "" }}</td>
-              <td>{{ row.usage_percent or "" }}</td>
-              <td>{{ row.status or "" }}</td>
+              <th>License</th>
+              <th>Entitlement / Available</th>
+              <th>Used</th>
+              <th>Used %</th>
+              <th>Status</th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% endfor %}
-    {% if report.license_summary.visible_other_license_rows %}
-      <h4>Other Licenses</h4>
-      <table class="compact-table">
-        <thead>
-          <tr>
-            <th>License</th>
-            <th>Available Total</th>
-            <th>Used</th>
-            <th>Unit</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in report.license_summary.visible_other_license_rows %}
+          </thead>
+          <tbody>
+            {% for row in section.rows %}
+              <tr>
+                <td>{{ row.license }}</td>
+                <td>{{ row.entitlement_value or "" }}</td>
+                <td>{{ row.used or "" }}</td>
+                <td>{{ row.usage_percent or "" }}</td>
+                <td>{{ row.status or "" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endfor %}
+      {% if report.license_summary.visible_other_license_rows %}
+        <h4>Other Licenses</h4>
+        <table class="compact-table">
+          <thead>
             <tr>
-              <td>{{ row.license }}</td>
-              <td>{{ row.available_total if row.available_total is not none else (row.raw_available_total or "") }}</td>
-              <td>{{ row.used if row.used is not none else (row.raw_used or "") }}</td>
-              <td>{{ row.unit or "" }}</td>
+              <th>License</th>
+              <th>Available Total</th>
+              <th>Used</th>
+              <th>Unit</th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% endif %}
-    {% if report.license_summary.visible_agent_feature_rows %}
-      <h4>Agent and Feature Licenses</h4>
-      <table class="compact-table">
-        <thead>
-          <tr>
-            <th>License</th>
-            <th>Permanent Total</th>
-            <th>Permanent Used</th>
-            <th>Term Total</th>
-            <th>Term Used</th>
-            <th>Client</th>
-            <th>Agent</th>
-            <th>Install Date</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in report.license_summary.visible_agent_feature_rows %}
+          </thead>
+          <tbody>
+            {% for row in report.license_summary.visible_other_license_rows %}
+              <tr>
+                <td>{{ row.license }}</td>
+                <td>{{ row.available_total if row.available_total is not none else (row.raw_available_total or "") }}</td>
+                <td>{{ row.used if row.used is not none else (row.raw_used or "") }}</td>
+                <td>{{ row.unit or "" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+      {% if report.license_summary.visible_agent_feature_rows %}
+        <h4>Agent and Feature Licenses</h4>
+        <table class="compact-table">
+          <thead>
             <tr>
-              <td>{{ row.license }}</td>
-              <td>{{ row.permanent_total if row.permanent_total is not none else "" }}</td>
-              <td>{{ row.permanent_used if row.permanent_used is not none else "" }}</td>
-              <td>{{ row.term_total if row.term_total is not none else "" }}</td>
-              <td>{{ row.term_used if row.term_used is not none else "" }}</td>
-              <td>{{ row.client or "" }}</td>
-              <td>{{ row.agent or "" }}</td>
-              <td>{{ row.install_date or "" }}</td>
+              <th>License</th>
+              <th>Permanent Total</th>
+              <th>Permanent Used</th>
+              <th>Term Total</th>
+              <th>Term Used</th>
+              <th>Client</th>
+              <th>Agent</th>
+              <th>Install Date</th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {% for row in report.license_summary.visible_agent_feature_rows %}
+              <tr>
+                <td>{{ row.license }}</td>
+                <td>{{ row.permanent_total if row.permanent_total is not none else "" }}</td>
+                <td>{{ row.permanent_used if row.permanent_used is not none else "" }}</td>
+                <td>{{ row.term_total if row.term_total is not none else "" }}</td>
+                <td>{{ row.term_used if row.term_used is not none else "" }}</td>
+                <td>{{ row.client or "" }}</td>
+                <td>{{ row.agent or "" }}</td>
+                <td>{{ row.install_date or "" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    {% else %}
+      <p>{{ report.license_summary.message }}</p>
+      <p><a href="{{ report.license_summary.detail_url }}">Open License Summary</a></p>
     {% endif %}
-  {% else %}
-    <p>{{ report.license_summary.message }}</p>
-    <p><a href="{{ report.license_summary.detail_url }}">Open License Summary</a></p>
   {% endif %}
 
   <h3>Evidence / Sources</h3>

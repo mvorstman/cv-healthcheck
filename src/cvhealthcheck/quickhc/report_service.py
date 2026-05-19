@@ -12,18 +12,17 @@ from cvhealthcheck.reportsplus.security_assessment import (
 from cvhealthcheck.security_assessment.service import SecurityAssessmentService
 
 ENVIRONMENT_SELECTION_ID = "environment"
-SECURITY_ASSESSMENT_SUMMARY_SELECTION_ID = "security_assessment_summary"
-SECURITY_ASSESSMENT_FINDINGS_SELECTION_ID = "security_assessment_findings"
-LICENSE_SUMMARY_METADATA_SELECTION_ID = "license_summary_metadata"
-LICENSE_SUMMARY_WORKLOAD_SELECTION_ID = "license_summary_workload"
-LICENSE_SUMMARY_DETAILS_SELECTION_ID = "license_summary_details"
+SECURITY_ASSESSMENT_SELECTION_ID = "security_assessment"
+LICENSE_SUMMARY_SELECTION_ID = "license_summary"
+SECURITY_ASSESSMENT_SUMMARY_SECTION_ID = "security_assessment_summary"
+SECURITY_ASSESSMENT_FINDINGS_SECTION_ID = "security_assessment_findings"
+LICENSE_SUMMARY_METADATA_SECTION_ID = "license_summary_metadata"
+LICENSE_SUMMARY_WORKLOAD_SECTION_ID = "license_summary_workload"
+LICENSE_SUMMARY_DETAILS_SECTION_ID = "license_summary_details"
 REPORT_SELECTION_IDS = {
     ENVIRONMENT_SELECTION_ID,
-    SECURITY_ASSESSMENT_SUMMARY_SELECTION_ID,
-    SECURITY_ASSESSMENT_FINDINGS_SELECTION_ID,
-    LICENSE_SUMMARY_METADATA_SELECTION_ID,
-    LICENSE_SUMMARY_WORKLOAD_SELECTION_ID,
-    LICENSE_SUMMARY_DETAILS_SELECTION_ID,
+    SECURITY_ASSESSMENT_SELECTION_ID,
+    LICENSE_SUMMARY_SELECTION_ID,
 }
 
 
@@ -58,27 +57,18 @@ class QuickHcReportService:
         default_to_all: bool = True,
     ) -> dict[str, Any]:
         report = self._build_full_report()
+        effective_subject_selection_ids = (
+            set(REPORT_SELECTION_IDS)
+            if default_to_all and not selection_ids
+            else set(selection_ids or set())
+        )
+        expanded_selection_ids = self._expand_subject_selection_ids(selection_ids or set())
         return self._filter_report(
             report,
-            selection_ids=selection_ids or set(),
+            subject_selection_ids=effective_subject_selection_ids,
+            selection_ids=expanded_selection_ids,
             default_to_all=default_to_all,
         )
-
-    def build_builder(self) -> dict[str, Any]:
-        report = self._build_full_report()
-        default_selection_ids = self._default_builder_selection_ids(report)
-        groups = self._build_builder_groups(report, default_selection_ids)
-        return {
-            "title": "Quick HealthCheck Report Builder",
-            "generated_at": report["generated_at"],
-            "groups": groups,
-            "has_artifacts": any(
-                (
-                    report["security_assessment"]["available"],
-                    report["license_summary"]["available"],
-                )
-            ),
-        }
 
     def _build_full_report(self) -> dict[str, Any]:
         security_assessment = self._build_security_assessment_section()
@@ -115,8 +105,8 @@ class QuickHcReportService:
                 "detail_url": "/quick-hc/security-assessment",
                 "artifact": None,
                 "evidence": None,
-                "summary_section_id": SECURITY_ASSESSMENT_SUMMARY_SELECTION_ID,
-                "findings_section_id": SECURITY_ASSESSMENT_FINDINGS_SELECTION_ID,
+                "summary_section_id": SECURITY_ASSESSMENT_SUMMARY_SECTION_ID,
+                "findings_section_id": SECURITY_ASSESSMENT_FINDINGS_SECTION_ID,
                 "sections": [],
             }
 
@@ -156,8 +146,8 @@ class QuickHcReportService:
             "warning": counters.get("Warning", 0),
             "info": counters.get("Info", 0),
             "good": counters.get("Good", 0),
-            "summary_section_id": SECURITY_ASSESSMENT_SUMMARY_SELECTION_ID,
-            "findings_section_id": SECURITY_ASSESSMENT_FINDINGS_SELECTION_ID,
+            "summary_section_id": SECURITY_ASSESSMENT_SUMMARY_SECTION_ID,
+            "findings_section_id": SECURITY_ASSESSMENT_FINDINGS_SECTION_ID,
             "source_metadata": dict(
                 artifact.get("source_metadata") or artifact.get("source") or {}
             ),
@@ -183,12 +173,12 @@ class QuickHcReportService:
                 "detail_url": "/quick-hc/license-summary",
                 "artifact": None,
                 "evidence": None,
-                "summary_section_id": LICENSE_SUMMARY_METADATA_SELECTION_ID,
+                "summary_section_id": LICENSE_SUMMARY_METADATA_SECTION_ID,
                 "workload_sections": [],
                 "other_license_rows": [],
                 "agent_feature_rows": [],
-                "workload_section_id": LICENSE_SUMMARY_WORKLOAD_SELECTION_ID,
-                "details_section_id": LICENSE_SUMMARY_DETAILS_SELECTION_ID,
+                "workload_section_id": LICENSE_SUMMARY_WORKLOAD_SECTION_ID,
+                "details_section_id": LICENSE_SUMMARY_DETAILS_SECTION_ID,
             }
 
         workload_sections = []
@@ -247,7 +237,7 @@ class QuickHcReportService:
             "generated_on": artifact.get("generated_on"),
             "loaded_from_path": artifact.get("loaded_from_path"),
             "license_expiry": artifact.get("license_expiry"),
-            "summary_section_id": LICENSE_SUMMARY_METADATA_SELECTION_ID,
+            "summary_section_id": LICENSE_SUMMARY_METADATA_SECTION_ID,
             "workload_summary_section_count": len(workload_sections),
             "other_license_row_count": len(other_license_rows),
             "agent_feature_license_row_count": len(agent_feature_rows),
@@ -255,8 +245,8 @@ class QuickHcReportService:
                 artifact.get("source_metadata") or artifact.get("source") or {}
             ),
             "workload_sections": workload_sections,
-            "workload_section_id": LICENSE_SUMMARY_WORKLOAD_SELECTION_ID,
-            "details_section_id": LICENSE_SUMMARY_DETAILS_SELECTION_ID,
+            "workload_section_id": LICENSE_SUMMARY_WORKLOAD_SECTION_ID,
+            "details_section_id": LICENSE_SUMMARY_DETAILS_SECTION_ID,
             "other_license_rows": other_license_rows,
             "agent_feature_rows": agent_feature_rows,
             "evidence": ReportEvidence(
@@ -309,6 +299,7 @@ class QuickHcReportService:
         self,
         report: dict[str, Any],
         *,
+        subject_selection_ids: set[str],
         selection_ids: set[str],
         default_to_all: bool,
     ) -> dict[str, Any]:
@@ -326,13 +317,16 @@ class QuickHcReportService:
         filtered_environment = {
             **report["environment"],
             **filtered_environment_rows,
+            "requested": ENVIRONMENT_SELECTION_ID in subject_selection_ids,
         }
         filtered_security = self._filter_security_assessment(
             report["security_assessment"],
+            SECURITY_ASSESSMENT_SELECTION_ID in subject_selection_ids,
             effective_selection_ids,
         )
         filtered_license = self._filter_license_summary(
             report["license_summary"],
+            LICENSE_SUMMARY_SELECTION_ID in subject_selection_ids,
             effective_selection_ids,
         )
 
@@ -354,11 +348,13 @@ class QuickHcReportService:
     def _filter_security_assessment(
         self,
         section: dict[str, Any],
+        requested: bool,
         selection_ids: set[str],
     ) -> dict[str, Any]:
         if not section.get("available"):
             return {
                 **section,
+                "requested": requested,
                 "show_summary": False,
                 "visible_sections": [],
                 "has_content": False,
@@ -377,6 +373,7 @@ class QuickHcReportService:
         has_content = show_summary or bool(visible_sections)
         return {
             **section,
+            "requested": requested,
             "show_summary": show_summary,
             "visible_sections": visible_sections,
             "has_content": has_content,
@@ -385,11 +382,13 @@ class QuickHcReportService:
     def _filter_license_summary(
         self,
         section: dict[str, Any],
+        requested: bool,
         selection_ids: set[str],
     ) -> dict[str, Any]:
         if not section.get("available"):
             return {
                 **section,
+                "requested": requested,
                 "show_summary": False,
                 "visible_workload_sections": [],
                 "visible_other_license_rows": [],
@@ -412,6 +411,7 @@ class QuickHcReportService:
         )
         return {
             **section,
+            "requested": requested,
             "show_summary": show_summary,
             "visible_workload_sections": visible_workload_sections,
             "visible_other_license_rows": (
@@ -445,96 +445,24 @@ class QuickHcReportService:
             selection_ids.add(license_summary["summary_section_id"])
         return selection_ids
 
-    def _default_builder_selection_ids(self, report: dict[str, Any]) -> set[str]:
-        selection_ids: set[str] = {report["environment"]["section_id"]}
-
-        security = report["security_assessment"]
-        if security.get("available"):
-            selection_ids.add(security["summary_section_id"])
-            selection_ids.add(security["findings_section_id"])
-
-        license_summary = report["license_summary"]
-        if license_summary.get("available"):
-            selection_ids.add(license_summary["summary_section_id"])
-            selection_ids.add(license_summary["workload_section_id"])
-            selection_ids.add(license_summary["details_section_id"])
-        return selection_ids
-
-    def _build_builder_groups(
-        self,
-        report: dict[str, Any],
-        default_selection_ids: set[str],
-    ) -> list[dict[str, Any]]:
-        groups = [
-            {
-                "title": "Environment Metadata",
-                "items": [
-                    self._builder_item(
-                        report["environment"]["section_id"],
-                        "Environment",
-                        default_selection_ids,
-                    )
-                ],
-            }
-        ]
-
-        security = report["security_assessment"]
-        security_items = []
-        if security.get("available"):
-            security_items.append(
-                self._builder_item(
-                    security["summary_section_id"],
-                    "Security Assessment Summary",
-                    default_selection_ids,
-                )
+    def _expand_subject_selection_ids(self, selection_ids: set[str]) -> set[str]:
+        expanded_selection_ids = set(selection_ids)
+        if SECURITY_ASSESSMENT_SELECTION_ID in selection_ids:
+            expanded_selection_ids.update(
+                {
+                    SECURITY_ASSESSMENT_SUMMARY_SECTION_ID,
+                    SECURITY_ASSESSMENT_FINDINGS_SECTION_ID,
+                }
             )
-            security_items.append(
-                self._builder_item(
-                    security["findings_section_id"],
-                    "Security Assessment Findings",
-                    default_selection_ids,
-                )
+        if LICENSE_SUMMARY_SELECTION_ID in selection_ids:
+            expanded_selection_ids.update(
+                {
+                    LICENSE_SUMMARY_METADATA_SECTION_ID,
+                    LICENSE_SUMMARY_WORKLOAD_SECTION_ID,
+                    LICENSE_SUMMARY_DETAILS_SECTION_ID,
+                }
             )
-        groups.append({"title": "Security Assessment", "items": security_items})
-
-        license_summary = report["license_summary"]
-        license_items = []
-        if license_summary.get("available"):
-            license_items.append(
-                self._builder_item(
-                    license_summary["summary_section_id"],
-                    "License Summary Metadata",
-                    default_selection_ids,
-                )
-            )
-            license_items.append(
-                self._builder_item(
-                    license_summary["workload_section_id"],
-                    "License Summary Workload",
-                    default_selection_ids,
-                )
-            )
-            license_items.append(
-                self._builder_item(
-                    license_summary["details_section_id"],
-                    "License Summary Details",
-                    default_selection_ids,
-                )
-            )
-        groups.append({"title": "License Summary", "items": license_items})
-        return groups
-
-    def _builder_item(
-        self,
-        item_id: str,
-        label: str,
-        default_selection_ids: set[str],
-    ) -> dict[str, Any]:
-        return {
-            "id": item_id,
-            "label": label,
-            "checked": item_id in default_selection_ids,
-        }
+        return expanded_selection_ids
 
 
 def _first_value(*payloads: dict[str, Any] | None, key: str) -> str | None:
