@@ -100,6 +100,7 @@ Current Phase 3 capabilities:
 - Quick HC overview rendering now also uses a shared subject-tile shell partial so template duplication can be reduced before any preview-renderer abstraction or report-service rewrite.
 - Quick HC section cards now also use a shared wrapper partial, completing the structural shell extraction before preview-renderer abstraction work.
 - Preview decomposition now covers all current Quick HC subjects through explicit preview partials, so the next step can focus on preview orchestration rather than further structural extraction.
+- Registry integrity tests are now in place so future renderer orchestration work can rely on tile/section metadata staying aligned with report-service selection contracts.
 
 Current known limitations:
 

@@ -132,6 +132,8 @@ The current refactor direction is registry-first rather than renderer-first. Qui
 
 The next extraction step is now in place on the overview template as well: the repeated outer Quick HC subject-card shell is rendered through a shared partial, and the reusable section-card wrapper now lives in its own partial too. Preview extraction now covers CommCell, Security Assessment, License Summary, Client Growth, and Capacity License via explicit partials, so the remaining work can focus on cleaner preview orchestration rather than more structural duplication.
 
+Because Quick HC now depends on a registry-first metadata contract, dedicated integrity tests now verify tile IDs, section IDs, required tile metadata, default-selection safety, and alignment between the registry and report-service selection constants before any renderer abstraction is introduced.
+
 ### Current Limitations
 
 - no PDF export yet

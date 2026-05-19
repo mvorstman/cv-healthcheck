@@ -22,6 +22,8 @@
 
 ## 2026-05-20
 
+- Added `tests/test_quickhc_registry.py` to lock down Quick HC registry integrity before renderer abstraction work.
+- The new coverage verifies unique tile/section IDs, tile metadata completeness, per-tile section ownership, and alignment between registry-derived selection metadata and the report-service constants consumed by the current UI/report flow.
 - Extracted the Capacity License Quick HC preview body into `web/templates/partials/quickhc/previews/capacity_license.html` and kept it explicitly included from `quick_hc.html`.
 - Moved the Capacity License summary and usage/details preview bodies into that partial without changing section IDs, localStorage behavior, report filtering, or customer report output.
 - Extracted the Client Growth Quick HC preview body into `web/templates/partials/quickhc/previews/client_growth.html` and kept it explicitly included from `quick_hc.html`.
