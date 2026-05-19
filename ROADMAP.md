@@ -99,6 +99,7 @@ Current Phase 3 capabilities:
 - Quick HC metadata extraction has started through shared tile/section dataclasses and a registry-first architecture so future subjects can be added incrementally without a full route/template rewrite.
 - Quick HC overview rendering now also uses a shared subject-tile shell partial so template duplication can be reduced before any preview-renderer abstraction or report-service rewrite.
 - Quick HC section cards now also use a shared wrapper partial, completing the structural shell extraction before preview-renderer abstraction work.
+- Preview decomposition has started with an explicit CommCell preview partial, proving the extraction pattern before applying it to the more complex subject previews.
 
 Current known limitations:
 

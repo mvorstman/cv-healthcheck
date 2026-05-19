@@ -1,0 +1,24 @@
+<div class="quickhc-section-preview">
+  {% if commcell_preview.exists %}
+    <div class="quickhc-preview-grid">
+      <div class="quickhc-preview-item">
+        <span class="quickhc-preview-label">CommCell Name</span>
+        <strong>{{ commcell_preview.commcell_name or "Not collected yet" }}</strong>
+      </div>
+      <div class="quickhc-preview-item">
+        <span class="quickhc-preview-label">CommCell ID</span>
+        <strong>{{ commcell_preview.commcell_id or "Not collected yet" }}</strong>
+      </div>
+      <div class="quickhc-preview-item">
+        <span class="quickhc-preview-label">Version</span>
+        <strong>{{ commcell_preview.version or "Not collected yet" }}</strong>
+      </div>
+      <div class="quickhc-preview-item">
+        <span class="quickhc-preview-label">Time Zone</span>
+        <strong>{{ commcell_preview.timezone or "Not collected yet" }}</strong>
+      </div>
+    </div>
+  {% else %}
+    <p class="quickhc-empty-state">CommCell details have not been collected yet.</p>
+  {% endif %}
+</div>
