@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from decimal import Decimal, InvalidOperation
 from datetime import UTC, datetime
+import re
 from typing import Any
 
 from cvhealthcheck.license_summary.service import LicenseSummaryService
@@ -297,6 +299,12 @@ class QuickHcReportService:
             section_name = str(section.get("section_name") or "")
             rows = []
             for row in section.get("rows") or []:
+                usage_summary = _build_usage_summary(
+                    available_value=row.get("entitlement_value"),
+                    used_value=row.get("used"),
+                    percent_value=row.get("usage_percent"),
+                    status_value=row.get("status"),
+                )
                 rows.append(
                     {
                         "license": row.get("license"),
@@ -304,6 +312,7 @@ class QuickHcReportService:
                         "used": row.get("used"),
                         "usage_percent": row.get("usage_percent"),
                         "status": row.get("status"),
+                        **usage_summary,
                     }
                 )
             workload_sections.append(
@@ -313,30 +322,59 @@ class QuickHcReportService:
                 }
             )
 
-        other_license_rows = [
-            {
-                "license": item.get("license"),
-                "available_total": item.get("available_total"),
-                "used": item.get("used"),
-                "unit": item.get("unit"),
-                "raw_available_total": item.get("raw_available_total"),
-                "raw_used": item.get("raw_used"),
-            }
-            for item in artifact.get("other_licenses") or []
-        ]
-        agent_feature_rows = [
-            {
-                "license": item.get("license"),
-                "permanent_total": item.get("permanent_total"),
-                "permanent_used": item.get("permanent_used"),
-                "term_total": item.get("term_total"),
-                "term_used": item.get("term_used"),
-                "client": item.get("client"),
-                "agent": item.get("agent"),
-                "install_date": item.get("install_date"),
-            }
-            for item in artifact.get("agent_feature_licenses") or []
-        ]
+        other_license_rows = []
+        for item in artifact.get("other_licenses") or []:
+            usage_summary = _build_usage_summary(
+                available_value=item.get("available_total"),
+                used_value=item.get("used"),
+                raw_available_value=item.get("raw_available_total"),
+                raw_used_value=item.get("raw_used"),
+                unit_value=item.get("unit"),
+            )
+            other_license_rows.append(
+                {
+                    "license": item.get("license"),
+                    "available_total": item.get("available_total"),
+                    "used": item.get("used"),
+                    "unit": item.get("unit"),
+                    "raw_available_total": item.get("raw_available_total"),
+                    "raw_used": item.get("raw_used"),
+                    **usage_summary,
+                }
+            )
+        agent_feature_rows = []
+        for item in artifact.get("agent_feature_licenses") or []:
+            total_value = _sum_decimals(item.get("permanent_total"), item.get("term_total"))
+            used_value = _sum_decimals(item.get("permanent_used"), item.get("term_used"))
+            usage_summary = _build_usage_summary(
+                available_value=total_value,
+                used_value=used_value,
+                raw_available_value=_join_non_empty(
+                    [
+                        _format_dual_count("Permanent", item.get("permanent_total")),
+                        _format_dual_count("Term", item.get("term_total")),
+                    ]
+                ),
+                raw_used_value=_join_non_empty(
+                    [
+                        _format_dual_count("Permanent", item.get("permanent_used")),
+                        _format_dual_count("Term", item.get("term_used")),
+                    ]
+                ),
+            )
+            agent_feature_rows.append(
+                {
+                    "license": item.get("license"),
+                    "permanent_total": item.get("permanent_total"),
+                    "permanent_used": item.get("permanent_used"),
+                    "term_total": item.get("term_total"),
+                    "term_used": item.get("term_used"),
+                    "client": item.get("client"),
+                    "agent": item.get("agent"),
+                    "install_date": item.get("install_date"),
+                    **usage_summary,
+                }
+            )
 
         return {
             "available": True,
@@ -805,6 +843,139 @@ def _coerce_int(value: Any) -> int | None:
         return int(str(value))
     except (TypeError, ValueError):
         return None
+
+
+def _coerce_decimal(value: Any) -> Decimal | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, (int, float)):
+        return Decimal(str(value))
+    try:
+        cleaned = str(value).strip().replace(",", "")
+        if not cleaned:
+            return None
+        return Decimal(cleaned)
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _sum_decimals(*values: Any) -> Decimal | None:
+    decimals = [item for item in (_coerce_decimal(value) for value in values) if item is not None]
+    if not decimals:
+        return None
+    total = Decimal("0")
+    for item in decimals:
+        total += item
+    return total
+
+
+def _stringify_number(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, float):
+        return f"{value:g}"
+    if isinstance(value, Decimal):
+        return f"{value.normalize():f}".rstrip("0").rstrip(".") if value != value.to_integral() else str(value.quantize(Decimal("1")))
+    return str(value)
+
+
+def _format_dual_count(label: str, value: Any) -> str | None:
+    display = _stringify_number(value)
+    if display in (None, ""):
+        return None
+    return f"{label} {display}"
+
+
+def _join_non_empty(values: list[str | None]) -> str | None:
+    filtered = [value for value in values if value]
+    if not filtered:
+        return None
+    return " | ".join(filtered)
+
+
+def _coerce_percent(value: Any) -> Decimal | None:
+    if value in (None, ""):
+        return None
+    try:
+        cleaned = str(value).strip().replace("%", "").replace(",", "")
+        if not cleaned:
+            return None
+        return Decimal(cleaned)
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _infer_unit(*values: Any) -> str | None:
+    for value in values:
+        if value in (None, ""):
+            continue
+        match = re.search(r"([A-Za-z]{1,8})\s*$", str(value).strip())
+        if match:
+            return match.group(1)
+    return None
+
+
+def _display_value(value: Any, raw_value: Any = None, unit: str | None = None) -> str:
+    if raw_value not in (None, ""):
+        return str(raw_value)
+    if value in (None, ""):
+        return ""
+    display = _stringify_number(value) or ""
+    if unit and display:
+        return f"{display} {unit}"
+    return display
+
+
+def _build_usage_summary(
+    *,
+    available_value: Any,
+    used_value: Any,
+    percent_value: Any = None,
+    status_value: Any = None,
+    raw_available_value: Any = None,
+    raw_used_value: Any = None,
+    unit_value: Any = None,
+) -> dict[str, Any]:
+    unit = str(unit_value).strip() if unit_value not in (None, "") else _infer_unit(raw_available_value, raw_used_value)
+    available_numeric = _coerce_decimal(available_value)
+    used_numeric = _coerce_decimal(used_value)
+    provided_percent = _coerce_percent(percent_value)
+    usage_percent: Decimal | None = None
+
+    if available_numeric is not None and available_numeric > 0 and used_numeric is not None:
+        usage_percent = (used_numeric / available_numeric) * Decimal("100")
+    elif provided_percent is not None:
+        usage_percent = provided_percent
+
+    if usage_percent is not None:
+        usage_percent = max(Decimal("0"), min(Decimal("100"), usage_percent.quantize(Decimal("0.1"))))
+
+    if available_numeric is not None and available_numeric <= 0:
+        usage_status = "License not purchased"
+    elif status_value not in (None, ""):
+        usage_status = str(status_value)
+    elif usage_percent is not None:
+        usage_status = f"{usage_percent.quantize(Decimal('1'))}%"
+    else:
+        usage_status = "N/A"
+
+    return {
+        "available_numeric": float(available_numeric) if available_numeric is not None else None,
+        "used_numeric": float(used_numeric) if used_numeric is not None else None,
+        "usage_percent_value": float(usage_percent) if usage_percent is not None else None,
+        "usage_percent_label": (
+            f"{usage_percent.quantize(Decimal('1'))}%"
+            if usage_percent is not None
+            else None
+        ),
+        "usage_status": usage_status,
+        "usage_has_bar": usage_percent is not None and available_numeric is not None and available_numeric > 0,
+        "available_display": _display_value(available_value, raw_available_value, unit),
+        "used_display": _display_value(used_value, raw_used_value, unit),
+        "unit": unit,
+    }
 
 
 def _client_growth_chart(records: list[dict[str, Any]]) -> dict[str, Any] | None:

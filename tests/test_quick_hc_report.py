@@ -33,6 +33,29 @@ Virtual Server,50,12,10,3,Client A,Agent A,2026-05-01
 """
 
 
+LICENSE_CSV_WITH_UNPURCHASED = """\
+License summary
+Generated on: May 18, 2026 09:15:00 AM
+CommCell Name,CommServe A
+CommCell ID,commcell-01
+Customer ID,customer-01
+License Expiry,Dec 31, 2026
+
+Capacity Licenses
+License,Available Total (TB),Permanent Purchased (TB),Term Purchased (TB),Used (TB),Used %,Summary
+Backup and Recovery,100,100,0,0.00,0%,0%
+
+Other Licenses - current usage details
+License,Available Total,Used
+Cloud Storage,100,40
+Archive,0,0
+
+Agent and Feature Licenses - current usage details
+License,Permanent Total,Permanent Used,Term Total,Term Used,Client,Agent,Install Date
+Virtual Server,50,12,10,3,Client A,Agent A,2026-05-01
+"""
+
+
 def _patch_security_assessment_paths(tmp_path, monkeypatch) -> None:
     import cvhealthcheck.security_assessment.service as security_assessment_service_module
     import cvhealthcheck.security_assessment.artifact as security_assessment_artifact_module
@@ -207,6 +230,8 @@ def test_quick_hc_report_includes_license_summary_summary(tmp_path, monkeypatch)
     assert report["license_summary"]["workload_summary_section_count"] == 1
     assert report["license_summary"]["other_license_row_count"] == 1
     assert report["license_summary"]["agent_feature_license_row_count"] == 1
+    assert report["license_summary"]["other_license_rows"][0]["usage_percent_label"] == "40%"
+    assert report["license_summary"]["other_license_rows"][0]["usage_has_bar"] is True
     assert report["environment"]["commcell_name"] == "CommServe A"
 
 
@@ -552,6 +577,48 @@ def test_quick_hc_report_post_license_summary_workload_only_excludes_detail_tabl
     assert "Agent and Feature Licenses" not in body
     assert "Cloud Storage" not in body
     assert "Virtual Server" not in body
+
+
+def test_quick_hc_report_renders_license_summary_usage_visualization(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+
+    license_artifact = parse_license_summary_csv(
+        LICENSE_CSV_WITH_UNPURCHASED,
+        source_file="/tmp/license-summary.csv",
+    )
+    persist_license_summary_artifact(
+        license_artifact,
+        catalog_dir=tmp_path / "license_catalog",
+        registry_path=tmp_path / "license_registry.sqlite3",
+    )
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/report",
+        data={
+            "selection_ids": [
+                "license_summary",
+                "license_summary.other_licenses",
+                "license_summary.agent_feature_licenses",
+                "license_summary.workload_sections",
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "<th>Summary</th>" in body
+    assert 'class="usage-summary-bar"' in body
+    assert 'class="usage-summary-bar-fill"' in body
+    assert "40%" in body
+    assert "License not purchased" in body
+    assert "dataset_guid" not in body
+    assert "HTTP status" not in body
+    assert "data/catalog/" not in body
+    assert "/tmp/" not in body
 
 
 def test_quick_hc_report_post_security_assessment_summary_only_excludes_findings(

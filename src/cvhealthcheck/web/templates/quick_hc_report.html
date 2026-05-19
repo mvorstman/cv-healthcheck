@@ -1,5 +1,21 @@
 {% extends "base.html" %}
 
+{% macro usage_summary_cell(row) -%}
+  <div class="usage-summary-cell">
+    {% if row.usage_has_bar and row.usage_percent_value is not none %}
+      <div class="usage-summary-bar" aria-hidden="true">
+        <span class="usage-summary-bar-fill" style="width: {{ row.usage_percent_value }}%"></span>
+      </div>
+      <div class="usage-summary-meta">
+        <strong>{{ row.usage_percent_label }}</strong>
+        <span>{{ row.usage_status }}</span>
+      </div>
+    {% else %}
+      <span class="usage-summary-status">{{ row.usage_status }}</span>
+    {% endif %}
+  </div>
+{%- endmacro %}
+
 {% block content %}
 <section>
   <h2>{{ report.title }}</h2>
@@ -184,20 +200,18 @@
             <thead>
               <tr>
                 <th>License</th>
-                <th>Entitlement / Available</th>
+                <th>Available Total</th>
                 <th>Used</th>
-                <th>Used %</th>
-                <th>Status</th>
+                <th>Summary</th>
               </tr>
             </thead>
             <tbody>
               {% for row in section.rows %}
                 <tr>
                   <td>{{ row.license }}</td>
-                  <td>{{ row.entitlement_value or "" }}</td>
-                  <td>{{ row.used or "" }}</td>
-                  <td>{{ row.usage_percent or "" }}</td>
-                  <td>{{ row.status or "" }}</td>
+                  <td>{{ row.available_display or (row.entitlement_value or "") }}</td>
+                  <td>{{ row.used_display or (row.used or "") }}</td>
+                  <td>{{ usage_summary_cell(row) }}</td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -213,16 +227,16 @@
                 <th>License</th>
                 <th>Available Total</th>
                 <th>Used</th>
-                <th>Unit</th>
+                <th>Summary</th>
               </tr>
             </thead>
             <tbody>
               {% for row in report.license_summary.visible_other_license_rows %}
                 <tr>
                   <td>{{ row.license }}</td>
-                  <td>{{ row.available_total if row.available_total is not none else (row.raw_available_total or "") }}</td>
-                  <td>{{ row.used if row.used is not none else (row.raw_used or "") }}</td>
-                  <td>{{ row.unit or "" }}</td>
+                  <td>{{ row.available_display or (row.available_total if row.available_total is not none else (row.raw_available_total or "")) }}</td>
+                  <td>{{ row.used_display or (row.used if row.used is not none else (row.raw_used or "")) }}</td>
+                  <td>{{ usage_summary_cell(row) }}</td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -238,10 +252,9 @@
             <thead>
               <tr>
                 <th>License</th>
-                <th>Permanent Total</th>
-                <th>Permanent Used</th>
-                <th>Term Total</th>
-                <th>Term Used</th>
+                <th>Available Total</th>
+                <th>Used</th>
+                <th>Summary</th>
                 <th>Client</th>
                 <th>Agent</th>
                 <th>Install Date</th>
@@ -251,10 +264,9 @@
               {% for row in report.license_summary.visible_agent_feature_rows %}
                 <tr>
                   <td>{{ row.license }}</td>
-                  <td>{{ row.permanent_total if row.permanent_total is not none else "" }}</td>
-                  <td>{{ row.permanent_used if row.permanent_used is not none else "" }}</td>
-                  <td>{{ row.term_total if row.term_total is not none else "" }}</td>
-                  <td>{{ row.term_used if row.term_used is not none else "" }}</td>
+                  <td>{{ row.available_display or "" }}</td>
+                  <td>{{ row.used_display or "" }}</td>
+                  <td>{{ usage_summary_cell(row) }}</td>
                   <td>{{ row.client or "" }}</td>
                   <td>{{ row.agent or "" }}</td>
                   <td>{{ row.install_date or "" }}</td>
