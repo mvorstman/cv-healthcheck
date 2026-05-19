@@ -336,6 +336,7 @@ class QuickHcReportService:
             if latest_total_clients is not None and starting_total_clients is not None
             else None
         )
+        chart = _client_growth_chart(records)
         return {
             "available": True,
             "requested": False,
@@ -350,7 +351,7 @@ class QuickHcReportService:
             "latest_total_clients": latest_total_clients,
             "starting_total_clients": starting_total_clients,
             "net_growth": net_growth,
-            "chart_points": _line_chart_points(records, value_key="total_clients"),
+            "chart": chart,
             "rows": records,
             "evidence": ReportEvidence(
                 artifact_type="client_growth",
@@ -623,34 +624,78 @@ def _coerce_int(value: Any) -> int | None:
         return None
 
 
-def _line_chart_points(
-    records: list[dict[str, Any]],
-    *,
-    value_key: str,
-    width: int = 420,
-    height: int = 160,
-    padding: int = 16,
-) -> str:
-    values = [_coerce_int(record.get(value_key)) for record in records]
-    numeric_values = [value for value in values if value is not None]
-    if len(numeric_values) < 2:
-        return ""
+def _client_growth_chart(records: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not records:
+        return None
 
-    min_value = min(numeric_values)
-    max_value = max(numeric_values)
-    value_span = max(max_value - min_value, 1)
-    usable_width = max(width - (padding * 2), 1)
-    usable_height = max(height - (padding * 2), 1)
-    points: list[str] = []
+    labels = [str(record.get("month") or "") for record in records]
+    total_clients = [_coerce_int(record.get("total_clients")) or 0 for record in records]
+    added = [_coerce_int(record.get("added")) or 0 for record in records]
+    removed = [_coerce_int(record.get("removed")) or 0 for record in records]
+    if not any(total_clients):
+        return None
 
-    for index, value in enumerate(values):
-        if value is None:
-            continue
-        x = padding + (usable_width * index / max(len(values) - 1, 1))
-        y = padding + usable_height - ((value - min_value) / value_span * usable_height)
-        points.append(f"{x:.1f},{y:.1f}")
-
-    return " ".join(points)
+    return {
+        "canvas_id": "client-growth-history-chart",
+        "type": "bar",
+        "title": "Client Growth History",
+        "labels": labels,
+        "datasets": [
+            {
+                "type": "line",
+                "label": "Total clients",
+                "data": total_clients,
+                "borderColor": "rgb(36, 87, 166)",
+                "backgroundColor": "rgba(36, 87, 166, 0.16)",
+                "borderWidth": 3,
+                "pointRadius": 4,
+                "pointHoverRadius": 5,
+                "pointBackgroundColor": "rgb(36, 87, 166)",
+                "tension": 0.25,
+                "fill": False,
+                "yAxisID": "clients",
+                "order": 1,
+            },
+            {
+                "type": "bar",
+                "label": "Added clients",
+                "data": added,
+                "backgroundColor": "rgba(22, 163, 74, 0.70)",
+                "borderColor": "rgb(22, 163, 74)",
+                "borderWidth": 1,
+                "yAxisID": "changes",
+                "order": 2,
+            },
+            {
+                "type": "bar",
+                "label": "Removed clients",
+                "data": removed,
+                "backgroundColor": "rgba(217, 119, 6, 0.68)",
+                "borderColor": "rgb(217, 119, 6)",
+                "borderWidth": 1,
+                "yAxisID": "changes",
+                "order": 3,
+            },
+        ],
+        "x_label": "Month",
+        "scales": {
+            "clients": {
+                "beginAtZero": False,
+                "position": "left",
+                "title": {"display": True, "text": "Total clients"},
+                "grid": {"color": "rgba(148, 163, 184, 0.20)"},
+            },
+            "changes": {
+                "beginAtZero": True,
+                "position": "right",
+                "title": {"display": True, "text": "Added / removed clients"},
+                "grid": {"drawOnChartArea": False},
+            },
+            "x": {
+                "grid": {"color": "rgba(148, 163, 184, 0.16)"},
+            },
+        },
+    }
 
 
 def _now_iso() -> str:

@@ -437,13 +437,15 @@ def test_quick_hc_report_post_client_growth_only_excludes_other_optional_subject
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Client Growth" in body
-    assert "Client Count Trend" in body
+    assert "Client Growth History" in body
     assert "Latest Total Clients" in body
     assert "Net Growth Over Period" in body
     assert "Monthly Summary" in body
     assert "125" in body
     assert "2026-04 to 2026-05" in body
-    assert "polyline" in body
+    assert 'id="client-growth-history-chart"' in body
+    assert '"labels": ["2026-04", "2026-05"]' in body
+    assert '"label": "Total clients"' in body
     assert "dataset_guid" not in body
     assert "Source report" not in body
     assert "Source dataset" not in body

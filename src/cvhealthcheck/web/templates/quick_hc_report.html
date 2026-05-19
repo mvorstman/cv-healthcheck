@@ -234,20 +234,18 @@
           <tr><th>Last Collected</th><td>{{ report.client_growth.imported_at or "Not collected yet" }}</td></tr>
         </tbody>
       </table>
-      {% if report.client_growth.chart_points %}
+      {% if report.client_growth.chart %}
         <div class="chart-panel">
-          <h4>Client Count Trend</h4>
-          <svg viewBox="0 0 420 160" role="img" aria-label="Client count trend over time" class="simple-chart">
-            <polyline
-              fill="none"
-              stroke="#2457a6"
-              stroke-width="3"
-              stroke-linejoin="round"
-              stroke-linecap="round"
-              points="{{ report.client_growth.chart_points }}"
-            ></polyline>
-          </svg>
+          <div class="chart-frame">
+            <canvas
+              id="{{ report.client_growth.chart.canvas_id }}"
+              aria-label="{{ report.client_growth.chart.title }}"
+              role="img"
+            ></canvas>
+          </div>
         </div>
+      {% else %}
+        <p class="notice">No trend points are available for Client Growth yet.</p>
       {% endif %}
       {% if report.client_growth.rows %}
         <h4>Monthly Summary</h4>
@@ -345,4 +343,49 @@
     <p>Not collected yet</p>
   {% endif %}
 </section>
+{% endblock %}
+
+{% block scripts %}
+  {% if report.client_growth.requested and report.client_growth.available and report.client_growth.has_content and report.client_growth.chart %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+      const clientGrowthChart = {{ report.client_growth.chart | tojson }};
+      const clientGrowthContext = document.getElementById(clientGrowthChart.canvas_id);
+      if (clientGrowthContext) {
+        const clientGrowthScales = Object.assign({
+          x: {
+            title: {
+              display: true,
+              text: clientGrowthChart.x_label
+            }
+          }
+        }, clientGrowthChart.scales || {});
+        new Chart(clientGrowthContext, {
+          type: clientGrowthChart.type || "bar",
+          data: {
+            labels: clientGrowthChart.labels,
+            datasets: clientGrowthChart.datasets
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              mode: "index",
+              intersect: false
+            },
+            plugins: {
+              legend: {
+                position: "top"
+              },
+              title: {
+                display: true,
+                text: clientGrowthChart.title
+              }
+            },
+            scales: clientGrowthScales
+          }
+        });
+      }
+    </script>
+  {% endif %}
 {% endblock %}
