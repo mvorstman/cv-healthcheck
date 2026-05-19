@@ -22,6 +22,8 @@
 
 ## 2026-05-20
 
+- Extracted the Client Growth Quick HC preview body into `web/templates/partials/quickhc/previews/client_growth.html` and kept it explicitly included from `quick_hc.html`.
+- Moved the Client Growth summary, chart-preview text, and monthly-table preview bodies into that partial without changing section IDs, localStorage behavior, or customer report output.
 - Extracted the License Summary Quick HC preview body into `web/templates/partials/quickhc/previews/license_summary.html` and kept it explicitly included from `quick_hc.html`.
 - Moved the License Summary metadata, workload-sections, other-licenses, and agent-feature preview bodies into that partial without changing report filtering, section IDs, or customer report output.
 - Extracted the Security Assessment Quick HC preview body into `web/templates/partials/quickhc/previews/security_assessment.html` and kept it explicitly included from `quick_hc.html`.

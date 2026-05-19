@@ -113,62 +113,18 @@
       ) %}
 
             {% call section_card("client_growth", "client_growth.summary", "Summary metrics", "client_growth.summary" in selected_report_sections, (client_growth.latest_total_clients ~ " total clients") if client_growth.exists and client_growth.latest_total_clients is not none else "Overview") %}
-              <div class="quickhc-section-preview">
-                {% if client_growth.exists %}
-                  <div class="quickhc-preview-inline">
-                    <span>Latest total clients {{ client_growth.latest_total_clients if client_growth.latest_total_clients is not none else "Not collected yet" }}</span>
-                    <span>
-                      Net growth
-                      {% if client_growth.latest_total_clients is not none and history %}
-                        {{ (client_growth.latest_total_clients or 0) - starting_total }}
-                      {% else %}
-                        Not collected yet
-                      {% endif %}
-                    </span>
-                    <span>
-                      History range
-                      {% if history %}
-                        {{ history.start }} to {{ history.end }}
-                      {% else %}
-                        Not collected yet
-                      {% endif %}
-                    </span>
-                  </div>
-                {% else %}
-                  <p class="quickhc-empty-state">Client Growth data has not been collected yet.</p>
-                {% endif %}
-              </div>
+              {% set client_growth_preview_section = "summary" %}
+              {% include "partials/quickhc/previews/client_growth.html" %}
             {% endcall %}
 
             {% call section_card("client_growth", "client_growth.chart", "Client Growth chart", "client_growth.chart" in selected_report_sections, "Trend preview") %}
-              <div class="quickhc-section-preview">
-                {% if client_growth.exists %}
-                  <p class="quickhc-preview-text">
-                    Trend preview available for {{ history.start if history else "the collected period" }}{% if history and history.end %} to {{ history.end }}{% endif %}.
-                  </p>
-                {% else %}
-                  <p class="quickhc-empty-state">Client Growth data has not been collected yet.</p>
-                {% endif %}
-              </div>
+              {% set client_growth_preview_section = "chart" %}
+              {% include "partials/quickhc/previews/client_growth.html" %}
             {% endcall %}
 
             {% call section_card("client_growth", "client_growth.monthly_table", "Monthly summary table", "client_growth.monthly_table" in selected_report_sections, (client_growth.record_count ~ " rows") if client_growth.exists else "History") %}
-              <div class="quickhc-section-preview">
-                {% if client_growth.exists %}
-                  <div class="quickhc-preview-inline">
-                    <span>{{ client_growth.record_count }} monthly rows</span>
-                    <span>
-                      {% if history %}
-                        {{ history.start }} to {{ history.end }}
-                      {% else %}
-                        No history range available
-                      {% endif %}
-                    </span>
-                  </div>
-                {% else %}
-                  <p class="quickhc-empty-state">Client Growth data has not been collected yet.</p>
-                {% endif %}
-              </div>
+              {% set client_growth_preview_section = "monthly_table" %}
+              {% include "partials/quickhc/previews/client_growth.html" %}
             {% endcall %}
       {% endcall %}
 

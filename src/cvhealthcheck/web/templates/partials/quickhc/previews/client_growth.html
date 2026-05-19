@@ -1,0 +1,50 @@
+<div class="quickhc-section-preview">
+  {% if client_growth_preview_section == "summary" %}
+    {% if client_growth.exists %}
+      <div class="quickhc-preview-inline">
+        <span>Latest total clients {{ client_growth.latest_total_clients if client_growth.latest_total_clients is not none else "Not collected yet" }}</span>
+        <span>
+          Net growth
+          {% if client_growth.latest_total_clients is not none and history %}
+            {{ (client_growth.latest_total_clients or 0) - starting_total }}
+          {% else %}
+            Not collected yet
+          {% endif %}
+        </span>
+        <span>
+          History range
+          {% if history %}
+            {{ history.start }} to {{ history.end }}
+          {% else %}
+            Not collected yet
+          {% endif %}
+        </span>
+      </div>
+    {% else %}
+      <p class="quickhc-empty-state">Client Growth data has not been collected yet.</p>
+    {% endif %}
+  {% elif client_growth_preview_section == "chart" %}
+    {% if client_growth.exists %}
+      <p class="quickhc-preview-text">
+        Trend preview available for {{ history.start if history else "the collected period" }}{% if history and history.end %} to {{ history.end }}{% endif %}.
+      </p>
+    {% else %}
+      <p class="quickhc-empty-state">Client Growth data has not been collected yet.</p>
+    {% endif %}
+  {% elif client_growth_preview_section == "monthly_table" %}
+    {% if client_growth.exists %}
+      <div class="quickhc-preview-inline">
+        <span>{{ client_growth.record_count }} monthly rows</span>
+        <span>
+          {% if history %}
+            {{ history.start }} to {{ history.end }}
+          {% else %}
+            No history range available
+          {% endif %}
+        </span>
+      </div>
+    {% else %}
+      <p class="quickhc-empty-state">Client Growth data has not been collected yet.</p>
+    {% endif %}
+  {% endif %}
+</div>
