@@ -95,6 +95,7 @@ Current Phase 3 capabilities:
 - Customer-facing output intentionally strips artifact paths, dataset GUIDs, HTTP status fields, and raw/debug extraction metadata.
 - Client Growth now includes a professional Chart.js visualization in the customer-facing report.
 - License Summary now includes workload/category sections plus compact usage visualization where that presentation fits the data.
+- The shell navigation direction is now stabilized around a sidebar-first flow with `Connect to CS`, `Status`, `Quick HC`, and `Development`, plus a lightweight Back action in the topbar.
 
 Current known limitations:
 

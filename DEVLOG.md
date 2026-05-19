@@ -20,6 +20,17 @@
 - Improved `start.sh` so it stops any process already listening on port `5001` before starting Flask again.
 - Added broad regression coverage for Quick HC overview rendering, section selection behavior, subject omission behavior, default report rendering, Security Assessment import/collect flows, Client Growth chart output, and License Summary usage rendering.
 
+## 2026-05-20
+
+- Refined the product-shell navigation after the initial app-shell rollout.
+- Reordered the sidebar so the connection entry point now appears first as `Connect to CS`, followed by `Status`, `Quick HC`, and `Development`.
+- Renamed the visible login navigation label from `Login` to `Connect to CS` without changing authentication behavior or routes.
+- Replaced the topbar `Login` action with a subtle Back button that prefers browser history and falls back to `/quick-hc`.
+- Kept the global theme toggle in the topbar and preserved responsive shell behavior.
+- Confirmed validation still passes:
+  `venv/bin/python -m compileall src tests`
+  `venv/bin/python -m pytest`
+
 ## 2026-05-18
 
 - Added a basic Quick HC HTML report output at `/quick-hc/report`.

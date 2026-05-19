@@ -116,11 +116,15 @@ Customer-facing report rules:
 The current UI foundation work is moving the Flask surface from isolated pages to a cleaner product shell:
 
 - app shell layout with sidebar and topbar
+- sidebar navigation with `Connect to CS`, `Status`, `Quick HC`, and `Development`
 - active navigation states
 - global design tokens
 - global light/dark theme toggle with persisted preference
+- topbar theme toggle plus a Back action that prefers browser history and falls back to `/quick-hc`
 - responsive shell behavior
 - visual separation between customer-facing Quick HC pages and internal/development pages
+
+The shell now exposes the connection/login route through the sidebar as `Connect to CS` instead of a separate `Login` navigation label.
 
 Quick HC itself now uses full-width expandable subject tiles, per-section cards, nested include/exclude controls, and theme-aware customer-facing previews.
 
