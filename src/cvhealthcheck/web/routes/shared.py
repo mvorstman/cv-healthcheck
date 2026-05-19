@@ -40,6 +40,7 @@ from cvhealthcheck.metrics import (
 )
 from cvhealthcheck.output.json_report import to_pretty_json
 from cvhealthcheck.quickhc import get_commcell_identity
+from cvhealthcheck.quickhc.commcell import normalize_commserv
 from cvhealthcheck.reportsplus.catalog import catalog_status, read_json, write_catalog
 from cvhealthcheck.reportsplus.client import ReportsPlusClient
 from cvhealthcheck.reportsplus.extract_report import extract_report
@@ -193,6 +194,7 @@ def _license_summary_quick_hc() -> dict[str, Any]:
             "exists": False,
             "path": "data/catalog/license_summary/latest.json",
         }
+    workload_sections = list(payload.get("workload_summary_sections") or [])
     return {
         "exists": True,
         "path": str(payload.get("file_path") or "data/catalog/license_summary/latest.json"),
@@ -203,8 +205,45 @@ def _license_summary_quick_hc() -> dict[str, Any]:
         "commcell_id": payload.get("commcell_id"),
         "commcell_name": payload.get("commcell_name"),
         "license_expiry": payload.get("license_expiry"),
+        "workload_section_count": len(workload_sections),
+        "workload_section_names": [
+            str(section.get("section_name") or "")
+            for section in workload_sections
+            if str(section.get("section_name") or "").strip()
+        ],
         "other_count": len(payload.get("other_licenses") or []),
         "agent_feature_count": len(payload.get("agent_feature_licenses") or []),
+    }
+
+
+def _commcell_quick_hc() -> dict[str, Any]:
+    try:
+        payload = read_json("commserv.json", catalog_dir=Path("data/catalog/rest"))
+    except FileNotFoundError:
+        return {
+            "exists": False,
+            "summary": "Not collected yet",
+        }
+
+    identity_payload = payload.get("identity") if isinstance(payload, dict) else {}
+    identity = (
+        identity_payload
+        if hasattr(identity_payload, "get")
+        else normalize_commserv(payload if isinstance(payload, dict) else {}).to_dict()
+    )
+    return {
+        "exists": True,
+        "commcell_name": identity.get("hostName"),
+        "commcell_id": identity.get("csGUID"),
+        "version": identity.get("csVersionInfo"),
+        "release_id": identity.get("releaseId"),
+        "timezone": identity.get("timeZone"),
+        "status": "Available",
+        "summary": (
+            f"{identity.get('hostName') or 'CommCell'}"
+            if identity.get("hostName")
+            else "CommCell details available"
+        ),
     }
 
 

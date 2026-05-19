@@ -10,6 +10,7 @@ from .shared import (
     SecurityAssessmentService,
     _capacity_license_quick_hc,
     _client_growth_quick_hc,
+    _commcell_quick_hc,
     _current_token,
     _license_summary_quick_hc,
     _reportsplus_client,
@@ -44,6 +45,7 @@ def quick_hc():
     return render_template(
         "quick_hc.html",
         commcell_status=catalog_status("commserv.json", catalog_dir=Path("data/catalog/rest")),
+        commcell_preview=_commcell_quick_hc(),
         security_assessment=security_assessment_quick_hc(),
         license_summary=_license_summary_quick_hc(),
         client_growth=_client_growth_quick_hc(),

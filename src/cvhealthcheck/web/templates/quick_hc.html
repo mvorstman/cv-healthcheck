@@ -21,8 +21,7 @@
             <span class="quickhc-chevron" aria-hidden="true"></span>
             <div class="quickhc-subject-copy">
               <h3>CommCell Details</h3>
-              <p class="helper-text">Environment and identity details used in the report header.</p>
-              <p class="quickhc-subject-caption">Quick HC environment metadata.</p>
+              <p class="helper-text">Platform identity and environment context for the customer-facing summary.</p>
             </div>
             <span class="badge badge-good">Available</span>
           </div>
@@ -44,19 +43,56 @@
         </summary>
 
         <div class="quickhc-subject-body">
-          <div class="quickhc-subsections" aria-label="CommCell Details sections">
-            {% for option in report_subsection_options["environment"] %}
-              <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
-                <input
-                  id="selection-{{ option.id | replace('.', '-') }}"
-                  type="checkbox"
-                  name="selection_ids"
-                  value="{{ option.id }}"
-                  {% if option.id in selected_report_sections %}checked{% endif %}
-                >
-                <span>{{ option.label }}</span>
-              </label>
-            {% endfor %}
+          <div class="quickhc-preview-block">
+            <h4>Subject Preview</h4>
+            {% if commcell_preview.exists %}
+              <div class="quickhc-preview-grid">
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">CommCell Name</span>
+                  <strong>{{ commcell_preview.commcell_name or "Not collected yet" }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">CommCell ID</span>
+                  <strong>{{ commcell_preview.commcell_id or "Not collected yet" }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Version</span>
+                  <strong>{{ commcell_preview.version or "Not collected yet" }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Release</span>
+                  <strong>{{ commcell_preview.release_id or "Not collected yet" }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Time Zone</span>
+                  <strong>{{ commcell_preview.timezone or "Not collected yet" }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Status</span>
+                  <strong>{{ commcell_preview.status }}</strong>
+                </div>
+              </div>
+            {% else %}
+              <p class="quickhc-empty-state">CommCell details have not been collected yet.</p>
+            {% endif %}
+          </div>
+
+          <div class="quickhc-selection-block">
+            <p class="quickhc-selection-label">Include in customer report</p>
+            <div class="quickhc-subsections" aria-label="CommCell Details sections">
+              {% for option in report_subsection_options["environment"] %}
+                <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
+                  <input
+                    id="selection-{{ option.id | replace('.', '-') }}"
+                    type="checkbox"
+                    name="selection_ids"
+                    value="{{ option.id }}"
+                    {% if option.id in selected_report_sections %}checked{% endif %}
+                  >
+                  <span>{{ option.label }}</span>
+                </label>
+              {% endfor %}
+            </div>
           </div>
         </div>
       </details>
@@ -67,15 +103,7 @@
             <span class="quickhc-chevron" aria-hidden="true"></span>
             <div class="quickhc-subject-copy">
               <h3>Security Assessment</h3>
-              <p class="helper-text">Security posture summary and actionable findings.</p>
-              <p class="quickhc-subject-caption">
-                {% if security_assessment.exists and security_assessment.summary %}
-                  {% set counters = security_assessment.summary.counters %}
-                  {{ counters["Critical"] }} critical, {{ counters["Warning"] }} warning, {{ counters["Info"] }} info, {{ counters["Good"] }} good
-                {% else %}
-                  No current Security Assessment artifact is available.
-                {% endif %}
-              </p>
+              <p class="helper-text">Posture summary with emphasis on the most important findings to address.</p>
             </div>
             {% if security_assessment.exists and security_assessment.summary %}
               <span class="badge badge-good">Available</span>
@@ -101,19 +129,73 @@
         </summary>
 
         <div class="quickhc-subject-body">
-          <div class="quickhc-subsections" aria-label="Security Assessment sections">
-            {% for option in report_subsection_options["security_assessment"] %}
-              <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
-                <input
-                  id="selection-{{ option.id | replace('.', '-') }}"
-                  type="checkbox"
-                  name="selection_ids"
-                  value="{{ option.id }}"
-                  {% if option.id in selected_report_sections %}checked{% endif %}
-                >
-                <span>{{ option.label }}</span>
-              </label>
-            {% endfor %}
+          <div class="quickhc-preview-block">
+            <h4>Subject Preview</h4>
+            {% if security_assessment.exists and security_assessment.summary %}
+              {% set counters = security_assessment.summary.counters %}
+              <div class="quickhc-preview-grid">
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Critical</span>
+                  <strong>{{ counters["Critical"] }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Warning</span>
+                  <strong>{{ counters["Warning"] }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Info</span>
+                  <strong>{{ counters["Info"] }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Good</span>
+                  <strong>{{ counters["Good"] }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Total checks</span>
+                  <strong>{{ counters["Total checks"] }}</strong>
+                </div>
+              </div>
+              <div class="quickhc-preview-list">
+                <h5>Critical / Warning highlights</h5>
+                {% set ns = namespace(count=0) %}
+                <ul>
+                  {% for section in security_assessment.summary.sections %}
+                    {% for row in section.checks %}
+                      {% if row.status in ["Critical", "Warning"] and ns.count < 5 %}
+                        <li>
+                          <strong>{{ row.parameter }}</strong>
+                          <span>{{ row.status }}{% if row.remarks %}: {{ row.remarks }}{% endif %}</span>
+                        </li>
+                        {% set ns.count = ns.count + 1 %}
+                      {% endif %}
+                    {% endfor %}
+                  {% endfor %}
+                </ul>
+                {% if ns.count == 0 %}
+                  <p class="quickhc-empty-state">No critical or warning highlights are currently present.</p>
+                {% endif %}
+              </div>
+            {% else %}
+              <p class="quickhc-empty-state">Security Assessment data has not been collected yet.</p>
+            {% endif %}
+          </div>
+
+          <div class="quickhc-selection-block">
+            <p class="quickhc-selection-label">Include in customer report</p>
+            <div class="quickhc-subsections" aria-label="Security Assessment sections">
+              {% for option in report_subsection_options["security_assessment"] %}
+                <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
+                  <input
+                    id="selection-{{ option.id | replace('.', '-') }}"
+                    type="checkbox"
+                    name="selection_ids"
+                    value="{{ option.id }}"
+                    {% if option.id in selected_report_sections %}checked{% endif %}
+                  >
+                  <span>{{ option.label }}</span>
+                </label>
+              {% endfor %}
+            </div>
           </div>
         </div>
       </details>
@@ -124,14 +206,7 @@
             <span class="quickhc-chevron" aria-hidden="true"></span>
             <div class="quickhc-subject-copy">
               <h3>License Summary</h3>
-              <p class="helper-text">License consumption summary for customer-facing reporting.</p>
-              <p class="quickhc-subject-caption">
-                {% if license_summary.exists %}
-                  {{ license_summary.other_count }} other licenses, {{ license_summary.agent_feature_count }} agent/feature licenses
-                {% else %}
-                  No current License Summary artifact is available.
-                {% endif %}
-              </p>
+              <p class="helper-text">Consumption snapshot across workloads, other licenses, and agent or feature usage.</p>
             </div>
             {% if license_summary.exists %}
               <span class="badge badge-good">Available</span>
@@ -157,19 +232,61 @@
         </summary>
 
         <div class="quickhc-subject-body">
-          <div class="quickhc-subsections" aria-label="License Summary sections">
-            {% for option in report_subsection_options["license_summary"] %}
-              <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
-                <input
-                  id="selection-{{ option.id | replace('.', '-') }}"
-                  type="checkbox"
-                  name="selection_ids"
-                  value="{{ option.id }}"
-                  {% if option.id in selected_report_sections %}checked{% endif %}
-                >
-                <span>{{ option.label }}</span>
-              </label>
-            {% endfor %}
+          <div class="quickhc-preview-block">
+            <h4>Subject Preview</h4>
+            {% if license_summary.exists %}
+              <div class="quickhc-preview-grid">
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Workload sections</span>
+                  <strong>{{ license_summary.workload_section_count }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Other license rows</span>
+                  <strong>{{ license_summary.other_count }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Agent / feature rows</span>
+                  <strong>{{ license_summary.agent_feature_count }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">License expiry</span>
+                  <strong>{{ license_summary.license_expiry or "Not collected yet" }}</strong>
+                </div>
+              </div>
+              <p class="quickhc-preview-text">
+                {{ license_summary.other_count }} other licenses, {{ license_summary.agent_feature_count }} agent/feature licenses
+              </p>
+              {% if license_summary.workload_section_names %}
+                <div class="quickhc-preview-list">
+                  <h5>Workload sections</h5>
+                  <ul>
+                    {% for section_name in license_summary.workload_section_names[:4] %}
+                      <li><strong>{{ section_name }}</strong></li>
+                    {% endfor %}
+                  </ul>
+                </div>
+              {% endif %}
+            {% else %}
+              <p class="quickhc-empty-state">License Summary data has not been collected yet.</p>
+            {% endif %}
+          </div>
+
+          <div class="quickhc-selection-block">
+            <p class="quickhc-selection-label">Include in customer report</p>
+            <div class="quickhc-subsections" aria-label="License Summary sections">
+              {% for option in report_subsection_options["license_summary"] %}
+                <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
+                  <input
+                    id="selection-{{ option.id | replace('.', '-') }}"
+                    type="checkbox"
+                    name="selection_ids"
+                    value="{{ option.id }}"
+                    {% if option.id in selected_report_sections %}checked{% endif %}
+                  >
+                  <span>{{ option.label }}</span>
+                </label>
+              {% endfor %}
+            </div>
           </div>
         </div>
       </details>
@@ -180,8 +297,7 @@
             <span class="quickhc-chevron" aria-hidden="true"></span>
             <div class="quickhc-subject-copy">
               <h3>Client Growth</h3>
-              <p class="helper-text">Client count change summary from the current Quick HC metric artifact.</p>
-              <p class="quickhc-subject-caption">{{ client_growth.summary }}</p>
+              <p class="helper-text">Trend snapshot showing recent protected client count and change over time.</p>
             </div>
             {% if client_growth.exists %}
               <span class="badge badge-good">Available</span>
@@ -207,19 +323,80 @@
         </summary>
 
         <div class="quickhc-subject-body">
-          <div class="quickhc-subsections" aria-label="Client Growth sections">
-            {% for option in report_subsection_options["client_growth"] %}
-              <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
-                <input
-                  id="selection-{{ option.id | replace('.', '-') }}"
-                  type="checkbox"
-                  name="selection_ids"
-                  value="{{ option.id }}"
-                  {% if option.id in selected_report_sections %}checked{% endif %}
-                >
-                <span>{{ option.label }}</span>
-              </label>
-            {% endfor %}
+          <div class="quickhc-preview-block">
+            <h4>Subject Preview</h4>
+            {% if client_growth.exists %}
+              {% set history = client_growth.history_range or {} %}
+              {% set starting_total = (client_growth.latest_total_clients or 0) - ((client_growth.latest_added or 0) - (client_growth.latest_removed or 0)) %}
+              <div class="quickhc-preview-grid">
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Latest total clients</span>
+                  <strong>{{ client_growth.latest_total_clients if client_growth.latest_total_clients is not none else "Not collected yet" }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Net growth over period</span>
+                  <strong>
+                    {% if client_growth.latest_total_clients is not none and history %}
+                      {{ (client_growth.latest_total_clients or 0) - starting_total }}
+                    {% else %}
+                      Not collected yet
+                    {% endif %}
+                  </strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">History range</span>
+                  <strong>
+                    {% if history %}
+                      {{ history.start }} to {{ history.end }}
+                    {% else %}
+                      Not collected yet
+                    {% endif %}
+                  </strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Latest month</span>
+                  <strong>{{ client_growth.latest_month or "Not collected yet" }}</strong>
+                </div>
+              </div>
+              <table class="compact-table quickhc-preview-table">
+                <thead>
+                  <tr>
+                    <th>Month</th>
+                    <th>Added</th>
+                    <th>Removed</th>
+                    <th>Total clients</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>{{ client_growth.latest_month or "" }}</td>
+                    <td>{{ client_growth.latest_added if client_growth.latest_added is not none else "" }}</td>
+                    <td>{{ client_growth.latest_removed if client_growth.latest_removed is not none else "" }}</td>
+                    <td>{{ client_growth.latest_total_clients if client_growth.latest_total_clients is not none else "" }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            {% else %}
+              <p class="quickhc-empty-state">Client Growth data has not been collected yet.</p>
+            {% endif %}
+          </div>
+
+          <div class="quickhc-selection-block">
+            <p class="quickhc-selection-label">Include in customer report</p>
+            <div class="quickhc-subsections" aria-label="Client Growth sections">
+              {% for option in report_subsection_options["client_growth"] %}
+                <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
+                  <input
+                    id="selection-{{ option.id | replace('.', '-') }}"
+                    type="checkbox"
+                    name="selection_ids"
+                    value="{{ option.id }}"
+                    {% if option.id in selected_report_sections %}checked{% endif %}
+                  >
+                  <span>{{ option.label }}</span>
+                </label>
+              {% endfor %}
+            </div>
           </div>
         </div>
       </details>
@@ -230,8 +407,7 @@
             <span class="quickhc-chevron" aria-hidden="true"></span>
             <div class="quickhc-subject-copy">
               <h3>Capacity License</h3>
-              <p class="helper-text">Capacity usage summary from the current Quick HC metric artifact.</p>
-              <p class="quickhc-subject-caption">{{ capacity_license.summary }}</p>
+              <p class="helper-text">Capacity utilization summary for the latest available reporting period.</p>
             </div>
             {% if capacity_license.exists %}
               <span class="badge badge-good">Available</span>
@@ -257,19 +433,61 @@
         </summary>
 
         <div class="quickhc-subject-body">
-          <div class="quickhc-subsections" aria-label="Capacity License sections">
-            {% for option in report_subsection_options["capacity_license"] %}
-              <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
-                <input
-                  id="selection-{{ option.id | replace('.', '-') }}"
-                  type="checkbox"
-                  name="selection_ids"
-                  value="{{ option.id }}"
-                  {% if option.id in selected_report_sections %}checked{% endif %}
-                >
-                <span>{{ option.label }}</span>
-              </label>
-            {% endfor %}
+          <div class="quickhc-preview-block">
+            <h4>Subject Preview</h4>
+            {% if capacity_license.exists %}
+              <div class="quickhc-preview-grid">
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Latest month</span>
+                  <strong>{{ capacity_license.latest_month or "Not collected yet" }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Entities summarized</span>
+                  <strong>{{ capacity_license.entity_count if capacity_license.entity_count is not none else "Not collected yet" }}</strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Capacity used</span>
+                  <strong>
+                    {% if capacity_license.total_used is not none %}
+                      {{ "%.2f"|format(capacity_license.total_used) }}
+                    {% else %}
+                      Not collected yet
+                    {% endif %}
+                  </strong>
+                </div>
+                <div class="quickhc-preview-item">
+                  <span class="quickhc-preview-label">Capacity licensed</span>
+                  <strong>
+                    {% if capacity_license.total_purchased is not none %}
+                      {{ "%.2f"|format(capacity_license.total_purchased) }}
+                    {% else %}
+                      Not collected yet
+                    {% endif %}
+                  </strong>
+                </div>
+              </div>
+              <p class="quickhc-preview-text">{{ capacity_license.summary }}</p>
+            {% else %}
+              <p class="quickhc-empty-state">Capacity License data has not been collected yet.</p>
+            {% endif %}
+          </div>
+
+          <div class="quickhc-selection-block">
+            <p class="quickhc-selection-label">Include in customer report</p>
+            <div class="quickhc-subsections" aria-label="Capacity License sections">
+              {% for option in report_subsection_options["capacity_license"] %}
+                <label class="quickhc-subsection-toggle" for="selection-{{ option.id | replace('.', '-') }}">
+                  <input
+                    id="selection-{{ option.id | replace('.', '-') }}"
+                    type="checkbox"
+                    name="selection_ids"
+                    value="{{ option.id }}"
+                    {% if option.id in selected_report_sections %}checked{% endif %}
+                  >
+                  <span>{{ option.label }}</span>
+                </label>
+              {% endfor %}
+            </div>
           </div>
         </div>
       </details>
