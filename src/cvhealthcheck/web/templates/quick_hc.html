@@ -1,17 +1,30 @@
 {% extends "base.html" %}
 
-{% macro section_toggle(subject_id, option_id, label, checked) -%}
-  <label class="quickhc-subsection-toggle" for="selection-{{ option_id | replace('.', '-') }}">
-    <input
-      id="selection-{{ option_id | replace('.', '-') }}"
-      type="checkbox"
-      name="selection_ids"
-      value="{{ option_id }}"
-      data-subject-child="{{ subject_id }}"
-      {% if checked %}checked{% endif %}
-    >
-    <span>{{ label }}</span>
-  </label>
+{% macro section_card(subject_id, option_id, label, checked, meta_text="") -%}
+  <div class="quickhc-section-card" data-section-card>
+    <label class="quickhc-section-header" for="selection-{{ option_id | replace('.', '-') }}">
+      <span class="quickhc-section-header-main">
+        <input
+          id="selection-{{ option_id | replace('.', '-') }}"
+          type="checkbox"
+          name="selection_ids"
+          value="{{ option_id }}"
+          data-subject-child="{{ subject_id }}"
+          {% if checked %}checked{% endif %}
+        >
+        <span class="quickhc-section-title">{{ label }}</span>
+      </span>
+      <span class="quickhc-section-meta">
+        {% if meta_text %}
+          <span class="quickhc-section-hint">{{ meta_text }}</span>
+        {% endif %}
+        <span class="quickhc-section-state" aria-hidden="true"></span>
+      </span>
+    </label>
+    <div class="quickhc-section-content">
+      {{ caller() }}
+    </div>
+  </div>
 {%- endmacro %}
 
 {% block content %}
@@ -74,8 +87,7 @@
         <div class="quickhc-subject-body">
           <div class="quickhc-selection-block" data-selection-block="environment">
             <p class="quickhc-selection-label">Include in customer report</p>
-            <div class="quickhc-section-option">
-              {{ section_toggle("environment", "environment.metadata", "Environment metadata", "environment.metadata" in selected_report_sections) }}
+            {% call section_card("environment", "environment.metadata", "Environment metadata", "environment.metadata" in selected_report_sections, "CommCell profile") %}
               <div class="quickhc-section-preview">
                 {% if commcell_preview.exists %}
                   <div class="quickhc-preview-grid">
@@ -100,7 +112,7 @@
                   <p class="quickhc-empty-state">CommCell details have not been collected yet.</p>
                 {% endif %}
               </div>
-            </div>
+            {% endcall %}
           </div>
         </div>
       </details>
@@ -141,8 +153,7 @@
           <div class="quickhc-selection-block" data-selection-block="security_assessment">
             <p class="quickhc-selection-label">Include in customer report</p>
 
-            <div class="quickhc-section-option">
-              {{ section_toggle("security_assessment", "security_assessment.summary", "Summary counters", "security_assessment.summary" in selected_report_sections) }}
+            {% call section_card("security_assessment", "security_assessment.summary", "Summary counters", "security_assessment.summary" in selected_report_sections, (security_assessment.summary.counters["Total checks"] ~ " checks") if security_assessment.exists and security_assessment.summary else "Overview") %}
               <div class="quickhc-section-preview">
                 {% if security_assessment.exists and security_assessment.summary %}
                   {% set counters = security_assessment.summary.counters %}
@@ -157,10 +168,9 @@
                   <p class="quickhc-empty-state">Security Assessment data has not been collected yet.</p>
                 {% endif %}
               </div>
-            </div>
+            {% endcall %}
 
-            <div class="quickhc-section-option">
-              {{ section_toggle("security_assessment", "security_assessment.highlights", "Critical / Warning highlights", "security_assessment.highlights" in selected_report_sections) }}
+            {% call section_card("security_assessment", "security_assessment.highlights", "Critical / Warning highlights", "security_assessment.highlights" in selected_report_sections, "Priority findings") %}
               <div class="quickhc-section-preview">
                 {% if security_assessment.exists and security_assessment.summary %}
                   {% set ns = namespace(count=0) %}
@@ -185,10 +195,9 @@
                   <p class="quickhc-empty-state">Security Assessment data has not been collected yet.</p>
                 {% endif %}
               </div>
-            </div>
+            {% endcall %}
 
-            <div class="quickhc-section-option">
-              {{ section_toggle("security_assessment", "security_assessment.all_findings", "Info / Good findings", "security_assessment.all_findings" in selected_report_sections) }}
+            {% call section_card("security_assessment", "security_assessment.all_findings", "Info / Good findings", "security_assessment.all_findings" in selected_report_sections, "Informational checks") %}
               <div class="quickhc-section-preview">
                 {% if security_assessment.exists and security_assessment.summary %}
                   {% set counters = security_assessment.summary.counters %}
@@ -211,7 +220,7 @@
                   <p class="quickhc-empty-state">Security Assessment data has not been collected yet.</p>
                 {% endif %}
               </div>
-            </div>
+            {% endcall %}
           </div>
         </div>
       </details>
@@ -252,8 +261,7 @@
           <div class="quickhc-selection-block" data-selection-block="license_summary">
             <p class="quickhc-selection-label">Include in customer report</p>
 
-            <div class="quickhc-section-option">
-              {{ section_toggle("license_summary", "license_summary.metadata", "Summary metadata", "license_summary.metadata" in selected_report_sections) }}
+            {% call section_card("license_summary", "license_summary.metadata", "Summary metadata", "license_summary.metadata" in selected_report_sections, "Source and dates") %}
               <div class="quickhc-section-preview">
                 {% if license_summary.exists %}
                   <div class="quickhc-preview-grid">
@@ -282,10 +290,9 @@
                   <p class="quickhc-empty-state">License Summary data has not been collected yet.</p>
                 {% endif %}
               </div>
-            </div>
+            {% endcall %}
 
-            <div class="quickhc-section-option">
-              {{ section_toggle("license_summary", "license_summary.workload_sections", "Workload Summary Sections", "license_summary.workload_sections" in selected_report_sections) }}
+            {% call section_card("license_summary", "license_summary.workload_sections", "Workload Summary Sections", "license_summary.workload_sections" in selected_report_sections, (license_summary.workload_summary_section_count ~ " sections") if license_summary.exists else "Workloads") %}
               <div class="quickhc-section-preview">
                 {% if license_summary.exists %}
                   <div class="quickhc-preview-grid">
@@ -306,10 +313,9 @@
                   <p class="quickhc-empty-state">License Summary data has not been collected yet.</p>
                 {% endif %}
               </div>
-            </div>
+            {% endcall %}
 
-            <div class="quickhc-section-option">
-              {{ section_toggle("license_summary", "license_summary.other_licenses", "Other Licenses table", "license_summary.other_licenses" in selected_report_sections) }}
+            {% call section_card("license_summary", "license_summary.other_licenses", "Other Licenses table", "license_summary.other_licenses" in selected_report_sections, (license_summary.other_count ~ " rows") if license_summary.exists else "Preview") %}
               <div class="quickhc-section-preview">
                 {% if license_summary.exists %}
                   <p class="quickhc-preview-text">{{ license_summary.other_count }} other licenses</p>
@@ -338,10 +344,9 @@
                   <p class="quickhc-empty-state">License Summary data has not been collected yet.</p>
                 {% endif %}
               </div>
-            </div>
+            {% endcall %}
 
-            <div class="quickhc-section-option">
-              {{ section_toggle("license_summary", "license_summary.agent_feature_licenses", "Agent / Feature Licenses table", "license_summary.agent_feature_licenses" in selected_report_sections) }}
+            {% call section_card("license_summary", "license_summary.agent_feature_licenses", "Agent / Feature Licenses table", "license_summary.agent_feature_licenses" in selected_report_sections, (license_summary.agent_feature_count ~ " rows") if license_summary.exists else "Preview") %}
               <div class="quickhc-section-preview">
                 {% if license_summary.exists %}
                   <p class="quickhc-preview-text">{{ license_summary.agent_feature_count }} agent/feature licenses</p>
@@ -372,7 +377,7 @@
                   <p class="quickhc-empty-state">License Summary data has not been collected yet.</p>
                 {% endif %}
               </div>
-            </div>
+            {% endcall %}
           </div>
         </div>
       </details>
@@ -415,8 +420,7 @@
             {% set history = client_growth.history_range or {} %}
             {% set starting_total = (client_growth.latest_total_clients or 0) - ((client_growth.latest_added or 0) - (client_growth.latest_removed or 0)) %}
 
-            <div class="quickhc-section-option">
-              {{ section_toggle("client_growth", "client_growth.summary", "Summary metrics", "client_growth.summary" in selected_report_sections) }}
+            {% call section_card("client_growth", "client_growth.summary", "Summary metrics", "client_growth.summary" in selected_report_sections, (client_growth.latest_total_clients ~ " total clients") if client_growth.exists and client_growth.latest_total_clients is not none else "Overview") %}
               <div class="quickhc-section-preview">
                 {% if client_growth.exists %}
                   <div class="quickhc-preview-inline">
@@ -442,10 +446,9 @@
                   <p class="quickhc-empty-state">Client Growth data has not been collected yet.</p>
                 {% endif %}
               </div>
-            </div>
+            {% endcall %}
 
-            <div class="quickhc-section-option">
-              {{ section_toggle("client_growth", "client_growth.chart", "Client Growth chart", "client_growth.chart" in selected_report_sections) }}
+            {% call section_card("client_growth", "client_growth.chart", "Client Growth chart", "client_growth.chart" in selected_report_sections, "Trend preview") %}
               <div class="quickhc-section-preview">
                 {% if client_growth.exists %}
                   <p class="quickhc-preview-text">
@@ -455,10 +458,9 @@
                   <p class="quickhc-empty-state">Client Growth data has not been collected yet.</p>
                 {% endif %}
               </div>
-            </div>
+            {% endcall %}
 
-            <div class="quickhc-section-option">
-              {{ section_toggle("client_growth", "client_growth.monthly_table", "Monthly summary table", "client_growth.monthly_table" in selected_report_sections) }}
+            {% call section_card("client_growth", "client_growth.monthly_table", "Monthly summary table", "client_growth.monthly_table" in selected_report_sections, (client_growth.record_count ~ " rows") if client_growth.exists else "History") %}
               <div class="quickhc-section-preview">
                 {% if client_growth.exists %}
                   <div class="quickhc-preview-inline">
@@ -475,7 +477,7 @@
                   <p class="quickhc-empty-state">Client Growth data has not been collected yet.</p>
                 {% endif %}
               </div>
-            </div>
+            {% endcall %}
           </div>
         </div>
       </details>
@@ -516,8 +518,7 @@
           <div class="quickhc-selection-block" data-selection-block="capacity_license">
             <p class="quickhc-selection-label">Include in customer report</p>
 
-            <div class="quickhc-section-option">
-              {{ section_toggle("capacity_license", "capacity_license.summary", "Summary", "capacity_license.summary" in selected_report_sections) }}
+            {% call section_card("capacity_license", "capacity_license.summary", "Summary", "capacity_license.summary" in selected_report_sections, (capacity_license.latest_month or "Latest period")) %}
               <div class="quickhc-section-preview">
                 {% if capacity_license.exists %}
                   <div class="quickhc-preview-inline">
@@ -529,10 +530,9 @@
                   <p class="quickhc-empty-state">Capacity License data has not been collected yet.</p>
                 {% endif %}
               </div>
-            </div>
+            {% endcall %}
 
-            <div class="quickhc-section-option">
-              {{ section_toggle("capacity_license", "capacity_license.table", "Usage/details table", "capacity_license.table" in selected_report_sections) }}
+            {% call section_card("capacity_license", "capacity_license.table", "Usage/details table", "capacity_license.table" in selected_report_sections, (capacity_license.entity_count ~ " entities") if capacity_license.exists else "Preview") %}
               <div class="quickhc-section-preview">
                 {% if capacity_license.exists %}
                   <div class="quickhc-preview-inline">
@@ -543,7 +543,7 @@
                   <p class="quickhc-empty-state">Capacity License data has not been collected yet.</p>
                 {% endif %}
               </div>
-            </div>
+            {% endcall %}
           </div>
         </div>
       </details>

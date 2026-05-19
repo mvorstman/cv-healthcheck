@@ -336,6 +336,9 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert 'data-theme-choice="light"' in body
     assert 'data-theme-choice="dark"' in body
     assert 'data-quickhc-form' in body
+    assert 'data-section-card' in body
+    assert 'class="quickhc-section-header"' in body
+    assert 'class="quickhc-section-content"' in body
     assert 'data-subject-toggle="environment"' in body
     assert 'data-subject-toggle="security_assessment"' in body
     assert 'data-subject-toggle="license_summary"' in body
@@ -348,12 +351,16 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert 'data-subject-child="capacity_license"' in body
     assert 'value="security_assessment.highlights"' in body
     security_highlights_idx = body.index('value="security_assessment.highlights"')
+    security_header_idx = body.index('class="quickhc-section-header"', security_highlights_idx)
     security_preview_idx = body.index('class="quickhc-highlight-cards"', security_highlights_idx)
+    assert security_highlights_idx < security_header_idx
     assert security_highlights_idx < security_preview_idx
     assert 'class="quickhc-section-preview"' in body
     assert 'value="license_summary.metadata"' in body
     license_metadata_idx = body.index('value="license_summary.metadata"')
+    license_metadata_header_idx = body.index('class="quickhc-section-header"', license_metadata_idx)
     license_metadata_preview_idx = body.index('class="quickhc-section-preview"', license_metadata_idx)
+    assert license_metadata_idx < license_metadata_header_idx
     assert license_metadata_idx < license_metadata_preview_idx
     assert "Summary metadata" in body
     assert 'value="environment"' in body
