@@ -475,6 +475,56 @@ dd[data-status="good"]::before {
   grid-template-columns: 140px minmax(0, 1fr);
 }
 
+.source-provenance-secondary {
+  margin-top: 1rem;
+  padding-top: 0.95rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.source-provenance-secondary-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 0.7rem;
+}
+
+.source-provenance-secondary-head strong {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.source-provenance-inactive-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.source-provenance-inactive-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+}
+
+.source-provenance-inactive-main {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.source-provenance-inactive-main strong {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.source-provenance-inactive-main span {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
 dd[data-status="bad"]::before {
   content: "● ";
   color: var(--critical);

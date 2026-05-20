@@ -121,7 +121,8 @@ def test_backup_job_summary_detail_route_renders_source_provenance(
     assert "HTML import" in body
     assert "Not implemented" in body
     assert "Not applicable" in body
-    assert "source-provenance-item--muted" in body
+    assert "source-provenance-secondary" in body
+    assert "source-provenance-inactive-item" in body
 
 
 def test_license_summary_detail_route_renders_shared_source_provenance(
@@ -163,3 +164,4 @@ def test_license_summary_detail_route_renders_shared_source_provenance(
     assert "CSV import" in body
     assert "HTML import" in body
     assert "Normalized artifact" in body
+    assert "Other supported paths" in body
