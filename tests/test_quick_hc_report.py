@@ -441,7 +441,7 @@ def test_quick_hc_report_service_uses_registry_detail_urls_and_client_growth_has
     assert report["license_summary"]["detail_url"] == "/quick-hc/license-summary"
     assert report["client_growth"]["detail_url"] == "/metrics/client-growth"
     assert report["capacity_license"]["detail_url"] == "/metrics/capacity-license"
-    assert report["backup_job_summary"]["detail_url"] == "/quick-hc"
+    assert report["backup_job_summary"]["detail_url"] == "/quick-hc/backup-job-summary"
     assert "message" not in report["client_growth"]
 
 

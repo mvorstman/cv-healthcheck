@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section>
+  <h2>Backup Job Summary</h2>
+  <p>Operational visibility into recent backup job outcomes from the latest Reports Plus Backup Job Summary artifact.</p>
+
+  {% if flashes %}
+    {% for flash in flashes %}
+      <p class="{{ 'error' if flash.category == 'error' else 'notice' }}">{{ flash.message }}</p>
+    {% endfor %}
+  {% endif %}
+
+  {% if not artifact %}
+    <p class="notice">
+      No Backup Job Summary artifact is available yet.
+    </p>
+    <p>
+      Collect or import the Backup Job Summary artifact through the existing Reports Plus artifact pipeline first.
+    </p>
+  {% else %}
+    <section class="metadata-card">
+      <div class="section-heading">
+        <h3>Source Metadata</h3>
+      </div>
+      <dl id="source-metadata">
+        <dt>Generated at</dt>
+        <dd>{{ artifact.generated_at or "N/A" }}</dd>
+        <dt>Source report</dt>
+        <dd>{{ artifact.source_report_name or "N/A" }}</dd>
+        <dt>Source dataset GUID</dt>
+        <dd><code>{{ artifact.source_dataset_guid or "N/A" }}</code></dd>
+      </dl>
+    </section>
+
+    <div class="status-summary">
+      <div class="status-card">
+        <strong>{{ artifact.total_jobs or 0 }}</strong>
+        <span>Total jobs</span>
+      </div>
+      <div class="status-card status-good">
+        <strong>{{ artifact.completed_jobs or 0 }}</strong>
+        <span>Completed</span>
+      </div>
+      <div class="status-card status-critical">
+        <strong>{{ artifact.failed_jobs or 0 }}</strong>
+        <span>Failed</span>
+      </div>
+      <div class="status-card status-warning">
+        <strong>{{ artifact.completed_with_errors_or_warnings or 0 }}</strong>
+        <span>Warnings</span>
+      </div>
+      <div class="status-card">
+        <strong>{{ artifact.running_jobs or 0 }}</strong>
+        <span>Running</span>
+      </div>
+      <div class="status-card">
+        <strong>{{ artifact.protected_clients_seen or 0 }}</strong>
+        <span>Protected clients</span>
+      </div>
+    </div>
+
+    <h3>Status Breakdown</h3>
+    {% if artifact.status_breakdown %}
+      <table class="compact-table">
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for label, count in artifact.status_breakdown.items() %}
+            <tr>
+              <td>{{ label }}</td>
+              <td>{{ count }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="notice">No status breakdown is available.</p>
+    {% endif %}
+
+    <h3>Recent Failures</h3>
+    {% if artifact.recent_failures %}
+      <table class="compact-table">
+        <thead>
+          <tr>
+            <th>Job ID</th>
+            <th>Client</th>
+            <th>Company</th>
+            <th>Workload</th>
+            <th>Agent</th>
+            <th>Backup Type</th>
+            <th>Status</th>
+            <th>Failure Reason</th>
+            <th>End Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in artifact.recent_failures %}
+            <tr>
+              <td>{{ row.job_id or "" }}</td>
+              <td>{{ row.client or "" }}</td>
+              <td>{{ row.company or "" }}</td>
+              <td>{{ row.workload or "" }}</td>
+              <td>{{ row.agent or "" }}</td>
+              <td>{{ row.backup_type or "" }}</td>
+              <td>{{ row.status or "" }}</td>
+              <td>{{ row.failure_reason or "" }}</td>
+              <td>{{ row.end_time or "" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="notice">No recent failures are available.</p>
+    {% endif %}
+
+    <h3>Recent Jobs</h3>
+    {% if artifact.recent_jobs %}
+      <table class="compact-table">
+        <thead>
+          <tr>
+            <th>Job ID</th>
+            <th>Client</th>
+            <th>Workload</th>
+            <th>Agent</th>
+            <th>Backup Type</th>
+            <th>Start Time</th>
+            <th>End Time</th>
+            <th>Duration</th>
+            <th>Status</th>
+            <th>Size</th>
+            <th>Throughput</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in artifact.recent_jobs %}
+            <tr>
+              <td>{{ row.job_id or "" }}</td>
+              <td>{{ row.client or "" }}</td>
+              <td>{{ row.workload or "" }}</td>
+              <td>{{ row.agent or "" }}</td>
+              <td>{{ row.backup_type or "" }}</td>
+              <td>{{ row.start_time or "" }}</td>
+              <td>{{ row.end_time or "" }}</td>
+              <td>{{ row.duration or "" }}</td>
+              <td>{{ row.status or "" }}</td>
+              <td>{{ row.size or "" }}</td>
+              <td>{{ row.throughput or "" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="notice">No recent jobs are available.</p>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

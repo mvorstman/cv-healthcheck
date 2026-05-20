@@ -31,6 +31,9 @@ from cvhealthcheck.quickhc.overview_service import build_quick_hc_overview_conte
 from cvhealthcheck.quickhc.report_service import (
     REPORT_SELECTION_IDS,
 )
+from cvhealthcheck.reportsplus.backup_job_summary import (
+    load_backup_job_summary_artifact,
+)
 from cvhealthcheck.reportsplus.security_assessment import security_assessment_quick_hc
 
 
@@ -166,6 +169,24 @@ def quick_hc_license_summary():
     ]
     return render_template(
         "license_summary.html",
+        artifact=artifact,
+        flashes=flashes,
+    )
+
+
+@bp.route("/quick-hc/backup-job-summary")
+def quick_hc_backup_job_summary():
+    artifact = None
+    try:
+        artifact = load_backup_job_summary_artifact()
+    except FileNotFoundError:
+        pass
+    flashes = [
+        {"category": category, "message": text}
+        for category, text in get_flashed_messages(with_categories=True)
+    ]
+    return render_template(
+        "quick_hc_backup_job_summary.html",
         artifact=artifact,
         flashes=flashes,
     )

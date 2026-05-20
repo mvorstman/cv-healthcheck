@@ -187,7 +187,7 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         artifact_type="backup_job_summary",
         preview_renderer="backup_job_summary_preview",
         report_renderer="backup_job_summary_report",
-        detail_endpoint="main.quick_hc",
+        detail_endpoint="main.quick_hc_backup_job_summary",
         sections=(
             SectionDefinition(
                 id=BACKUP_JOB_SUMMARY_SUMMARY_SECTION_ID,

@@ -20,6 +20,7 @@ def test_route_split_keeps_expected_endpoints_registered() -> None:
 
     assert rules["/quick-hc"] == "main.quick_hc"
     assert rules["/quick-hc/license-summary"] == "main.quick_hc_license_summary"
+    assert rules["/quick-hc/backup-job-summary"] == "main.quick_hc_backup_job_summary"
     assert rules["/security-assessment"] == "main.reportsplus_security_assessment"
     assert rules["/development"] == "main.development"
     assert rules["/reportsplus/reports"] == "main.reportsplus_reports"
@@ -31,6 +32,7 @@ def test_quick_hc_and_report_pages_still_render() -> None:
 
     assert client.get("/quick-hc").status_code == 200
     assert client.get("/quick-hc/license-summary").status_code == 200
+    assert client.get("/quick-hc/backup-job-summary").status_code == 200
     assert client.get("/security-assessment").status_code == 200
 
 
