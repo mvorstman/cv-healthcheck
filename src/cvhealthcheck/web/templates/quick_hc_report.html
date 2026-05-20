@@ -80,6 +80,16 @@
         <span>Capacity rows</span>
       </div>
     {% endif %}
+    {% if report.backup_job_summary.requested and report.backup_job_summary.show_summary %}
+      <div class="status-card">
+        <strong>{{ report.backup_job_summary.total_jobs if report.backup_job_summary.available else 0 }}</strong>
+        <span>Backup jobs</span>
+      </div>
+      <div class="status-card status-warning">
+        <strong>{{ report.backup_job_summary.failed_jobs if report.backup_job_summary.available else 0 }}</strong>
+        <span>Failed jobs</span>
+      </div>
+    {% endif %}
   </div>
 
   {% if report.environment.requested and report.environment.show_metadata %}
@@ -392,6 +402,136 @@
     {% else %}
       <p>{{ report.capacity_license.message }}</p>
       <p><a href="{{ report.capacity_license.detail_url }}">Open Capacity License</a></p>
+    {% endif %}
+  {% endif %}
+
+  {% if report.backup_job_summary.requested %}
+    <h3>Backup Job Summary</h3>
+    {% if report.backup_job_summary.available and report.backup_job_summary.has_content %}
+      {% if report.backup_job_summary.show_summary %}
+        <table class="compact-table">
+          <tbody>
+            <tr><th>Generated At</th><td>{{ report.backup_job_summary.generated_at or "Not collected yet" }}</td></tr>
+            <tr><th>Source Report</th><td>{{ report.backup_job_summary.source_report_name or "Not collected yet" }}</td></tr>
+            <tr><th>Source Dataset GUID</th><td><code>{{ report.backup_job_summary.source_dataset_guid or "Not collected yet" }}</code></td></tr>
+            <tr><th>Total Jobs</th><td>{{ report.backup_job_summary.total_jobs }}</td></tr>
+            <tr><th>Protected Clients Seen</th><td>{{ report.backup_job_summary.protected_clients_seen }}</td></tr>
+            <tr><th>Detail Page</th><td><a href="{{ report.backup_job_summary.detail_url }}">Open Quick HC</a></td></tr>
+          </tbody>
+        </table>
+      {% endif %}
+      {% if report.backup_job_summary.show_status_breakdown %}
+        <h4>Status Breakdown</h4>
+        <table class="compact-table">
+          <tbody>
+            <tr><th>Completed</th><td>{{ report.backup_job_summary.completed_jobs }}</td></tr>
+            <tr><th>Failed</th><td>{{ report.backup_job_summary.failed_jobs }}</td></tr>
+            <tr><th>Completed with errors/warnings</th><td>{{ report.backup_job_summary.completed_with_errors_or_warnings }}</td></tr>
+            <tr><th>Running</th><td>{{ report.backup_job_summary.running_jobs }}</td></tr>
+            <tr><th>Killed</th><td>{{ report.backup_job_summary.killed_jobs }}</td></tr>
+            <tr><th>Other</th><td>{{ report.backup_job_summary.other_jobs }}</td></tr>
+          </tbody>
+        </table>
+        {% if report.backup_job_summary.status_breakdown %}
+          <table class="compact-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Count</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for label, count in report.backup_job_summary.status_breakdown.items() %}
+                <tr>
+                  <td>{{ label }}</td>
+                  <td>{{ count }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
+      {% endif %}
+      {% if report.backup_job_summary.show_recent_failures %}
+        <h4>Recent Failures</h4>
+        {% if report.backup_job_summary.recent_failures %}
+          <table class="compact-table">
+            <thead>
+              <tr>
+                <th>Job ID</th>
+                <th>Client</th>
+                <th>Company</th>
+                <th>Workload</th>
+                <th>Agent</th>
+                <th>Backup Type</th>
+                <th>Status</th>
+                <th>Failure Reason</th>
+                <th>End Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in report.backup_job_summary.recent_failures %}
+                <tr>
+                  <td>{{ row.job_id or "" }}</td>
+                  <td>{{ row.client or "" }}</td>
+                  <td>{{ row.company or "" }}</td>
+                  <td>{{ row.workload or "" }}</td>
+                  <td>{{ row.agent or "" }}</td>
+                  <td>{{ row.backup_type or "" }}</td>
+                  <td>{{ row.status or "" }}</td>
+                  <td>{{ row.failure_reason or "" }}</td>
+                  <td>{{ row.end_time or "" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="notice">No recent failures are available.</p>
+        {% endif %}
+      {% endif %}
+      {% if report.backup_job_summary.show_recent_jobs %}
+        <h4>Recent Jobs</h4>
+        {% if report.backup_job_summary.recent_jobs %}
+          <table class="compact-table">
+            <thead>
+              <tr>
+                <th>Job ID</th>
+                <th>Client</th>
+                <th>Workload</th>
+                <th>Agent</th>
+                <th>Backup Type</th>
+                <th>Start Time</th>
+                <th>End Time</th>
+                <th>Duration</th>
+                <th>Status</th>
+                <th>Size</th>
+                <th>Throughput</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in report.backup_job_summary.recent_jobs %}
+                <tr>
+                  <td>{{ row.job_id or "" }}</td>
+                  <td>{{ row.client or "" }}</td>
+                  <td>{{ row.workload or "" }}</td>
+                  <td>{{ row.agent or "" }}</td>
+                  <td>{{ row.backup_type or "" }}</td>
+                  <td>{{ row.start_time or "" }}</td>
+                  <td>{{ row.end_time or "" }}</td>
+                  <td>{{ row.duration or "" }}</td>
+                  <td>{{ row.status or "" }}</td>
+                  <td>{{ row.size or "" }}</td>
+                  <td>{{ row.throughput or "" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="notice">No recent jobs are available.</p>
+        {% endif %}
+      {% endif %}
+    {% else %}
+      <p>{{ report.backup_job_summary.message }}</p>
+      <p><a href="{{ report.backup_job_summary.detail_url }}">Open Quick HC</a></p>
     {% endif %}
   {% endif %}
 </section>

@@ -37,6 +37,11 @@ def test_build_quick_hc_overview_context_aggregates_all_subjects(monkeypatch) ->
     )
     monkeypatch.setattr(
         overview_service,
+        "backup_job_summary_quick_hc_preview",
+        lambda tile=None: {"exists": True, "summary": "backup"},
+    )
+    monkeypatch.setattr(
+        overview_service,
         "OVERVIEW_PREVIEW_BUILDERS",
         {
             "commcell_preview": overview_service.commcell_quick_hc_preview,
@@ -44,6 +49,7 @@ def test_build_quick_hc_overview_context_aggregates_all_subjects(monkeypatch) ->
             "license_summary_preview": overview_service.license_summary_quick_hc_preview,
             "client_growth_preview": overview_service.client_growth_quick_hc_preview,
             "capacity_license_preview": overview_service.capacity_license_quick_hc_preview,
+            "backup_job_summary_preview": overview_service.backup_job_summary_quick_hc_preview,
         },
     )
 
@@ -55,12 +61,14 @@ def test_build_quick_hc_overview_context_aggregates_all_subjects(monkeypatch) ->
     assert context["license_summary"]["summary"] == "license"
     assert context["client_growth"]["summary"] == "growth"
     assert context["capacity_license"]["summary"] == "capacity"
+    assert context["backup_job_summary"]["summary"] == "backup"
     assert set(context["quick_hc_tile_previews"]) == {
         "environment",
         "security_assessment",
         "license_summary",
         "client_growth",
         "capacity_license",
+        "backup_job_summary",
     }
     assert set(context["quick_hc_tiles"]) == {
         "environment",
@@ -68,6 +76,7 @@ def test_build_quick_hc_overview_context_aggregates_all_subjects(monkeypatch) ->
         "license_summary",
         "client_growth",
         "capacity_license",
+        "backup_job_summary",
     }
 
 

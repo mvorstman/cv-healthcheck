@@ -15,6 +15,10 @@ from cvhealthcheck.quickhc.report_service import (
     REPORT_OVERVIEW_DEFAULT_SELECTION_IDS,
     REPORT_SUBSECTION_OPTIONS,
 )
+from cvhealthcheck.reportsplus.backup_job_summary import (
+    BACKUP_JOB_SUMMARY_ARTIFACT_NAME,
+    load_backup_job_summary_artifact,
+)
 from cvhealthcheck.reportsplus.catalog import catalog_status, read_json
 from cvhealthcheck.reportsplus.security_assessment import security_assessment_quick_hc
 
@@ -29,6 +33,7 @@ OVERVIEW_CONTEXT_KEYS: dict[str, str] = {
     "license_summary": "license_summary",
     "client_growth": "client_growth",
     "capacity_license": "capacity_license",
+    "backup_job_summary": "backup_job_summary",
 }
 
 
@@ -273,6 +278,45 @@ def capacity_license_quick_hc_preview(
     }
 
 
+def backup_job_summary_quick_hc_preview(
+    tile: TileDefinition | None = None,
+) -> dict[str, Any]:
+    try:
+        payload = load_backup_job_summary_artifact()
+    except FileNotFoundError:
+        return {
+            "exists": False,
+            "summary": "Not collected yet",
+            "artifact_name": BACKUP_JOB_SUMMARY_ARTIFACT_NAME,
+        }
+
+    return {
+        "exists": True,
+        "generated_at": payload.get("generated_at"),
+        "source_report_name": payload.get("source_report_name"),
+        "source_dataset_guid": payload.get("source_dataset_guid"),
+        "total_jobs": int(payload.get("total_jobs") or 0),
+        "completed_jobs": int(payload.get("completed_jobs") or 0),
+        "failed_jobs": int(payload.get("failed_jobs") or 0),
+        "completed_with_errors_or_warnings": int(
+            payload.get("completed_with_errors_or_warnings") or 0
+        ),
+        "running_jobs": int(payload.get("running_jobs") or 0),
+        "killed_jobs": int(payload.get("killed_jobs") or 0),
+        "other_jobs": int(payload.get("other_jobs") or 0),
+        "protected_clients_seen": int(payload.get("protected_clients_seen") or 0),
+        "status_breakdown": dict(payload.get("status_breakdown") or {}),
+        "recent_failures": list(payload.get("recent_failures") or []),
+        "recent_jobs": list(payload.get("recent_jobs") or []),
+        "recent_failures_count": len(payload.get("recent_failures") or []),
+        "summary": (
+            f"{int(payload.get('total_jobs') or 0)} jobs, "
+            f"{int(payload.get('failed_jobs') or 0)} failed, "
+            f"{int(payload.get('running_jobs') or 0)} running"
+        ),
+    }
+
+
 OVERVIEW_PREVIEW_BUILDERS.update(
     {
         "commcell_preview": commcell_quick_hc_preview,
@@ -280,5 +324,6 @@ OVERVIEW_PREVIEW_BUILDERS.update(
         "license_summary_preview": license_summary_quick_hc_preview,
         "client_growth_preview": client_growth_quick_hc_preview,
         "capacity_license_preview": capacity_license_quick_hc_preview,
+        "backup_job_summary_preview": backup_job_summary_quick_hc_preview,
     }
 )

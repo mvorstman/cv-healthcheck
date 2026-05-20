@@ -44,6 +44,7 @@ Current Quick HC subjects:
 - License Summary
 - Client Growth
 - Capacity Licenses
+- Backup Job Summary
 
 Each subject now supports:
 

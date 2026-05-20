@@ -14,6 +14,7 @@
         <span class="quickhc-kpi-chip quickhc-kpi-chip--{{ 'good' if license_summary.exists else 'warn' }}">Licenses</span>
         <span class="quickhc-kpi-chip quickhc-kpi-chip--{{ 'good' if client_growth.exists else 'warn' }}">Client Growth</span>
         <span class="quickhc-kpi-chip quickhc-kpi-chip--{{ 'good' if capacity_license.exists else 'warn' }}">Capacity</span>
+        <span class="quickhc-kpi-chip quickhc-kpi-chip--{{ 'good' if backup_job_summary.exists else 'warn' }}">Backup Jobs</span>
       </div>
     </div>
   </div>
@@ -145,6 +146,35 @@
             {% call section_card("capacity_license", "capacity_license.table", "Usage/details table", "capacity_license.table" in selected_report_sections, (capacity_license.entity_count ~ " entities") if capacity_license.exists else "Preview") %}
               {% set capacity_license_preview_section = "table" %}
               {% include "partials/quickhc/previews/capacity_license.html" %}
+            {% endcall %}
+      {% endcall %}
+
+      {% set backup_job_summary_tile = quick_hc_tiles["backup_job_summary"] %}
+      {% call render_quickhc_tile(
+        backup_job_summary_tile,
+        "backup_job_summary" in selected_report_sections,
+        "Available" if backup_job_summary.exists else "Not collected",
+        "badge-good" if backup_job_summary.exists else "badge-warning",
+        url_for(backup_job_summary_tile.detail_endpoint),
+      ) %}
+            {% call section_card("backup_job_summary", "backup_job_summary.summary", "Summary", "backup_job_summary.summary" in selected_report_sections, (backup_job_summary.total_jobs ~ " jobs") if backup_job_summary.exists else "Overview") %}
+              {% set backup_job_summary_preview_section = "summary" %}
+              {% include "partials/quickhc/previews/backup_job_summary.html" %}
+            {% endcall %}
+
+            {% call section_card("backup_job_summary", "backup_job_summary.status_breakdown", "Status breakdown", "backup_job_summary.status_breakdown" in selected_report_sections, (backup_job_summary.status_breakdown | length ~ " statuses") if backup_job_summary.exists else "Statuses") %}
+              {% set backup_job_summary_preview_section = "status_breakdown" %}
+              {% include "partials/quickhc/previews/backup_job_summary.html" %}
+            {% endcall %}
+
+            {% call section_card("backup_job_summary", "backup_job_summary.recent_failures", "Recent failures", "backup_job_summary.recent_failures" in selected_report_sections, (backup_job_summary.recent_failures_count ~ " failures") if backup_job_summary.exists else "Failures") %}
+              {% set backup_job_summary_preview_section = "recent_failures" %}
+              {% include "partials/quickhc/previews/backup_job_summary.html" %}
+            {% endcall %}
+
+            {% call section_card("backup_job_summary", "backup_job_summary.recent_jobs", "Recent jobs", "backup_job_summary.recent_jobs" in selected_report_sections, (backup_job_summary.recent_jobs | length ~ " jobs") if backup_job_summary.exists else "Jobs") %}
+              {% set backup_job_summary_preview_section = "recent_jobs" %}
+              {% include "partials/quickhc/previews/backup_job_summary.html" %}
             {% endcall %}
       {% endcall %}
     </div>

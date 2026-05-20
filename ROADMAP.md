@@ -90,6 +90,7 @@ Current Phase 3 capabilities:
 
 - Quick HC now acts as the main customer-facing report-composition surface.
 - Supported Quick HC subjects are CommCell Details, Security Assessment, License Summary, Client Growth, and Capacity Licenses.
+- Supported Quick HC subjects now also include Backup Job Summary via the normalized Reports Plus artifact path, without adding scoring or rules-engine behavior.
 - Each subject supports expandable overview tiles, customer-facing previews, include/exclude controls, and nested section/table selection.
 - `/quick-hc/report` now renders selected subjects and selected sections only.
 - Customer-facing output intentionally strips artifact paths, dataset GUIDs, HTTP status fields, and raw/debug extraction metadata.

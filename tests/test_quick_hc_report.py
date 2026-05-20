@@ -6,6 +6,7 @@ from pathlib import Path
 from cvhealthcheck.license_summary.import_csv import parse_license_summary_csv
 from cvhealthcheck.license_summary.service import persist_license_summary_artifact
 from cvhealthcheck.quickhc.report_service import QuickHcReportService
+from cvhealthcheck.reportsplus.backup_job_summary import write_backup_job_summary_artifact
 from cvhealthcheck.security_assessment.artifact import build_security_assessment_artifact
 from cvhealthcheck.security_assessment.service import persist_security_assessment_artifact
 from cvhealthcheck.web.app import create_app
@@ -115,6 +116,19 @@ def _write_metric_artifact(metrics_dir: Path, name: str, payload: dict) -> None:
     (metrics_dir / f"{name}.json").write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _patch_backup_job_summary_paths(tmp_path, monkeypatch) -> Path:
+    import cvhealthcheck.reportsplus.backup_job_summary as backup_job_summary_module
+
+    catalog_dir = tmp_path / "quickhc_catalog"
+    monkeypatch.setattr(
+        backup_job_summary_module,
+        "QUICKHC_CATALOG_DIR",
+        catalog_dir,
+    )
+    catalog_dir.mkdir(parents=True, exist_ok=True)
+    return catalog_dir
+
+
 CLIENT_GROWTH_ARTIFACT = {
     "collected_at": "2026-05-18T21:00:00Z",
     "source": {
@@ -150,6 +164,69 @@ CAPACITY_LICENSE_ARTIFACT = {
     "records": [
         {"month": "2026-05", "entity_name": "CommServe A", "used_capacity": 18.5, "purchased_capacity": 40.0, "data_source": "CommServe A"},
         {"month": "2026-05", "entity_name": "CommServe B", "used_capacity": 11.0, "purchased_capacity": 20.0, "data_source": "CommServe B"},
+    ],
+}
+
+BACKUP_JOB_SUMMARY_ARTIFACT = {
+    "generated_at": "2026-05-20T10:30:00Z",
+    "source_report_name": "Backup Job Summary",
+    "source_dataset_guid": "2638c3d3-adc7-4b61-bb24-2ba509229bf5",
+    "source_related_dataset_guid": "ce01fc88-d2bd-46cc-ba41-1d967c7fa4a2",
+    "total_jobs": 12,
+    "completed_jobs": 8,
+    "failed_jobs": 2,
+    "completed_with_errors_or_warnings": 1,
+    "running_jobs": 1,
+    "killed_jobs": 0,
+    "other_jobs": 0,
+    "protected_clients_seen": 5,
+    "status_breakdown": {
+        "Completed": 8,
+        "Failed": 2,
+        "Completed with errors/warnings": 1,
+        "Running": 1,
+    },
+    "recent_failures": [
+        {
+            "job_id": "9002",
+            "client": "client-b",
+            "company": "Tenant B",
+            "workload": "File System",
+            "agent": "FS",
+            "backup_type": "Incremental",
+            "start_time": "2026-05-20 08:00:00",
+            "end_time": "2026-05-20 08:20:00",
+            "duration": "00:20:00",
+            "status": "Failed",
+            "failure_reason": "Media issue",
+            "storage_policy": "Gold",
+            "media_agent": "ma-1",
+            "size": "100 GB",
+            "throughput": "80 MB/s",
+            "schedule_policy": "Daily",
+            "schedule_name": "Nightly",
+        }
+    ],
+    "recent_jobs": [
+        {
+            "job_id": "9003",
+            "client": "client-c",
+            "company": "Tenant C",
+            "workload": "VMware",
+            "agent": "VSA",
+            "backup_type": "Full",
+            "start_time": "2026-05-20 09:00:00",
+            "end_time": "2026-05-20 09:40:00",
+            "duration": "00:40:00",
+            "status": "Completed",
+            "failure_reason": None,
+            "storage_policy": "Silver",
+            "media_agent": "ma-2",
+            "size": "250 GB",
+            "throughput": "120 MB/s",
+            "schedule_policy": "Weekly",
+            "schedule_name": "Weekend",
+        }
     ],
 }
 
@@ -330,6 +407,14 @@ def test_quick_hc_report_route_uses_service(monkeypatch) -> None:
                 "message": "Not collected yet",
                 "detail_url": "/metrics/capacity-license",
             },
+            "backup_job_summary": {
+                "available": False,
+                "requested": False,
+                "has_content": False,
+                "total_jobs": 0,
+                "message": "No Backup Job Summary artifact available yet.",
+                "detail_url": "/quick-hc",
+            },
             "evidence": [],
         }
 
@@ -356,6 +441,7 @@ def test_quick_hc_report_service_uses_registry_detail_urls_and_client_growth_has
     assert report["license_summary"]["detail_url"] == "/quick-hc/license-summary"
     assert report["client_growth"]["detail_url"] == "/metrics/client-growth"
     assert report["capacity_license"]["detail_url"] == "/metrics/capacity-license"
+    assert report["backup_job_summary"]["detail_url"] == "/quick-hc"
     assert "message" not in report["client_growth"]
 
 
@@ -389,11 +475,13 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert 'data-subject-toggle="license_summary"' in body
     assert 'data-subject-toggle="client_growth"' in body
     assert 'data-subject-toggle="capacity_license"' in body
+    assert 'data-subject-toggle="backup_job_summary"' in body
     assert 'data-subject-child="environment"' in body
     assert 'data-subject-child="security_assessment"' in body
     assert 'data-subject-child="license_summary"' in body
     assert 'data-subject-child="client_growth"' in body
     assert 'data-subject-child="capacity_license"' in body
+    assert 'data-subject-child="backup_job_summary"' in body
     assert 'value="security_assessment.highlights"' in body
     security_highlights_idx = body.index('value="security_assessment.highlights"')
     security_header_idx = body.index('class="quickhc-section-header"', security_highlights_idx)
@@ -426,9 +514,15 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert 'value="capacity_license"' in body
     assert 'value="capacity_license.summary"' in body
     assert 'value="capacity_license.table"' in body
+    assert 'value="backup_job_summary"' in body
+    assert 'value="backup_job_summary.summary"' in body
+    assert 'value="backup_job_summary.status_breakdown"' in body
+    assert 'value="backup_job_summary.recent_failures"' in body
+    assert 'value="backup_job_summary.recent_jobs"' in body
     assert "CommCell Details" in body
     assert "Client Growth" in body
     assert "Capacity License" in body
+    assert "Backup Job Summary" in body
     assert "Generate/View Customer Report" in body
     assert "dataset_guid" not in body
     assert "HTTP status" not in body
@@ -475,6 +569,48 @@ def test_quick_hc_overview_license_summary_previews_real_fields(
     assert "HTTP status" not in body
 
 
+def test_quick_hc_overview_handles_missing_backup_job_summary_artifact(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+    _patch_metrics_paths(tmp_path, monkeypatch)
+    _patch_backup_job_summary_paths(tmp_path, monkeypatch)
+
+    app = create_app()
+    response = app.test_client().get("/quick-hc")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Backup Job Summary" in body
+    assert "No Backup Job Summary artifact available yet." in body
+
+
+def test_quick_hc_overview_renders_backup_job_summary_preview(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+    _patch_metrics_paths(tmp_path, monkeypatch)
+    backup_catalog_dir = _patch_backup_job_summary_paths(tmp_path, monkeypatch)
+    write_backup_job_summary_artifact(
+        BACKUP_JOB_SUMMARY_ARTIFACT,
+        catalog_dir=backup_catalog_dir,
+    )
+
+    app = create_app()
+    response = app.test_client().get("/quick-hc")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Backup Job Summary" in body
+    assert "Total jobs 12" in body
+    assert "Failed 2" in body
+    assert "Protected clients 5" in body
+    assert "Recent failures 1" in body
+    assert "dataset_guid" not in body
+
+
 def test_quick_hc_report_post_license_summary_only_excludes_security_assessment(
     tmp_path, monkeypatch
 ) -> None:
@@ -518,8 +654,43 @@ def test_quick_hc_report_post_license_summary_only_excludes_security_assessment(
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Security Assessment" not in body
-    assert "Cloud Storage" in body
-    assert "Virtual Server" in body
+
+
+def test_quick_hc_report_renders_selected_backup_job_summary_sections(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+    _patch_metrics_paths(tmp_path, monkeypatch)
+    backup_catalog_dir = _patch_backup_job_summary_paths(tmp_path, monkeypatch)
+    write_backup_job_summary_artifact(
+        BACKUP_JOB_SUMMARY_ARTIFACT,
+        catalog_dir=backup_catalog_dir,
+    )
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/report",
+        data={
+            "selection_ids": [
+                "backup_job_summary",
+                "backup_job_summary.summary",
+                "backup_job_summary.recent_failures",
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Backup Job Summary" in body
+    assert "Source Report" in body
+    assert "Backup Job Summary" in body
+    assert "Recent Failures" in body
+    assert "Media issue" in body
+    assert "Status Breakdown" not in body
+    assert "Recent Jobs" not in body
+    assert "Cloud Storage" not in body
+    assert "Virtual Server" not in body
     assert "MFA enabled" not in body
 
 

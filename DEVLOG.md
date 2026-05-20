@@ -22,6 +22,9 @@
 
 ## 2026-05-20
 
+- Added the Backup Job Summary Quick HC tile using the existing registry-driven tile platform and the Phase 1 normalized Reports Plus artifact.
+- Kept the integration limited to tile metadata, overview preview rendering, and customer-report section rendering; no scoring, rules engine logic, or collector redesign was added.
+- This validates that the current Quick HC platform can absorb a new Reports Plus collector artifact with only metadata, service-layer, template-partial, and test updates.
 - Added the Phase 1 Backup Job Summary collector foundation under `reportsplus/backup_job_summary.py` without introducing any Quick HC tile UI yet.
 - Locked in the current validated Reports Plus dataset contract for Backup Job Summary using dataset GUID `2638c3d3-adc7-4b61-bb24-2ba509229bf5` plus related dataset GUID `ce01fc88-d2bd-46cc-ba41-1d967c7fa4a2`.
 - Added normalization and summary aggregation for total jobs, status buckets, protected client count, recent failures, and recent jobs, with persistence to `data/catalog/quickhc/backup_job_summary_latest.json`.

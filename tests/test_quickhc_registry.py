@@ -78,6 +78,17 @@ def test_tile_by_id_contains_all_quick_hc_tiles() -> None:
         assert QUICK_HC_TILE_BY_ID[tile.id] == tile
 
 
+def test_backup_job_summary_tile_is_registered() -> None:
+    tile = QUICK_HC_TILE_BY_ID["backup_job_summary"]
+    assert tile.title == "Backup Job Summary"
+    assert tile.section_ids == (
+        "backup_job_summary.summary",
+        "backup_job_summary.status_breakdown",
+        "backup_job_summary.recent_failures",
+        "backup_job_summary.recent_jobs",
+    )
+
+
 def test_registry_report_subsection_options_include_all_tile_section_ids() -> None:
     subsection_options = report_subsection_options()
     assert set(subsection_options) == QUICK_HC_SUBJECT_IDS

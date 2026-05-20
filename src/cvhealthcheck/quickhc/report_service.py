@@ -15,6 +15,7 @@ from cvhealthcheck.metrics import (
 )
 from cvhealthcheck.quickhc.models import TileDefinition
 from cvhealthcheck.quickhc.registry import (
+    BACKUP_JOB_SUMMARY_SELECTION_ID,
     CAPACITY_LICENSE_SELECTION_ID,
     CLIENT_GROWTH_SELECTION_ID,
     ENVIRONMENT_SELECTION_ID,
@@ -27,6 +28,9 @@ from cvhealthcheck.quickhc.registry import (
     SECURITY_ASSESSMENT_SELECTION_ID,
     report_overview_default_selection_ids,
     report_subsection_options,
+)
+from cvhealthcheck.reportsplus.backup_job_summary import (
+    load_backup_job_summary_artifact,
 )
 from cvhealthcheck.reportsplus.security_assessment import (
     SECTION_ORDER,
@@ -108,6 +112,7 @@ class QuickHcReportService:
                 sections[LICENSE_SUMMARY_SELECTION_ID].get("evidence"),
                 sections[CLIENT_GROWTH_SELECTION_ID].get("evidence"),
                 sections[CAPACITY_LICENSE_SELECTION_ID].get("evidence"),
+                sections[BACKUP_JOB_SUMMARY_SELECTION_ID].get("evidence"),
             )
             if item is not None
         ]
@@ -119,6 +124,7 @@ class QuickHcReportService:
             LICENSE_SUMMARY_SELECTION_ID: sections[LICENSE_SUMMARY_SELECTION_ID],
             CLIENT_GROWTH_SELECTION_ID: sections[CLIENT_GROWTH_SELECTION_ID],
             CAPACITY_LICENSE_SELECTION_ID: sections[CAPACITY_LICENSE_SELECTION_ID],
+            BACKUP_JOB_SUMMARY_SELECTION_ID: sections[BACKUP_JOB_SUMMARY_SELECTION_ID],
             "evidence": evidence,
         }
 
@@ -129,6 +135,7 @@ class QuickHcReportService:
             "license_summary_report": self._build_license_summary_section,
             "client_growth_report": self._build_client_growth_section,
             "capacity_license_report": self._build_capacity_license_section,
+            "backup_job_summary_report": self._build_backup_job_summary_section,
         }
 
     def _build_tile_section(
@@ -525,6 +532,70 @@ class QuickHcReportService:
             ).to_dict(),
         }
 
+    def _build_backup_job_summary_section(
+        self,
+        tile: TileDefinition,
+        _built_sections: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        (
+            summary_section,
+            status_breakdown_section,
+            recent_failures_section,
+            recent_jobs_section,
+        ) = tile.sections
+        try:
+            artifact = load_backup_job_summary_artifact()
+        except FileNotFoundError:
+            return {
+                "available": False,
+                "requested": False,
+                "title": tile.effective_report_label,
+                "message": "No Backup Job Summary artifact available yet.",
+                "detail_url": _detail_url_for_tile(tile),
+                "evidence": None,
+                "summary_section_id": summary_section.id,
+                "status_breakdown_section_id": status_breakdown_section.id,
+                "recent_failures_section_id": recent_failures_section.id,
+                "recent_jobs_section_id": recent_jobs_section.id,
+                "status_breakdown": {},
+                "recent_failures": [],
+                "recent_jobs": [],
+            }
+
+        return {
+            "available": True,
+            "requested": False,
+            "title": tile.effective_report_label,
+            "detail_url": _detail_url_for_tile(tile),
+            "generated_at": artifact.get("generated_at"),
+            "source_report_name": artifact.get("source_report_name"),
+            "source_dataset_guid": artifact.get("source_dataset_guid"),
+            "total_jobs": int(artifact.get("total_jobs") or 0),
+            "completed_jobs": int(artifact.get("completed_jobs") or 0),
+            "failed_jobs": int(artifact.get("failed_jobs") or 0),
+            "completed_with_errors_or_warnings": int(
+                artifact.get("completed_with_errors_or_warnings") or 0
+            ),
+            "running_jobs": int(artifact.get("running_jobs") or 0),
+            "killed_jobs": int(artifact.get("killed_jobs") or 0),
+            "other_jobs": int(artifact.get("other_jobs") or 0),
+            "protected_clients_seen": int(artifact.get("protected_clients_seen") or 0),
+            "summary_section_id": summary_section.id,
+            "status_breakdown_section_id": status_breakdown_section.id,
+            "recent_failures_section_id": recent_failures_section.id,
+            "recent_jobs_section_id": recent_jobs_section.id,
+            "status_breakdown": dict(artifact.get("status_breakdown") or {}),
+            "recent_failures": list(artifact.get("recent_failures") or []),
+            "recent_jobs": list(artifact.get("recent_jobs") or []),
+            "evidence": ReportEvidence(
+                artifact_type="backup_job_summary",
+                source_type="reportsplus_dataset",
+                imported_at=artifact.get("generated_at"),
+                generated_on=artifact.get("generated_at"),
+                loaded_from_path=None,
+            ).to_dict(),
+        }
+
     def _filter_report(
         self,
         report: dict[str, Any],
@@ -557,6 +628,11 @@ class QuickHcReportService:
             CAPACITY_LICENSE_SELECTION_ID in subject_selection_ids,
             selection_ids,
         )
+        filtered_backup_job_summary = self._filter_backup_job_summary(
+            report["backup_job_summary"],
+            BACKUP_JOB_SUMMARY_SELECTION_ID in subject_selection_ids,
+            selection_ids,
+        )
 
         evidence = []
         if filtered_security.get("has_content") and filtered_security.get("evidence"):
@@ -567,6 +643,8 @@ class QuickHcReportService:
             evidence.append(filtered_client_growth["evidence"])
         if filtered_capacity_license.get("has_content") and filtered_capacity_license.get("evidence"):
             evidence.append(filtered_capacity_license["evidence"])
+        if filtered_backup_job_summary.get("has_content") and filtered_backup_job_summary.get("evidence"):
+            evidence.append(filtered_backup_job_summary["evidence"])
 
         return {
             "title": report["title"],
@@ -576,6 +654,7 @@ class QuickHcReportService:
             "license_summary": filtered_license,
             "client_growth": filtered_client_growth,
             "capacity_license": filtered_capacity_license,
+            "backup_job_summary": filtered_backup_job_summary,
             "evidence": evidence,
         }
 
@@ -757,6 +836,59 @@ class QuickHcReportService:
             "has_content": has_content,
         }
 
+    def _filter_backup_job_summary(
+        self,
+        section: dict[str, Any],
+        requested: bool,
+        selection_ids: set[str],
+    ) -> dict[str, Any]:
+        show_summary = requested and section["summary_section_id"] in selection_ids
+        show_status_breakdown = (
+            requested and section["status_breakdown_section_id"] in selection_ids
+        )
+        show_recent_failures = (
+            requested and section["recent_failures_section_id"] in selection_ids
+        )
+        show_recent_jobs = (
+            requested and section["recent_jobs_section_id"] in selection_ids
+        )
+        has_content = requested and any(
+            (show_summary, show_status_breakdown, show_recent_failures, show_recent_jobs)
+        )
+
+        if not section.get("available"):
+            return {
+                **section,
+                "requested": requested,
+                "show_summary": show_summary,
+                "show_status_breakdown": show_status_breakdown,
+                "show_recent_failures": show_recent_failures,
+                "show_recent_jobs": show_recent_jobs,
+                "status_breakdown": {},
+                "recent_failures": [],
+                "recent_jobs": [],
+                "has_content": False,
+            }
+
+        return {
+            **section,
+            "requested": requested,
+            "show_summary": show_summary,
+            "show_status_breakdown": show_status_breakdown,
+            "show_recent_failures": show_recent_failures,
+            "show_recent_jobs": show_recent_jobs,
+            "status_breakdown": dict(section.get("status_breakdown") or {})
+            if show_status_breakdown
+            else {},
+            "recent_failures": list(section.get("recent_failures") or [])
+            if show_recent_failures
+            else [],
+            "recent_jobs": list(section.get("recent_jobs") or [])
+            if show_recent_jobs
+            else [],
+            "has_content": has_content,
+        }
+
     def _default_report_selection_ids(self, report: dict[str, Any]) -> set[str]:
         client_growth_tile = QUICK_HC_TILE_BY_ID[CLIENT_GROWTH_SELECTION_ID]
         capacity_license_tile = QUICK_HC_TILE_BY_ID[CAPACITY_LICENSE_SELECTION_ID]
@@ -773,6 +905,10 @@ class QuickHcReportService:
         license_summary = report["license_summary"]
         if license_summary.get("available"):
             selection_ids.add(license_summary["metadata_section_id"])
+
+        backup_job_summary = report["backup_job_summary"]
+        if backup_job_summary.get("available"):
+            selection_ids.add(backup_job_summary["summary_section_id"])
 
         return selection_ids
 

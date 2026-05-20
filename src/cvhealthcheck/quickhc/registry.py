@@ -8,6 +8,7 @@ SECURITY_ASSESSMENT_SELECTION_ID = "security_assessment"
 LICENSE_SUMMARY_SELECTION_ID = "license_summary"
 CLIENT_GROWTH_SELECTION_ID = "client_growth"
 CAPACITY_LICENSE_SELECTION_ID = "capacity_license"
+BACKUP_JOB_SUMMARY_SELECTION_ID = "backup_job_summary"
 
 ENVIRONMENT_METADATA_SECTION_ID = "environment.metadata"
 SECURITY_ASSESSMENT_SUMMARY_SECTION_ID = "security_assessment.summary"
@@ -24,6 +25,10 @@ CLIENT_GROWTH_CHART_SECTION_ID = "client_growth.chart"
 CLIENT_GROWTH_MONTHLY_TABLE_SECTION_ID = "client_growth.monthly_table"
 CAPACITY_LICENSE_SUMMARY_SECTION_ID = "capacity_license.summary"
 CAPACITY_LICENSE_TABLE_SECTION_ID = "capacity_license.table"
+BACKUP_JOB_SUMMARY_SUMMARY_SECTION_ID = "backup_job_summary.summary"
+BACKUP_JOB_SUMMARY_STATUS_BREAKDOWN_SECTION_ID = "backup_job_summary.status_breakdown"
+BACKUP_JOB_SUMMARY_RECENT_FAILURES_SECTION_ID = "backup_job_summary.recent_failures"
+BACKUP_JOB_SUMMARY_RECENT_JOBS_SECTION_ID = "backup_job_summary.recent_jobs"
 
 QUICK_HC_TILES: tuple[TileDefinition, ...] = (
     TileDefinition(
@@ -170,6 +175,43 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
                 label="Usage/details table",
                 preview_renderer="capacity_license_table_preview",
                 report_renderer="capacity_license_table_report",
+            ),
+        ),
+    ),
+    TileDefinition(
+        id=BACKUP_JOB_SUMMARY_SELECTION_ID,
+        title="Backup Job Summary",
+        subtitle="Operational backup job visibility from the latest Reports Plus Backup Job Summary artifact.",
+        source_type="reportsplus",
+        source_service="backup_job_summary_collector",
+        artifact_type="backup_job_summary",
+        preview_renderer="backup_job_summary_preview",
+        report_renderer="backup_job_summary_report",
+        detail_endpoint="main.quick_hc",
+        sections=(
+            SectionDefinition(
+                id=BACKUP_JOB_SUMMARY_SUMMARY_SECTION_ID,
+                label="Summary",
+                preview_renderer="backup_job_summary_summary_preview",
+                report_renderer="backup_job_summary_summary_report",
+            ),
+            SectionDefinition(
+                id=BACKUP_JOB_SUMMARY_STATUS_BREAKDOWN_SECTION_ID,
+                label="Status breakdown",
+                preview_renderer="backup_job_summary_status_preview",
+                report_renderer="backup_job_summary_status_report",
+            ),
+            SectionDefinition(
+                id=BACKUP_JOB_SUMMARY_RECENT_FAILURES_SECTION_ID,
+                label="Recent failures",
+                preview_renderer="backup_job_summary_failures_preview",
+                report_renderer="backup_job_summary_failures_report",
+            ),
+            SectionDefinition(
+                id=BACKUP_JOB_SUMMARY_RECENT_JOBS_SECTION_ID,
+                label="Recent jobs",
+                preview_renderer="backup_job_summary_jobs_preview",
+                report_renderer="backup_job_summary_jobs_report",
             ),
         ),
     ),
