@@ -11,6 +11,8 @@
     {% endfor %}
   {% endif %}
 
+  {% include "partials/quickhc/source_provenance.html" %}
+
   {% if not artifact %}
     <p class="notice">
       No Backup Job Summary artifact is available yet.

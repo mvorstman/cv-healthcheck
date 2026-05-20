@@ -6,6 +6,7 @@ from cvhealthcheck.metrics import (
     get_client_growth_details,
     get_client_growth_summary,
 )
+from cvhealthcheck.quickhc.source_provenance import build_metric_provenance
 
 from .shared import (
     _capacity_license_chart,
@@ -27,6 +28,11 @@ def metrics_client_count():
         title="Client Count",
         metrics=[metric],
         chart=_client_count_chart(metric),
+        source_provenance=build_metric_provenance(
+            metric,
+            artifact_name="client_count_history",
+            report_name="Client Count",
+        ),
     )
 
 
@@ -48,6 +54,11 @@ def metrics_client_growth():
         title="Client Growth",
         metrics=[summary, details],
         charts=charts,
+        source_provenance=build_metric_provenance(
+            summary,
+            artifact_name="client_growth_summary",
+            report_name="Client Growth",
+        ),
     )
 
 
@@ -60,4 +71,9 @@ def metrics_capacity_license():
         title="Capacity License Usage",
         metrics=[metric],
         chart=_capacity_license_chart(metric),
+        source_provenance=build_metric_provenance(
+            metric,
+            artifact_name="capacity_license_usage",
+            report_name="Capacity License Usage",
+        ),
     )

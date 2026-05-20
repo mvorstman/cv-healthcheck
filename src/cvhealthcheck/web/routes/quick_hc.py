@@ -31,6 +31,12 @@ from cvhealthcheck.quickhc.overview_service import build_quick_hc_overview_conte
 from cvhealthcheck.quickhc.report_service import (
     REPORT_SELECTION_IDS,
 )
+from cvhealthcheck.quickhc.source_provenance import (
+    build_backup_job_summary_provenance,
+    build_commcell_provenance,
+    build_license_summary_provenance,
+    build_security_assessment_provenance,
+)
 from cvhealthcheck.reportsplus.backup_job_summary import (
     load_backup_job_summary_artifact,
 )
@@ -80,19 +86,22 @@ def quick_hc_commcell():
     return render_template(
         "quick_hc_commcell.html",
         result=result,
+        source_provenance=build_commcell_provenance(result),
         formatted=to_pretty_json(result),
     )
 
 
 @bp.route("/quick-hc/security-assessment")
 def quick_hc_security_assessment():
+    assessment = security_assessment_quick_hc()
     flashes = [
         {"category": category, "message": text}
         for category, text in get_flashed_messages(with_categories=True)
     ]
     return render_template(
         "quick_hc_security_assessment.html",
-        assessment=security_assessment_quick_hc(),
+        assessment=assessment,
+        source_provenance=build_security_assessment_provenance(assessment),
         flashes=flashes,
     )
 
@@ -170,6 +179,7 @@ def quick_hc_license_summary():
     return render_template(
         "license_summary.html",
         artifact=artifact,
+        source_provenance=build_license_summary_provenance(artifact),
         flashes=flashes,
     )
 
@@ -188,6 +198,7 @@ def quick_hc_backup_job_summary():
     return render_template(
         "quick_hc_backup_job_summary.html",
         artifact=artifact,
+        source_provenance=build_backup_job_summary_provenance(artifact),
         flashes=flashes,
     )
 

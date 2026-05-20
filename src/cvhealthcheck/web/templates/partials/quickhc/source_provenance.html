@@ -1,0 +1,49 @@
+<section class="metadata-card">
+  <div class="section-heading">
+    <h3>Source Provenance</h3>
+    <p class="helper-text">Supported and current acquisition paths for this Quick HC subject.</p>
+  </div>
+  <div class="source-provenance-list">
+    {% for item in source_provenance %}
+      <article class="source-provenance-item{% if not item.active %} source-provenance-item--muted{% endif %}">
+        <div class="source-provenance-head">
+          <strong>{{ item.label }}</strong>
+          <span class="badge {{ item.badge_class }}">{{ item.status_label }}</span>
+        </div>
+        {% if item.description %}
+          <p class="source-provenance-description">{{ item.description }}</p>
+        {% endif %}
+        <dl class="source-provenance-meta">
+          {% if item.report_name %}
+            <dt>Report</dt>
+            <dd>{{ item.report_name }}</dd>
+          {% endif %}
+          {% if item.dataset_guid %}
+            <dt>Dataset GUID</dt>
+            <dd><code>{{ item.dataset_guid }}</code></dd>
+          {% endif %}
+          {% if item.endpoint %}
+            <dt>Endpoint</dt>
+            <dd><code>{{ item.endpoint }}</code></dd>
+          {% endif %}
+          {% if item.artifact_path %}
+            <dt>Artifact</dt>
+            <dd><code>{{ item.artifact_path }}</code></dd>
+          {% endif %}
+          {% if item.generated_at %}
+            <dt>Generated at</dt>
+            <dd>{{ item.generated_at }}</dd>
+          {% endif %}
+          {% if item.row_count is not none %}
+            <dt>Rows / count</dt>
+            <dd>{{ item.row_count }}</dd>
+          {% endif %}
+          {% if item.notes %}
+            <dt>Notes</dt>
+            <dd>{{ item.notes }}</dd>
+          {% endif %}
+        </dl>
+      </article>
+    {% endfor %}
+  </div>
+</section>

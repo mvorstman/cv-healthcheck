@@ -353,6 +353,12 @@ section {
   border: 1px solid rgba(63, 185, 80, 0.3);
 }
 
+.badge-muted {
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
 /* === Status summary (index/status page) === */
 .status-summary {
   display: grid;
@@ -428,6 +434,45 @@ dd {
 dd[data-status="good"]::before {
   content: "● ";
   color: var(--good);
+}
+
+.source-provenance-list {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.source-provenance-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  padding: 0.9rem 1rem;
+}
+
+.source-provenance-item--muted {
+  opacity: 0.72;
+  background: var(--bg-subtle);
+  border-color: var(--border-subtle);
+}
+
+.source-provenance-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.source-provenance-head strong {
+  color: var(--text-primary);
+}
+
+.source-provenance-description {
+  margin: 0.45rem 0 0.75rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.source-provenance-meta {
+  grid-template-columns: 140px minmax(0, 1fr);
 }
 
 dd[data-status="bad"]::before {

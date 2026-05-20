@@ -4,6 +4,10 @@
 <section>
   <h2>{{ title }}</h2>
 
+  {% if source_provenance is defined %}
+    {% include "partials/quickhc/source_provenance.html" %}
+  {% endif %}
+
   {% set chart_list = charts if charts is defined else ([chart] if chart else []) %}
   {% for chart in chart_list %}
     <div class="chart-panel">

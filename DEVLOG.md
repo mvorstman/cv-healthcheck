@@ -22,6 +22,9 @@
 
 ## 2026-05-20
 
+- Standardized Quick HC source provenance across tile detail pages with a shared provenance model and shared rendering partial.
+- Added consistent source categories and statuses such as REST API, Reports Plus, CSV, HTML, normalized artifact, and manual/static source, with unavailable or unimplemented sources shown explicitly as muted instead of omitted.
+- Applied the shared provenance block to Backup Job Summary first and also migrated existing mature detail pages such as License Summary, Security Assessment, CommCell, and metric-backed Quick HC detail views to the same pattern.
 - Added the Backup Job Summary Quick HC tile using the existing registry-driven tile platform and the Phase 1 normalized Reports Plus artifact.
 - Kept the integration limited to tile metadata, overview preview rendering, and customer-report section rendering; no scoring, rules engine logic, or collector redesign was added.
 - This validates that the current Quick HC platform can absorb a new Reports Plus collector artifact with only metadata, service-layer, template-partial, and test updates.

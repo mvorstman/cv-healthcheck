@@ -11,6 +11,8 @@
     {% endfor %}
   {% endif %}
 
+  {% include "partials/quickhc/source_provenance.html" %}
+
   {% with
     report_name="License Summary",
     collect_action=url_for('main.quick_hc_license_summary_collect'),

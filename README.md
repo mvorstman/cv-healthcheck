@@ -131,6 +131,8 @@ Quick HC itself now uses full-width expandable subject tiles, per-section cards,
 
 The current refactor direction is registry-first rather than renderer-first. Quick HC tile and section metadata is beginning to move into shared dataclasses and a central registry so new subjects can be added with less duplication across routes, templates, and report composition code, while preserving the existing customer-facing UX.
 
+Detail pages now also use a standardized Source Provenance block so supported acquisition paths are visible consistently across tiles. Available or validated sources remain active, while unavailable, not implemented, not tested, or not applicable sources are rendered in a muted state instead of being hidden.
+
 The next extraction step is now in place on the overview template as well: the repeated outer Quick HC subject-card shell is rendered through a shared partial, and the reusable section-card wrapper now lives in its own partial too. Preview extraction now covers CommCell, Security Assessment, License Summary, Client Growth, and Capacity License via explicit partials, and the current platform layer now hardens that structure with explicit preview-builder and report-builder mappings keyed by registry metadata rather than ad hoc per-route wiring.
 
 Because Quick HC now depends on a registry-first metadata contract, dedicated integrity tests now verify tile IDs, section IDs, required tile metadata, default-selection safety, and alignment between the registry and report-service selection constants before any renderer abstraction is introduced.
