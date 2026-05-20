@@ -143,6 +143,7 @@ src/cvhealthcheck/quickhc/
   models.py
   registry.py
   report_service.py
+  overview_service.py
 
 src/cvhealthcheck/web/templates/
   quick_hc.html
@@ -167,6 +168,7 @@ Current boundaries are intentional:
 - `quickhc/models.py`: shared Quick HC metadata models only.
 - `quickhc/registry.py`: the single source of truth for tile IDs, section IDs, labels, subtitles, default selections, and logical renderer names.
 - `quickhc/report_service.py`: backend report composition and filtering only.
+- `quickhc/overview_service.py`: overview-only preview shaping for the `/quick-hc` dashboard.
 - `web/routes/quick_hc.py`: thin route layer that passes already-shaped data into templates.
 - `web/templates/quick_hc.html`: top-level overview composition only.
 - `web/templates/partials/quickhc_tile.html`: reusable outer tile shell.

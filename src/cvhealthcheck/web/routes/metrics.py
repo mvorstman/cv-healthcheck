@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+from cvhealthcheck.metrics import (
+    get_capacity_license_usage,
+    get_client_count_history,
+    get_client_growth_details,
+    get_client_growth_summary,
+)
+
 from .shared import (
     _capacity_license_chart,
     _client_count_chart,
     _client_growth_chart,
     _client_growth_detail_chart,
     bp,
-    get_capacity_license_usage,
-    get_client_count_history,
-    get_client_growth_details,
-    get_client_growth_summary,
     login_required,
     render_template,
 )

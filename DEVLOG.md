@@ -22,6 +22,10 @@
 
 ## 2026-05-20
 
+- Started the Phase 2 structural cleanup without changing Quick HC behavior or visuals.
+- Moved Quick HC overview preview orchestration out of `web/routes/shared.py` into `quickhc/overview_service.py`.
+- Kept Flask routes thin by switching the `/quick-hc` overview route to consume the new overview service rather than building all tile preview payloads out of the shared route module.
+- Replaced the License Summary service's direct import of the Security Assessment registry class with a small generic artifact-registry helper.
 - Fixed the Quick HC Phase 1 safety/stability issues without expanding the current architecture scope.
 - Prevented `extract_security_assessment()` from persisting unauthorized or failed report responses by validating auth/status before normalization and artifact persistence.
 - Added the missing `@login_required` protection to the three `/metrics/*` routes and the two unprotected Reports Plus operational routes.

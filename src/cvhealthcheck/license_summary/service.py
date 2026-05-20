@@ -10,9 +10,9 @@ from uuid import uuid4
 
 from werkzeug.utils import secure_filename
 
+from cvhealthcheck.artifact_registry import ArtifactRegistry, create_artifact_registry
 from cvhealthcheck.reportsplus.catalog import collected_at
 from cvhealthcheck.reportsplus.client import ReportsPlusClient
-from cvhealthcheck.security_assessment.registry import SecurityAssessmentArtifactRegistry
 
 from .artifact import LICENSE_SUMMARY_CATALOG_DIR, write_license_summary_artifact
 from .collect_rest import collect_license_summary_rest, import_license_summary_xlsx_recording
@@ -62,7 +62,7 @@ class LicenseSummaryService:
     ) -> None:
         self.catalog_dir = catalog_dir or LICENSE_SUMMARY_CATALOG_DIR
         self.registry_path = registry_path or LICENSE_SUMMARY_REGISTRY_PATH
-        self.registry = SecurityAssessmentArtifactRegistry(self.registry_path)
+        self.registry = create_artifact_registry(self.registry_path)
 
     def get_current(
         self,
@@ -240,9 +240,7 @@ def persist_license_summary_artifact(
         artifact_filename=artifact_filename,
     )
 
-    registry = SecurityAssessmentArtifactRegistry(
-        registry_path or LICENSE_SUMMARY_REGISTRY_PATH
-    )
+    registry = create_artifact_registry(registry_path or LICENSE_SUMMARY_REGISTRY_PATH)
     import_run = ImportRun(
         import_run_id=import_run_id,
         customer_id=customer.customer_id,
@@ -308,9 +306,7 @@ def load_active_license_summary_artifact(
         commcell_name=(commcell_context.commcell_name if commcell_context else DEFAULT_COMMCELL_CONTEXT.commcell_name),
         customer_id=customer.customer_id,
     )
-    registry = SecurityAssessmentArtifactRegistry(
-        registry_path or LICENSE_SUMMARY_REGISTRY_PATH
-    )
+    registry = create_artifact_registry(registry_path or LICENSE_SUMMARY_REGISTRY_PATH)
     active_record = registry.get_active_artifact(
         "license_summary",
         customer_id=customer.customer_id,
@@ -355,7 +351,7 @@ def load_active_license_summary_artifact(
 def _load_artifact_payload_from_record(
     record: ArtifactRecord,
     *,
-    registry: SecurityAssessmentArtifactRegistry,
+    registry: ArtifactRegistry,
     catalog_dir: Path,
 ) -> dict[str, Any]:
     path = Path(record.file_path)

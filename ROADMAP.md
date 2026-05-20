@@ -107,6 +107,7 @@ Current Quick HC framework milestone:
 - `quickhc/models.py` defines shared Quick HC metadata dataclasses.
 - `quickhc/registry.py` is the source of truth for tiles, sections, IDs, labels, default selections, and logical renderer names.
 - `quickhc/report_service.py` remains responsible for backend report composition and filtering.
+- `quickhc/overview_service.py` now owns Quick HC overview preview shaping instead of the shared route module.
 - `quick_hc.html` now acts as a thin composition template over shared partials.
 - `partials/quickhc_tile.html` and `partials/quickhc_section_card.html` provide reusable structural shells.
 - `partials/quickhc/previews/*.html` now contain explicit per-subject preview bodies for all current Quick HC subjects.

@@ -1,21 +1,14 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from .shared import (
     LICENSE_SUMMARY_UPLOAD_EXTENSIONS,
     LicenseSummaryImportError,
     LicenseSummaryService,
     SecurityAssessmentImportError,
     SecurityAssessmentService,
-    _capacity_license_quick_hc,
-    _client_growth_quick_hc,
-    _commcell_quick_hc,
     _current_token,
-    _license_summary_quick_hc,
     _reportsplus_client,
     bp,
-    catalog_status,
     clear_current_token,
     flash,
     get_commcell_identity,
@@ -28,32 +21,22 @@ from .shared import (
     redirect,
     render_template,
     request,
-    security_assessment_quick_hc,
     to_pretty_json,
     url_for,
 )
 from cvhealthcheck.quickhc import QuickHcReportService
-from cvhealthcheck.quickhc.registry import QUICK_HC_TILE_BY_ID
+from cvhealthcheck.quickhc.overview_service import build_quick_hc_overview_context
 from cvhealthcheck.quickhc.report_service import (
-    REPORT_OVERVIEW_DEFAULT_SELECTION_IDS,
     REPORT_SELECTION_IDS,
-    REPORT_SUBSECTION_OPTIONS,
 )
+from cvhealthcheck.reportsplus.security_assessment import security_assessment_quick_hc
 
 
 @bp.route("/quick-hc")
 def quick_hc():
     return render_template(
         "quick_hc.html",
-        commcell_status=catalog_status("commserv.json", catalog_dir=Path("data/catalog/rest")),
-        commcell_preview=_commcell_quick_hc(),
-        security_assessment=security_assessment_quick_hc(),
-        license_summary=_license_summary_quick_hc(),
-        client_growth=_client_growth_quick_hc(),
-        capacity_license=_capacity_license_quick_hc(),
-        quick_hc_tiles=QUICK_HC_TILE_BY_ID,
-        selected_report_sections=REPORT_OVERVIEW_DEFAULT_SELECTION_IDS,
-        report_subsection_options=REPORT_SUBSECTION_OPTIONS,
+        **build_quick_hc_overview_context(),
     )
 
 
