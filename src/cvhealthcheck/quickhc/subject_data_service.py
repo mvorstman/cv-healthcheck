@@ -256,6 +256,15 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
         }
         for f in highlights[:12]
     ]
+    highlight_rows = [
+        [
+            str(f.get("section") or ""),
+            str(f.get("parameter") or ""),
+            str(f.get("status") or ""),
+            _finding_rem(f),
+        ]
+        for f in highlights[:12]
+    ]
 
     info_good_findings = [
         {
@@ -267,10 +276,30 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
         for f in sec.get("checks") or []
         if f.get("status") in ("Info", "Good")
     ][:20]
+    info_good_rows = [
+        [
+            str(sec.get("name") or ""),
+            str(f.get("parameter") or ""),
+            str(f.get("status") or ""),
+            str(f.get("remarks") or ""),
+        ]
+        for sec in sections
+        for f in sec.get("checks") or []
+        if f.get("status") in ("Info", "Good")
+    ][:20]
+
+    summary_rows = [
+        {"k": "TOTAL CHECKS", "v": str(total)},
+        {"k": "CRITICAL", "v": str(critical), "cls": "err" if critical > 0 else ""},
+        {"k": "WARNING", "v": str(warning), "cls": "warn" if warning > 0 else ""},
+        {"k": "INFO", "v": str(info_count)},
+        {"k": "GOOD", "v": str(good_count), "cls": "ok" if good_count > 0 else ""},
+    ]
+    if collected_at := str(sa.get("collected_at") or ""):
+        summary_rows.append({"k": "COLLECTED", "v": collected_at[:19]})
 
     # Source metadata
-    collected_at = sa.get("collected_at") or ""
-    is_rest = source_type in ("rest",)
+    is_rest = source_type in ("rest", "reportsplus")
     is_import = source_type in ("csv", "html", "import")
     active_src = "rest_report" if is_rest else ("import" if is_import else "rest_report")
 
@@ -314,22 +343,27 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
                     "Info": info_count,
                     "Good": good_count,
                 },
+                "rows": summary_rows,
             },
             {
                 "id": "security_assessment.highlights",
                 "title": "Critical / Warning highlights",
-                "meta": "Priority findings",
+                "meta": f"{len(highlight_findings)} finding{'s' if len(highlight_findings) != 1 else ''}",
                 "included": True,
                 "type": "findings_grid",
                 "findings": highlight_findings,
+                "columns": ["Section", "Parameter", "Status", "Remarks"],
+                "rows": highlight_rows,
             },
             {
                 "id": "security_assessment.all_findings",
                 "title": "Info / Good findings",
-                "meta": "Informational checks",
+                "meta": f"{len(info_good_findings)} finding{'s' if len(info_good_findings) != 1 else ''}",
                 "included": False,
                 "type": "findings_list",
                 "findings": info_good_findings,
+                "columns": ["Section", "Parameter", "Status", "Remarks"],
+                "rows": info_good_rows,
             },
         ],
     }

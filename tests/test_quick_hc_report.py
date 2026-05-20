@@ -548,6 +548,63 @@ def test_quick_hc_overview_renders_commcell_report_section_values(monkeypatch) -
     assert '{"k": "TIMEZONE", "v": "UTC"}' in body
 
 
+def test_quick_hc_overview_renders_security_assessment_report_section_values(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+    _patch_metrics_paths(tmp_path, monkeypatch)
+
+    artifact = build_security_assessment_artifact(
+        [
+            {
+                "section": "Platform Security",
+                "parameter": "Threat Indicator alert",
+                "status": "Critical",
+                "remarks": "Disabled",
+                "action": "Enable alert",
+            },
+            {
+                "section": "Access Security",
+                "parameter": "MFA enabled",
+                "status": "Warning",
+                "remarks": "Recommended for admins",
+                "action": "Enable MFA",
+            },
+            {
+                "section": "Auditing",
+                "parameter": "Audit retention",
+                "status": "Info",
+                "remarks": "30 days",
+                "action": "Review retention",
+            },
+        ],
+        source_type="rest",
+        source={"report_id": "336"},
+    )
+    persist_security_assessment_artifact(
+        artifact,
+        catalog_dir=tmp_path / "security_catalog",
+        registry_path=tmp_path / "security_registry.sqlite3",
+    )
+
+    app = create_app()
+    response = app.test_client().get("/quick-hc")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert '"id": "security_assessment.summary"' in body
+    assert '{"k": "TOTAL CHECKS", "v": "3"}' in body
+    assert '{"cls": "err", "k": "CRITICAL", "v": "1"}' in body
+    assert '{"cls": "warn", "k": "WARNING", "v": "1"}' in body
+    assert '{"k": "INFO", "v": "1"}' in body
+    assert '"id": "security_assessment.highlights"' in body
+    assert '"title": "Threat Indicator alert"' in body
+    assert '"title": "MFA enabled"' in body
+    assert '"id": "security_assessment.all_findings"' in body
+    assert '[["Auditing", "Audit retention", "Info", "30 days"]]' in body
+
+
 def test_quick_hc_overview_handles_missing_backup_job_summary_artifact(
     tmp_path, monkeypatch
 ) -> None:
