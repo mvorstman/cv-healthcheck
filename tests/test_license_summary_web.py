@@ -108,7 +108,8 @@ def test_quick_hc_index_includes_license_summary_link(tmp_path, monkeypatch) -> 
     body = response.get_data(as_text=True)
     assert "/quick-hc/license-summary" in body
     assert "1 other licenses" in body
-    assert "1 agent/feature licenses" in body
+    assert '"title": "Agent / Feature Licenses table"' in body
+    assert '"Virtual Server"' in body
 
 
 def test_quick_hc_license_summary_upload_imports_csv_and_redirects(tmp_path, monkeypatch) -> None:

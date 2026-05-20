@@ -2,8 +2,8 @@
 
 {% block content %}
 <section class="login-card">
-  <p class="login-appname">cv-healthcheck</p>
-  <p class="login-subtitle">Commvault Health Check Platform</p>
+  <p class="login-appname">Connect to CS</p>
+  <p class="login-subtitle">Sign in to the Commvault operational workspace.</p>
   {% if base_url %}
     <p class="helper-text" style="text-align:center;margin-bottom:1rem">{{ base_url }}</p>
   {% else %}
@@ -22,7 +22,7 @@
       <label for="password">Password</label>
       <input id="password" name="password" type="password" autocomplete="current-password" required>
     </div>
-    <button type="submit" class="login-submit">Login</button>
+    <button type="submit" class="login-submit">Connect</button>
   </form>
 </section>
 {% endblock %}

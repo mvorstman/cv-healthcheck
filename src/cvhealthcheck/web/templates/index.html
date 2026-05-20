@@ -1,22 +1,58 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section>
-  <h2>Status</h2>
-  <dl>
-    <dt>Base URL</dt>
-    <dd>{{ base_url or "not configured" }}</dd>
-    <dt>Token loaded</dt>
-    <dd data-status="{{ 'good' if token_loaded else 'bad' }}">{{ "yes" if token_loaded else "no" }}</dd>
-    <dt>SSL verification</dt>
-    <dd data-status="{{ 'good' if verify_ssl else 'bad' }}">{{ "enabled" if verify_ssl else "disabled" }}</dd>
-    <dt>API reachable</dt>
-    <dd data-status="{{ 'good' if api_reachable else 'bad' }}">{{ "yes" if api_reachable else "no" }}</dd>
-    <dt>API status</dt>
-    <dd data-status="{{ 'good' if api_status_code == 200 else ('bad' if api_status_code else '') }}">{{ api_status_code or "not checked" }}</dd>
-  </dl>
+<div class="app-page">
+  <div class="app-page-head">
+    <div>
+      <h2>Status</h2>
+      <p class="app-page-subtitle">Environment connectivity, authentication, and API readiness for the operational workspace.</p>
+    </div>
+  </div>
+
+  <div class="status-summary">
+    <div class="status-card">
+      <strong>{{ "yes" if token_loaded else "no" }}</strong>
+      <span>Token loaded</span>
+    </div>
+    <div class="status-card {{ 'status-good' if api_reachable else 'status-critical' }}">
+      <strong>{{ "yes" if api_reachable else "no" }}</strong>
+      <span>API reachable</span>
+    </div>
+    <div class="status-card {{ 'status-good' if verify_ssl else 'status-warning' }}">
+      <strong>{{ "enabled" if verify_ssl else "disabled" }}</strong>
+      <span>SSL verification</span>
+    </div>
+    <div class="status-card {{ 'status-good' if api_status_code == 200 else ('status-critical' if api_status_code else '') }}">
+      <strong>{{ api_status_code or "n/a" }}</strong>
+      <span>API status</span>
+    </div>
+  </div>
+
+  <section class="metadata-card">
+    <div class="section-heading">
+      <h3>Connection Summary</h3>
+    </div>
+    <dl>
+      <dt>Base URL</dt>
+      <dd>{{ base_url or "not configured" }}</dd>
+      <dt>Token loaded</dt>
+      <dd data-status="{{ 'good' if token_loaded else 'bad' }}">{{ "yes" if token_loaded else "no" }}</dd>
+      <dt>SSL verification</dt>
+      <dd data-status="{{ 'good' if verify_ssl else 'bad' }}">{{ "enabled" if verify_ssl else "disabled" }}</dd>
+      <dt>API reachable</dt>
+      <dd data-status="{{ 'good' if api_reachable else 'bad' }}">{{ "yes" if api_reachable else "no" }}</dd>
+      <dt>API status</dt>
+      <dd data-status="{{ 'good' if api_status_code == 200 else ('bad' if api_status_code else '') }}">{{ api_status_code or "not checked" }}</dd>
+    </dl>
+  </section>
+
   {% if api_error %}
-    <pre>{{ api_error }}</pre>
+    <section class="metadata-card">
+      <div class="section-heading">
+        <h3>API Error</h3>
+      </div>
+      <pre>{{ api_error }}</pre>
+    </section>
   {% endif %}
-</section>
+</div>
 {% endblock %}

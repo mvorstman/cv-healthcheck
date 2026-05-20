@@ -1,103 +1,126 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section>
-  <h2>Reports Plus Reports</h2>
-  <dl>
-    <dt>Endpoint</dt>
-    <dd>{{ diagnostics.endpoint }}</dd>
-    <dt>Status</dt>
-    <dd>{{ diagnostics.status }}</dd>
-    <dt>Elapsed</dt>
-    <dd>{{ diagnostics.elapsed_ms if diagnostics.elapsed_ms is not none else "unknown" }} ms</dd>
-    <dt>Records</dt>
-    <dd>{{ diagnostics.record_count }}</dd>
-    <dt>Catalog</dt>
-    <dd>
-      {% if catalog_status.exists %}
-        {{ catalog_status.path }}{% if catalog_status.record_count is not none %} ({{ catalog_status.record_count }} records){% endif %}
-      {% else %}
-        not written
-      {% endif %}
-    </dd>
-  </dl>
+<div class="app-page">
+  <div class="app-page-head">
+    <div>
+      <h2>Reports Plus Reports</h2>
+      <p class="app-page-subtitle">Operational report catalog view for Reports Plus discovery and healthcheck candidate analysis.</p>
+    </div>
+  </div>
+
+  <section class="metadata-card">
+    <div class="section-heading">
+      <h3>Catalog Summary</h3>
+    </div>
+    <dl>
+      <dt>Endpoint</dt>
+      <dd>{{ diagnostics.endpoint }}</dd>
+      <dt>Status</dt>
+      <dd>{{ diagnostics.status }}</dd>
+      <dt>Elapsed</dt>
+      <dd>{{ diagnostics.elapsed_ms if diagnostics.elapsed_ms is not none else "unknown" }} ms</dd>
+      <dt>Records</dt>
+      <dd>{{ diagnostics.record_count }}</dd>
+      <dt>Catalog</dt>
+      <dd>
+        {% if catalog_status.exists %}
+          {{ catalog_status.path }}{% if catalog_status.record_count is not none %} ({{ catalog_status.record_count }} records){% endif %}
+        {% else %}
+          not written
+        {% endif %}
+      </dd>
+    </dl>
+  </section>
 
   {% if message %}
     <p class="notice">{{ message }}</p>
   {% endif %}
 
-  <form method="get" class="filters">
-    <label>Report name <input name="name" value="{{ filters.name }}"></label>
-    <label><input name="metrics_only" type="checkbox" {% if filters.metrics_only %}checked{% endif %}> Metrics only</label>
-    <label>Deployed
-      <select name="deployed">
-        <option value="">Any</option>
-        <option value="true" {% if filters.deployed == "true" %}selected{% endif %}>Yes</option>
-        <option value="false" {% if filters.deployed == "false" %}selected{% endif %}>No</option>
-      </select>
-    </label>
-    <label>Viewable
-      <select name="viewable">
-        <option value="">Any</option>
-        <option value="true" {% if filters.viewable == "true" %}selected{% endif %}>Yes</option>
-        <option value="false" {% if filters.viewable == "false" %}selected{% endif %}>No</option>
-      </select>
-    </label>
-    <button type="submit">Apply</button>
-  </form>
+  <section class="metadata-card">
+    <div class="section-heading">
+      <h3>Filters</h3>
+    </div>
+    <form method="get" class="filters">
+      <label>Report name <input name="name" value="{{ filters.name }}"></label>
+      <label><input name="metrics_only" type="checkbox" {% if filters.metrics_only %}checked{% endif %}> Metrics only</label>
+      <label>Deployed
+        <select name="deployed">
+          <option value="">Any</option>
+          <option value="true" {% if filters.deployed == "true" %}selected{% endif %}>Yes</option>
+          <option value="false" {% if filters.deployed == "false" %}selected{% endif %}>No</option>
+        </select>
+      </label>
+      <label>Viewable
+        <select name="viewable">
+          <option value="">Any</option>
+          <option value="true" {% if filters.viewable == "true" %}selected{% endif %}>Yes</option>
+          <option value="false" {% if filters.viewable == "false" %}selected{% endif %}>No</option>
+        </select>
+      </label>
+      <button type="submit">Apply</button>
+    </form>
+  </section>
 
   {% if reports %}
-    <table>
-      <thead>
-        <tr>
-          <th>reportId</th>
-          <th>reportName</th>
-          <th>guid</th>
-          <th>deployed</th>
-          <th>viewable</th>
-          <th>editable</th>
-          <th>isMetrics</th>
-          <th>relevance</th>
-          <th>has_content</th>
-          <th>reportSource</th>
-          <th>packageId</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for report in reports %}
-          <tr>
-            <td>
-              {% if report.get("reportId") %}
-                <a href="{{ url_for('main.reportsplus_report_detail', report_id_or_guid=report.get('reportId')) }}">{{ report.get("reportId") }}</a>
-              {% else %}
-                {{ report.get("reportId", "") }}
-              {% endif %}
-            </td>
-            <td>{{ report.get("reportName", "") }}</td>
-            <td>
-              {% if report.get("guid") %}
-                <a href="{{ url_for('main.reportsplus_report_detail', report_id_or_guid=report.get('guid')) }}">{{ report.get("guid") }}</a>
-              {% endif %}
-            </td>
-            <td>{{ report.get("deployed", "") }}</td>
-            <td>{{ report.get("viewable", "") }}</td>
-            <td>{{ report.get("editable", "") }}</td>
-            <td>{{ report.get("isMetrics", "") }}</td>
-            <td>{{ report.get("relevance", "") }}</td>
-            <td>{{ report.get("has_content", "") }}</td>
-            <td>{{ report.get("reportSource", "") }}</td>
-            <td>{{ report.get("packageId", "") }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <section class="metadata-card">
+      <div class="section-heading">
+        <h3>Reports</h3>
+      </div>
+      <div class="app-table-wrap">
+        <table class="compact-table">
+          <thead>
+            <tr>
+              <th>reportId</th>
+              <th>reportName</th>
+              <th>guid</th>
+              <th>deployed</th>
+              <th>viewable</th>
+              <th>editable</th>
+              <th>isMetrics</th>
+              <th>relevance</th>
+              <th>has_content</th>
+              <th>reportSource</th>
+              <th>packageId</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for report in reports %}
+              <tr>
+                <td>
+                  {% if report.get("reportId") %}
+                    <a href="{{ url_for('main.reportsplus_report_detail', report_id_or_guid=report.get('reportId')) }}">{{ report.get("reportId") }}</a>
+                  {% else %}
+                    {{ report.get("reportId", "") }}
+                  {% endif %}
+                </td>
+                <td>{{ report.get("reportName", "") }}</td>
+                <td>
+                  {% if report.get("guid") %}
+                    <a href="{{ url_for('main.reportsplus_report_detail', report_id_or_guid=report.get('guid')) }}">{{ report.get("guid") }}</a>
+                  {% endif %}
+                </td>
+                <td>{{ report.get("deployed", "") }}</td>
+                <td>{{ report.get("viewable", "") }}</td>
+                <td>{{ report.get("editable", "") }}</td>
+                <td>{{ report.get("isMetrics", "") }}</td>
+                <td>{{ report.get("relevance", "") }}</td>
+                <td>{{ report.get("has_content", "") }}</td>
+                <td>{{ report.get("reportSource", "") }}</td>
+                <td>{{ report.get("packageId", "") }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
   {% endif %}
 
   {% if result %}
-    <details>
+    <details class="app-details">
       <summary>Raw JSON</summary>
       <pre>{{ formatted }}</pre>
     </details>
   {% endif %}
-</section>
+</div>
 {% endblock %}

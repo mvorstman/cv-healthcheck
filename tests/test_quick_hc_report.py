@@ -459,71 +459,24 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Customer Report" in body
-    assert '<details class="metadata-card quickhc-subject-card" open>' in body
-    assert '<summary class="quickhc-subject-summary">' in body
-    assert 'class="quickhc-chevron"' in body
-    assert 'data-quickhc-dashboard' in body
-    assert 'data-theme-toggle' in body
-    assert 'data-theme-choice="light"' in body
-    assert 'data-theme-choice="dark"' in body
-    assert 'data-quickhc-form' in body
-    assert 'data-section-card' in body
-    assert 'class="quickhc-section-header"' in body
-    assert 'class="quickhc-section-content"' in body
-    assert 'data-subject-toggle="environment"' in body
-    assert 'data-subject-toggle="security_assessment"' in body
-    assert 'data-subject-toggle="license_summary"' in body
-    assert 'data-subject-toggle="client_growth"' in body
-    assert 'data-subject-toggle="capacity_license"' in body
-    assert 'data-subject-toggle="backup_job_summary"' in body
-    assert 'data-subject-child="environment"' in body
-    assert 'data-subject-child="security_assessment"' in body
-    assert 'data-subject-child="license_summary"' in body
-    assert 'data-subject-child="client_growth"' in body
-    assert 'data-subject-child="capacity_license"' in body
-    assert 'data-subject-child="backup_job_summary"' in body
-    assert 'value="security_assessment.highlights"' in body
-    security_highlights_idx = body.index('value="security_assessment.highlights"')
-    security_header_idx = body.index('class="quickhc-section-header"', security_highlights_idx)
-    security_preview_idx = body.index('class="quickhc-highlight-cards"', security_highlights_idx)
-    assert security_highlights_idx < security_header_idx
-    assert security_highlights_idx < security_preview_idx
-    assert 'class="quickhc-section-preview"' in body
-    assert 'value="license_summary.metadata"' in body
-    license_metadata_idx = body.index('value="license_summary.metadata"')
-    license_metadata_header_idx = body.index('class="quickhc-section-header"', license_metadata_idx)
-    license_metadata_preview_idx = body.index('class="quickhc-section-preview"', license_metadata_idx)
-    assert license_metadata_idx < license_metadata_header_idx
-    assert license_metadata_idx < license_metadata_preview_idx
-    assert "Summary metadata" in body
-    assert 'value="environment"' in body
-    assert 'value="environment.metadata"' in body
-    assert 'value="security_assessment"' in body
-    assert 'value="security_assessment.summary"' in body
-    assert 'value="security_assessment.highlights"' in body
-    assert 'value="security_assessment.all_findings"' in body
-    assert 'value="license_summary"' in body
-    assert 'value="license_summary.metadata"' in body
-    assert 'value="license_summary.workload_sections"' in body
-    assert 'value="license_summary.other_licenses"' in body
-    assert 'value="license_summary.agent_feature_licenses"' in body
-    assert 'value="client_growth"' in body
-    assert 'value="client_growth.summary"' in body
-    assert 'value="client_growth.chart"' in body
-    assert 'value="client_growth.monthly_table"' in body
-    assert 'value="capacity_license"' in body
-    assert 'value="capacity_license.summary"' in body
-    assert 'value="capacity_license.table"' in body
-    assert 'value="backup_job_summary"' in body
-    assert 'value="backup_job_summary.summary"' in body
-    assert 'value="backup_job_summary.status_breakdown"' in body
-    assert 'value="backup_job_summary.recent_failures"' in body
-    assert 'value="backup_job_summary.recent_jobs"' in body
+    assert "window.QUICK_HC_INITIAL_DATA" in body
+    assert "/static/quick_hc.css" in body
+    assert "/static/quick_hc.js" in body
+    assert 'id="left-scroll"' in body
+    assert 'id="right-body"' in body
+    assert 'id="report-form"' in body
+    assert '"id": "environment"' in body
+    assert '"id": "security_assessment"' in body
+    assert '"id": "license_summary"' in body
+    assert '"id": "client_growth"' in body
+    assert '"id": "capacity_license"' in body
+    assert '"id": "backup_job_summary"' in body
+    assert '"id": "security_assessment.highlights"' in body
     assert "CommCell Details" in body
     assert "Client Growth" in body
-    assert "Capacity License" in body
+    assert "Capacity Licenses" in body
     assert "Backup Job Summary" in body
-    assert "Generate/View Customer Report" in body
+    assert "Generate Customer Report" in body
     assert "dataset_guid" not in body
     assert "HTTP status" not in body
     assert "data/catalog/" not in body
@@ -553,18 +506,16 @@ def test_quick_hc_overview_license_summary_previews_real_fields(
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "Summary metadata" in body
-    assert "Source" in body
-    assert "CommCell Name" in body
-    assert "Generated on" in body
-    assert "License expiry" in body
-    assert "Imported at" in body
-    assert "<th>License</th>" in body
-    assert "<th>Available Total</th>" in body
-    assert "<th>Agent</th>" in body
-    assert "Permanent Used / Term Used" in body
-    assert "1 other licenses" in body
-    assert "1 agent/feature licenses" in body
+    assert '"id": "license_summary.metadata"' in body
+    assert '"k": "SOURCE", "v": "CSV"' in body
+    assert '"k": "IMPORTED"' in body
+    assert '"k": "GENERATED ON"' in body
+    assert '"k": "LICENSE EXPIRY"' in body
+    assert '"title": "Other Licenses table"' in body
+    assert '"title": "Agent / Feature Licenses table"' in body
+    assert '"Cloud Storage"' in body
+    assert '"Virtual Server"' in body
+    assert '"pct": 0' in body
     assert "dataset_guid" not in body
     assert "HTTP status" not in body
 
@@ -583,7 +534,9 @@ def test_quick_hc_overview_handles_missing_backup_job_summary_artifact(
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Backup Job Summary" in body
-    assert "No Backup Job Summary artifact available yet." in body
+    assert '"id": "backup_job_summary"' in body
+    assert '"state": "nodata"' in body
+    assert '"subtitle": "Not collected"' in body
 
 
 def test_quick_hc_overview_renders_backup_job_summary_preview(
@@ -604,10 +557,11 @@ def test_quick_hc_overview_renders_backup_job_summary_preview(
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Backup Job Summary" in body
-    assert "Total jobs 12" in body
-    assert "Failed 2" in body
-    assert "Protected clients 5" in body
-    assert "Recent failures 1" in body
+    assert '"meta": "12 jobs"' in body
+    assert '{"k": "TOTAL JOBS", "v": "12"}' in body
+    assert '{"cls": "err", "k": "FAILED", "v": "2"}' in body
+    assert '"meta": "1 failures"' in body
+    assert '"title": "Recent jobs"' in body
     assert "dataset_guid" not in body
 
 

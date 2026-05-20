@@ -375,7 +375,7 @@ def _build_license_summary_subject(ls: dict | None) -> dict:
                     "license": str(row.get("license") or ""),
                     "ent": str(row.get("entitlement_value") or ""),
                     "used": str(row.get("used") or ""),
-                    "pct": int(row.get("usage_percent") or 0),
+                    "pct": _safe_int_percent(row.get("usage_percent")),
                 }
                 for row in rows
             ],
@@ -466,6 +466,18 @@ def _build_license_summary_subject(ls: dict | None) -> dict:
             },
         ],
     }
+
+
+def _safe_int_percent(value: object) -> int:
+    text = str(value or "").strip()
+    if not text:
+        return 0
+    if text.endswith("%"):
+        text = text[:-1].strip()
+    try:
+        return int(float(text))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _build_client_growth_subject(cg: dict | None) -> dict:

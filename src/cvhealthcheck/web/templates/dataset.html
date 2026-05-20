@@ -1,23 +1,37 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section>
-  <h2>Dataset Metadata</h2>
-  <p><code>{{ dataset_guid }}</code></p>
-  <dl>
-    <dt>Status</dt>
-    <dd>{{ result.status_code or "request failed" }}</dd>
-    <dt>Fields</dt>
-    <dd><pre>{{ summary.fields }}</pre></dd>
-    <dt>Parameters</dt>
-    <dd><pre>{{ summary.parameters }}</pre></dd>
-    <dt>Backend</dt>
-    <dd><pre>{{ summary.backend }}</pre></dd>
-    <dt>SQL / Stored procedure</dt>
-    <dd><pre>{{ summary.sql }}</pre></dd>
-  </dl>
-  <h3>Raw JSON</h3>
-  <pre>{{ formatted }}</pre>
-</section>
-{% endblock %}
+<div class="app-page">
+  <div class="app-page-head">
+    <div>
+      <h2>Dataset Metadata</h2>
+      <p class="app-page-subtitle"><code class="app-inline-code">{{ dataset_guid }}</code></p>
+    </div>
+  </div>
 
+  <section class="metadata-card">
+    <div class="section-heading">
+      <h3>Metadata</h3>
+    </div>
+    <dl>
+      <dt>Status</dt>
+      <dd>{{ result.status_code or "request failed" }}</dd>
+      <dt>Fields</dt>
+      <dd><pre>{{ summary.fields }}</pre></dd>
+      <dt>Parameters</dt>
+      <dd><pre>{{ summary.parameters }}</pre></dd>
+      <dt>Backend</dt>
+      <dd><pre>{{ summary.backend }}</pre></dd>
+      <dt>SQL / Stored procedure</dt>
+      <dd><pre>{{ summary.sql }}</pre></dd>
+    </dl>
+  </section>
+
+  <section class="metadata-card">
+    <div class="section-heading">
+      <h3>Raw JSON</h3>
+    </div>
+    <pre>{{ formatted }}</pre>
+  </section>
+</div>
+{% endblock %}

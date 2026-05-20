@@ -1,8 +1,13 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section>
-  <h2>{{ title }}</h2>
+<div class="app-page">
+  <div class="app-page-head">
+    <div>
+      <h2>{{ title }}</h2>
+      <p class="app-page-subtitle">Operational metric detail view with provenance, charts, and normalized sample data.</p>
+    </div>
+  </div>
 
   {% if source_provenance is defined %}
     {% include "partials/quickhc/source_provenance.html" %}
@@ -20,59 +25,65 @@
   {% endfor %}
 
   {% for metric in metrics %}
-    <h3>{{ metric.source.dataset_name }}</h3>
-    <dl>
-      <dt>Source report</dt>
-      <dd>{{ metric.source.report_id }}</dd>
-      <dt>Source dataset</dt>
-      <dd>{{ metric.source.dataset_id }} / {{ metric.source.dataset_guid }}</dd>
-      <dt>Source widget</dt>
-      <dd>{{ metric.source.widget_name }}</dd>
-      <dt>Last extraction</dt>
-      <dd>{{ metric.collected_at }}</dd>
-      <dt>Records</dt>
-      <dd>{{ metric.record_count }}</dd>
-      <dt>History range</dt>
-      <dd>
-        {% if metric.history_range %}
-          {{ metric.history_range.start }} to {{ metric.history_range.end }}
-          ({{ metric.history_range.points }} points)
-        {% else %}
-          none
-        {% endif %}
-      </dd>
-      <dt>HTTP status</dt>
-      <dd>{{ metric.http_status }}</dd>
-    </dl>
+    <section class="metadata-card">
+      <div class="section-heading">
+        <h3>{{ metric.source.dataset_name }}</h3>
+      </div>
+      <dl>
+        <dt>Source report</dt>
+        <dd>{{ metric.source.report_id }}</dd>
+        <dt>Source dataset</dt>
+        <dd>{{ metric.source.dataset_id }} / {{ metric.source.dataset_guid }}</dd>
+        <dt>Source widget</dt>
+        <dd>{{ metric.source.widget_name }}</dd>
+        <dt>Last extraction</dt>
+        <dd>{{ metric.collected_at }}</dd>
+        <dt>Records</dt>
+        <dd>{{ metric.record_count }}</dd>
+        <dt>History range</dt>
+        <dd>
+          {% if metric.history_range %}
+            {{ metric.history_range.start }} to {{ metric.history_range.end }}
+            ({{ metric.history_range.points }} points)
+          {% else %}
+            none
+          {% endif %}
+        </dd>
+        <dt>HTTP status</dt>
+        <dd>{{ metric.http_status }}</dd>
+      </dl>
 
-    {% if metric.records %}
-      {% set columns = metric.records[0].keys() | list %}
-      <h4>Normalized fields</h4>
-      <p>{{ columns | join(", ") }}</p>
-      <h4>Sample rows</h4>
-      <table>
-        <thead>
-          <tr>
-            {% for column in columns %}
-              <th>{{ column }}</th>
-            {% endfor %}
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in metric.records[:25] %}
-            <tr>
-              {% for column in columns %}
-                <td>{{ row.get(column, "") }}</td>
+      {% if metric.records %}
+        {% set columns = metric.records[0].keys() | list %}
+        <h4>Normalized fields</h4>
+        <p>{{ columns | join(", ") }}</p>
+        <h4>Sample rows</h4>
+        <div class="app-table-wrap">
+          <table class="compact-table">
+            <thead>
+              <tr>
+                {% for column in columns %}
+                  <th>{{ column }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in metric.records[:25] %}
+                <tr>
+                  {% for column in columns %}
+                    <td>{{ row.get(column, "") }}</td>
+                  {% endfor %}
+                </tr>
               {% endfor %}
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="notice">No normalized records are available for this metric.</p>
-    {% endif %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="notice">No normalized records are available for this metric.</p>
+      {% endif %}
+    </section>
   {% endfor %}
-</section>
+</div>
 {% endblock %}
 
 {% block scripts %}

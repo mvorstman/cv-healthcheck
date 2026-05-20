@@ -1,17 +1,33 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section>
-  <h2>API Test</h2>
-  <dl>
-    <dt>URL</dt>
-    <dd>{{ result.url }}</dd>
-    <dt>Status</dt>
-    <dd>{{ result.status_code or "request failed" }}</dd>
-    <dt>WebService is Running!</dt>
-    <dd>{{ "yes" if running else "no" }}</dd>
-  </dl>
-  <pre>{{ formatted }}</pre>
-</section>
-{% endblock %}
+<div class="app-page">
+  <div class="app-page-head">
+    <div>
+      <h2>API Test</h2>
+      <p class="app-page-subtitle">Direct connectivity probe for the Command Center API endpoint.</p>
+    </div>
+  </div>
 
+  <section class="metadata-card">
+    <div class="section-heading">
+      <h3>Probe Result</h3>
+    </div>
+    <dl>
+      <dt>URL</dt>
+      <dd>{{ result.url }}</dd>
+      <dt>Status</dt>
+      <dd>{{ result.status_code or "request failed" }}</dd>
+      <dt>WebService is Running!</dt>
+      <dd>{{ "yes" if running else "no" }}</dd>
+    </dl>
+  </section>
+
+  <section class="metadata-card">
+    <div class="section-heading">
+      <h3>Response</h3>
+    </div>
+    <pre>{{ formatted }}</pre>
+  </section>
+</div>
+{% endblock %}

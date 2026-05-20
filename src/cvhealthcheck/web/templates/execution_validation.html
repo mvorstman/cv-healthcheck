@@ -1,25 +1,36 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section>
-  <h2>Reports Plus Execution Validation</h2>
-  <dl>
-    <dt>Catalog</dt>
-    <dd>
-      {% if catalog_status.exists %}
-        {{ catalog_status.path }}{% if catalog_status.record_count is not none %} ({{ catalog_status.record_count }} records){% endif %}
-      {% else %}
-        not written
-      {% endif %}
-    </dd>
-    <dt>Summary</dt>
-    <dd>
-      EXECUTABLE {{ summary.EXECUTABLE }},
-      NEEDS_PARAMS {{ summary.NEEDS_PARAMS }},
-      FAILS {{ summary.FAILS }},
-      SKIPPED {{ summary.SKIPPED }}
-    </dd>
-  </dl>
+<div class="app-page">
+  <div class="app-page-head">
+    <div>
+      <h2>Reports Plus Execution Validation</h2>
+      <p class="app-page-subtitle">Execution readiness and failure breakdown for candidate datasets and mapped operational areas.</p>
+    </div>
+  </div>
+
+  <section class="metadata-card">
+    <div class="section-heading">
+      <h3>Validation Summary</h3>
+    </div>
+    <dl>
+      <dt>Catalog</dt>
+      <dd>
+        {% if catalog_status.exists %}
+          {{ catalog_status.path }}{% if catalog_status.record_count is not none %} ({{ catalog_status.record_count }} records){% endif %}
+        {% else %}
+          not written
+        {% endif %}
+      </dd>
+      <dt>Summary</dt>
+      <dd>
+        EXECUTABLE {{ summary.EXECUTABLE }},
+        NEEDS_PARAMS {{ summary.NEEDS_PARAMS }},
+        FAILS {{ summary.FAILS }},
+        SKIPPED {{ summary.SKIPPED }}
+      </dd>
+    </dl>
+  </section>
 
   {% if message %}
     <p class="notice">{{ message }}</p>
@@ -27,35 +38,41 @@
 
   {% for status, records in grouped.items() %}
     {% if records %}
-      <h3>{{ status }}</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>candidate</th>
-            <th>dataset</th>
-            <th>mapped_health_area</th>
-            <th>records</th>
-            <th>fields</th>
-            <th>error</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for record in records %}
-            <tr>
-              <td>{{ record.get("candidate_name", "") }}</td>
-              <td>
-                {{ record.get("dataset_name", "") }}<br>
-                <code>{{ record.get("dataset_guid", "") }}</code>
-              </td>
-              <td>{{ record.get("mapped_health_area", "") }}</td>
-              <td>{{ record.get("record_count", "") }}</td>
-              <td>{{ record.get("returned_fields", [])|join(", ") }}</td>
-              <td>{{ record.get("error_summary", "") }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <section class="metadata-card">
+        <div class="section-heading">
+          <h3>{{ status }}</h3>
+        </div>
+        <div class="app-table-wrap">
+          <table class="compact-table">
+            <thead>
+              <tr>
+                <th>candidate</th>
+                <th>dataset</th>
+                <th>mapped_health_area</th>
+                <th>records</th>
+                <th>fields</th>
+                <th>error</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for record in records %}
+                <tr>
+                  <td>{{ record.get("candidate_name", "") }}</td>
+                  <td>
+                    {{ record.get("dataset_name", "") }}<br>
+                    <code>{{ record.get("dataset_guid", "") }}</code>
+                  </td>
+                  <td>{{ record.get("mapped_health_area", "") }}</td>
+                  <td>{{ record.get("record_count", "") }}</td>
+                  <td>{{ record.get("returned_fields", [])|join(", ") }}</td>
+                  <td>{{ record.get("error_summary", "") }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
     {% endif %}
   {% endfor %}
-</section>
+</div>
 {% endblock %}

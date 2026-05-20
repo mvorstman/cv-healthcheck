@@ -284,6 +284,105 @@ h5 {
   flex: 1;
 }
 
+.app-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.app-page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.app-page-head > div:first-child {
+  min-width: 0;
+}
+
+.app-page-head h2 {
+  margin: 0 0 0.35rem;
+}
+
+.app-page-subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+}
+
+.app-card-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.app-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.app-table-wrap {
+  overflow-x: auto;
+}
+
+.app-link-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.app-link-list li {
+  margin: 0;
+}
+
+.app-link-list a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.app-link-list a:hover {
+  text-decoration: underline;
+}
+
+.app-inline-code {
+  font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.875rem;
+}
+
+.app-details {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow);
+}
+
+.app-details summary {
+  cursor: pointer;
+  padding: 0.9rem 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.app-details[open] summary {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.app-details pre,
+.app-details dl,
+.app-details .app-table-wrap {
+  margin: 0;
+}
+
+.app-details > *:not(summary) {
+  padding: 1rem;
+}
+
 /* === Section / Cards === */
 section {
   background: var(--bg-surface);
@@ -530,12 +629,14 @@ label {
 
 input,
 textarea,
+select,
 button {
   font: inherit;
 }
 
 input,
-textarea {
+textarea,
+select {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.625rem 0.875rem;
@@ -545,10 +646,23 @@ textarea {
 }
 
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem 1rem;
+  max-width: none;
+}
+
+.filters label {
+  min-width: 160px;
 }
 
 button {

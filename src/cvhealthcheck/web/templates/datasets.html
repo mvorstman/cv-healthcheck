@@ -1,79 +1,97 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section>
-  <h2>Reports Plus Datasets</h2>
-  <dl>
-    <dt>Endpoint</dt>
-    <dd>{{ diagnostics.endpoint }}</dd>
-    <dt>Status</dt>
-    <dd>{{ diagnostics.status }}</dd>
-    <dt>Elapsed</dt>
-    <dd>{{ diagnostics.elapsed_ms if diagnostics.elapsed_ms is not none else "unknown" }} ms</dd>
-    <dt>Records</dt>
-    <dd>{{ diagnostics.record_count }}</dd>
-    <dt>Catalog</dt>
-    <dd>
-      {% if catalog_status.exists %}
-        {{ catalog_status.path }}{% if catalog_status.record_count is not none %} ({{ catalog_status.record_count }} records){% endif %}
-      {% else %}
-        not written
-      {% endif %}
-    </dd>
-  </dl>
+<div class="app-page">
+  <div class="app-page-head">
+    <div>
+      <h2>Reports Plus Datasets</h2>
+      <p class="app-page-subtitle">Dataset catalog view for endpoint discovery, metadata inspection, and report execution analysis.</p>
+    </div>
+  </div>
+
+  <section class="metadata-card">
+    <div class="section-heading">
+      <h3>Catalog Summary</h3>
+    </div>
+    <dl>
+      <dt>Endpoint</dt>
+      <dd>{{ diagnostics.endpoint }}</dd>
+      <dt>Status</dt>
+      <dd>{{ diagnostics.status }}</dd>
+      <dt>Elapsed</dt>
+      <dd>{{ diagnostics.elapsed_ms if diagnostics.elapsed_ms is not none else "unknown" }} ms</dd>
+      <dt>Records</dt>
+      <dd>{{ diagnostics.record_count }}</dd>
+      <dt>Catalog</dt>
+      <dd>
+        {% if catalog_status.exists %}
+          {{ catalog_status.path }}{% if catalog_status.record_count is not none %} ({{ catalog_status.record_count }} records){% endif %}
+        {% else %}
+          not written
+        {% endif %}
+      </dd>
+    </dl>
+  </section>
 
   {% if message %}
     <p class="notice">{{ message }}</p>
   {% endif %}
 
   {% if datasets %}
-    <table>
-      <thead>
-        <tr>
-          <th>dataSetId</th>
-          <th>dataSetName</th>
-          <th>dataSetGuid</th>
-          <th>guid</th>
-          <th>deployed</th>
-          <th>endpoint</th>
-          <th>databaseName</th>
-          <th>fields</th>
-          <th>parameters</th>
-          <th>has_sql_text</th>
-          <th>relevance</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for dataset in datasets %}
-          <tr>
-            <td>{{ dataset.get("dataSetId", "") }}</td>
-            <td>{{ dataset.get("dataSetName", "") }}</td>
-            <td>
-              {% if dataset.get("dataSetGuid") %}
-                <a href="{{ url_for('main.reportsplus_dataset', dataset_guid=dataset.get('dataSetGuid')) }}">{{ dataset.get("dataSetGuid") }}</a>
-              {% endif %}
-            </td>
-            <td>
-              {% if dataset.get("guid") %}
-                <a href="{{ url_for('main.reportsplus_dataset', dataset_guid=dataset.get('guid')) }}">{{ dataset.get("guid") }}</a>
-              {% endif %}
-            </td>
-            <td>{{ dataset.get("deployed", "") }}</td>
-            <td>{{ dataset.get("endpoint", "") }}</td>
-            <td>{{ dataset.get("databaseName", "") }}</td>
-            <td>{{ dataset.get("field_count", "") }}</td>
-            <td>{{ dataset.get("parameter_count", "") }}</td>
-            <td>{{ dataset.get("has_sql_text", "") }}</td>
-            <td>{{ dataset.get("relevance", "") }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <section class="metadata-card">
+      <div class="section-heading">
+        <h3>Datasets</h3>
+      </div>
+      <div class="app-table-wrap">
+        <table class="compact-table">
+          <thead>
+            <tr>
+              <th>dataSetId</th>
+              <th>dataSetName</th>
+              <th>dataSetGuid</th>
+              <th>guid</th>
+              <th>deployed</th>
+              <th>endpoint</th>
+              <th>databaseName</th>
+              <th>fields</th>
+              <th>parameters</th>
+              <th>has_sql_text</th>
+              <th>relevance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for dataset in datasets %}
+              <tr>
+                <td>{{ dataset.get("dataSetId", "") }}</td>
+                <td>{{ dataset.get("dataSetName", "") }}</td>
+                <td>
+                  {% if dataset.get("dataSetGuid") %}
+                    <a href="{{ url_for('main.reportsplus_dataset', dataset_guid=dataset.get('dataSetGuid')) }}">{{ dataset.get("dataSetGuid") }}</a>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if dataset.get("guid") %}
+                    <a href="{{ url_for('main.reportsplus_dataset', dataset_guid=dataset.get('guid')) }}">{{ dataset.get("guid") }}</a>
+                  {% endif %}
+                </td>
+                <td>{{ dataset.get("deployed", "") }}</td>
+                <td>{{ dataset.get("endpoint", "") }}</td>
+                <td>{{ dataset.get("databaseName", "") }}</td>
+                <td>{{ dataset.get("field_count", "") }}</td>
+                <td>{{ dataset.get("parameter_count", "") }}</td>
+                <td>{{ dataset.get("has_sql_text", "") }}</td>
+                <td>{{ dataset.get("relevance", "") }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
   {% endif %}
 
-  <details>
+  <details class="app-details">
     <summary>Raw JSON</summary>
     <pre>{{ formatted }}</pre>
   </details>
-</section>
+</div>
 {% endblock %}
