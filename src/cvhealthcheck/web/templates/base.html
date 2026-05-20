@@ -20,7 +20,16 @@
     <div class="shell">
       <aside class="sidebar">
         <div class="sidebar-top">
-          <span class="sidebar-wordmark">cv&#8209;healthcheck</span>
+          <a href="{{ url_for('main.quick_hc') }}"
+             class="sidebar-brand"
+             aria-label="cvThing by Purple">
+            <img
+              src="{{ url_for('static', filename='img/cvthing-logo-dark.png') }}"
+              data-light-logo="{{ url_for('static', filename='img/cvthing-logo-light.png') }}"
+              data-dark-logo="{{ url_for('static', filename='img/cvthing-logo-dark.png') }}"
+              alt="cvThing by Purple"
+              class="sidebar-logo">
+          </a>
         </div>
         {% set ep = request.endpoint or '' %}
         <nav class="sidebar-nav">
@@ -73,6 +82,7 @@
         var themeKey = 'quickhc-theme-v1';
         var buttons = Array.from(document.querySelectorAll('[data-theme-toggle] [data-theme-choice]'));
         var backButton = document.querySelector('[data-shell-back]');
+        var sidebarLogo = document.querySelector('.sidebar-logo');
 
         if (backButton) {
           backButton.addEventListener('click', function () {
@@ -90,8 +100,16 @@
           }
         };
 
+        var syncSidebarLogo = function (theme) {
+          if (!sidebarLogo) return;
+          var lightLogo = sidebarLogo.dataset.lightLogo;
+          var darkLogo = sidebarLogo.dataset.darkLogo;
+          sidebarLogo.src = theme === 'dark' ? darkLogo : lightLogo;
+        };
+
         var current = document.documentElement.dataset.theme || 'light';
         syncButtons(current);
+        syncSidebarLogo(current);
 
         for (var i = 0; i < buttons.length; i++) {
           (function (btn) {
@@ -101,6 +119,7 @@
               document.documentElement.dataset.theme = theme;
               localStorage.setItem(themeKey, theme);
               syncButtons(theme);
+              syncSidebarLogo(theme);
             });
           })(buttons[i]);
         }

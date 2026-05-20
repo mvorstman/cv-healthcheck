@@ -108,24 +108,34 @@ h5 {
 }
 
 .sidebar-top {
-  padding: 1.25rem 1.1rem 1rem;
-  border-bottom: 1px solid var(--border);
+  padding: 1.4rem 1.4rem 1.1rem;
+  border-bottom: 0;
 }
 
-.sidebar-wordmark {
+.sidebar-brand {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.sidebar-brand:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.sidebar-logo {
   display: block;
-  font-size: 0.9rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--accent);
-  line-height: 1;
+  width: 175px;
+  max-width: 100%;
+  height: auto;
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
-  padding: 0.75rem 0.5rem;
+  padding: 1.2rem 0.5rem 0.75rem;
   flex: 1;
 }
 
@@ -1605,6 +1615,10 @@ th {
     padding: 0.75rem 1rem;
     border-bottom: none;
     border-right: 1px solid var(--border);
+  }
+
+  .sidebar-logo {
+    width: 126px;
   }
 
   .sidebar-nav {
