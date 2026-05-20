@@ -241,7 +241,7 @@ def test_quick_hc_report_route_loads_without_artifacts() -> None:
     assert "Environment" in body
     assert "Security Assessment" in body
     assert "License Summary" in body
-    assert "Not collected yet" in body
+    assert "Backup Job Summary" in body
     assert "Evidence / Sources" not in body
     assert "Artifact sources" not in body
 

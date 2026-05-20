@@ -1,88 +1,51 @@
 <section class="metadata-card">
   <div class="section-heading">
-    <h3>Source Provenance</h3>
-    <p class="helper-text">Supported and current acquisition paths for this Quick HC subject.</p>
+    <h3>Source / Acquisition</h3>
+    <p class="helper-text">Supported live collection and offline import methods for this Quick HC subject.</p>
   </div>
-  {% set preferred_sources = source_provenance | selectattr("notes", "equalto", "Active source") | list %}
-  {% set non_artifact_active_sources = source_provenance | selectattr("active") | rejectattr("source_type", "equalto", "artifact") | list %}
-  {% set active_sources = source_provenance | selectattr("active") | list %}
-  {% set primary_source = preferred_sources[0] if preferred_sources else (non_artifact_active_sources[0] if non_artifact_active_sources else (active_sources[0] if active_sources else none)) %}
-  {% set secondary_sources = source_provenance | rejectattr("source_type", "equalto", primary_source.source_type if primary_source else "") | list %}
-  {% if primary_source %}
-    <div class="source-provenance-list">
-      <article class="source-provenance-item">
+  <div class="source-provenance-list">
+    {% for item in source_provenance %}
+      <article class="source-provenance-item{% if item.primary %} source-provenance-item--primary{% else %} source-provenance-item--secondary{% endif %}{% if not item.active %} source-provenance-item--muted{% endif %}">
         <div class="source-provenance-head">
-          <strong>Primary source: {{ primary_source.label }}</strong>
-          <span class="badge {{ primary_source.badge_class }}">{{ primary_source.status_label }}</span>
+          <strong>{{ item.label }}</strong>
+          <span class="badge {{ item.badge_class }}">{{ item.status_label }}</span>
         </div>
-        {% if primary_source.description %}
-          <p class="source-provenance-description">{{ primary_source.description }}</p>
+        {% if item.description %}
+          <p class="source-provenance-description">{{ item.description }}</p>
         {% endif %}
-        <dl class="source-provenance-meta">
-          {% if primary_source.report_name %}
-            <dt>Report</dt>
-            <dd>{{ primary_source.report_name }}</dd>
-          {% endif %}
-          {% if primary_source.dataset_guid %}
-            <dt>Dataset GUID</dt>
-            <dd><code>{{ primary_source.dataset_guid }}</code></dd>
-          {% endif %}
-          {% if primary_source.endpoint %}
-            <dt>Endpoint</dt>
-            <dd><code>{{ primary_source.endpoint }}</code></dd>
-          {% endif %}
-          {% if primary_source.artifact_path %}
-            <dt>Artifact</dt>
-            <dd><code>{{ primary_source.artifact_path }}</code></dd>
-          {% endif %}
-          {% if primary_source.generated_at %}
-            <dt>Generated at</dt>
-            <dd>{{ primary_source.generated_at }}</dd>
-          {% endif %}
-          {% if primary_source.row_count is not none %}
-            <dt>Rows / count</dt>
-            <dd>{{ primary_source.row_count }}</dd>
-          {% endif %}
-          {% if primary_source.notes %}
-            <dt>Notes</dt>
-            <dd>{{ primary_source.notes }}</dd>
-          {% endif %}
-        </dl>
+        {% if item.primary and (item.report_name or item.dataset_guid or item.endpoint or item.artifact_path or item.generated_at or item.row_count is not none or item.notes) %}
+          <dl class="source-provenance-meta">
+            {% if item.report_name %}
+              <dt>Report</dt>
+              <dd>{{ item.report_name }}</dd>
+            {% endif %}
+            {% if item.dataset_guid %}
+              <dt>Dataset GUID</dt>
+              <dd><code>{{ item.dataset_guid }}</code></dd>
+            {% endif %}
+            {% if item.endpoint %}
+              <dt>Endpoint</dt>
+              <dd><code>{{ item.endpoint }}</code></dd>
+            {% endif %}
+            {% if item.generated_at %}
+              <dt>Generated at</dt>
+              <dd>{{ item.generated_at }}</dd>
+            {% endif %}
+            {% if item.row_count is not none %}
+              <dt>Rows / count</dt>
+              <dd>{{ item.row_count }}</dd>
+            {% endif %}
+            {% if item.artifact_path %}
+              <dt>Artifact path</dt>
+              <dd><code>{{ item.artifact_path }}</code></dd>
+            {% endif %}
+            {% if item.notes %}
+              <dt>Notes</dt>
+              <dd>{{ item.notes }}</dd>
+            {% endif %}
+          </dl>
+        {% endif %}
       </article>
-    </div>
-  {% endif %}
-  {% if secondary_sources %}
-    <div class="source-provenance-secondary">
-      <div class="source-provenance-secondary-head">
-        <strong>Other acquisition paths</strong>
-        <span class="helper-text">Visible for completeness without repeating the primary-source detail.</span>
-      </div>
-      <div class="source-provenance-inactive-list">
-        {% for item in secondary_sources %}
-          <div class="source-provenance-inactive-item">
-            <div class="source-provenance-inactive-main">
-              <strong>{{ item.label }}</strong>
-              {% if item.description %}
-                <span>{{ item.description }}</span>
-              {% endif %}
-              {% if item.report_name or item.dataset_guid or item.artifact_path %}
-                <div class="source-provenance-inline-meta">
-                  {% if item.report_name %}
-                    <code>{{ item.report_name }}</code>
-                  {% endif %}
-                  {% if item.dataset_guid %}
-                    <code>{{ item.dataset_guid }}</code>
-                  {% endif %}
-                  {% if item.artifact_path %}
-                    <code>{{ item.artifact_path }}</code>
-                  {% endif %}
-                </div>
-              {% endif %}
-            </div>
-            <span class="badge {{ item.badge_class }}">{{ item.status_label }}</span>
-          </div>
-        {% endfor %}
-      </div>
-    </div>
-  {% endif %}
+    {% endfor %}
+  </div>
 </section>

@@ -69,24 +69,26 @@ def test_backup_job_summary_provenance_statuses_with_artifact() -> None:
     items = build_backup_job_summary_provenance(BACKUP_JOB_SUMMARY_ARTIFACT)
     by_type = {item["source_type"]: item for item in items}
 
-    assert by_type["reports_plus"]["status"] == "validated"
-    assert by_type["reports_plus"]["dataset_guid"] == "2638c3d3-adc7-4b61-bb24-2ba509229bf5"
-    assert by_type["artifact"]["status"] == "available"
-    assert by_type["artifact"]["active"] is True
+    assert {item["label"] for item in items} == {"REST / Reports Plus", "CSV", "HTML"}
+    assert len(items) == 3
+    assert by_type["rest_reports_plus"]["status"] == "validated"
+    assert by_type["rest_reports_plus"]["dataset_guid"] == "2638c3d3-adc7-4b61-bb24-2ba509229bf5"
+    assert by_type["rest_reports_plus"]["artifact_path"] == "data/catalog/quickhc/backup_job_summary_latest.json"
+    assert by_type["rest_reports_plus"]["primary"] is True
     assert by_type["csv"]["status"] == "not_implemented"
     assert by_type["csv"]["active"] is False
-    assert by_type["rest_api"]["status"] == "not_applicable"
+    assert by_type["html"]["status"] == "not_implemented"
 
 
 def test_backup_job_summary_provenance_statuses_without_artifact_are_muted() -> None:
     items = build_backup_job_summary_provenance(None)
     by_type = {item["source_type"]: item for item in items}
 
-    assert by_type["artifact"]["status"] == "not_available"
-    assert by_type["artifact"]["active"] is False
-    assert by_type["artifact"]["badge_class"] == "badge-warning"
+    assert len(items) == 3
+    assert by_type["rest_reports_plus"]["status"] == "validated"
+    assert by_type["rest_reports_plus"]["artifact_path"] is None
     assert by_type["html"]["status"] == "not_implemented"
-    assert by_type["manual"]["status"] == "not_applicable"
+    assert by_type["csv"]["status"] == "not_implemented"
 
 
 def test_license_summary_provenance_marks_import_and_reportsplus_paths_validated() -> None:
@@ -94,11 +96,12 @@ def test_license_summary_provenance_marks_import_and_reportsplus_paths_validated
     items = build_license_summary_provenance(artifact)
     by_type = {item["source_type"]: item for item in items}
 
-    assert by_type["reports_plus"]["status"] == "validated"
+    assert len(items) == 3
+    assert by_type["rest_reports_plus"]["status"] == "validated"
     assert by_type["csv"]["status"] == "validated"
     assert by_type["html"]["status"] == "validated"
-    assert by_type["artifact"]["status"] == "available"
-    assert by_type["csv"]["notes"] == "Active source"
+    assert by_type["csv"]["primary"] is True
+    assert by_type["csv"]["artifact_path"] == "data/catalog/license_summary/latest.json"
 
 
 def test_backup_job_summary_detail_route_renders_source_provenance(
@@ -115,19 +118,16 @@ def test_backup_job_summary_detail_route_renders_source_provenance(
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "Source Provenance" in body
-    assert "Reports Plus dataset/report" in body
-    assert "Normalized artifact" in body
-    assert "CSV import" in body
-    assert "HTML import" in body
-    assert "Primary source:" in body
-    assert body.count('class="source-provenance-item"') == 1
-    assert "Other acquisition paths" in body
-    assert "source-provenance-inline-meta" in body
+    assert "Source / Acquisition" in body
+    assert "REST / Reports Plus" in body
+    assert "CSV" in body
+    assert "HTML" in body
     assert "Not implemented" in body
-    assert "Not applicable" in body
-    assert "source-provenance-secondary" in body
-    assert "source-provenance-inactive-item" in body
+    assert "Normalized artifact" not in body
+    assert "Manual/static source" not in body
+    assert body.count("source-provenance-item--primary") == 1
+    assert body.count("source-provenance-item--secondary") == 2
+    assert "data/catalog/quickhc/backup_job_summary_latest.json" in body
 
 
 def test_license_summary_detail_route_renders_shared_source_provenance(
@@ -164,11 +164,25 @@ def test_license_summary_detail_route_renders_shared_source_provenance(
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "Source Provenance" in body
-    assert "Reports Plus dataset/report" in body
-    assert "CSV import" in body
-    assert "HTML import" in body
-    assert "Normalized artifact" in body
-    assert "Primary source: CSV import" in body
-    assert body.count('class="source-provenance-item"') == 1
-    assert "Other acquisition paths" in body
+    assert "Source / Acquisition" in body
+    assert "REST / Reports Plus" in body
+    assert "CSV" in body
+    assert "HTML" in body
+    assert "Normalized artifact" not in body
+    assert "Manual/static source" not in body
+    assert body.count("source-provenance-item--primary") == 1
+    assert body.count("source-provenance-item--secondary") == 2
+    assert "artifact_" in body
+
+
+def test_security_assessment_detail_keeps_import_controls_with_simplified_provenance() -> None:
+    app = create_app()
+    response = app.test_client().get("/quick-hc/security-assessment")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Source / Acquisition" in body
+    assert "REST / Reports Plus" in body
+    assert "CSV" in body
+    assert "HTML" in body
+    assert "Import Security Assessment" in body

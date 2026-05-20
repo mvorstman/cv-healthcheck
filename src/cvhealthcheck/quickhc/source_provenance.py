@@ -29,14 +29,7 @@ STATUS_BADGE_CLASSES = {
 
 ACTIVE_STATUSES = {"available", "validated"}
 
-SOURCE_ORDER = (
-    "rest_api",
-    "reports_plus",
-    "csv",
-    "html",
-    "artifact",
-    "manual",
-)
+SOURCE_ORDER = ("rest_reports_plus", "csv", "html")
 
 
 @dataclass(frozen=True)
@@ -52,6 +45,7 @@ class SourceProvenanceItem:
     generated_at: str | None = None
     row_count: int | None = None
     notes: str | None = None
+    primary: bool = False
 
     @property
     def active(self) -> bool:
@@ -77,56 +71,36 @@ def build_backup_job_summary_provenance(
     artifact: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
     artifact_exists = isinstance(artifact, dict)
-    artifact_path = (
-        f"data/catalog/quickhc/{BACKUP_JOB_SUMMARY_ARTIFACT_NAME}"
-        if artifact_exists
-        else None
-    )
     return _serialize_items(
         [
-            SourceProvenanceItem(
-                source_type="reports_plus",
-                label="Reports Plus dataset/report",
+            _method_item(
+                "rest_reports_plus",
+                label="REST / Reports Plus",
                 status="validated",
-                description="Primary collector path for Backup Job Summary.",
+                description="Live Reports Plus dataset-backed collection path for Backup Job Summary.",
                 endpoint="/commandcenter/api/cr/reportsplusengine/datasets/<dataset_guid>/data",
                 dataset_guid=BACKUP_JOB_SUMMARY_DATASET_GUID,
                 report_name=BACKUP_JOB_SUMMARY_REPORT_NAME,
                 generated_at=artifact.get("generated_at") if artifact_exists else None,
                 row_count=artifact.get("total_jobs") if artifact_exists else None,
+                artifact_path=(
+                    f"data/catalog/quickhc/{BACKUP_JOB_SUMMARY_ARTIFACT_NAME}"
+                    if artifact_exists
+                    else None
+                ),
+                primary=True,
             ),
-            SourceProvenanceItem(
-                source_type="artifact",
-                label="Normalized artifact",
-                status="available" if artifact_exists else "not_available",
-                description="Local normalized Quick HC artifact used by the detail page and report builder.",
-                artifact_path=artifact_path,
-                generated_at=artifact.get("generated_at") if artifact_exists else None,
-                row_count=artifact.get("total_jobs") if artifact_exists else None,
-            ),
-            SourceProvenanceItem(
-                source_type="rest_api",
-                label="REST API",
-                status="not_applicable",
-                description="This tile currently relies on Reports Plus rather than a direct operational REST endpoint.",
-            ),
-            SourceProvenanceItem(
-                source_type="csv",
-                label="CSV import",
+            _method_item(
+                "csv",
+                label="CSV",
                 status="not_implemented",
                 description="No CSV import pipeline exists for Backup Job Summary yet.",
             ),
-            SourceProvenanceItem(
-                source_type="html",
-                label="HTML import",
+            _method_item(
+                "html",
+                label="HTML",
                 status="not_implemented",
                 description="No HTML import pipeline exists for Backup Job Summary yet.",
-            ),
-            SourceProvenanceItem(
-                source_type="manual",
-                label="Manual/static source",
-                status="not_applicable",
-                description="No manual/static backup job summary source is currently used.",
             ),
         ]
     )
@@ -137,7 +111,7 @@ def build_license_summary_provenance(
 ) -> list[dict[str, Any]]:
     artifact_exists = isinstance(artifact, dict)
     source_type = str((artifact or {}).get("source_type") or "").lower()
-    imported_at = (artifact or {}).get("imported_at")
+    primary_method = _normalized_primary_method(source_type, default="rest_reports_plus")
     generated_on = (artifact or {}).get("generated_on")
     source_metadata = dict((artifact or {}).get("source_metadata") or (artifact or {}).get("source") or {})
     dataset_guid = _first_dataset_guid(source_metadata)
@@ -146,58 +120,46 @@ def build_license_summary_provenance(
         or source_metadata.get("dataset_name")
         or "License Summary"
     )
+    row_count = _license_row_count(artifact)
+    artifact_path = (
+        (artifact or {}).get("file_path") or "data/catalog/license_summary/latest.json"
+        if artifact_exists
+        else None
+    )
     return _serialize_items(
         [
-            SourceProvenanceItem(
-                source_type="reports_plus",
-                label="Reports Plus dataset/report",
+            _method_item(
+                "rest_reports_plus",
+                label="REST / Reports Plus",
                 status="validated",
-                description="Live collection path for License Summary.",
+                description="Live Reports Plus collection path for License Summary.",
                 endpoint="/commandcenter/api/cr/reportsplusengine/datasets/<dataset_guid>/data",
-                dataset_guid=dataset_guid,
-                report_name=report_name,
-                generated_at=generated_on,
-                row_count=_license_row_count(artifact),
-                notes="Active source" if source_type == "rest" else None,
+                dataset_guid=dataset_guid if primary_method == "rest_reports_plus" else None,
+                report_name=report_name if primary_method == "rest_reports_plus" else None,
+                generated_at=generated_on if primary_method == "rest_reports_plus" else None,
+                row_count=row_count if primary_method == "rest_reports_plus" else None,
+                artifact_path=artifact_path if primary_method == "rest_reports_plus" else None,
+                primary=primary_method == "rest_reports_plus",
             ),
-            SourceProvenanceItem(
-                source_type="csv",
-                label="CSV import",
+            _method_item(
+                "csv",
+                label="CSV",
                 status="validated",
                 description="Offline CSV import path for License Summary.",
-                generated_at=generated_on,
-                row_count=_license_row_count(artifact),
-                notes="Active source" if source_type == "csv" else None,
+                generated_at=generated_on if primary_method == "csv" else None,
+                row_count=row_count if primary_method == "csv" else None,
+                artifact_path=artifact_path if primary_method == "csv" else None,
+                primary=primary_method == "csv",
             ),
-            SourceProvenanceItem(
-                source_type="html",
-                label="HTML import",
+            _method_item(
+                "html",
+                label="HTML",
                 status="validated",
                 description="Offline HTML import path for License Summary.",
-                generated_at=generated_on,
-                row_count=_license_row_count(artifact),
-                notes="Active source" if source_type == "html" else None,
-            ),
-            SourceProvenanceItem(
-                source_type="artifact",
-                label="Normalized artifact",
-                status="available" if artifact_exists else "not_available",
-                description="Registry-backed canonical License Summary artifact.",
-                artifact_path=(artifact or {}).get("file_path") or "data/catalog/license_summary/latest.json",
-                generated_at=imported_at,
-                row_count=_license_row_count(artifact),
-            ),
-            SourceProvenanceItem(
-                source_type="rest_api",
-                label="REST API",
-                status="not_applicable",
-                description="License Summary is collected through Reports Plus rather than a dedicated operational REST endpoint.",
-            ),
-            SourceProvenanceItem(
-                source_type="manual",
-                label="Manual/static source",
-                status="not_applicable",
-                description="No manual/static license source is currently used.",
+                generated_at=generated_on if primary_method == "html" else None,
+                row_count=row_count if primary_method == "html" else None,
+                artifact_path=artifact_path if primary_method == "html" else None,
+                primary=primary_method == "html",
             ),
         ]
     )
@@ -206,61 +168,48 @@ def build_license_summary_provenance(
 def build_security_assessment_provenance(
     assessment: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
-    exists = bool((assessment or {}).get("exists"))
     source = dict((assessment or {}).get("source") or {})
     source_type = str((assessment or {}).get("source_type") or "").lower()
+    primary_method = _normalized_primary_method(source_type, default="rest_reports_plus")
+    generated_at = (assessment or {}).get("collected_at")
+    row_count = _security_row_count(assessment)
+    artifact_path = (assessment or {}).get("path") if (assessment or {}).get("exists") else None
     return _serialize_items(
         [
-            SourceProvenanceItem(
-                source_type="reports_plus",
-                label="Reports Plus dataset/report",
+            _method_item(
+                "rest_reports_plus",
+                label="REST / Reports Plus",
                 status="validated",
-                description="Primary source for the Security Assessment tile.",
+                description="Reports Plus-backed Security Assessment collection path.",
                 endpoint="/commandcenter/api/cr/reportsplusengine/reports/336",
-                dataset_guid=_first_dataset_guid(source),
-                report_name=source.get("report_name") or "Security Assessment",
-                generated_at=(assessment or {}).get("collected_at"),
-                row_count=_security_row_count(assessment),
-                notes="Active source" if source_type == "rest" else None,
+                dataset_guid=_first_dataset_guid(source) if primary_method == "rest_reports_plus" else None,
+                report_name=(source.get("report_name") or "Security Assessment")
+                if primary_method == "rest_reports_plus"
+                else None,
+                generated_at=generated_at if primary_method == "rest_reports_plus" else None,
+                row_count=row_count if primary_method == "rest_reports_plus" else None,
+                artifact_path=artifact_path if primary_method == "rest_reports_plus" else None,
+                primary=primary_method == "rest_reports_plus",
             ),
-            SourceProvenanceItem(
-                source_type="csv",
-                label="CSV import",
+            _method_item(
+                "csv",
+                label="CSV",
                 status="validated",
                 description="Offline CSV import path for Security Assessment.",
-                generated_at=(assessment or {}).get("collected_at"),
-                row_count=_security_row_count(assessment),
-                notes="Active source" if source_type == "csv" else None,
+                generated_at=generated_at if primary_method == "csv" else None,
+                row_count=row_count if primary_method == "csv" else None,
+                artifact_path=artifact_path if primary_method == "csv" else None,
+                primary=primary_method == "csv",
             ),
-            SourceProvenanceItem(
-                source_type="html",
-                label="HTML import",
+            _method_item(
+                "html",
+                label="HTML",
                 status="validated",
                 description="Offline HTML import path for Security Assessment.",
-                generated_at=(assessment or {}).get("collected_at"),
-                row_count=_security_row_count(assessment),
-                notes="Active source" if source_type == "html" else None,
-            ),
-            SourceProvenanceItem(
-                source_type="artifact",
-                label="Normalized artifact",
-                status="available" if exists else "not_available",
-                description="Canonical Security Assessment artifact.",
-                artifact_path=(assessment or {}).get("path") or "data/imports/security_assessment/latest.json",
-                generated_at=(assessment or {}).get("collected_at"),
-                row_count=_security_row_count(assessment),
-            ),
-            SourceProvenanceItem(
-                source_type="rest_api",
-                label="REST API",
-                status="not_applicable",
-                description="Security Assessment uses Reports Plus rather than a direct Command Center REST endpoint.",
-            ),
-            SourceProvenanceItem(
-                source_type="manual",
-                label="Manual/static source",
-                status="not_applicable",
-                description="No manual/static security assessment source is currently used.",
+                generated_at=generated_at if primary_method == "html" else None,
+                row_count=row_count if primary_method == "html" else None,
+                artifact_path=artifact_path if primary_method == "html" else None,
+                primary=primary_method == "html",
             ),
         ]
     )
@@ -270,49 +219,33 @@ def build_commcell_provenance(
     result: dict[str, Any] | None,
 ) -> list[dict[str, Any]]:
     source = dict((result or {}).get("source") or {})
-    status = "validated" if (result or {}).get("http_status") == 200 else "not_available"
+    live_success = (result or {}).get("http_status") == 200
+    rest_status = "validated" if live_success else ("available" if result else "not_available")
+    artifact_path = "data/catalog/rest/commserv.json" if source.get("method") == "cache" else None
     return _serialize_items(
         [
-            SourceProvenanceItem(
-                source_type="rest_api",
-                label="REST API",
-                status=status,
-                description="Direct CommCell identity endpoint.",
+            _method_item(
+                "rest_reports_plus",
+                label="REST / Reports Plus",
+                status=rest_status,
+                description="Direct CommCell identity collection path via REST.",
                 endpoint=source.get("endpoint"),
                 generated_at=(result or {}).get("collected_at"),
+                artifact_path=artifact_path,
                 notes=source.get("auth"),
+                primary=True,
             ),
-            SourceProvenanceItem(
-                source_type="artifact",
-                label="Normalized artifact",
-                status="available" if source.get("method") == "cache" else "not_available",
-                description="Cached CommCell identity payload used when live authentication is unavailable.",
-                artifact_path="data/catalog/rest/commserv.json" if source.get("method") == "cache" else None,
-                generated_at=(result or {}).get("collected_at"),
-            ),
-            SourceProvenanceItem(
-                source_type="reports_plus",
-                label="Reports Plus dataset/report",
-                status="not_applicable",
-                description="CommCell identity is not sourced from Reports Plus.",
-            ),
-            SourceProvenanceItem(
-                source_type="csv",
-                label="CSV import",
+            _method_item(
+                "csv",
+                label="CSV",
                 status="not_applicable",
                 description="No CSV import path exists for CommCell identity.",
             ),
-            SourceProvenanceItem(
-                source_type="html",
-                label="HTML import",
+            _method_item(
+                "html",
+                label="HTML",
                 status="not_applicable",
                 description="No HTML import path exists for CommCell identity.",
-            ),
-            SourceProvenanceItem(
-                source_type="manual",
-                label="Manual/static source",
-                status="not_applicable",
-                description="No manual/static source is currently used.",
             ),
         ]
     )
@@ -328,49 +261,30 @@ def build_metric_provenance(
     exists = isinstance(metric, dict) and bool(metric)
     return _serialize_items(
         [
-            SourceProvenanceItem(
-                source_type="reports_plus",
-                label="Reports Plus dataset/report",
+            _method_item(
+                "rest_reports_plus",
+                label="REST / Reports Plus",
                 status="validated",
-                description="Metrics-based operational source used by this tile.",
+                description="Metrics / Reports Plus-backed operational collection path.",
                 endpoint="/commandcenter/api/cr/reportsplusengine/datasets/<dataset_guid>/data",
                 dataset_guid=source.get("dataset_guid"),
                 report_name=source.get("dataset_name") or report_name,
                 generated_at=(metric or {}).get("collected_at"),
                 row_count=(metric or {}).get("record_count"),
+                artifact_path=f"data/catalog/metrics/{artifact_name}.json" if exists else None,
+                primary=True,
             ),
-            SourceProvenanceItem(
-                source_type="artifact",
-                label="Normalized artifact",
-                status="available" if exists else "not_available",
-                description="Local normalized metric artifact used by the Quick HC detail page.",
-                artifact_path=f"data/catalog/metrics/{artifact_name}.json",
-                generated_at=(metric or {}).get("collected_at"),
-                row_count=(metric or {}).get("record_count"),
-            ),
-            SourceProvenanceItem(
-                source_type="rest_api",
-                label="REST API",
+            _method_item(
+                "csv",
+                label="CSV",
                 status="not_applicable",
-                description="This tile is currently backed by Metrics / Reports Plus, not a dedicated REST endpoint.",
+                description="No CSV import path exists for this subject.",
             ),
-            SourceProvenanceItem(
-                source_type="csv",
-                label="CSV import",
+            _method_item(
+                "html",
+                label="HTML",
                 status="not_applicable",
-                description="No CSV import path exists for this tile.",
-            ),
-            SourceProvenanceItem(
-                source_type="html",
-                label="HTML import",
-                status="not_applicable",
-                description="No HTML import path exists for this tile.",
-            ),
-            SourceProvenanceItem(
-                source_type="manual",
-                label="Manual/static source",
-                status="not_applicable",
-                description="No manual/static source is currently used.",
+                description="No HTML import path exists for this subject.",
             ),
         ]
     )
@@ -380,6 +294,46 @@ def _serialize_items(items: list[SourceProvenanceItem]) -> list[dict[str, Any]]:
     by_type = {item.source_type: item for item in items}
     ordered = [by_type[source_type] for source_type in SOURCE_ORDER if source_type in by_type]
     return [item.to_dict() for item in ordered]
+
+
+def _method_item(
+    source_type: str,
+    *,
+    label: str,
+    status: str,
+    description: str,
+    endpoint: str | None = None,
+    artifact_path: str | None = None,
+    dataset_guid: str | None = None,
+    report_name: str | None = None,
+    generated_at: str | None = None,
+    row_count: int | None = None,
+    notes: str | None = None,
+    primary: bool = False,
+) -> SourceProvenanceItem:
+    return SourceProvenanceItem(
+        source_type=source_type,
+        label=label,
+        status=status,
+        description=description,
+        endpoint=endpoint,
+        artifact_path=artifact_path,
+        dataset_guid=dataset_guid,
+        report_name=report_name,
+        generated_at=generated_at,
+        row_count=row_count,
+        notes=notes,
+        primary=primary,
+    )
+
+
+def _normalized_primary_method(source_type: str, *, default: str) -> str:
+    normalized = source_type.strip().lower()
+    if normalized == "csv":
+        return "csv"
+    if normalized == "html":
+        return "html"
+    return default
 
 
 def _first_dataset_guid(source: dict[str, Any]) -> str | None:
