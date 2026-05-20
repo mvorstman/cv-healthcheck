@@ -525,6 +525,22 @@ dd[data-status="good"]::before {
   font-size: 0.8125rem;
 }
 
+.source-provenance-inline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.18rem;
+}
+
+.source-provenance-inline-meta code {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 0.14rem 0.45rem;
+}
+
 dd[data-status="bad"]::before {
   content: "● ";
   color: var(--critical);

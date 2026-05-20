@@ -98,6 +98,7 @@ def test_license_summary_provenance_marks_import_and_reportsplus_paths_validated
     assert by_type["csv"]["status"] == "validated"
     assert by_type["html"]["status"] == "validated"
     assert by_type["artifact"]["status"] == "available"
+    assert by_type["csv"]["notes"] == "Active source"
 
 
 def test_backup_job_summary_detail_route_renders_source_provenance(
@@ -119,6 +120,10 @@ def test_backup_job_summary_detail_route_renders_source_provenance(
     assert "Normalized artifact" in body
     assert "CSV import" in body
     assert "HTML import" in body
+    assert "Primary source:" in body
+    assert body.count('class="source-provenance-item"') == 1
+    assert "Other acquisition paths" in body
+    assert "source-provenance-inline-meta" in body
     assert "Not implemented" in body
     assert "Not applicable" in body
     assert "source-provenance-secondary" in body
@@ -164,4 +169,6 @@ def test_license_summary_detail_route_renders_shared_source_provenance(
     assert "CSV import" in body
     assert "HTML import" in body
     assert "Normalized artifact" in body
-    assert "Other supported paths" in body
+    assert "Primary source: CSV import" in body
+    assert body.count('class="source-provenance-item"') == 1
+    assert "Other acquisition paths" in body
