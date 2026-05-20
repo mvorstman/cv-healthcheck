@@ -520,6 +520,34 @@ def test_quick_hc_overview_license_summary_previews_real_fields(
     assert "HTTP status" not in body
 
 
+def test_quick_hc_overview_renders_commcell_report_section_values(monkeypatch) -> None:
+    import cvhealthcheck.quickhc.subject_data_service as subject_data_service_module
+
+    monkeypatch.setattr(
+        subject_data_service_module,
+        "read_json",
+        lambda *_args, **_kwargs: {
+            "identity": {
+                "hostName": "CommServe A",
+                "csGUID": "commcell-01",
+                "csVersionInfo": "11 SP40.47",
+                "timeZone": "UTC",
+            }
+        },
+    )
+
+    app = create_app()
+    response = app.test_client().get("/quick-hc")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert '"id": "environment.metadata"' in body
+    assert '{"k": "COMMCELL NAME", "v": "CommServe A"}' in body
+    assert '{"k": "COMMCELL ID", "v": "commcell-01"}' in body
+    assert '{"k": "VERSION", "v": "11 SP40.47"}' in body
+    assert '{"k": "TIMEZONE", "v": "UTC"}' in body
+
+
 def test_quick_hc_overview_handles_missing_backup_job_summary_artifact(
     tmp_path, monkeypatch
 ) -> None:

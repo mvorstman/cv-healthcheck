@@ -176,6 +176,12 @@ def _build_environment_subject(cc: dict | None) -> dict:
     name = cc.get("hostName") or "CommCell"
     version = cc.get("csVersionInfo") or ""
     subtitle = f"{name} · {version}" if version else name
+    metadata_rows = [
+        {"k": "COMMCELL NAME", "v": name},
+        {"k": "COMMCELL ID", "v": str(cc.get("csGUID") or "—")},
+        {"k": "VERSION", "v": version or "—"},
+        {"k": "TIMEZONE", "v": str(cc.get("timeZone") or "—")},
+    ]
 
     return {
         "id": "environment",
@@ -197,7 +203,16 @@ def _build_environment_subject(cc: dict | None) -> dict:
                 ],
             },
         ],
-        "sections": [],
+        "sections": [
+            {
+                "id": "environment.metadata",
+                "included": True,
+                "title": "Environment metadata",
+                "meta": "CommCell profile",
+                "type": "meta",
+                "rows": metadata_rows,
+            }
+        ],
     }
 
 
