@@ -1,295 +1,46 @@
-{% extends "base.html" %}
-{% from "partials/quickhc_tile.html" import render_quickhc_tile %}
-{% from "partials/quickhc_section_card.html" import section_card %}
-
-{% block content %}
-<section class="quickhc-dashboard" data-quickhc-dashboard>
-  <div class="quickhc-page-head">
-    <div>
-      <h2>Quick HC</h2>
-      <p class="helper-text">Quick HealthCheck provides a fast, read-only way to assemble customer-facing operational summaries.</p>
-      <div class="quickhc-kpi-row">
-        <span class="quickhc-kpi-chip quickhc-kpi-chip--{{ 'good' if commcell_preview.exists else 'warn' }}">CommCell</span>
-        <span class="quickhc-kpi-chip quickhc-kpi-chip--{{ 'good' if security_assessment.exists else 'warn' }}">Security</span>
-        <span class="quickhc-kpi-chip quickhc-kpi-chip--{{ 'good' if license_summary.exists else 'warn' }}">Licenses</span>
-        <span class="quickhc-kpi-chip quickhc-kpi-chip--{{ 'good' if client_growth.exists else 'warn' }}">Client Growth</span>
-        <span class="quickhc-kpi-chip quickhc-kpi-chip--{{ 'good' if capacity_license.exists else 'warn' }}">Capacity</span>
-        <span class="quickhc-kpi-chip quickhc-kpi-chip--{{ 'good' if backup_job_summary.exists else 'warn' }}">Backup Jobs</span>
-      </div>
-    </div>
-  </div>
-
-  <form
-    method="post"
-    action="{{ url_for('main.quick_hc_report') }}"
-    class="quickhc-report-form"
-    data-quickhc-form
-  >
-    <section class="metadata-card quickhc-report-card">
-      <div class="section-heading">
-        <h3>Customer Report</h3>
-        <button type="submit">Generate/View Customer Report</button>
-      </div>
-      <p class="helper-text">Select the subjects and report sections to include in the customer-facing report. Detail pages remain available separately for deeper review.</p>
-    </section>
-
-    <div class="quickhc-subject-grid">
-      {% set environment_tile = quick_hc_tiles["environment"] %}
-      {% call render_quickhc_tile(
-        environment_tile,
-        "environment" in selected_report_sections,
-        "Available",
-        "badge-good",
-        url_for(environment_tile.detail_endpoint),
-        is_open=True,
-      ) %}
-        {% call section_card("environment", "environment.metadata", "Environment metadata", "environment.metadata" in selected_report_sections, "CommCell profile") %}
-          {% include "partials/quickhc/previews/commcell.html" %}
-        {% endcall %}
-      {% endcall %}
-
-      {% set security_tile = quick_hc_tiles["security_assessment"] %}
-      {% call render_quickhc_tile(
-        security_tile,
-        "security_assessment" in selected_report_sections,
-        "Available" if security_assessment.exists and security_assessment.summary else "Not collected",
-        "badge-good" if security_assessment.exists and security_assessment.summary else "badge-warning",
-        url_for(security_tile.detail_endpoint),
-      ) %}
-            {% call section_card("security_assessment", "security_assessment.summary", "Summary counters", "security_assessment.summary" in selected_report_sections, (security_assessment.summary.counters["Total checks"] ~ " checks") if security_assessment.exists and security_assessment.summary else "Overview") %}
-              {% set security_preview_section = "summary" %}
-              {% include "partials/quickhc/previews/security_assessment.html" %}
-            {% endcall %}
-
-            {% call section_card("security_assessment", "security_assessment.highlights", "Critical / Warning highlights", "security_assessment.highlights" in selected_report_sections, "Priority findings") %}
-              {% set security_preview_section = "highlights" %}
-              {% include "partials/quickhc/previews/security_assessment.html" %}
-            {% endcall %}
-
-            {% call section_card("security_assessment", "security_assessment.all_findings", "Info / Good findings", "security_assessment.all_findings" in selected_report_sections, "Informational checks") %}
-              {% set security_preview_section = "all_findings" %}
-              {% include "partials/quickhc/previews/security_assessment.html" %}
-            {% endcall %}
-      {% endcall %}
-
-      {% set license_tile = quick_hc_tiles["license_summary"] %}
-      {% call render_quickhc_tile(
-        license_tile,
-        "license_summary" in selected_report_sections,
-        "Available" if license_summary.exists else "Not collected",
-        "badge-good" if license_summary.exists else "badge-warning",
-        url_for(license_tile.detail_endpoint),
-      ) %}
-
-            {% call section_card("license_summary", "license_summary.metadata", "Summary metadata", "license_summary.metadata" in selected_report_sections, "Source and dates") %}
-              {% set license_preview_section = "metadata" %}
-              {% include "partials/quickhc/previews/license_summary.html" %}
-            {% endcall %}
-
-            {% call section_card("license_summary", "license_summary.workload_sections", "Workload Summary Sections", "license_summary.workload_sections" in selected_report_sections, (license_summary.workload_summary_section_count ~ " sections") if license_summary.exists else "Workloads") %}
-              {% set license_preview_section = "workload_sections" %}
-              {% include "partials/quickhc/previews/license_summary.html" %}
-            {% endcall %}
-
-            {% call section_card("license_summary", "license_summary.other_licenses", "Other Licenses table", "license_summary.other_licenses" in selected_report_sections, (license_summary.other_count ~ " rows") if license_summary.exists else "Preview") %}
-              {% set license_preview_section = "other_licenses" %}
-              {% include "partials/quickhc/previews/license_summary.html" %}
-            {% endcall %}
-
-            {% call section_card("license_summary", "license_summary.agent_feature_licenses", "Agent / Feature Licenses table", "license_summary.agent_feature_licenses" in selected_report_sections, (license_summary.agent_feature_count ~ " rows") if license_summary.exists else "Preview") %}
-              {% set license_preview_section = "agent_feature_licenses" %}
-              {% include "partials/quickhc/previews/license_summary.html" %}
-            {% endcall %}
-      {% endcall %}
-
-      {% set client_growth_tile = quick_hc_tiles["client_growth"] %}
-      {% set history = client_growth.history_range or {} %}
-      {% set starting_total = (client_growth.latest_total_clients or 0) - ((client_growth.latest_added or 0) - (client_growth.latest_removed or 0)) %}
-      {% call render_quickhc_tile(
-        client_growth_tile,
-        "client_growth" in selected_report_sections,
-        "Available" if client_growth.exists else "Not collected",
-        "badge-good" if client_growth.exists else "badge-warning",
-        url_for(client_growth_tile.detail_endpoint),
-      ) %}
-
-            {% call section_card("client_growth", "client_growth.summary", "Summary metrics", "client_growth.summary" in selected_report_sections, (client_growth.latest_total_clients ~ " total clients") if client_growth.exists and client_growth.latest_total_clients is not none else "Overview") %}
-              {% set client_growth_preview_section = "summary" %}
-              {% include "partials/quickhc/previews/client_growth.html" %}
-            {% endcall %}
-
-            {% call section_card("client_growth", "client_growth.chart", "Client Growth chart", "client_growth.chart" in selected_report_sections, "Trend preview") %}
-              {% set client_growth_preview_section = "chart" %}
-              {% include "partials/quickhc/previews/client_growth.html" %}
-            {% endcall %}
-
-            {% call section_card("client_growth", "client_growth.monthly_table", "Monthly summary table", "client_growth.monthly_table" in selected_report_sections, (client_growth.record_count ~ " rows") if client_growth.exists else "History") %}
-              {% set client_growth_preview_section = "monthly_table" %}
-              {% include "partials/quickhc/previews/client_growth.html" %}
-            {% endcall %}
-      {% endcall %}
-
-      {% set capacity_tile = quick_hc_tiles["capacity_license"] %}
-      {% call render_quickhc_tile(
-        capacity_tile,
-        "capacity_license" in selected_report_sections,
-        "Available" if capacity_license.exists else "Not collected",
-        "badge-good" if capacity_license.exists else "badge-warning",
-        url_for(capacity_tile.detail_endpoint),
-      ) %}
-
-            {% call section_card("capacity_license", "capacity_license.summary", "Summary", "capacity_license.summary" in selected_report_sections, (capacity_license.latest_month or "Latest period")) %}
-              {% set capacity_license_preview_section = "summary" %}
-              {% include "partials/quickhc/previews/capacity_license.html" %}
-            {% endcall %}
-
-            {% call section_card("capacity_license", "capacity_license.table", "Usage/details table", "capacity_license.table" in selected_report_sections, (capacity_license.entity_count ~ " entities") if capacity_license.exists else "Preview") %}
-              {% set capacity_license_preview_section = "table" %}
-              {% include "partials/quickhc/previews/capacity_license.html" %}
-            {% endcall %}
-      {% endcall %}
-
-      {% set backup_job_summary_tile = quick_hc_tiles["backup_job_summary"] %}
-      {% call render_quickhc_tile(
-        backup_job_summary_tile,
-        "backup_job_summary" in selected_report_sections,
-        "Available" if backup_job_summary.exists else "Not collected",
-        "badge-good" if backup_job_summary.exists else "badge-warning",
-        url_for(backup_job_summary_tile.detail_endpoint),
-      ) %}
-            {% call section_card("backup_job_summary", "backup_job_summary.summary", "Summary", "backup_job_summary.summary" in selected_report_sections, (backup_job_summary.total_jobs ~ " jobs") if backup_job_summary.exists else "Overview") %}
-              {% set backup_job_summary_preview_section = "summary" %}
-              {% include "partials/quickhc/previews/backup_job_summary.html" %}
-            {% endcall %}
-
-            {% call section_card("backup_job_summary", "backup_job_summary.status_breakdown", "Status breakdown", "backup_job_summary.status_breakdown" in selected_report_sections, (backup_job_summary.status_breakdown | length ~ " statuses") if backup_job_summary.exists else "Statuses") %}
-              {% set backup_job_summary_preview_section = "status_breakdown" %}
-              {% include "partials/quickhc/previews/backup_job_summary.html" %}
-            {% endcall %}
-
-            {% call section_card("backup_job_summary", "backup_job_summary.recent_failures", "Recent failures", "backup_job_summary.recent_failures" in selected_report_sections, (backup_job_summary.recent_failures_count ~ " failures") if backup_job_summary.exists else "Failures") %}
-              {% set backup_job_summary_preview_section = "recent_failures" %}
-              {% include "partials/quickhc/previews/backup_job_summary.html" %}
-            {% endcall %}
-
-            {% call section_card("backup_job_summary", "backup_job_summary.recent_jobs", "Recent jobs", "backup_job_summary.recent_jobs" in selected_report_sections, (backup_job_summary.recent_jobs | length ~ " jobs") if backup_job_summary.exists else "Jobs") %}
-              {% set backup_job_summary_preview_section = "recent_jobs" %}
-              {% include "partials/quickhc/previews/backup_job_summary.html" %}
-            {% endcall %}
-      {% endcall %}
-    </div>
-  </form>
-
-  <section class="metadata-card quickhc-secondary quickhc-secondary--internal">
-    <div class="section-heading">
-      <h3>Other Operational Views</h3>
-      <p class="helper-text">Secondary views for internal follow-up and supporting analysis.</p>
-    </div>
-    <p class="helper-text">Additional internal tools are available from the Development area when needed.</p>
-  </section>
-</section>
-{% endblock %}
-
-{% block scripts %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quick HC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='quick_hc.css') }}">
   <script>
-    (() => {
-      const form = document.querySelector("[data-quickhc-form]");
-      const dashboard = document.querySelector("[data-quickhc-dashboard]");
-      if (!form || !dashboard) {
-        return;
-      }
-
-      const storageKey = "quickhc-report-selections-v1";
-      const selectionInputs = Array.from(
-        form.querySelectorAll('input[type="checkbox"][name="selection_ids"]')
-      );
-      const parentInputs = Array.from(
-        form.querySelectorAll('input[type="checkbox"][data-subject-toggle]')
-      );
-
-      const loadSavedState = () => {
-        try {
-          return JSON.parse(window.localStorage.getItem(storageKey) || "{}");
-        } catch {
-          return {};
-        }
-      };
-
-      const saveState = () => {
-        const payload = {};
-        for (const input of selectionInputs) {
-          payload[input.value] = input.checked;
-        }
-        window.localStorage.setItem(storageKey, JSON.stringify(payload));
-      };
-
-      const applySubjectState = (subjectId, savedState, { resetChildren = false } = {}) => {
-        const parent = form.querySelector(
-          `input[type="checkbox"][data-subject-toggle="${subjectId}"]`
-        );
-        const children = Array.from(
-          form.querySelectorAll(
-            `input[type="checkbox"][data-subject-child="${subjectId}"]`
-          )
-        );
-        if (!parent) {
-          return;
-        }
-
-        if (!parent.checked) {
-          for (const child of children) {
-            child.checked = false;
-            child.disabled = true;
-          }
-          return;
-        }
-
-        for (const child of children) {
-          child.disabled = false;
-          if (resetChildren) {
-            child.checked = true;
-            continue;
-          }
-          if (Object.prototype.hasOwnProperty.call(savedState, child.value)) {
-            child.checked = Boolean(savedState[child.value]);
-          } else {
-            child.checked = true;
-          }
-        }
-      };
-
-      const restoreState = () => {
-        const savedState = loadSavedState();
-
-        for (const input of selectionInputs) {
-          if (Object.prototype.hasOwnProperty.call(savedState, input.value)) {
-            input.checked = Boolean(savedState[input.value]);
-          }
-        }
-
-        for (const parent of parentInputs) {
-          applySubjectState(parent.dataset.subjectToggle, savedState);
-        }
-      };
-
-      restoreState();
-      saveState();
-
-      for (const parent of parentInputs) {
-        parent.addEventListener("change", () => {
-          applySubjectState(parent.dataset.subjectToggle, loadSavedState(), {
-            resetChildren: parent.checked,
-          });
-          saveState();
-        });
-      }
-
-      for (const input of selectionInputs) {
-        if (input.dataset.subjectToggle) {
-          continue;
-        }
-        input.addEventListener("change", saveState);
-      }
-    })();
+    window.QUICK_HC_INITIAL_DATA = {{ initial_data | tojson }};
   </script>
-{% endblock %}
+</head>
+<body>
+
+<header class="hdr">
+  <span class="hdr-title" onclick="showOverview()">Quick HC</span>
+  <span class="hdr-sep"></span>
+  <span id="hdr-subtitle" style="font-family:var(--mono);font-size:11px;color:var(--text-2)"></span>
+  <span class="hdr-spacer"></span>
+  <span class="hdr-avail" id="hdr-avail"></span>
+  <a href="{{ url_for('main.index') }}" class="btn-ghost">← Dashboard</a>
+</header>
+
+<div class="body">
+  <aside class="left">
+    <div class="left-scroll" id="left-scroll"></div>
+    <div class="left-footer">
+      <button class="btn-gen" id="btn-gen">⬇ Generate Customer Report</button>
+    </div>
+  </aside>
+  <main class="right">
+    <div class="right-body" id="right-body"></div>
+    <footer class="right-footer" id="right-footer">
+      <span class="rf-source" id="rf-source"></span>
+      <a class="rf-link" id="rf-link" href="#">Open full details →</a>
+    </footer>
+  </main>
+</div>
+
+<form id="report-form" method="post" action="{{ url_for('main.quick_hc_report') }}" style="display:none"></form>
+
+<script src="{{ url_for('static', filename='quick_hc.js') }}"></script>
+</body>
+</html>

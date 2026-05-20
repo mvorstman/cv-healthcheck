@@ -7,6 +7,7 @@ from . import basic  # noqa: F401
 from . import development  # noqa: F401
 from . import metrics  # noqa: F401
 from . import quick_hc  # noqa: F401
+from . import quick_hc_api  # noqa: F401
 from . import reportsplus  # noqa: F401
 from . import security_assessment  # noqa: F401
 

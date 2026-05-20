@@ -27,10 +27,10 @@ from .shared import (
     url_for,
 )
 from cvhealthcheck.quickhc import QuickHcReportService
-from cvhealthcheck.quickhc.overview_service import build_quick_hc_overview_context
 from cvhealthcheck.quickhc.report_service import (
     REPORT_SELECTION_IDS,
 )
+from cvhealthcheck.quickhc.subject_data_service import build_subject_initial_data
 from cvhealthcheck.quickhc.source_provenance import (
     build_backup_job_summary_provenance,
     build_commcell_provenance,
@@ -47,7 +47,7 @@ from cvhealthcheck.reportsplus.security_assessment import security_assessment_qu
 def quick_hc():
     return render_template(
         "quick_hc.html",
-        **build_quick_hc_overview_context(),
+        initial_data=build_subject_initial_data(),
     )
 
 
