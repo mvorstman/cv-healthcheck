@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 import re
 from typing import Any
 
+from flask import has_app_context, url_for
+
 from cvhealthcheck.license_summary.service import LicenseSummaryService
 from cvhealthcheck.metrics import (
     get_capacity_license_usage,
@@ -26,6 +28,7 @@ from cvhealthcheck.quickhc.registry import (
     LICENSE_SUMMARY_OTHER_LICENSES_SECTION_ID,
     LICENSE_SUMMARY_SELECTION_ID,
     LICENSE_SUMMARY_WORKLOAD_SECTION_ID,
+    QUICK_HC_TILE_BY_ID,
     QUICK_HC_SECTION_IDS,
     QUICK_HC_SELECTION_IDS,
     QUICK_HC_SUBJECT_IDS,
@@ -136,7 +139,7 @@ class QuickHcReportService:
                 "available": False,
                 "title": "Security Assessment",
                 "message": "Not collected yet",
-                "detail_url": "/quick-hc/security-assessment",
+                "detail_url": _detail_url_for(SECURITY_ASSESSMENT_SELECTION_ID),
                 "artifact": None,
                 "evidence": None,
                 "summary_section_id": SECURITY_ASSESSMENT_SUMMARY_SECTION_ID,
@@ -173,7 +176,7 @@ class QuickHcReportService:
         return {
             "available": True,
             "title": "Security Assessment",
-            "detail_url": "/quick-hc/security-assessment",
+            "detail_url": _detail_url_for(SECURITY_ASSESSMENT_SELECTION_ID),
             "artifact": artifact,
             "source_type": artifact.get("source_type"),
             "imported_at": artifact.get("imported_at"),
@@ -210,7 +213,7 @@ class QuickHcReportService:
                 "available": False,
                 "title": "License Summary",
                 "message": "Not collected yet",
-                "detail_url": "/quick-hc/license-summary",
+                "detail_url": _detail_url_for(LICENSE_SUMMARY_SELECTION_ID),
                 "artifact": None,
                 "evidence": None,
                 "metadata_section_id": LICENSE_SUMMARY_METADATA_SECTION_ID,
@@ -307,7 +310,7 @@ class QuickHcReportService:
         return {
             "available": True,
             "title": "License Summary",
-            "detail_url": "/quick-hc/license-summary",
+            "detail_url": _detail_url_for(LICENSE_SUMMARY_SELECTION_ID),
             "artifact": artifact,
             "source_type": artifact.get("source_type"),
             "imported_at": artifact.get("imported_at"),
@@ -382,7 +385,7 @@ class QuickHcReportService:
                 "requested": False,
                 "title": "Client Growth",
                 "message": "Not collected yet",
-                "detail_url": "/metrics/client-growth",
+                "detail_url": _detail_url_for(CLIENT_GROWTH_SELECTION_ID),
                 "evidence": None,
                 "record_count": 0,
                 "history_range": None,
@@ -413,8 +416,7 @@ class QuickHcReportService:
             "requested": False,
             "title": "Client Growth",
             "description": "Client Growth summarizes how the protected client count has changed over the recorded period.",
-            "message": "Not collected yet",
-            "detail_url": "/metrics/client-growth",
+            "detail_url": _detail_url_for(CLIENT_GROWTH_SELECTION_ID),
             "imported_at": artifact.get("collected_at"),
             "record_count": int(artifact.get("record_count") or 0),
             "history_range": artifact.get("history_range"),
@@ -445,7 +447,7 @@ class QuickHcReportService:
                 "requested": False,
                 "title": "Capacity License",
                 "message": "Not collected yet",
-                "detail_url": "/metrics/capacity-license",
+                "detail_url": _detail_url_for(CAPACITY_LICENSE_SELECTION_ID),
                 "evidence": None,
                 "record_count": 0,
                 "history_range": None,
@@ -464,7 +466,7 @@ class QuickHcReportService:
             "requested": False,
             "title": "Capacity License",
             "message": "Not collected yet",
-            "detail_url": "/metrics/capacity-license",
+            "detail_url": _detail_url_for(CAPACITY_LICENSE_SELECTION_ID),
             "source_type": "metric_artifact",
             "imported_at": artifact.get("collected_at"),
             "generated_on": None,
@@ -758,6 +760,16 @@ def _first_value(*payloads: dict[str, Any] | None, key: str) -> str | None:
         if value not in (None, ""):
             return str(value)
     return None
+
+
+def _detail_url_for(tile_id: str) -> str | None:
+    tile = QUICK_HC_TILE_BY_ID.get(tile_id)
+    endpoint = tile.detail_endpoint if tile else None
+    if not endpoint:
+        return None
+    if has_app_context():
+        return url_for(endpoint)
+    return endpoint
 
 
 def _coerce_int(value: Any) -> int | None:

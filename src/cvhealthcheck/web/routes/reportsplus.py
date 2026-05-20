@@ -141,6 +141,7 @@ def reportsplus_datasets():
 
 
 @bp.route("/reportsplus/health-candidates")
+@login_required
 def reportsplus_health_candidates():
     status = catalog_status("health_candidate_priority.json")
     candidates = []
@@ -171,6 +172,7 @@ def reportsplus_health_candidates():
 
 
 @bp.route("/reportsplus/execution-validation")
+@login_required
 def reportsplus_execution_validation():
     status = catalog_status("execution_validation.json")
     records = []

@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from cvhealthcheck.api_client import CommvaultApiClient
+from cvhealthcheck.auth.commvault_auth import SESSION_TOKEN_KEY
 from cvhealthcheck.config import Settings, load_settings
 from cvhealthcheck.license_summary.artifact import build_license_summary_artifact
 from cvhealthcheck.license_summary.models import LicenseSummaryArtifact
@@ -31,6 +32,39 @@ def test_quick_hc_and_report_pages_still_render() -> None:
     assert client.get("/quick-hc").status_code == 200
     assert client.get("/quick-hc/license-summary").status_code == 200
     assert client.get("/security-assessment").status_code == 200
+
+
+def test_operational_metrics_and_reportsplus_routes_require_login() -> None:
+    app = create_app()
+    client = app.test_client()
+
+    for path in (
+        "/metrics/client-count",
+        "/metrics/client-growth",
+        "/metrics/capacity-license",
+        "/reportsplus/health-candidates",
+        "/reportsplus/execution-validation",
+    ):
+        response = client.get(path)
+        assert response.status_code == 302
+        assert "/login" in response.headers["Location"]
+
+
+def test_operational_metrics_and_reportsplus_routes_render_after_login() -> None:
+    app = create_app()
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session[SESSION_TOKEN_KEY] = "test-token"
+
+    for path in (
+        "/metrics/client-count",
+        "/metrics/client-growth",
+        "/metrics/capacity-license",
+        "/reportsplus/health-candidates",
+        "/reportsplus/execution-validation",
+    ):
+        response = client.get(path)
+        assert response.status_code == 200
 
 
 def test_security_assessment_artifact_includes_version_fields() -> None:

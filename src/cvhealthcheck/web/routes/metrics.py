@@ -10,11 +10,13 @@ from .shared import (
     get_client_count_history,
     get_client_growth_details,
     get_client_growth_summary,
+    login_required,
     render_template,
 )
 
 
 @bp.route("/metrics/client-count")
+@login_required
 def metrics_client_count():
     metric = get_client_count_history(live=False)
     return render_template(
@@ -26,6 +28,7 @@ def metrics_client_count():
 
 
 @bp.route("/metrics/client-growth")
+@login_required
 def metrics_client_growth():
     summary = get_client_growth_summary(live=False)
     details = get_client_growth_details(live=False)
@@ -46,6 +49,7 @@ def metrics_client_growth():
 
 
 @bp.route("/metrics/capacity-license")
+@login_required
 def metrics_capacity_license():
     metric = get_capacity_license_usage(live=False)
     return render_template(

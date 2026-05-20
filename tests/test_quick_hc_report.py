@@ -342,6 +342,23 @@ def test_quick_hc_report_route_uses_service(monkeypatch) -> None:
     assert called["used"] is True
 
 
+def test_quick_hc_report_service_uses_registry_detail_urls_and_client_growth_has_no_stale_message(
+    tmp_path, monkeypatch
+) -> None:
+    metrics_dir = _patch_metrics_paths(tmp_path, monkeypatch)
+    _write_metric_artifact(metrics_dir, "client_growth_summary", CLIENT_GROWTH_ARTIFACT)
+
+    app = create_app()
+    with app.test_request_context():
+        report = QuickHcReportService().build_report()
+
+    assert report["security_assessment"]["detail_url"] == "/quick-hc/security-assessment"
+    assert report["license_summary"]["detail_url"] == "/quick-hc/license-summary"
+    assert report["client_growth"]["detail_url"] == "/metrics/client-growth"
+    assert report["capacity_license"]["detail_url"] == "/metrics/capacity-license"
+    assert "message" not in report["client_growth"]
+
+
 def test_quick_hc_overview_shows_report_selection_checkboxes(
     tmp_path, monkeypatch
 ) -> None:

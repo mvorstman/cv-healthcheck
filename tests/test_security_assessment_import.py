@@ -551,6 +551,38 @@ def test_flask_rest_refresh_redirects_to_single_artifact_render_path(
     assert "REST" in body
 
 
+def test_extract_security_assessment_does_not_persist_401_payload(monkeypatch) -> None:
+    import cvhealthcheck.reportsplus.security_assessment as module
+
+    def fake_extract_report(*args, **kwargs):
+        return {
+            "summary": {
+                "report_name": "Security Assessment",
+                "report_http_status": 401,
+                "report_ok": False,
+            },
+            "report": {"url": "https://example.test/report/336"},
+            "datasets": [],
+            "executions": [],
+        }
+
+    def fail_persist(*args, **kwargs):
+        raise AssertionError("401 responses must not be persisted")
+
+    def fail_load(*args, **kwargs):
+        raise AssertionError("401 responses must not load active artifacts")
+
+    monkeypatch.setattr(module, "extract_report", fake_extract_report)
+    monkeypatch.setattr(module, "persist_security_assessment_artifact", fail_persist)
+    monkeypatch.setattr(module, "load_active_security_assessment_artifact", fail_load)
+
+    result = module.extract_security_assessment()
+
+    assert result["artifact"] is None
+    assert result["normalized"]["source"]["http_status"] == 401
+    assert result["normalized"]["finding_count"] == 0
+
+
 def test_flask_upload_rejects_missing_file(tmp_path, monkeypatch) -> None:
     _patch_security_assessment_paths(tmp_path, monkeypatch)
 

@@ -22,6 +22,11 @@
 
 ## 2026-05-20
 
+- Fixed the Quick HC Phase 1 safety/stability issues without expanding the current architecture scope.
+- Prevented `extract_security_assessment()` from persisting unauthorized or failed report responses by validating auth/status before normalization and artifact persistence.
+- Added the missing `@login_required` protection to the three `/metrics/*` routes and the two unprotected Reports Plus operational routes.
+- Replaced hardcoded Quick HC report detail URLs in `quickhc/report_service.py` with registry-authoritative `TileDefinition.detail_endpoint` resolution through `url_for()`.
+- Removed the stale `message: "Not collected yet"` value from the available Client Growth report branch.
 - Closed the structural Quick HC framework extraction milestone for the current subject set.
 - The registry/data side now consists of `quickhc/models.py`, `quickhc/registry.py`, and `quickhc/report_service.py`.
 - The overview/template side now consists of `quick_hc.html`, shared tile and section-card partials, and explicit per-subject preview partials for CommCell, Security Assessment, License Summary, Client Growth, and Capacity License.

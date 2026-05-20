@@ -43,6 +43,14 @@ def extract_security_assessment(
         execute=execute,
         sample_limit=sample_limit,
     )
+    summary = extraction.get("summary", {})
+    report_status = summary.get("report_http_status")
+    if _is_failed_report_status(report_status, summary.get("report_ok")):
+        return {
+            "extraction": extraction,
+            "normalized": _build_failed_rest_artifact(extraction),
+            "artifact": None,
+        }
     normalized = normalize_security_assessment(extraction)
     artifact_paths = persist_security_assessment_artifact(normalized).get("artifact_paths", {})
     normalized = load_active_security_assessment_artifact()
@@ -223,6 +231,39 @@ def _stringify_action(value: Any) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+def _is_failed_report_status(status: Any, ok: Any) -> bool:
+    try:
+        numeric_status = int(status) if status is not None else None
+    except (TypeError, ValueError):
+        numeric_status = None
+    if ok is False:
+        return True
+    return numeric_status is not None and numeric_status >= 400
+
+
+def _build_failed_rest_artifact(extraction: dict[str, Any]) -> dict[str, Any]:
+    summary = extraction.get("summary", {})
+    source = {
+        "report_id": SECURITY_ASSESSMENT_REPORT_ID,
+        "report_name": summary.get("report_name") or "Security Assessment",
+        "source_endpoint": extraction.get("report", {}).get("url"),
+        "http_status": summary.get("report_http_status"),
+        "ok": summary.get("report_ok"),
+        "report_http_status": summary.get("report_http_status"),
+        "report_ok": summary.get("report_ok"),
+    }
+    return {
+        "artifact_type": "security_assessment",
+        "source_type": "rest",
+        "imported_at": collected_at(),
+        "finding_count": 0,
+        "status_counts": {"Critical": 0, "Warning": 0, "Info": 0, "Good": 0},
+        "sections": [],
+        "findings": [],
+        "source": source,
+    }
 
 
 def _finding_preview(findings: Any) -> str:
