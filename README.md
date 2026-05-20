@@ -130,7 +130,7 @@ Quick HC itself now uses full-width expandable subject tiles, per-section cards,
 
 The current refactor direction is registry-first rather than renderer-first. Quick HC tile and section metadata is beginning to move into shared dataclasses and a central registry so new subjects can be added with less duplication across routes, templates, and report composition code, while preserving the existing customer-facing UX.
 
-The next extraction step is now in place on the overview template as well: the repeated outer Quick HC subject-card shell is rendered through a shared partial, and the reusable section-card wrapper now lives in its own partial too. Preview extraction now covers CommCell, Security Assessment, License Summary, Client Growth, and Capacity License via explicit partials, so the remaining work can focus on cleaner preview orchestration rather than more structural duplication.
+The next extraction step is now in place on the overview template as well: the repeated outer Quick HC subject-card shell is rendered through a shared partial, and the reusable section-card wrapper now lives in its own partial too. Preview extraction now covers CommCell, Security Assessment, License Summary, Client Growth, and Capacity License via explicit partials, and the current platform layer now hardens that structure with explicit preview-builder and report-builder mappings keyed by registry metadata rather than ad hoc per-route wiring.
 
 Because Quick HC now depends on a registry-first metadata contract, dedicated integrity tests now verify tile IDs, section IDs, required tile metadata, default-selection safety, and alignment between the registry and report-service selection constants before any renderer abstraction is introduced.
 
@@ -160,7 +160,7 @@ src/cvhealthcheck/web/templates/
 
 The current registry layer uses two shared dataclasses:
 
-- `TileDefinition`: subject-level metadata such as tile ID, title, subtitle, source type, service name, artifact type, preview renderer name, report renderer name, and detail endpoint.
+- `TileDefinition`: subject-level metadata such as tile ID, title, subtitle/description, source type, service name, artifact type, preview renderer name, report renderer name, detail endpoint, and registry-derived section/default-selection helpers.
 - `SectionDefinition`: nested report-section metadata such as stable section ID, label, default-selection flag, and logical renderer names.
 
 Current boundaries are intentional:
@@ -168,7 +168,7 @@ Current boundaries are intentional:
 - `quickhc/models.py`: shared Quick HC metadata models only.
 - `quickhc/registry.py`: the single source of truth for tile IDs, section IDs, labels, subtitles, default selections, and logical renderer names.
 - `quickhc/report_service.py`: backend report composition and filtering only.
-- `quickhc/overview_service.py`: overview-only preview shaping for the `/quick-hc` dashboard.
+- `quickhc/overview_service.py`: overview-only preview shaping for the `/quick-hc` dashboard, including the explicit preview-renderer mapping that turns tile metadata into preview payloads.
 - `web/routes/quick_hc.py`: thin route layer that passes already-shaped data into templates.
 - `web/templates/quick_hc.html`: top-level overview composition only.
 - `web/templates/partials/quickhc_tile.html`: reusable outer tile shell.
@@ -178,11 +178,12 @@ Current boundaries are intentional:
 The current extension model for future tiles is:
 
 1. Add or update `TileDefinition` and `SectionDefinition` entries in `quickhc/registry.py`.
-2. Keep `report_service.py` as the backend source of filtered report data.
-3. Add a subject preview partial when a new overview subject needs one.
-4. Wire preview rendering explicitly rather than dynamically until renderer orchestration is formalized.
+2. Register a preview builder and a report builder that consume the tile metadata contract instead of duplicating tile IDs or labels elsewhere.
+3. Keep `report_service.py` as the backend source of filtered report data.
+4. Add a subject preview partial when a new overview subject needs one.
+5. Keep renderer orchestration explicit rather than dynamically resolving Jinja templates from registry values.
 
-The next logical phase is controlled renderer orchestration. That should use an explicit renderer mapping between logical renderer names and concrete template/handler functions, rather than direct dynamic Jinja includes.
+The next logical phase remains controlled renderer orchestration. The platform now has the first hardened version of that boundary through explicit Python-side renderer mappings; the remaining work is to formalize those mappings further without switching to direct dynamic Jinja includes.
 
 Longer term, the same registry-first model is intended to align Quick HC with broader orchestration surfaces such as scheduled reporting, future MCP-driven report assembly, and eventually multi-surface report composition without duplicating tile metadata in each layer.
 

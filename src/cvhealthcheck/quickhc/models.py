@@ -61,3 +61,15 @@ class TileDefinition:
     @property
     def effective_report_label(self) -> str:
         return self.report_label or self.title
+
+    @property
+    def description(self) -> str:
+        return self.subtitle
+
+    @property
+    def section_ids(self) -> tuple[str, ...]:
+        return tuple(section.id for section in self.sections)
+
+    @property
+    def default_section_ids(self) -> tuple[str, ...]:
+        return tuple(section.id for section in self.sections if section.default_selected)

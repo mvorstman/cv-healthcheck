@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from cvhealthcheck.license_summary.service import LicenseSummaryService
 from cvhealthcheck.metrics import (
@@ -9,7 +9,8 @@ from cvhealthcheck.metrics import (
     get_client_growth_summary,
 )
 from cvhealthcheck.quickhc.commcell import normalize_commserv
-from cvhealthcheck.quickhc.registry import QUICK_HC_TILE_BY_ID
+from cvhealthcheck.quickhc.models import TileDefinition
+from cvhealthcheck.quickhc.registry import QUICK_HC_TILE_BY_ID, QUICK_HC_TILES
 from cvhealthcheck.quickhc.report_service import (
     REPORT_OVERVIEW_DEFAULT_SELECTION_IDS,
     REPORT_SUBSECTION_OPTIONS,
@@ -18,24 +19,54 @@ from cvhealthcheck.reportsplus.catalog import catalog_status, read_json
 from cvhealthcheck.reportsplus.security_assessment import security_assessment_quick_hc
 
 
+OverviewPreviewBuilder = Callable[[TileDefinition], dict[str, Any]]
+
+
+OVERVIEW_PREVIEW_BUILDERS: dict[str, OverviewPreviewBuilder] = {}
+OVERVIEW_CONTEXT_KEYS: dict[str, str] = {
+    "environment": "commcell_preview",
+    "security_assessment": "security_assessment",
+    "license_summary": "license_summary",
+    "client_growth": "client_growth",
+    "capacity_license": "capacity_license",
+}
+
+
 def build_quick_hc_overview_context() -> dict[str, Any]:
+    tile_previews = build_quick_hc_tile_previews()
     return {
         "commcell_status": catalog_status(
             "commserv.json",
             catalog_dir=Path("data/catalog/rest"),
         ),
-        "commcell_preview": commcell_quick_hc_preview(),
-        "security_assessment": security_assessment_quick_hc_preview(),
-        "license_summary": license_summary_quick_hc_preview(),
-        "client_growth": client_growth_quick_hc_preview(),
-        "capacity_license": capacity_license_quick_hc_preview(),
+        "quick_hc_tile_previews": tile_previews,
         "quick_hc_tiles": QUICK_HC_TILE_BY_ID,
         "selected_report_sections": REPORT_OVERVIEW_DEFAULT_SELECTION_IDS,
         "report_subsection_options": REPORT_SUBSECTION_OPTIONS,
+        **{
+            context_key: tile_previews[tile_id]
+            for tile_id, context_key in OVERVIEW_CONTEXT_KEYS.items()
+        },
     }
 
 
-def commcell_quick_hc_preview() -> dict[str, Any]:
+def build_quick_hc_tile_previews(
+    tiles: tuple[TileDefinition, ...] = QUICK_HC_TILES,
+) -> dict[str, dict[str, Any]]:
+    return {
+        tile.id: build_quick_hc_tile_preview(tile)
+        for tile in tiles
+    }
+
+
+def build_quick_hc_tile_preview(tile: TileDefinition) -> dict[str, Any]:
+    builder = OVERVIEW_PREVIEW_BUILDERS.get(tile.preview_renderer)
+    if builder is None:
+        raise KeyError(f"No Quick HC overview preview builder registered for {tile.id}")
+    return builder(tile)
+
+
+def commcell_quick_hc_preview(tile: TileDefinition | None = None) -> dict[str, Any]:
     try:
         payload = read_json("commserv.json", catalog_dir=Path("data/catalog/rest"))
     except FileNotFoundError:
@@ -66,11 +97,15 @@ def commcell_quick_hc_preview() -> dict[str, Any]:
     }
 
 
-def security_assessment_quick_hc_preview() -> dict[str, Any]:
+def security_assessment_quick_hc_preview(
+    tile: TileDefinition | None = None,
+) -> dict[str, Any]:
     return security_assessment_quick_hc()
 
 
-def license_summary_quick_hc_preview() -> dict[str, Any]:
+def license_summary_quick_hc_preview(
+    tile: TileDefinition | None = None,
+) -> dict[str, Any]:
     try:
         payload = LicenseSummaryService().get_current()
     except FileNotFoundError:
@@ -169,7 +204,9 @@ def license_summary_quick_hc_preview() -> dict[str, Any]:
     }
 
 
-def client_growth_quick_hc_preview() -> dict[str, Any]:
+def client_growth_quick_hc_preview(
+    tile: TileDefinition | None = None,
+) -> dict[str, Any]:
     try:
         summary = get_client_growth_summary(live=False)
     except FileNotFoundError:
@@ -199,7 +236,9 @@ def client_growth_quick_hc_preview() -> dict[str, Any]:
     }
 
 
-def capacity_license_quick_hc_preview() -> dict[str, Any]:
+def capacity_license_quick_hc_preview(
+    tile: TileDefinition | None = None,
+) -> dict[str, Any]:
     try:
         metric = get_capacity_license_usage(live=False)
     except FileNotFoundError:
@@ -232,3 +271,14 @@ def capacity_license_quick_hc_preview() -> dict[str, Any]:
             else "No capacity rows are available."
         ),
     }
+
+
+OVERVIEW_PREVIEW_BUILDERS.update(
+    {
+        "commcell_preview": commcell_quick_hc_preview,
+        "security_assessment_preview": security_assessment_quick_hc_preview,
+        "license_summary_preview": license_summary_quick_hc_preview,
+        "client_growth_preview": client_growth_quick_hc_preview,
+        "capacity_license_preview": capacity_license_quick_hc_preview,
+    }
+)

@@ -9,6 +9,8 @@ from cvhealthcheck.quickhc.registry import (
     report_overview_default_selection_ids,
     report_subsection_options,
 )
+from cvhealthcheck.quickhc.overview_service import OVERVIEW_PREVIEW_BUILDERS
+from cvhealthcheck.quickhc.report_service import QuickHcReportService
 from cvhealthcheck.quickhc.report_service import (
     REPORT_OVERVIEW_DEFAULT_SELECTION_IDS,
     REPORT_SELECTION_IDS,
@@ -41,6 +43,7 @@ def test_every_tile_has_required_metadata() -> None:
         assert tile.id
         assert tile.title
         assert tile.subtitle
+        assert tile.description == tile.subtitle
         assert tile.source_type
         assert tile.source_service
         assert tile.artifact_type
@@ -60,7 +63,13 @@ def test_every_default_selected_section_belongs_to_its_tile() -> None:
             for section in tile.sections
             if section.default_selected
         }
+        assert set(tile.default_section_ids) == default_section_ids
         assert default_section_ids.issubset({section.id for section in tile.sections})
+
+
+def test_tile_section_ids_property_matches_registry_order() -> None:
+    for tile in QUICK_HC_TILES:
+        assert tile.section_ids == tuple(section.id for section in tile.sections)
 
 
 def test_tile_by_id_contains_all_quick_hc_tiles() -> None:
@@ -95,3 +104,14 @@ def test_report_service_selection_contract_matches_registry() -> None:
     assert REPORT_SELECTION_IDS == QUICK_HC_SELECTION_IDS
     assert REPORT_OVERVIEW_DEFAULT_SELECTION_IDS == report_overview_default_selection_ids()
     assert REPORT_OVERVIEW_DEFAULT_SELECTION_IDS.issubset(REPORT_SELECTION_IDS)
+
+
+def test_every_tile_preview_renderer_has_registered_builder() -> None:
+    for tile in QUICK_HC_TILES:
+        assert tile.preview_renderer in OVERVIEW_PREVIEW_BUILDERS
+
+
+def test_every_tile_report_renderer_has_registered_builder() -> None:
+    builder_names = set(QuickHcReportService()._report_builders())
+    for tile in QUICK_HC_TILES:
+        assert tile.report_renderer in builder_names

@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation
 from datetime import UTC, datetime
 import re
-from typing import Any
+from typing import Any, Callable
 
 from flask import has_app_context, url_for
 
@@ -13,29 +13,18 @@ from cvhealthcheck.metrics import (
     get_capacity_license_usage,
     get_client_growth_summary,
 )
+from cvhealthcheck.quickhc.models import TileDefinition
 from cvhealthcheck.quickhc.registry import (
     CAPACITY_LICENSE_SELECTION_ID,
-    CAPACITY_LICENSE_SUMMARY_SECTION_ID,
-    CAPACITY_LICENSE_TABLE_SECTION_ID,
-    CLIENT_GROWTH_CHART_SECTION_ID,
-    CLIENT_GROWTH_MONTHLY_TABLE_SECTION_ID,
     CLIENT_GROWTH_SELECTION_ID,
-    CLIENT_GROWTH_SUMMARY_SECTION_ID,
-    ENVIRONMENT_METADATA_SECTION_ID,
     ENVIRONMENT_SELECTION_ID,
-    LICENSE_SUMMARY_AGENT_FEATURE_LICENSES_SECTION_ID,
-    LICENSE_SUMMARY_METADATA_SECTION_ID,
-    LICENSE_SUMMARY_OTHER_LICENSES_SECTION_ID,
     LICENSE_SUMMARY_SELECTION_ID,
-    LICENSE_SUMMARY_WORKLOAD_SECTION_ID,
     QUICK_HC_TILE_BY_ID,
+    QUICK_HC_TILES,
     QUICK_HC_SECTION_IDS,
     QUICK_HC_SELECTION_IDS,
     QUICK_HC_SUBJECT_IDS,
-    SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
-    SECURITY_ASSESSMENT_HIGHLIGHTS_SECTION_ID,
     SECURITY_ASSESSMENT_SELECTION_ID,
-    SECURITY_ASSESSMENT_SUMMARY_SECTION_ID,
     report_overview_default_selection_ids,
     report_subsection_options,
 )
@@ -51,6 +40,7 @@ REPORT_SECTION_IDS = QUICK_HC_SECTION_IDS
 REPORT_SELECTION_IDS = QUICK_HC_SELECTION_IDS
 REPORT_OVERVIEW_DEFAULT_SELECTION_IDS = report_overview_default_selection_ids()
 REPORT_DEFAULT_SUBJECT_SELECTION_IDS = QUICK_HC_SUBJECT_IDS
+ReportTileBuilder = Callable[[TileDefinition, dict[str, dict[str, Any]]], dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -102,49 +92,74 @@ class QuickHcReportService:
         )
 
     def _build_full_report(self) -> dict[str, Any]:
-        security_assessment = self._build_security_assessment_section()
-        license_summary = self._build_license_summary_section()
-        client_growth = self._build_client_growth_section()
-        capacity_license = self._build_capacity_license_section()
-        environment = self._build_environment(
-            security_assessment.get("artifact"),
-            license_summary.get("artifact"),
+        sections: dict[str, dict[str, Any]] = {}
+        for tile in QUICK_HC_TILES:
+            if tile.id == ENVIRONMENT_SELECTION_ID:
+                continue
+            sections[tile.id] = self._build_tile_section(tile, sections)
+        sections[ENVIRONMENT_SELECTION_ID] = self._build_tile_section(
+            QUICK_HC_TILE_BY_ID[ENVIRONMENT_SELECTION_ID],
+            sections,
         )
         evidence = [
             item
             for item in (
-                security_assessment.get("evidence"),
-                license_summary.get("evidence"),
-                client_growth.get("evidence"),
-                capacity_license.get("evidence"),
+                sections[SECURITY_ASSESSMENT_SELECTION_ID].get("evidence"),
+                sections[LICENSE_SUMMARY_SELECTION_ID].get("evidence"),
+                sections[CLIENT_GROWTH_SELECTION_ID].get("evidence"),
+                sections[CAPACITY_LICENSE_SELECTION_ID].get("evidence"),
             )
             if item is not None
         ]
         return {
             "title": "Quick HealthCheck Report",
             "generated_at": _now_iso(),
-            "environment": environment,
-            "security_assessment": security_assessment,
-            "license_summary": license_summary,
-            "client_growth": client_growth,
-            "capacity_license": capacity_license,
+            ENVIRONMENT_SELECTION_ID: sections[ENVIRONMENT_SELECTION_ID],
+            SECURITY_ASSESSMENT_SELECTION_ID: sections[SECURITY_ASSESSMENT_SELECTION_ID],
+            LICENSE_SUMMARY_SELECTION_ID: sections[LICENSE_SUMMARY_SELECTION_ID],
+            CLIENT_GROWTH_SELECTION_ID: sections[CLIENT_GROWTH_SELECTION_ID],
+            CAPACITY_LICENSE_SELECTION_ID: sections[CAPACITY_LICENSE_SELECTION_ID],
             "evidence": evidence,
         }
 
-    def _build_security_assessment_section(self) -> dict[str, Any]:
+    def _report_builders(self) -> dict[str, ReportTileBuilder]:
+        return {
+            "environment_report": self._build_environment_section,
+            "security_assessment_report": self._build_security_assessment_section,
+            "license_summary_report": self._build_license_summary_section,
+            "client_growth_report": self._build_client_growth_section,
+            "capacity_license_report": self._build_capacity_license_section,
+        }
+
+    def _build_tile_section(
+        self,
+        tile: TileDefinition,
+        built_sections: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        builder = self._report_builders().get(tile.report_renderer)
+        if builder is None:
+            raise KeyError(f"No Quick HC report builder registered for {tile.id}")
+        return builder(tile, built_sections)
+
+    def _build_security_assessment_section(
+        self,
+        tile: TileDefinition,
+        _built_sections: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        summary_section, highlights_section, all_findings_section = tile.sections
         try:
             artifact = self.security_assessment_service.get_current()
         except FileNotFoundError:
             return {
                 "available": False,
-                "title": "Security Assessment",
+                "title": tile.effective_report_label,
                 "message": "Not collected yet",
-                "detail_url": _detail_url_for(SECURITY_ASSESSMENT_SELECTION_ID),
+                "detail_url": _detail_url_for_tile(tile),
                 "artifact": None,
                 "evidence": None,
-                "summary_section_id": SECURITY_ASSESSMENT_SUMMARY_SECTION_ID,
-                "highlights_section_id": SECURITY_ASSESSMENT_HIGHLIGHTS_SECTION_ID,
-                "all_findings_section_id": SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
+                "summary_section_id": summary_section.id,
+                "highlights_section_id": highlights_section.id,
+                "all_findings_section_id": all_findings_section.id,
                 "sections": [],
                 "highlight_rows": [],
             }
@@ -175,8 +190,8 @@ class QuickHcReportService:
             )
         return {
             "available": True,
-            "title": "Security Assessment",
-            "detail_url": _detail_url_for(SECURITY_ASSESSMENT_SELECTION_ID),
+            "title": tile.effective_report_label,
+            "detail_url": _detail_url_for_tile(tile),
             "artifact": artifact,
             "source_type": artifact.get("source_type"),
             "imported_at": artifact.get("imported_at"),
@@ -187,9 +202,9 @@ class QuickHcReportService:
             "warning": counters.get("Warning", 0),
             "info": counters.get("Info", 0),
             "good": counters.get("Good", 0),
-            "summary_section_id": SECURITY_ASSESSMENT_SUMMARY_SECTION_ID,
-            "highlights_section_id": SECURITY_ASSESSMENT_HIGHLIGHTS_SECTION_ID,
-            "all_findings_section_id": SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
+            "summary_section_id": summary_section.id,
+            "highlights_section_id": highlights_section.id,
+            "all_findings_section_id": all_findings_section.id,
             "source_metadata": dict(
                 artifact.get("source_metadata") or artifact.get("source") or {}
             ),
@@ -205,21 +220,31 @@ class QuickHcReportService:
             ).to_dict(),
         }
 
-    def _build_license_summary_section(self) -> dict[str, Any]:
+    def _build_license_summary_section(
+        self,
+        tile: TileDefinition,
+        _built_sections: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        (
+            metadata_section,
+            workload_section,
+            other_licenses_section,
+            agent_feature_section,
+        ) = tile.sections
         try:
             artifact = self.license_summary_service.get_current()
         except FileNotFoundError:
             return {
                 "available": False,
-                "title": "License Summary",
+                "title": tile.effective_report_label,
                 "message": "Not collected yet",
-                "detail_url": _detail_url_for(LICENSE_SUMMARY_SELECTION_ID),
+                "detail_url": _detail_url_for_tile(tile),
                 "artifact": None,
                 "evidence": None,
-                "metadata_section_id": LICENSE_SUMMARY_METADATA_SECTION_ID,
-                "workload_section_id": LICENSE_SUMMARY_WORKLOAD_SECTION_ID,
-                "other_licenses_section_id": LICENSE_SUMMARY_OTHER_LICENSES_SECTION_ID,
-                "agent_feature_section_id": LICENSE_SUMMARY_AGENT_FEATURE_LICENSES_SECTION_ID,
+                "metadata_section_id": metadata_section.id,
+                "workload_section_id": workload_section.id,
+                "other_licenses_section_id": other_licenses_section.id,
+                "agent_feature_section_id": agent_feature_section.id,
                 "workload_sections": [],
                 "other_license_rows": [],
                 "agent_feature_rows": [],
@@ -309,18 +334,18 @@ class QuickHcReportService:
 
         return {
             "available": True,
-            "title": "License Summary",
-            "detail_url": _detail_url_for(LICENSE_SUMMARY_SELECTION_ID),
+            "title": tile.effective_report_label,
+            "detail_url": _detail_url_for_tile(tile),
             "artifact": artifact,
             "source_type": artifact.get("source_type"),
             "imported_at": artifact.get("imported_at"),
             "generated_on": artifact.get("generated_on"),
             "loaded_from_path": artifact.get("loaded_from_path"),
             "license_expiry": artifact.get("license_expiry"),
-            "metadata_section_id": LICENSE_SUMMARY_METADATA_SECTION_ID,
-            "workload_section_id": LICENSE_SUMMARY_WORKLOAD_SECTION_ID,
-            "other_licenses_section_id": LICENSE_SUMMARY_OTHER_LICENSES_SECTION_ID,
-            "agent_feature_section_id": LICENSE_SUMMARY_AGENT_FEATURE_LICENSES_SECTION_ID,
+            "metadata_section_id": metadata_section.id,
+            "workload_section_id": workload_section.id,
+            "other_licenses_section_id": other_licenses_section.id,
+            "agent_feature_section_id": agent_feature_section.id,
             "workload_summary_section_count": len(workload_sections),
             "other_license_row_count": len(other_license_rows),
             "agent_feature_license_row_count": len(agent_feature_rows),
@@ -340,11 +365,14 @@ class QuickHcReportService:
             ).to_dict(),
         }
 
-    def _build_environment(
+    def _build_environment_section(
         self,
-        security_artifact: dict[str, Any] | None,
-        license_artifact: dict[str, Any] | None,
+        tile: TileDefinition,
+        built_sections: dict[str, dict[str, Any]],
     ) -> dict[str, Any]:
+        security_artifact = built_sections.get(SECURITY_ASSESSMENT_SELECTION_ID, {}).get("artifact")
+        license_artifact = built_sections.get(LICENSE_SUMMARY_SELECTION_ID, {}).get("artifact")
+        metadata_section = tile.sections[0]
         rows = [
             {
                 "label": "Customer ID",
@@ -368,7 +396,9 @@ class QuickHcReportService:
             },
         ]
         return {
-            "metadata_section_id": ENVIRONMENT_METADATA_SECTION_ID,
+            "title": tile.effective_report_label,
+            "detail_url": _detail_url_for_tile(tile),
+            "metadata_section_id": metadata_section.id,
             "customer_id": rows[0]["value"],
             "commcell_id": rows[1]["value"],
             "commcell_name": rows[2]["value"],
@@ -376,24 +406,29 @@ class QuickHcReportService:
             "rows": rows,
         }
 
-    def _build_client_growth_section(self) -> dict[str, Any]:
+    def _build_client_growth_section(
+        self,
+        tile: TileDefinition,
+        _built_sections: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        summary_section, chart_section, monthly_table_section = tile.sections
         try:
             artifact = get_client_growth_summary(live=False)
         except FileNotFoundError:
             return {
                 "available": False,
                 "requested": False,
-                "title": "Client Growth",
+                "title": tile.effective_report_label,
                 "message": "Not collected yet",
-                "detail_url": _detail_url_for(CLIENT_GROWTH_SELECTION_ID),
+                "detail_url": _detail_url_for_tile(tile),
                 "evidence": None,
                 "record_count": 0,
                 "history_range": None,
                 "latest_record": None,
                 "rows": [],
-                "summary_section_id": CLIENT_GROWTH_SUMMARY_SECTION_ID,
-                "chart_section_id": CLIENT_GROWTH_CHART_SECTION_ID,
-                "monthly_table_section_id": CLIENT_GROWTH_MONTHLY_TABLE_SECTION_ID,
+                "summary_section_id": summary_section.id,
+                "chart_section_id": chart_section.id,
+                "monthly_table_section_id": monthly_table_section.id,
             }
 
         records = list(artifact.get("records") or [])
@@ -414,9 +449,9 @@ class QuickHcReportService:
         return {
             "available": True,
             "requested": False,
-            "title": "Client Growth",
+            "title": tile.effective_report_label,
             "description": "Client Growth summarizes how the protected client count has changed over the recorded period.",
-            "detail_url": _detail_url_for(CLIENT_GROWTH_SELECTION_ID),
+            "detail_url": _detail_url_for_tile(tile),
             "imported_at": artifact.get("collected_at"),
             "record_count": int(artifact.get("record_count") or 0),
             "history_range": artifact.get("history_range"),
@@ -426,9 +461,9 @@ class QuickHcReportService:
             "net_growth": net_growth,
             "chart": chart,
             "rows": records,
-            "summary_section_id": CLIENT_GROWTH_SUMMARY_SECTION_ID,
-            "chart_section_id": CLIENT_GROWTH_CHART_SECTION_ID,
-            "monthly_table_section_id": CLIENT_GROWTH_MONTHLY_TABLE_SECTION_ID,
+            "summary_section_id": summary_section.id,
+            "chart_section_id": chart_section.id,
+            "monthly_table_section_id": monthly_table_section.id,
             "evidence": ReportEvidence(
                 artifact_type="client_growth",
                 source_type="metric_artifact",
@@ -438,23 +473,28 @@ class QuickHcReportService:
             ).to_dict(),
         }
 
-    def _build_capacity_license_section(self) -> dict[str, Any]:
+    def _build_capacity_license_section(
+        self,
+        tile: TileDefinition,
+        _built_sections: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        summary_section, table_section = tile.sections
         try:
             artifact = get_capacity_license_usage(live=False)
         except FileNotFoundError:
             return {
                 "available": False,
                 "requested": False,
-                "title": "Capacity License",
+                "title": tile.effective_report_label,
                 "message": "Not collected yet",
-                "detail_url": _detail_url_for(CAPACITY_LICENSE_SELECTION_ID),
+                "detail_url": _detail_url_for_tile(tile),
                 "evidence": None,
                 "record_count": 0,
                 "history_range": None,
                 "latest_month": None,
                 "latest_rows": [],
-                "summary_section_id": CAPACITY_LICENSE_SUMMARY_SECTION_ID,
-                "table_section_id": CAPACITY_LICENSE_TABLE_SECTION_ID,
+                "summary_section_id": summary_section.id,
+                "table_section_id": table_section.id,
             }
 
         records = list(artifact.get("records") or [])
@@ -464,9 +504,9 @@ class QuickHcReportService:
         return {
             "available": True,
             "requested": False,
-            "title": "Capacity License",
+            "title": tile.effective_report_label,
             "message": "Not collected yet",
-            "detail_url": _detail_url_for(CAPACITY_LICENSE_SELECTION_ID),
+            "detail_url": _detail_url_for_tile(tile),
             "source_type": "metric_artifact",
             "imported_at": artifact.get("collected_at"),
             "generated_on": None,
@@ -474,8 +514,8 @@ class QuickHcReportService:
             "history_range": history_range,
             "latest_month": latest_month,
             "latest_rows": latest_rows,
-            "summary_section_id": CAPACITY_LICENSE_SUMMARY_SECTION_ID,
-            "table_section_id": CAPACITY_LICENSE_TABLE_SECTION_ID,
+            "summary_section_id": summary_section.id,
+            "table_section_id": table_section.id,
             "evidence": ReportEvidence(
                 artifact_type="capacity_license",
                 source_type="metric_artifact",
@@ -718,13 +758,12 @@ class QuickHcReportService:
         }
 
     def _default_report_selection_ids(self, report: dict[str, Any]) -> set[str]:
+        client_growth_tile = QUICK_HC_TILE_BY_ID[CLIENT_GROWTH_SELECTION_ID]
+        capacity_license_tile = QUICK_HC_TILE_BY_ID[CAPACITY_LICENSE_SELECTION_ID]
         selection_ids: set[str] = {
             report["environment"]["metadata_section_id"],
-            CLIENT_GROWTH_SUMMARY_SECTION_ID,
-            CLIENT_GROWTH_CHART_SECTION_ID,
-            CLIENT_GROWTH_MONTHLY_TABLE_SECTION_ID,
-            CAPACITY_LICENSE_SUMMARY_SECTION_ID,
-            CAPACITY_LICENSE_TABLE_SECTION_ID,
+            *client_growth_tile.default_section_ids,
+            *capacity_license_tile.default_section_ids,
         }
 
         security = report["security_assessment"]
@@ -764,6 +803,10 @@ def _first_value(*payloads: dict[str, Any] | None, key: str) -> str | None:
 
 def _detail_url_for(tile_id: str) -> str | None:
     tile = QUICK_HC_TILE_BY_ID.get(tile_id)
+    return _detail_url_for_tile(tile)
+
+
+def _detail_url_for_tile(tile: TileDefinition | None) -> str | None:
     endpoint = tile.detail_endpoint if tile else None
     if not endpoint:
         return None

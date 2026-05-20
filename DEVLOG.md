@@ -22,6 +22,11 @@
 
 ## 2026-05-20
 
+- Hardened the Quick HC tile platform without changing current UI behavior or customer-facing report output.
+- Added small tile-contract helpers on `TileDefinition` so description and section/default-selection access stay registry-derived rather than reassembled ad hoc.
+- Switched `quickhc/overview_service.py` to build tile previews through an explicit preview-builder mapping keyed by each tile's `preview_renderer`, while still exporting the existing template context keys for backward compatibility.
+- Switched `quickhc/report_service.py` to build report sections through an explicit report-builder mapping keyed by each tile's `report_renderer`, so titles, detail endpoints, and section IDs are consumed from registry metadata more consistently.
+- Added regression coverage to verify all current tile preview renderers and report renderers are registered and that metadata-driven preview dispatch works for a synthetic tile.
 - Started the Phase 2 structural cleanup without changing Quick HC behavior or visuals.
 - Moved Quick HC overview preview orchestration out of `web/routes/shared.py` into `quickhc/overview_service.py`.
 - Kept Flask routes thin by switching the `/quick-hc` overview route to consume the new overview service rather than building all tile preview payloads out of the shared route module.
