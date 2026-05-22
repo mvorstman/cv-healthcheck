@@ -565,6 +565,16 @@ def test_quick_hc_workspace_sections_match_registry_contract_for_all_tiles(
         assert actual_section_ids == tile.section_ids
 
 
+def test_quick_hc_renderer_scopes_commcell_metadata_to_environment_tile() -> None:
+    app = create_app()
+    response = app.test_client().get("/static/quick_hc.js")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "s.id === 'environment' && CC.exists" in body
+    assert "shown for all subjects" not in body
+
+
 def test_quick_hc_overview_license_summary_previews_real_fields(
     tmp_path, monkeypatch
 ) -> None:

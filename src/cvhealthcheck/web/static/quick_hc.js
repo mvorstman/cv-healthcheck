@@ -62,17 +62,13 @@ function renderLeft() {
       <div class="cat-hdr" onclick="toggleCat('${cat.id}',this)">
         <span class="cat-icon">${cat.icon}</span>
         <span class="cat-label">${esc(cat.name)}</span>
-        <span class="cat-chev ${cat.open ? 'open' : ''}">▶</span>
       </div>
       <div class="cat-body" id="cb-${cat.id}" style="max-height:${cat.open ? '2000px' : '0'}">`;
     cat.subjects.forEach(s => {
-      const bc = s.state === 'ok' ? 'b-ok' : s.state === 'issues' ? 'b-issues' : 'b-nodata';
-      const bi = s.state === 'ok' ? '✓' : s.state === 'issues' ? '!' : '';
       const isActive = s.id === activeId && mode === 'config';
       h += `<div class="subj-row${isActive ? ' active' : ''}" id="sr-${s.id}">
-        <input type="checkbox" class="subj-cb" ${s.included ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleInclude('${s.id}',this.checked)" title="Include in report">
         <span class="subj-name" onclick="openConfig('${s.id}')">${esc(s.name)}</span>
-        <span class="subj-badge ${bc}">${bi}</span>
+        <input type="checkbox" class="subj-cb" ${s.included ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleInclude('${s.id}',this.checked)" title="Include in report">
       </div>`;
     });
     h += `</div></div>`;
@@ -86,7 +82,6 @@ function toggleCat(id, el) {
   const cat = CATS.find(c => c.id === id);
   cat.open = !cat.open;
   document.getElementById('cb-' + id).style.maxHeight = cat.open ? '2000px' : '0';
-  el.querySelector('.cat-chev').classList.toggle('open', cat.open);
 }
 
 function toggleInclude(id, val) {
@@ -284,9 +279,9 @@ function openConfig(id) {
     srcPanel += `</div>`;
   }
 
-  // Identity tile (CommCell context, shown for all subjects)
+  // Identity tile (CommCell context, only shown for the CommCell subject)
   let identityRows = '';
-  if (CC.exists) {
+  if (s.id === 'environment' && CC.exists) {
     const rows = [
       {k:'CommCell Name', v: CC.name || '—'},
       {k:'Version', v: CC.version || '—'},
