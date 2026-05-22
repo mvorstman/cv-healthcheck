@@ -38,6 +38,13 @@ class SectionDefinition:
 
 
 @dataclass(frozen=True)
+class SourceDefinition:
+    id: str
+    label: str
+    description: str
+
+
+@dataclass(frozen=True)
 class TileDefinition:
     id: str
     title: str
@@ -47,6 +54,7 @@ class TileDefinition:
     artifact_type: str
     preview_renderer: str
     report_renderer: str
+    sources: tuple[SourceDefinition, ...]
     sections: tuple[SectionDefinition, ...]
     report_label: str | None = None
     detail_endpoint: str | None = None
@@ -73,3 +81,7 @@ class TileDefinition:
     @property
     def default_section_ids(self) -> tuple[str, ...]:
         return tuple(section.id for section in self.sections if section.default_selected)
+
+    @property
+    def source_ids(self) -> tuple[str, ...]:
+        return tuple(source.id for source in self.sources)

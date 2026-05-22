@@ -242,13 +242,19 @@ function openConfig(id) {
 
   // Footer
   const rf = document.getElementById('right-footer');
-  const srcName = {rest_api:'Direct REST API', rest_report:'REST Report', import:'Import File'};
+  const srcName = {
+    rest_command_center_api:'REST / Command Center API',
+    rest_reports_plus:'REST / Reports Plus',
+    json_import:'JSON import',
+    csv_import:'CSV import',
+    html_import:'HTML import',
+  };
   rf.style.display = 'flex';
   document.getElementById('rf-source').textContent = s.activeSource ? 'Source: ' + (srcName[s.activeSource] || s.activeSource) : '';
 
   // Source buttons
-  const sl = {v:'● Validated', n:'○ Not configured'};
-  const sc = {v:'ss-v', n:'ss-n'};
+  const sl = {v:'● Validated', a:'● Available', n:'○ Not configured', ni:'○ Not implemented'};
+  const sc = {v:'ss-v', a:'ss-v', n:'ss-n', ni:'ss-n'};
   const srcBtns = (s.sources || []).map(src =>
     `<button class="src-btn${s.activeSource === src.id ? ' src-active' : ''}" data-src="${src.id}" data-subj="${s.id}" onclick="setActiveSrc(this.dataset.subj,this.dataset.src)">${esc(src.name)}</button>`
   ).join('');
@@ -265,15 +271,16 @@ function openConfig(id) {
     } else {
       srcPanel += `<div class="src-meta-empty">No source metadata is available yet.</div>`;
     }
-    if (activeSrc.hasUpload && activeSrc.importUrl) {
+    const uploadAction = (activeSrc.actions || []).find(action => action.kind === 'upload' && action.importUrl);
+    if (uploadAction) {
       srcPanel += `<div class="src-upload">
-        <form method="post" action="${esc(activeSrc.importUrl)}" enctype="multipart/form-data" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <form method="post" action="${esc(uploadAction.importUrl)}" enctype="multipart/form-data" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <label class="btn-sm btn-sm-s" style="cursor:pointer">
             Choose File
-            <input type="file" name="${esc(activeSrc.importField || 'file')}" hidden accept=".html,.htm,.csv,.json" onchange="this.closest('.src-upload').querySelector('.src-filename').textContent=this.files[0]?this.files[0].name:''">
+            <input type="file" name="${esc(uploadAction.importField || 'file')}" hidden accept="${esc(uploadAction.accept || '.html,.htm,.csv,.json')}" onchange="this.closest('.src-upload').querySelector('.src-filename').textContent=this.files[0]?this.files[0].name:''">
           </label>
           <span class="src-filename"></span>
-          <button type="submit" class="btn-sm btn-sm-p">Import</button>
+          <button type="submit" class="btn-sm btn-sm-p">${esc(uploadAction.label || 'Import')}</button>
         </form>
       </div>`;
     }

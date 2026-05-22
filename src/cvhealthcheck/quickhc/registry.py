@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .models import SectionDefinition, TileDefinition
+from .models import SectionDefinition, SourceDefinition, TileDefinition
 
 
 ENVIRONMENT_SELECTION_ID = "environment"
@@ -9,6 +9,40 @@ LICENSE_SUMMARY_SELECTION_ID = "license_summary"
 CLIENT_GROWTH_SELECTION_ID = "client_growth"
 CAPACITY_LICENSE_SELECTION_ID = "capacity_license"
 BACKUP_JOB_SUMMARY_SELECTION_ID = "backup_job_summary"
+
+REST_COMMAND_CENTER_API_SOURCE_ID = "rest_command_center_api"
+REST_REPORTS_PLUS_SOURCE_ID = "rest_reports_plus"
+JSON_IMPORT_SOURCE_ID = "json_import"
+CSV_IMPORT_SOURCE_ID = "csv_import"
+HTML_IMPORT_SOURCE_ID = "html_import"
+
+UNIVERSAL_SOURCE_DEFINITIONS: tuple[SourceDefinition, ...] = (
+    SourceDefinition(
+        id=REST_COMMAND_CENTER_API_SOURCE_ID,
+        label="REST / Command Center API",
+        description="Live collection through Command Center API endpoints.",
+    ),
+    SourceDefinition(
+        id=REST_REPORTS_PLUS_SOURCE_ID,
+        label="REST / Reports Plus",
+        description="Live collection through Reports Plus report and dataset endpoints.",
+    ),
+    SourceDefinition(
+        id=JSON_IMPORT_SOURCE_ID,
+        label="JSON import",
+        description="Offline JSON import into the canonical Quick HC artifact contract.",
+    ),
+    SourceDefinition(
+        id=CSV_IMPORT_SOURCE_ID,
+        label="CSV import",
+        description="Offline CSV import into the canonical Quick HC artifact contract.",
+    ),
+    SourceDefinition(
+        id=HTML_IMPORT_SOURCE_ID,
+        label="HTML import",
+        description="Offline HTML import into the canonical Quick HC artifact contract.",
+    ),
+)
 
 ENVIRONMENT_METADATA_SECTION_ID = "environment.metadata"
 SECURITY_ASSESSMENT_SUMMARY_SECTION_ID = "security_assessment.summary"
@@ -60,6 +94,7 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         artifact_type="commcell",
         preview_renderer="commcell_preview",
         report_renderer="environment_report",
+        sources=UNIVERSAL_SOURCE_DEFINITIONS,
         detail_endpoint="main.quick_hc_commcell",
         sections=(
             SectionDefinition(
@@ -79,6 +114,7 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         artifact_type="security_assessment",
         preview_renderer="security_assessment_preview",
         report_renderer="security_assessment_report",
+        sources=UNIVERSAL_SOURCE_DEFINITIONS,
         detail_endpoint="main.quick_hc_security_assessment",
         collect_capable=True,
         import_capable=True,
@@ -148,6 +184,7 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         artifact_type="license_summary",
         preview_renderer="license_summary_preview",
         report_renderer="license_summary_report",
+        sources=UNIVERSAL_SOURCE_DEFINITIONS,
         detail_endpoint="main.quick_hc_license_summary",
         collect_capable=True,
         import_capable=True,
@@ -187,6 +224,7 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         artifact_type="client_growth",
         preview_renderer="client_growth_preview",
         report_renderer="client_growth_report",
+        sources=UNIVERSAL_SOURCE_DEFINITIONS,
         detail_endpoint="main.metrics_client_growth",
         sections=(
             SectionDefinition(
@@ -218,6 +256,7 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         artifact_type="capacity_license",
         preview_renderer="capacity_license_preview",
         report_renderer="capacity_license_report",
+        sources=UNIVERSAL_SOURCE_DEFINITIONS,
         detail_endpoint="main.metrics_capacity_license",
         sections=(
             SectionDefinition(
@@ -243,6 +282,7 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         artifact_type="backup_job_summary",
         preview_renderer="backup_job_summary_preview",
         report_renderer="backup_job_summary_report",
+        sources=UNIVERSAL_SOURCE_DEFINITIONS,
         detail_endpoint="main.quick_hc_backup_job_summary",
         sections=(
             SectionDefinition(

@@ -613,6 +613,12 @@ def test_quick_hc_renderer_uses_shared_data_source_card_structure() -> None:
     assert "src-meta-desc" in body
     assert "src-meta-empty" in body
     assert "No source metadata is available yet." in body
+    assert "rest_command_center_api" in body
+    assert "rest_reports_plus" in body
+    assert "json_import" in body
+    assert "csv_import" in body
+    assert "html_import" in body
+    assert "uploadAction" in body
 
 
 def test_quick_hc_renderer_does_not_repeat_subject_title_in_report_sections_panel() -> None:
@@ -688,20 +694,37 @@ def test_quick_hc_workspace_sources_use_standardized_shape_and_labels(
         for subject in category["subjects"]
     }
 
-    assert subjects["environment"]["sources"][0]["name"] == "Direct REST API"
-    assert subjects["security_assessment"]["sources"][0]["name"] == "REST / Reports Plus"
-    assert subjects["security_assessment"]["sources"][1]["name"] == "CSV / HTML import"
-    assert subjects["license_summary"]["sources"][0]["name"] == "REST / Reports Plus"
-    assert subjects["client_growth"]["sources"][0]["name"] == "REST / Reports Plus"
-    assert subjects["capacity_license"]["sources"][0]["name"] == "REST / Reports Plus"
-    assert subjects["backup_job_summary"]["sources"][0]["name"] == "REST / Reports Plus"
+    expected_source_ids = [
+        "rest_command_center_api",
+        "rest_reports_plus",
+        "json_import",
+        "csv_import",
+        "html_import",
+    ]
+    expected_source_names = [
+        "REST / Command Center API",
+        "REST / Reports Plus",
+        "JSON import",
+        "CSV import",
+        "HTML import",
+    ]
 
     for subject in subjects.values():
         assert subject["sources"]
+        assert [source["id"] for source in subject["sources"]] == expected_source_ids
+        assert [source["name"] for source in subject["sources"]] == expected_source_names
         for source in subject["sources"]:
-            assert set(source).issuperset({"id", "name", "desc", "status", "meta"})
-            assert source["status"] in {"v", "n"}
+            assert set(source).issuperset({"id", "name", "desc", "status", "meta", "actions"})
+            assert source["status"] in {"v", "a", "n", "ni"}
             assert isinstance(source["meta"], list)
+            assert isinstance(source["actions"], list)
+
+    assert subjects["security_assessment"]["activeSource"] == "rest_reports_plus"
+    assert subjects["license_summary"]["activeSource"] == "csv_import"
+    assert subjects["security_assessment"]["sources"][3]["actions"][0]["importUrl"] == "/quick-hc/security-assessment/import"
+    assert subjects["security_assessment"]["sources"][4]["actions"][0]["importUrl"] == "/quick-hc/security-assessment/import"
+    assert subjects["license_summary"]["sources"][3]["actions"][0]["importUrl"] == "/quick-hc/license-summary/import"
+    assert subjects["license_summary"]["sources"][4]["actions"][0]["importUrl"] == "/quick-hc/license-summary/import"
 
 
 def test_quick_hc_overview_license_summary_previews_real_fields(

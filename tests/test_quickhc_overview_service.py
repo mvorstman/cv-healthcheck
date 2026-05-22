@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from cvhealthcheck.quickhc.models import SectionDefinition, TileDefinition
+from cvhealthcheck.quickhc.registry import UNIVERSAL_SOURCE_DEFINITIONS
 from cvhealthcheck.quickhc import overview_service
 
 
@@ -90,6 +91,7 @@ def test_build_quick_hc_tile_previews_uses_tile_renderer_metadata() -> None:
         artifact_type="synthetic",
         preview_renderer="synthetic_preview",
         report_renderer="synthetic_report",
+        sources=UNIVERSAL_SOURCE_DEFINITIONS,
         sections=(
             SectionDefinition(
                 id="synthetic.summary",

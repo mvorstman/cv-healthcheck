@@ -12,6 +12,12 @@ from cvhealthcheck.reportsplus.catalog import read_json
 from cvhealthcheck.reportsplus.security_assessment import security_assessment_quick_hc
 from cvhealthcheck.quickhc.commcell import normalize_commserv
 from cvhealthcheck.quickhc.registry import (
+    CSV_IMPORT_SOURCE_ID,
+    HTML_IMPORT_SOURCE_ID,
+    JSON_IMPORT_SOURCE_ID,
+    QUICK_HC_TILE_BY_ID,
+    REST_COMMAND_CENTER_API_SOURCE_ID,
+    REST_REPORTS_PLUS_SOURCE_ID,
     SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME,
 )
 
@@ -175,38 +181,85 @@ def _source_item(
     *,
     status: str = "n",
     meta: list[dict[str, str]] | None = None,
-    has_upload: bool = False,
-    import_url: str | None = None,
-    import_field: str | None = None,
+    actions: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    item: dict[str, Any] = {
+    return {
         "id": source_id,
         "name": name,
         "desc": desc,
         "status": status,
         "meta": list(meta or []),
+        "actions": list(actions or []),
     }
-    if has_upload:
-        item["hasUpload"] = True
-    if import_url:
-        item["importUrl"] = import_url
-    if import_field:
-        item["importField"] = import_field
-    return item
+
+
+def _upload_action(
+    *,
+    import_url: str,
+    import_field: str,
+    accept: str = ".html,.htm,.csv,.json",
+    label: str = "Import",
+) -> dict[str, str]:
+    return {
+        "kind": "upload",
+        "label": label,
+        "importUrl": import_url,
+        "importField": import_field,
+        "accept": accept,
+    }
+
+
+def _build_tile_sources(
+    tile_id: str,
+    *,
+    active_source_id: str,
+    statuses: dict[str, str] | None = None,
+    meta: dict[str, list[dict[str, str]]] | None = None,
+    descriptions: dict[str, str] | None = None,
+    actions: dict[str, list[dict[str, str]]] | None = None,
+) -> list[dict[str, Any]]:
+    tile = QUICK_HC_TILE_BY_ID[tile_id]
+    status_map = dict(statuses or {})
+    meta_map = dict(meta or {})
+    description_map = dict(descriptions or {})
+    action_map = dict(actions or {})
+    return [
+        _source_item(
+            source.id,
+            source.label,
+            description_map.get(source.id, source.description),
+            status=status_map.get(source.id, "ni"),
+            meta=meta_map.get(source.id, []),
+            actions=action_map.get(source.id, []),
+        )
+        for source in tile.sources
+    ]
 
 
 def _build_environment_subject(cc: dict | None) -> dict:
     full_url = _try_url("main.quick_hc_commcell")
     if not cc:
         subj = _nodata_subject("environment", "CommCell Details", full_url)
-        subj["activeSource"] = "rest_api"
-        subj["sources"] = [
-            _source_item(
-                "rest_api",
-                "Direct REST API",
-                "Live call to the CommServ identity endpoint.",
-            )
-        ]
+        subj["activeSource"] = REST_COMMAND_CENTER_API_SOURCE_ID
+        subj["sources"] = _build_tile_sources(
+            "environment",
+            active_source_id=REST_COMMAND_CENTER_API_SOURCE_ID,
+            statuses={
+                REST_COMMAND_CENTER_API_SOURCE_ID: "n",
+                REST_REPORTS_PLUS_SOURCE_ID: "ni",
+                JSON_IMPORT_SOURCE_ID: "ni",
+                CSV_IMPORT_SOURCE_ID: "ni",
+                HTML_IMPORT_SOURCE_ID: "ni",
+            },
+            meta={
+                REST_COMMAND_CENTER_API_SOURCE_ID: [
+                    {"k": "Endpoint", "v": "GET /commandcenter/api/CommServ"},
+                ],
+            },
+            descriptions={
+                REST_COMMAND_CENTER_API_SOURCE_ID: "Live collection of CommCell identity details from Command Center.",
+            },
+        )
         return subj
 
     name = cc.get("hostName") or "CommCell"
@@ -226,20 +279,28 @@ def _build_environment_subject(cc: dict | None) -> dict:
         "included": True,
         "subtitle": subtitle,
         "fullUrl": full_url,
-        "activeSource": "rest_api",
-        "sources": [
-            _source_item(
-                "rest_api",
-                "Direct REST API",
-                "Live call to GET /commandcenter/api/CommServ.",
-                status="v",
-                meta=[
+        "activeSource": REST_COMMAND_CENTER_API_SOURCE_ID,
+        "sources": _build_tile_sources(
+            "environment",
+            active_source_id=REST_COMMAND_CENTER_API_SOURCE_ID,
+            statuses={
+                REST_COMMAND_CENTER_API_SOURCE_ID: "v",
+                REST_REPORTS_PLUS_SOURCE_ID: "ni",
+                JSON_IMPORT_SOURCE_ID: "ni",
+                CSV_IMPORT_SOURCE_ID: "ni",
+                HTML_IMPORT_SOURCE_ID: "ni",
+            },
+            meta={
+                REST_COMMAND_CENTER_API_SOURCE_ID: [
                     {"k": "Endpoint", "v": "GET /commandcenter/api/CommServ"},
                     {"k": "Host", "v": name},
                     {"k": "Version", "v": version or "Unknown"},
                 ],
-            ),
-        ],
+            },
+            descriptions={
+                REST_COMMAND_CENTER_API_SOURCE_ID: "Live collection of CommCell identity details from Command Center.",
+            },
+        ),
         "sections": [
             {
                 "id": "environment.metadata",
@@ -257,23 +318,40 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
     full_url = _try_url("main.quick_hc_security_assessment")
     if not sa or not sa.get("exists"):
         subj = _nodata_subject("security_assessment", "Security Assessment", full_url)
-        subj["activeSource"] = "rest_report"
-        subj["sources"] = [
-            _source_item(
-                "rest_report",
-                "REST / Reports Plus",
-                "Reports Plus report 336 — Security Assessment.",
-                meta=[{"k": "Report ID", "v": "336"}],
-            ),
-            _source_item(
-                "import",
-                "CSV / HTML import",
-                "Upload a Security Assessment CSV or HTML export.",
-                has_upload=True,
-                import_url="/quick-hc/security-assessment/import",
-                import_field="assessment_file",
-            ),
-        ]
+        subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
+        subj["sources"] = _build_tile_sources(
+            "security_assessment",
+            active_source_id=REST_REPORTS_PLUS_SOURCE_ID,
+            statuses={
+                REST_COMMAND_CENTER_API_SOURCE_ID: "ni",
+                REST_REPORTS_PLUS_SOURCE_ID: "n",
+                JSON_IMPORT_SOURCE_ID: "ni",
+                CSV_IMPORT_SOURCE_ID: "a",
+                HTML_IMPORT_SOURCE_ID: "a",
+            },
+            meta={
+                REST_REPORTS_PLUS_SOURCE_ID: [{"k": "Report ID", "v": "336"}],
+            },
+            descriptions={
+                REST_REPORTS_PLUS_SOURCE_ID: "Live Reports Plus collection path for Security Assessment.",
+                CSV_IMPORT_SOURCE_ID: "Import a Security Assessment CSV export into the canonical artifact.",
+                HTML_IMPORT_SOURCE_ID: "Import a Security Assessment HTML export into the canonical artifact.",
+            },
+            actions={
+                CSV_IMPORT_SOURCE_ID: [
+                    _upload_action(
+                        import_url="/quick-hc/security-assessment/import",
+                        import_field="assessment_file",
+                    )
+                ],
+                HTML_IMPORT_SOURCE_ID: [
+                    _upload_action(
+                        import_url="/quick-hc/security-assessment/import",
+                        import_field="assessment_file",
+                    )
+                ],
+            },
+        )
         return subj
 
     summary = sa.get("summary") or {}
@@ -374,8 +452,11 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
 
     # Source metadata
     is_rest = source_type in ("rest", "reportsplus")
-    is_import = source_type in ("csv", "html", "import")
-    active_src = "rest_report" if is_rest else ("import" if is_import else "rest_report")
+    active_src = REST_REPORTS_PLUS_SOURCE_ID
+    if source_type == "csv":
+        active_src = CSV_IMPORT_SOURCE_ID
+    elif source_type == "html":
+        active_src = HTML_IMPORT_SOURCE_ID
 
     return {
         "id": "security_assessment",
@@ -385,29 +466,53 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
         "subtitle": subtitle,
         "fullUrl": full_url,
         "activeSource": active_src,
-        "sources": [
-            _source_item(
-                "rest_report",
-                "REST / Reports Plus",
-                "Reports Plus report 336 — Security Assessment.",
-                status="v" if is_rest else "n",
-                meta=(
-                    [{"k": "Report ID", "v": "336"}, {"k": "Last Collected", "v": collected_at}, {"k": "Findings", "v": str(total)}]
-                    if is_rest and collected_at else
-                    ([{"k": "Report ID", "v": "336"}] if is_rest else [{"k": "Report ID", "v": "336"}])
+        "sources": _build_tile_sources(
+            "security_assessment",
+            active_source_id=active_src,
+            statuses={
+                REST_COMMAND_CENTER_API_SOURCE_ID: "ni",
+                REST_REPORTS_PLUS_SOURCE_ID: "v" if is_rest else "a",
+                JSON_IMPORT_SOURCE_ID: "ni",
+                CSV_IMPORT_SOURCE_ID: "v" if source_type == "csv" else "a",
+                HTML_IMPORT_SOURCE_ID: "v" if source_type == "html" else "a",
+            },
+            meta={
+                REST_REPORTS_PLUS_SOURCE_ID: [
+                    {"k": "Report ID", "v": "336"},
+                    *([{"k": "Last Collected", "v": collected_at[:19]}] if is_rest and collected_at else []),
+                    {"k": "Findings", "v": str(total)},
+                ],
+                CSV_IMPORT_SOURCE_ID: (
+                    [{"k": "Last Imported", "v": collected_at[:19]}]
+                    if source_type == "csv" and collected_at
+                    else []
                 ),
-            ),
-            _source_item(
-                "import",
-                "CSV / HTML import",
-                "Upload a Security Assessment CSV or HTML export.",
-                status="v" if is_import else "n",
-                meta=([{"k": "Source Type", "v": source_type.upper()}, {"k": "Last Imported", "v": collected_at}] if is_import and collected_at else []),
-                has_upload=True,
-                import_url="/quick-hc/security-assessment/import",
-                import_field="assessment_file",
-            ),
-        ],
+                HTML_IMPORT_SOURCE_ID: (
+                    [{"k": "Last Imported", "v": collected_at[:19]}]
+                    if source_type == "html" and collected_at
+                    else []
+                ),
+            },
+            descriptions={
+                REST_REPORTS_PLUS_SOURCE_ID: "Live Reports Plus collection path for Security Assessment.",
+                CSV_IMPORT_SOURCE_ID: "Import a Security Assessment CSV export into the canonical artifact.",
+                HTML_IMPORT_SOURCE_ID: "Import a Security Assessment HTML export into the canonical artifact.",
+            },
+            actions={
+                CSV_IMPORT_SOURCE_ID: [
+                    _upload_action(
+                        import_url="/quick-hc/security-assessment/import",
+                        import_field="assessment_file",
+                    )
+                ],
+                HTML_IMPORT_SOURCE_ID: [
+                    _upload_action(
+                        import_url="/quick-hc/security-assessment/import",
+                        import_field="assessment_file",
+                    )
+                ],
+            },
+        ),
         "sections": [
             {
                 "id": "security_assessment.summary",
@@ -442,23 +547,40 @@ def _build_license_summary_subject(ls: dict | None) -> dict:
     full_url = _try_url("main.quick_hc_license_summary")
     if not ls:
         subj = _nodata_subject("license_summary", "License Summary", full_url)
-        subj["activeSource"] = "rest_report"
-        subj["sources"] = [
-            _source_item(
-                "rest_report",
-                "REST / Reports Plus",
-                "Reports Plus report 206 — License Summary.",
-                meta=[{"k": "Report ID", "v": "206"}],
-            ),
-            _source_item(
-                "import",
-                "CSV / HTML import",
-                "Upload a License Summary CSV or HTML export.",
-                has_upload=True,
-                import_url="/quick-hc/license-summary/import",
-                import_field="license_summary_file",
-            ),
-        ]
+        subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
+        subj["sources"] = _build_tile_sources(
+            "license_summary",
+            active_source_id=REST_REPORTS_PLUS_SOURCE_ID,
+            statuses={
+                REST_COMMAND_CENTER_API_SOURCE_ID: "ni",
+                REST_REPORTS_PLUS_SOURCE_ID: "n",
+                JSON_IMPORT_SOURCE_ID: "ni",
+                CSV_IMPORT_SOURCE_ID: "a",
+                HTML_IMPORT_SOURCE_ID: "a",
+            },
+            meta={
+                REST_REPORTS_PLUS_SOURCE_ID: [{"k": "Report ID", "v": "206"}],
+            },
+            descriptions={
+                REST_REPORTS_PLUS_SOURCE_ID: "Live Reports Plus collection path for License Summary.",
+                CSV_IMPORT_SOURCE_ID: "Import a License Summary CSV export into the canonical artifact.",
+                HTML_IMPORT_SOURCE_ID: "Import a License Summary HTML export into the canonical artifact.",
+            },
+            actions={
+                CSV_IMPORT_SOURCE_ID: [
+                    _upload_action(
+                        import_url="/quick-hc/license-summary/import",
+                        import_field="license_summary_file",
+                    )
+                ],
+                HTML_IMPORT_SOURCE_ID: [
+                    _upload_action(
+                        import_url="/quick-hc/license-summary/import",
+                        import_field="license_summary_file",
+                    )
+                ],
+            },
+        )
         return subj
 
     source_type = str(ls.get("source_type") or "")
@@ -480,8 +602,13 @@ def _build_license_summary_subject(ls: dict | None) -> dict:
     subtitle = " · ".join(subtitle_parts) if subtitle_parts else "Available"
 
     is_rest = source_type in ("rest", "reportsplus")
-    is_import = source_type in ("csv", "html", "import")
-    active_src = "rest_report" if is_rest else ("import" if is_import else "import")
+    active_src = REST_REPORTS_PLUS_SOURCE_ID
+    if source_type == "csv":
+        active_src = CSV_IMPORT_SOURCE_ID
+    elif source_type == "html":
+        active_src = HTML_IMPORT_SOURCE_ID
+    elif source_type == "json":
+        active_src = JSON_IMPORT_SOURCE_ID
 
     # Metadata rows
     meta_rows = [
@@ -540,25 +667,56 @@ def _build_license_summary_subject(ls: dict | None) -> dict:
         "subtitle": subtitle,
         "fullUrl": full_url,
         "activeSource": active_src,
-        "sources": [
-            _source_item(
-                "rest_report",
-                "REST / Reports Plus",
-                "Reports Plus report 206 — License Summary.",
-                status="v" if is_rest else "n",
-                meta=[{"k": "Report ID", "v": "206"}, {"k": "Source Type", "v": "REST"}] if is_rest else [{"k": "Report ID", "v": "206"}],
-            ),
-            _source_item(
-                "import",
-                "CSV / HTML import",
-                "Upload a License Summary CSV or HTML export.",
-                status="v" if is_import else "n",
-                meta=([{"k": "Source Type", "v": source_type.upper()}, {"k": "Last Imported", "v": imported_at[:19]}] if is_import and imported_at else []),
-                has_upload=True,
-                import_url="/quick-hc/license-summary/import",
-                import_field="license_summary_file",
-            ),
-        ],
+        "sources": _build_tile_sources(
+            "license_summary",
+            active_source_id=active_src,
+            statuses={
+                REST_COMMAND_CENTER_API_SOURCE_ID: "ni",
+                REST_REPORTS_PLUS_SOURCE_ID: "v" if is_rest else "a",
+                JSON_IMPORT_SOURCE_ID: "ni",
+                CSV_IMPORT_SOURCE_ID: "v" if source_type == "csv" else "a",
+                HTML_IMPORT_SOURCE_ID: "v" if source_type == "html" else "a",
+            },
+            meta={
+                REST_REPORTS_PLUS_SOURCE_ID: [{"k": "Report ID", "v": "206"}],
+                **(
+                    {REST_REPORTS_PLUS_SOURCE_ID: [
+                        {"k": "Report ID", "v": "206"},
+                        {"k": "Last Collected", "v": imported_at[:19] if imported_at else (generated_on or "Unknown")},
+                    ]}
+                    if is_rest else {}
+                ),
+                CSV_IMPORT_SOURCE_ID: (
+                    [{"k": "Last Imported", "v": imported_at[:19]}]
+                    if source_type == "csv" and imported_at
+                    else []
+                ),
+                HTML_IMPORT_SOURCE_ID: (
+                    [{"k": "Last Imported", "v": imported_at[:19]}]
+                    if source_type == "html" and imported_at
+                    else []
+                ),
+            },
+            descriptions={
+                REST_REPORTS_PLUS_SOURCE_ID: "Live Reports Plus collection path for License Summary.",
+                CSV_IMPORT_SOURCE_ID: "Import a License Summary CSV export into the canonical artifact.",
+                HTML_IMPORT_SOURCE_ID: "Import a License Summary HTML export into the canonical artifact.",
+            },
+            actions={
+                CSV_IMPORT_SOURCE_ID: [
+                    _upload_action(
+                        import_url="/quick-hc/license-summary/import",
+                        import_field="license_summary_file",
+                    )
+                ],
+                HTML_IMPORT_SOURCE_ID: [
+                    _upload_action(
+                        import_url="/quick-hc/license-summary/import",
+                        import_field="license_summary_file",
+                    )
+                ],
+            },
+        ),
         "sections": [
             {
                 "id": "license_summary.metadata",
@@ -614,15 +772,22 @@ def _build_client_growth_subject(cg: dict | None) -> dict:
     full_url = _try_url("main.metrics_client_growth")
     if not cg:
         subj = _nodata_subject("client_growth", "Client Growth", full_url)
-        subj["activeSource"] = "rest_report"
-        subj["sources"] = [
-            _source_item(
-                "rest_report",
-                "REST / Reports Plus",
-                "Reports Plus report 318 — Client Growth.",
-                meta=[{"k": "Report ID", "v": "318"}],
-            )
-        ]
+        subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
+        subj["sources"] = _build_tile_sources(
+            "client_growth",
+            active_source_id=REST_REPORTS_PLUS_SOURCE_ID,
+            statuses={
+                REST_COMMAND_CENTER_API_SOURCE_ID: "ni",
+                REST_REPORTS_PLUS_SOURCE_ID: "n",
+                JSON_IMPORT_SOURCE_ID: "ni",
+                CSV_IMPORT_SOURCE_ID: "ni",
+                HTML_IMPORT_SOURCE_ID: "ni",
+            },
+            meta={REST_REPORTS_PLUS_SOURCE_ID: [{"k": "Report ID", "v": "318"}]},
+            descriptions={
+                REST_REPORTS_PLUS_SOURCE_ID: "Live Reports Plus collection path for Client Growth metrics.",
+            },
+        )
         return subj
 
     records = list(cg.get("records") or [])
@@ -685,20 +850,28 @@ def _build_client_growth_subject(cg: dict | None) -> dict:
         "included": True,
         "subtitle": subtitle,
         "fullUrl": full_url,
-        "activeSource": "rest_report",
-        "sources": [
-            _source_item(
-                "rest_report",
-                "REST / Reports Plus",
-                "Reports Plus report 318 — Client Growth.",
-                status="v",
-                meta=[
+        "activeSource": REST_REPORTS_PLUS_SOURCE_ID,
+        "sources": _build_tile_sources(
+            "client_growth",
+            active_source_id=REST_REPORTS_PLUS_SOURCE_ID,
+            statuses={
+                REST_COMMAND_CENTER_API_SOURCE_ID: "ni",
+                REST_REPORTS_PLUS_SOURCE_ID: "v",
+                JSON_IMPORT_SOURCE_ID: "ni",
+                CSV_IMPORT_SOURCE_ID: "ni",
+                HTML_IMPORT_SOURCE_ID: "ni",
+            },
+            meta={
+                REST_REPORTS_PLUS_SOURCE_ID: [
                     {"k": "Report ID", "v": "318"},
                     {"k": "Records", "v": str(len(records))},
                     {"k": "Latest Month", "v": latest_month or "Unknown"},
                 ],
-            ),
-        ],
+            },
+            descriptions={
+                REST_REPORTS_PLUS_SOURCE_ID: "Live Reports Plus collection path for Client Growth metrics.",
+            },
+        ),
         "sections": [
             {
                 "id": "client_growth.summary",
@@ -733,15 +906,22 @@ def _build_capacity_license_subject(cl: dict | None) -> dict:
     full_url = _try_url("main.metrics_capacity_license")
     if not cl:
         subj = _nodata_subject("capacity_license", "Capacity Licenses", full_url)
-        subj["activeSource"] = "rest_report"
-        subj["sources"] = [
-            _source_item(
-                "rest_report",
-                "REST / Reports Plus",
-                "Reports Plus report 318 — Capacity License.",
-                meta=[{"k": "Report ID", "v": "318"}],
-            )
-        ]
+        subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
+        subj["sources"] = _build_tile_sources(
+            "capacity_license",
+            active_source_id=REST_REPORTS_PLUS_SOURCE_ID,
+            statuses={
+                REST_COMMAND_CENTER_API_SOURCE_ID: "ni",
+                REST_REPORTS_PLUS_SOURCE_ID: "n",
+                JSON_IMPORT_SOURCE_ID: "ni",
+                CSV_IMPORT_SOURCE_ID: "ni",
+                HTML_IMPORT_SOURCE_ID: "ni",
+            },
+            meta={REST_REPORTS_PLUS_SOURCE_ID: [{"k": "Report ID", "v": "318"}]},
+            descriptions={
+                REST_REPORTS_PLUS_SOURCE_ID: "Live Reports Plus collection path for Capacity License metrics.",
+            },
+        )
         return subj
 
     records = list(cl.get("records") or [])
@@ -808,19 +988,27 @@ def _build_capacity_license_subject(cl: dict | None) -> dict:
         "included": True,
         "subtitle": subtitle,
         "fullUrl": full_url,
-        "activeSource": "rest_report",
-        "sources": [
-            _source_item(
-                "rest_report",
-                "REST / Reports Plus",
-                "Reports Plus report 318 — Capacity License.",
-                status="v",
-                meta=[
+        "activeSource": REST_REPORTS_PLUS_SOURCE_ID,
+        "sources": _build_tile_sources(
+            "capacity_license",
+            active_source_id=REST_REPORTS_PLUS_SOURCE_ID,
+            statuses={
+                REST_COMMAND_CENTER_API_SOURCE_ID: "ni",
+                REST_REPORTS_PLUS_SOURCE_ID: "v",
+                JSON_IMPORT_SOURCE_ID: "ni",
+                CSV_IMPORT_SOURCE_ID: "ni",
+                HTML_IMPORT_SOURCE_ID: "ni",
+            },
+            meta={
+                REST_REPORTS_PLUS_SOURCE_ID: [
                     {"k": "Report ID", "v": "318"},
                     {"k": "Period", "v": latest_month or "Unknown"},
                 ],
-            ),
-        ],
+            },
+            descriptions={
+                REST_REPORTS_PLUS_SOURCE_ID: "Live Reports Plus collection path for Capacity License metrics.",
+            },
+        ),
         "sections": [
             {
                 "id": "capacity_license.summary",
@@ -847,15 +1035,24 @@ def _build_backup_job_summary_subject(bjs: dict | None) -> dict:
     full_url = _try_url("main.quick_hc_backup_job_summary")
     if not bjs:
         subj = _nodata_subject("backup_job_summary", "Backup Job Summary", full_url)
-        subj["activeSource"] = "rest_report"
-        subj["sources"] = [
-            _source_item(
-                "rest_report",
-                "REST / Reports Plus",
-                "Reports Plus Backup Job Summary dataset.",
-                meta=[{"k": "Dataset", "v": "2638c3d3-adc7-4b61-bb24-2ba509229bf5"}],
-            )
-        ]
+        subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
+        subj["sources"] = _build_tile_sources(
+            "backup_job_summary",
+            active_source_id=REST_REPORTS_PLUS_SOURCE_ID,
+            statuses={
+                REST_COMMAND_CENTER_API_SOURCE_ID: "ni",
+                REST_REPORTS_PLUS_SOURCE_ID: "n",
+                JSON_IMPORT_SOURCE_ID: "ni",
+                CSV_IMPORT_SOURCE_ID: "ni",
+                HTML_IMPORT_SOURCE_ID: "ni",
+            },
+            meta={
+                REST_REPORTS_PLUS_SOURCE_ID: [{"k": "Dataset", "v": "2638c3d3-adc7-4b61-bb24-2ba509229bf5"}],
+            },
+            descriptions={
+                REST_REPORTS_PLUS_SOURCE_ID: "Live Reports Plus collection path for Backup Job Summary.",
+            },
+        )
         return subj
 
     total_jobs = int(bjs.get("total_jobs") or 0)
@@ -914,20 +1111,28 @@ def _build_backup_job_summary_subject(bjs: dict | None) -> dict:
         "included": True,
         "subtitle": subtitle,
         "fullUrl": full_url,
-        "activeSource": "rest_report",
-        "sources": [
-            _source_item(
-                "rest_report",
-                "REST / Reports Plus",
-                "Reports Plus Backup Job Summary dataset.",
-                status="v",
-                meta=[
+        "activeSource": REST_REPORTS_PLUS_SOURCE_ID,
+        "sources": _build_tile_sources(
+            "backup_job_summary",
+            active_source_id=REST_REPORTS_PLUS_SOURCE_ID,
+            statuses={
+                REST_COMMAND_CENTER_API_SOURCE_ID: "ni",
+                REST_REPORTS_PLUS_SOURCE_ID: "v",
+                JSON_IMPORT_SOURCE_ID: "ni",
+                CSV_IMPORT_SOURCE_ID: "ni",
+                HTML_IMPORT_SOURCE_ID: "ni",
+            },
+            meta={
+                REST_REPORTS_PLUS_SOURCE_ID: [
                     {"k": "Dataset", "v": str(bjs.get("source_dataset_guid") or "2638c3d3-adc7-4b61-bb24-2ba509229bf5")},
                     {"k": "Last Generated", "v": str(bjs.get("generated_at") or "Unknown")},
                     {"k": "Total Jobs", "v": str(total_jobs)},
                 ],
-            ),
-        ],
+            },
+            descriptions={
+                REST_REPORTS_PLUS_SOURCE_ID: "Live Reports Plus collection path for Backup Job Summary.",
+            },
+        ),
         "sections": [
             {
                 "id": "backup_job_summary.summary",

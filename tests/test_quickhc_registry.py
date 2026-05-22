@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 from cvhealthcheck.quickhc.registry import (
+    CSV_IMPORT_SOURCE_ID,
+    HTML_IMPORT_SOURCE_ID,
+    JSON_IMPORT_SOURCE_ID,
     QUICK_HC_SECTION_IDS,
     QUICK_HC_SELECTION_IDS,
     QUICK_HC_SUBJECT_IDS,
     QUICK_HC_TILE_BY_ID,
     QUICK_HC_TILES,
+    REST_COMMAND_CENTER_API_SOURCE_ID,
+    REST_REPORTS_PLUS_SOURCE_ID,
+    UNIVERSAL_SOURCE_DEFINITIONS,
     report_overview_default_selection_ids,
     report_subsection_options,
 )
@@ -50,6 +56,7 @@ def test_every_tile_has_required_metadata() -> None:
         assert tile.artifact_type
         assert tile.preview_renderer
         assert tile.report_renderer
+        assert tile.sources
 
 
 def test_every_tile_has_at_least_one_section() -> None:
@@ -71,6 +78,19 @@ def test_every_default_selected_section_belongs_to_its_tile() -> None:
 def test_tile_section_ids_property_matches_registry_order() -> None:
     for tile in QUICK_HC_TILES:
         assert tile.section_ids == tuple(section.id for section in tile.sections)
+
+
+def test_every_tile_uses_universal_source_option_structure() -> None:
+    expected_source_ids = (
+        REST_COMMAND_CENTER_API_SOURCE_ID,
+        REST_REPORTS_PLUS_SOURCE_ID,
+        JSON_IMPORT_SOURCE_ID,
+        CSV_IMPORT_SOURCE_ID,
+        HTML_IMPORT_SOURCE_ID,
+    )
+    assert tuple(source.id for source in UNIVERSAL_SOURCE_DEFINITIONS) == expected_source_ids
+    for tile in QUICK_HC_TILES:
+        assert tile.source_ids == expected_source_ids
 
 
 def test_tile_by_id_contains_all_quick_hc_tiles() -> None:
