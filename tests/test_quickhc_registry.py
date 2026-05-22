@@ -89,6 +89,21 @@ def test_backup_job_summary_tile_is_registered() -> None:
     )
 
 
+def test_security_assessment_tile_registers_detail_sections() -> None:
+    tile = QUICK_HC_TILE_BY_ID["security_assessment"]
+    assert tile.section_ids == (
+        "security_assessment.summary",
+        "security_assessment.highlights",
+        "security_assessment.all_findings",
+        "security_assessment.access_security",
+        "security_assessment.auditing",
+        "security_assessment.platform_security",
+        "security_assessment.company_and_owners_security",
+        "security_assessment.capabilities",
+        "security_assessment.hardening",
+    )
+
+
 def test_registry_report_subsection_options_include_all_tile_section_ids() -> None:
     subsection_options = report_subsection_options()
     assert set(subsection_options) == QUICK_HC_SUBJECT_IDS

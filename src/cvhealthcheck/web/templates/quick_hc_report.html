@@ -150,8 +150,8 @@
           <p class="notice">No critical or warning findings are available.</p>
         {% endif %}
       {% endif %}
-      {% if report.security_assessment.show_all_findings %}
-        <h4>All findings</h4>
+      {% if report.security_assessment.show_detail_sections %}
+        <h4>Detailed Checks</h4>
         {% if report.security_assessment.visible_sections %}
           {% for section in report.security_assessment.visible_sections %}
             <h5>{{ section.name }}</h5>

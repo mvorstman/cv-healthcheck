@@ -26,6 +26,7 @@ from cvhealthcheck.quickhc.registry import (
     QUICK_HC_SELECTION_IDS,
     QUICK_HC_SUBJECT_IDS,
     SECURITY_ASSESSMENT_SELECTION_ID,
+    SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME,
     report_overview_default_selection_ids,
     report_subsection_options,
 )
@@ -153,7 +154,18 @@ class QuickHcReportService:
         tile: TileDefinition,
         _built_sections: dict[str, dict[str, Any]],
     ) -> dict[str, Any]:
-        summary_section, highlights_section, all_findings_section = tile.sections
+        summary_section = tile.sections[0]
+        highlights_section = tile.sections[1]
+        all_findings_section = next(
+            section
+            for section in tile.sections
+            if section.id == "security_assessment.all_findings"
+        )
+        detail_section_definitions = tuple(
+            section
+            for section in tile.sections
+            if section.id in SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME.values()
+        )
         try:
             artifact = self.security_assessment_service.get_current()
         except FileNotFoundError:
@@ -167,6 +179,9 @@ class QuickHcReportService:
                 "summary_section_id": summary_section.id,
                 "highlights_section_id": highlights_section.id,
                 "all_findings_section_id": all_findings_section.id,
+                "detail_section_ids": tuple(
+                    section.id for section in detail_section_definitions
+                ),
                 "sections": [],
                 "highlight_rows": [],
             }
@@ -177,6 +192,7 @@ class QuickHcReportService:
         highlight_rows = []
         for section in summary.get("sections", []):
             section_name = str(section.get("name") or "")
+            section_id = SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME.get(section_name)
             rows = []
             for row in section.get("checks") or []:
                 normalized_row = {
@@ -191,6 +207,7 @@ class QuickHcReportService:
                     highlight_rows.append(normalized_row)
             sections.append(
                 {
+                    "id": section_id,
                     "name": section_name,
                     "rows": rows,
                 }
@@ -212,6 +229,9 @@ class QuickHcReportService:
             "summary_section_id": summary_section.id,
             "highlights_section_id": highlights_section.id,
             "all_findings_section_id": all_findings_section.id,
+            "detail_section_ids": tuple(
+                section.id for section in detail_section_definitions
+            ),
             "source_metadata": dict(
                 artifact.get("source_metadata") or artifact.get("source") or {}
             ),
@@ -681,9 +701,15 @@ class QuickHcReportService:
     ) -> dict[str, Any]:
         show_summary = requested and section["summary_section_id"] in selection_ids
         show_highlights = requested and section["highlights_section_id"] in selection_ids
-        show_all_findings = (
+        show_all_findings_alias = (
             requested and section["all_findings_section_id"] in selection_ids
         )
+        selected_detail_section_ids = (
+            set(section.get("detail_section_ids") or set()) & selection_ids
+            if requested
+            else set()
+        )
+        show_detailed_sections = bool(show_all_findings_alias or selected_detail_section_ids)
 
         if not section.get("available"):
             return {
@@ -691,24 +717,34 @@ class QuickHcReportService:
                 "requested": requested,
                 "show_summary": show_summary,
                 "show_highlights": show_highlights,
-                "show_all_findings": show_all_findings,
+                "show_all_findings": show_detailed_sections,
+                "show_detail_sections": show_detailed_sections,
                 "highlight_rows": [],
                 "visible_sections": [],
                 "has_content": False,
             }
+
+        visible_sections = list(section.get("sections", []))
+        if not show_all_findings_alias:
+            visible_sections = [
+                item
+                for item in visible_sections
+                if item.get("id") in selected_detail_section_ids
+            ]
 
         return {
             **section,
             "requested": requested,
             "show_summary": show_summary,
             "show_highlights": show_highlights,
-            "show_all_findings": show_all_findings,
+            "show_all_findings": show_detailed_sections,
+            "show_detail_sections": show_detailed_sections,
             "highlight_rows": (
                 list(section.get("highlight_rows", [])) if show_highlights else []
             ),
-            "visible_sections": list(section.get("sections", [])) if show_all_findings else [],
+            "visible_sections": visible_sections if show_detailed_sections else [],
             "has_content": requested
-            and any((show_summary, show_highlights, show_all_findings)),
+            and any((show_summary, show_highlights, show_detailed_sections)),
         }
 
     def _filter_license_summary(

@@ -11,6 +11,9 @@ from cvhealthcheck.reportsplus.backup_job_summary import load_backup_job_summary
 from cvhealthcheck.reportsplus.catalog import read_json
 from cvhealthcheck.reportsplus.security_assessment import security_assessment_quick_hc
 from cvhealthcheck.quickhc.commcell import normalize_commserv
+from cvhealthcheck.quickhc.registry import (
+    SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -276,17 +279,6 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
         for f in sec.get("checks") or []
         if f.get("status") in ("Info", "Good")
     ][:20]
-    info_good_rows = [
-        [
-            str(sec.get("name") or ""),
-            str(f.get("parameter") or ""),
-            str(f.get("status") or ""),
-            str(f.get("remarks") or ""),
-        ]
-        for sec in sections
-        for f in sec.get("checks") or []
-        if f.get("status") in ("Info", "Good")
-    ][:20]
 
     summary_rows = [
         {"k": "TOTAL CHECKS", "v": str(total)},
@@ -297,6 +289,42 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
     ]
     if collected_at := str(sa.get("collected_at") or ""):
         summary_rows.append({"k": "COLLECTED", "v": collected_at[:19]})
+
+    detail_sections = []
+    for sec in sections:
+        section_name = str(sec.get("name") or "")
+        section_id = SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME.get(section_name)
+        if not section_id:
+            continue
+        checks = list(sec.get("checks") or [])
+        section_findings = [
+            {
+                "sev": _security_finding_sev(f.get("status")),
+                "title": str(f.get("parameter") or ""),
+                "rem": _finding_rem(f),
+            }
+            for f in checks
+        ]
+        detail_sections.append(
+            {
+                "id": section_id,
+                "title": section_name,
+                "meta": f"{len(checks)} finding{'s' if len(checks) != 1 else ''}",
+                "included": False,
+                "type": "findings_list",
+                "findings": section_findings,
+                "rows": [
+                    [
+                        str(f.get("parameter") or ""),
+                        str(f.get("status") or ""),
+                        str(f.get("remarks") or ""),
+                        str(f.get("action") or ""),
+                    ]
+                    for f in checks
+                ],
+                "columns": ["Parameter", "Status", "Remarks", "Action"],
+            }
+        )
 
     # Source metadata
     is_rest = source_type in ("rest", "reportsplus")
@@ -355,16 +383,7 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
                 "columns": ["Section", "Parameter", "Status", "Remarks"],
                 "rows": highlight_rows,
             },
-            {
-                "id": "security_assessment.all_findings",
-                "title": "Info / Good findings",
-                "meta": f"{len(info_good_findings)} finding{'s' if len(info_good_findings) != 1 else ''}",
-                "included": False,
-                "type": "findings_list",
-                "findings": info_good_findings,
-                "columns": ["Section", "Parameter", "Status", "Remarks"],
-                "rows": info_good_rows,
-            },
+            *detail_sections,
         ],
     }
 
@@ -900,3 +919,14 @@ def _finding_rem(f: dict) -> str:
     if section and remarks:
         return f"{section} · {remarks}"
     return remarks or section
+
+
+def _security_finding_sev(status: object) -> str:
+    value = str(status or "")
+    if value == "Critical":
+        return "crit"
+    if value == "Warning":
+        return "warn"
+    if value == "Info":
+        return "info"
+    return "good"

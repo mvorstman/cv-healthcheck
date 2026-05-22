@@ -472,6 +472,12 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert '"id": "capacity_license"' in body
     assert '"id": "backup_job_summary"' in body
     assert '"id": "security_assessment.highlights"' in body
+    assert '"id": "security_assessment.access_security"' in body
+    assert '"id": "security_assessment.auditing"' in body
+    assert '"id": "security_assessment.platform_security"' in body
+    assert '"id": "security_assessment.company_and_owners_security"' in body
+    assert '"id": "security_assessment.capabilities"' in body
+    assert '"id": "security_assessment.hardening"' in body
     assert "CommCell Details" in body
     assert "Client Growth" in body
     assert "Capacity Licenses" in body
@@ -601,8 +607,54 @@ def test_quick_hc_overview_renders_security_assessment_report_section_values(
     assert '"id": "security_assessment.highlights"' in body
     assert '"title": "Threat Indicator alert"' in body
     assert '"title": "MFA enabled"' in body
-    assert '"id": "security_assessment.all_findings"' in body
-    assert '[["Auditing", "Audit retention", "Info", "30 days"]]' in body
+    assert '"id": "security_assessment.platform_security"' in body
+    assert '"id": "security_assessment.access_security"' in body
+    assert '"id": "security_assessment.auditing"' in body
+    assert '"title": "Platform Security"' in body
+    assert '"title": "Access Security"' in body
+    assert '"title": "Auditing"' in body
+    assert '[["Threat Indicator alert", "Critical", "Disabled", "Enable alert"]]' in body
+    assert '[["MFA enabled", "Warning", "Recommended for admins", "Enable MFA"]]' in body
+    assert '[["Audit retention", "Info", "30 days", "Review retention"]]' in body
+
+
+def test_quick_hc_security_assessment_detail_renders_all_artifact_sections(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+
+    artifact = build_security_assessment_artifact(
+        [
+            {"section": "Access Security", "parameter": "MFA enabled", "status": "Critical", "remarks": "Missing", "action": "Enable MFA"},
+            {"section": "Auditing", "parameter": "Audit retention", "status": "Info", "remarks": "30 days", "action": "Review retention"},
+            {"section": "Platform Security", "parameter": "Threat Indicator alert", "status": "Critical", "remarks": "Disabled", "action": "Enable alert"},
+            {"section": "Company and Owners Security", "parameter": "Owner review", "status": "Good", "remarks": "Completed", "action": "None"},
+            {"section": "Capabilities", "parameter": "Feature lockdown", "status": "Warning", "remarks": "Review", "action": "Tighten scope"},
+            {"section": "Hardening", "parameter": "DR backup", "status": "Warning", "remarks": "Cloud copy missing", "action": "Configure backup"},
+        ],
+        source_type="rest",
+        source={"report_id": "336"},
+    )
+    persist_security_assessment_artifact(
+        artifact,
+        catalog_dir=tmp_path / "security_catalog",
+        registry_path=tmp_path / "security_registry.sqlite3",
+    )
+
+    app = create_app()
+    response = app.test_client().get("/quick-hc/security-assessment")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    for section_name in (
+        "Access Security",
+        "Auditing",
+        "Platform Security",
+        "Company and Owners Security",
+        "Capabilities",
+        "Hardening",
+    ):
+        assert f"<h4>{section_name}</h4>" in body
 
 
 def test_quick_hc_overview_handles_missing_backup_job_summary_artifact(
@@ -904,9 +956,73 @@ def test_quick_hc_report_post_security_assessment_summary_only_excludes_findings
     assert "Security Assessment" in body
     assert "Total checks" in body
     assert "Critical / Warning findings" not in body
-    assert "All findings" not in body
+    assert "Detailed Checks" not in body
     assert "MFA enabled" not in body
     assert "Audit retention" not in body
+
+
+def test_quick_hc_report_post_security_assessment_selected_detail_sections_render(
+    tmp_path, monkeypatch
+) -> None:
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+
+    security_artifact = build_security_assessment_artifact(
+        [
+            {
+                "section": "Access Security",
+                "parameter": "MFA enabled",
+                "status": "Critical",
+                "remarks": "Missing for admin users",
+                "action": "Enable MFA",
+            },
+            {
+                "section": "Platform Security",
+                "parameter": "Threat Indicator alert",
+                "status": "Warning",
+                "remarks": "Disabled",
+                "action": "Enable alert",
+            },
+            {
+                "section": "Hardening",
+                "parameter": "DR backup",
+                "status": "Info",
+                "remarks": "Cloud copy missing",
+                "action": "Configure backup",
+            },
+        ],
+        source_type="rest",
+        source={"report_id": "336"},
+    )
+    persist_security_assessment_artifact(
+        security_artifact,
+        catalog_dir=tmp_path / "security_catalog",
+        registry_path=tmp_path / "security_registry.sqlite3",
+    )
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/report",
+        data={
+            "selection_ids": [
+                "security_assessment",
+                "security_assessment.summary",
+                "security_assessment.access_security",
+                "security_assessment.hardening",
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Security Assessment" in body
+    assert "Detailed Checks" in body
+    assert "Access Security" in body
+    assert "Hardening" in body
+    assert "Platform Security" not in body
+    assert "MFA enabled" in body
+    assert "DR backup" in body
+    assert "Threat Indicator alert" not in body
 
 
 def test_quick_hc_report_post_client_growth_only_excludes_other_optional_subjects(

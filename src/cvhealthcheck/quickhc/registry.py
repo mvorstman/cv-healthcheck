@@ -14,6 +14,14 @@ ENVIRONMENT_METADATA_SECTION_ID = "environment.metadata"
 SECURITY_ASSESSMENT_SUMMARY_SECTION_ID = "security_assessment.summary"
 SECURITY_ASSESSMENT_HIGHLIGHTS_SECTION_ID = "security_assessment.highlights"
 SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID = "security_assessment.all_findings"
+SECURITY_ASSESSMENT_ACCESS_SECURITY_SECTION_ID = "security_assessment.access_security"
+SECURITY_ASSESSMENT_AUDITING_SECTION_ID = "security_assessment.auditing"
+SECURITY_ASSESSMENT_PLATFORM_SECURITY_SECTION_ID = "security_assessment.platform_security"
+SECURITY_ASSESSMENT_COMPANY_OWNERS_SECURITY_SECTION_ID = (
+    "security_assessment.company_and_owners_security"
+)
+SECURITY_ASSESSMENT_CAPABILITIES_SECTION_ID = "security_assessment.capabilities"
+SECURITY_ASSESSMENT_HARDENING_SECTION_ID = "security_assessment.hardening"
 LICENSE_SUMMARY_METADATA_SECTION_ID = "license_summary.metadata"
 LICENSE_SUMMARY_WORKLOAD_SECTION_ID = "license_summary.workload_sections"
 LICENSE_SUMMARY_OTHER_LICENSES_SECTION_ID = "license_summary.other_licenses"
@@ -29,6 +37,15 @@ BACKUP_JOB_SUMMARY_SUMMARY_SECTION_ID = "backup_job_summary.summary"
 BACKUP_JOB_SUMMARY_STATUS_BREAKDOWN_SECTION_ID = "backup_job_summary.status_breakdown"
 BACKUP_JOB_SUMMARY_RECENT_FAILURES_SECTION_ID = "backup_job_summary.recent_failures"
 BACKUP_JOB_SUMMARY_RECENT_JOBS_SECTION_ID = "backup_job_summary.recent_jobs"
+
+SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME = {
+    "Access Security": SECURITY_ASSESSMENT_ACCESS_SECURITY_SECTION_ID,
+    "Auditing": SECURITY_ASSESSMENT_AUDITING_SECTION_ID,
+    "Platform Security": SECURITY_ASSESSMENT_PLATFORM_SECURITY_SECTION_ID,
+    "Company and Owners Security": SECURITY_ASSESSMENT_COMPANY_OWNERS_SECURITY_SECTION_ID,
+    "Capabilities": SECURITY_ASSESSMENT_CAPABILITIES_SECTION_ID,
+    "Hardening": SECURITY_ASSESSMENT_HARDENING_SECTION_ID,
+}
 
 QUICK_HC_TILES: tuple[TileDefinition, ...] = (
     TileDefinition(
@@ -78,8 +95,51 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
             SectionDefinition(
                 id=SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
                 label="Info / Good findings",
+                default_selected=False,
                 preview_renderer="security_all_findings_preview",
                 report_renderer="security_all_findings_report",
+            ),
+            SectionDefinition(
+                id=SECURITY_ASSESSMENT_ACCESS_SECURITY_SECTION_ID,
+                label="Access Security",
+                default_selected=False,
+                preview_renderer="security_section_preview",
+                report_renderer="security_detail_section_report",
+            ),
+            SectionDefinition(
+                id=SECURITY_ASSESSMENT_AUDITING_SECTION_ID,
+                label="Auditing",
+                default_selected=False,
+                preview_renderer="security_section_preview",
+                report_renderer="security_detail_section_report",
+            ),
+            SectionDefinition(
+                id=SECURITY_ASSESSMENT_PLATFORM_SECURITY_SECTION_ID,
+                label="Platform Security",
+                default_selected=False,
+                preview_renderer="security_section_preview",
+                report_renderer="security_detail_section_report",
+            ),
+            SectionDefinition(
+                id=SECURITY_ASSESSMENT_COMPANY_OWNERS_SECURITY_SECTION_ID,
+                label="Company and Owners Security",
+                default_selected=False,
+                preview_renderer="security_section_preview",
+                report_renderer="security_detail_section_report",
+            ),
+            SectionDefinition(
+                id=SECURITY_ASSESSMENT_CAPABILITIES_SECTION_ID,
+                label="Capabilities",
+                default_selected=False,
+                preview_renderer="security_section_preview",
+                report_renderer="security_detail_section_report",
+            ),
+            SectionDefinition(
+                id=SECURITY_ASSESSMENT_HARDENING_SECTION_ID,
+                label="Hardening",
+                default_selected=False,
+                preview_renderer="security_section_preview",
+                report_renderer="security_detail_section_report",
             ),
         ),
     ),
