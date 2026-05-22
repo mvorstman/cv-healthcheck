@@ -1,3 +1,4 @@
+from .exceptions import AdapterNotFoundError
 from .store import ArtifactStore
 from .enums import (
     ArtifactStatus,
@@ -26,6 +27,7 @@ from .models import (
 )
 
 __all__ = [
+    "AdapterNotFoundError",
     "ArtifactStore",
     "ArtifactStatus",
     "ArtifactSource",
