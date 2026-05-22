@@ -45,6 +45,7 @@ UNIVERSAL_SOURCE_DEFINITIONS: tuple[SourceDefinition, ...] = (
 )
 
 ENVIRONMENT_METADATA_SECTION_ID = "environment.metadata"
+SECURITY_ASSESSMENT_METADATA_SECTION_ID = "security_assessment.metadata"
 SECURITY_ASSESSMENT_SUMMARY_SECTION_ID = "security_assessment.summary"
 SECURITY_ASSESSMENT_HIGHLIGHTS_SECTION_ID = "security_assessment.highlights"
 SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID = "security_assessment.all_findings"
@@ -120,6 +121,12 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         import_capable=True,
         sections=(
             SectionDefinition(
+                id=SECURITY_ASSESSMENT_METADATA_SECTION_ID,
+                label="Source metadata",
+                preview_renderer="security_metadata_preview",
+                report_renderer="security_metadata_report",
+            ),
+            SectionDefinition(
                 id=SECURITY_ASSESSMENT_SUMMARY_SECTION_ID,
                 label="Summary counters",
                 preview_renderer="security_summary_preview",
@@ -134,42 +141,36 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
             SectionDefinition(
                 id=SECURITY_ASSESSMENT_ACCESS_SECURITY_SECTION_ID,
                 label="Access Security",
-                default_selected=False,
                 preview_renderer="security_section_preview",
                 report_renderer="security_detail_section_report",
             ),
             SectionDefinition(
                 id=SECURITY_ASSESSMENT_AUDITING_SECTION_ID,
                 label="Auditing",
-                default_selected=False,
                 preview_renderer="security_section_preview",
                 report_renderer="security_detail_section_report",
             ),
             SectionDefinition(
                 id=SECURITY_ASSESSMENT_PLATFORM_SECURITY_SECTION_ID,
                 label="Platform Security",
-                default_selected=False,
                 preview_renderer="security_section_preview",
                 report_renderer="security_detail_section_report",
             ),
             SectionDefinition(
                 id=SECURITY_ASSESSMENT_COMPANY_OWNERS_SECURITY_SECTION_ID,
                 label="Company and Owners Security",
-                default_selected=False,
                 preview_renderer="security_section_preview",
                 report_renderer="security_detail_section_report",
             ),
             SectionDefinition(
                 id=SECURITY_ASSESSMENT_CAPABILITIES_SECTION_ID,
                 label="Capabilities",
-                default_selected=False,
                 preview_renderer="security_section_preview",
                 report_renderer="security_detail_section_report",
             ),
             SectionDefinition(
                 id=SECURITY_ASSESSMENT_HARDENING_SECTION_ID,
                 label="Hardening",
-                default_selected=False,
                 preview_renderer="security_section_preview",
                 report_renderer="security_detail_section_report",
             ),

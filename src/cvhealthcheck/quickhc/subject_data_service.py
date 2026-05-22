@@ -20,6 +20,7 @@ from cvhealthcheck.quickhc.registry import (
     REST_COMMAND_CENTER_API_SOURCE_ID,
     REST_REPORTS_PLUS_SOURCE_ID,
     SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME,
+    SECURITY_ASSESSMENT_METADATA_SECTION_ID,
 )
 
 logger = logging.getLogger(__name__)
@@ -362,6 +363,10 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
     highlights = summary.get("highlights") or []
     sections = summary.get("sections") or []
     source_type = sa.get("source_type") or ""
+    generated_on = str(sa.get("generated_on") or "")
+    source = sa.get("source") or {}
+    report_id = str(source.get("report_id") or "").strip()
+    report_name = str(source.get("report_name") or "").strip()
 
     critical = int(counters.get("Critical") or 0)
     warning = int(counters.get("Warning") or 0)
@@ -437,7 +442,7 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
                 "id": section_id,
                 "title": section_name,
                 "meta": f"{len(checks)} finding{'s' if len(checks) != 1 else ''}",
-                "included": False,
+                "included": True,
                 "type": "findings_list",
                 "findings": section_findings,
                 "rows": [
@@ -518,6 +523,20 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
             },
         ),
         "sections": [
+            {
+                "id": SECURITY_ASSESSMENT_METADATA_SECTION_ID,
+                "title": "Source metadata",
+                "meta": (report_name or "Security Assessment"),
+                "included": True,
+                "type": "meta",
+                "rows": [
+                    {"k": "SOURCE", "v": str(source_type or "unknown").upper()},
+                    *([{"k": "IMPORTED", "v": collected_at[:19]}] if collected_at else []),
+                    *([{"k": "GENERATED", "v": generated_on}] if generated_on else []),
+                    *([{"k": "REPORT", "v": f"{report_name} ({report_id})"}] if report_name and report_id else []),
+                    *([{"k": "REPORT", "v": report_name}] if report_name and not report_id else []),
+                ],
+            },
             {
                 "id": "security_assessment.summary",
                 "title": "Summary counters",

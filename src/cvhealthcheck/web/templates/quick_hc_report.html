@@ -106,6 +106,16 @@
   {% if report.security_assessment.requested %}
     <h3>Security Assessment</h3>
     {% if report.security_assessment.available and report.security_assessment.has_content %}
+      {% if report.security_assessment.show_metadata %}
+        <h4>Source Metadata</h4>
+        <table class="compact-table">
+          <tbody>
+            {% for row in report.security_assessment.metadata_rows %}
+              <tr><th>{{ row.label }}</th><td>{{ row.value }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
       {% if report.security_assessment.show_summary %}
         <table class="compact-table">
           <tbody>
@@ -114,10 +124,7 @@
             <tr><th>Warning</th><td>{{ report.security_assessment.warning }}</td></tr>
             <tr><th>Info</th><td>{{ report.security_assessment.info }}</td></tr>
             <tr><th>Good</th><td>{{ report.security_assessment.good }}</td></tr>
-            <tr><th>Source Type</th><td>{{ (report.security_assessment.source_type or "unknown") | upper }}</td></tr>
-            <tr><th>Imported At</th><td>{{ report.security_assessment.imported_at or "Not collected yet" }}</td></tr>
-            <tr><th>Generated On</th><td>{{ report.security_assessment.generated_on or "Not collected yet" }}</td></tr>
-            <tr><th>Detail Page</th><td><a href="{{ report.security_assessment.detail_url }}">View Security Assessment</a></td></tr>
+            <tr><th>Quick HC</th><td><a href="{{ report.security_assessment.detail_url }}">Open Quick HC overview</a></td></tr>
           </tbody>
         </table>
       {% endif %}
@@ -182,7 +189,7 @@
       {% endif %}
     {% else %}
       <p>{{ report.security_assessment.message }}</p>
-      <p><a href="{{ report.security_assessment.detail_url }}">Open Security Assessment</a></p>
+      <p><a href="{{ report.security_assessment.detail_url }}">Open Quick HC overview</a></p>
     {% endif %}
   {% endif %}
 

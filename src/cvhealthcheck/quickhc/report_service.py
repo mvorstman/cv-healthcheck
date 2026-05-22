@@ -28,6 +28,7 @@ from cvhealthcheck.quickhc.registry import (
     SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
     SECURITY_ASSESSMENT_SELECTION_ID,
     SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME,
+    SECURITY_ASSESSMENT_METADATA_SECTION_ID,
     report_overview_default_selection_ids,
     report_subsection_options,
 )
@@ -157,8 +158,9 @@ class QuickHcReportService:
         tile: TileDefinition,
         _built_sections: dict[str, dict[str, Any]],
     ) -> dict[str, Any]:
-        summary_section = tile.sections[0]
-        highlights_section = tile.sections[1]
+        metadata_section = tile.sections[0]
+        summary_section = tile.sections[1]
+        highlights_section = tile.sections[2]
         detail_section_definitions = tuple(
             section
             for section in tile.sections
@@ -174,18 +176,34 @@ class QuickHcReportService:
                 "detail_url": _detail_url_for_tile(tile),
                 "artifact": None,
                 "evidence": None,
+                "metadata_section_id": metadata_section.id,
                 "summary_section_id": summary_section.id,
                 "highlights_section_id": highlights_section.id,
                 "all_findings_section_id": SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
                 "detail_section_ids": tuple(
                     section.id for section in detail_section_definitions
                 ),
+                "metadata_rows": [],
                 "sections": [],
                 "highlight_rows": [],
             }
 
         summary = summarize_security_assessment_artifact(artifact, SECTION_ORDER)
         counters = dict(summary.get("counters") or {})
+        source_metadata = dict(artifact.get("source_metadata") or artifact.get("source") or {})
+        report_id = str(source_metadata.get("report_id") or "").strip()
+        report_name = str(source_metadata.get("report_name") or "").strip()
+        metadata_rows = [
+            {"label": "Source Type", "value": str(artifact.get("source_type") or "unknown").upper()},
+            {"label": "Imported At", "value": artifact.get("imported_at") or "Not collected yet"},
+            {"label": "Generated On", "value": artifact.get("generated_on") or "Not collected yet"},
+        ]
+        if report_name and report_id:
+            metadata_rows.append({"label": "Report", "value": f"{report_name} ({report_id})"})
+        elif report_name:
+            metadata_rows.append({"label": "Report", "value": report_name})
+        elif report_id:
+            metadata_rows.append({"label": "Report", "value": report_id})
         sections = []
         highlight_rows = []
         for section in summary.get("sections", []):
@@ -219,6 +237,8 @@ class QuickHcReportService:
             "imported_at": artifact.get("imported_at"),
             "generated_on": artifact.get("generated_on"),
             "loaded_from_path": artifact.get("loaded_from_path"),
+            "metadata_section_id": metadata_section.id,
+            "metadata_rows": metadata_rows,
             "total_checks": counters.get("Total checks", 0),
             "critical": counters.get("Critical", 0),
             "warning": counters.get("Warning", 0),
@@ -230,9 +250,7 @@ class QuickHcReportService:
             "detail_section_ids": tuple(
                 section.id for section in detail_section_definitions
             ),
-            "source_metadata": dict(
-                artifact.get("source_metadata") or artifact.get("source") or {}
-            ),
+            "source_metadata": source_metadata,
             "sections": sections,
             "highlight_rows": highlight_rows,
             "evidence": ReportEvidence(
@@ -697,6 +715,7 @@ class QuickHcReportService:
         requested: bool,
         selection_ids: set[str],
     ) -> dict[str, Any]:
+        show_metadata = requested and section["metadata_section_id"] in selection_ids
         show_summary = requested and section["summary_section_id"] in selection_ids
         show_highlights = requested and section["highlights_section_id"] in selection_ids
         show_all_findings_alias = (
@@ -713,10 +732,12 @@ class QuickHcReportService:
             return {
                 **section,
                 "requested": requested,
+                "show_metadata": show_metadata,
                 "show_summary": show_summary,
                 "show_highlights": show_highlights,
                 "show_all_findings": show_detailed_sections,
                 "show_detail_sections": show_detailed_sections,
+                "metadata_rows": [],
                 "highlight_rows": [],
                 "visible_sections": [],
                 "has_content": False,
@@ -733,16 +754,18 @@ class QuickHcReportService:
         return {
             **section,
             "requested": requested,
+            "show_metadata": show_metadata,
             "show_summary": show_summary,
             "show_highlights": show_highlights,
             "show_all_findings": show_detailed_sections,
             "show_detail_sections": show_detailed_sections,
+            "metadata_rows": list(section.get("metadata_rows", [])) if show_metadata else [],
             "highlight_rows": (
                 list(section.get("highlight_rows", [])) if show_highlights else []
             ),
             "visible_sections": visible_sections if show_detailed_sections else [],
             "has_content": requested
-            and any((show_summary, show_highlights, show_detailed_sections)),
+            and any((show_metadata, show_summary, show_highlights, show_detailed_sections)),
         }
 
     def _filter_license_summary(
@@ -924,17 +947,19 @@ class QuickHcReportService:
         }
 
     def _default_report_selection_ids(self, report: dict[str, Any]) -> set[str]:
+        security_tile = QUICK_HC_TILE_BY_ID[SECURITY_ASSESSMENT_SELECTION_ID]
         client_growth_tile = QUICK_HC_TILE_BY_ID[CLIENT_GROWTH_SELECTION_ID]
         capacity_license_tile = QUICK_HC_TILE_BY_ID[CAPACITY_LICENSE_SELECTION_ID]
         selection_ids: set[str] = {
             report["environment"]["metadata_section_id"],
+            *security_tile.default_section_ids,
             *client_growth_tile.default_section_ids,
             *capacity_license_tile.default_section_ids,
         }
 
         security = report["security_assessment"]
-        if security.get("available"):
-            selection_ids.add(security["summary_section_id"])
+        if not security.get("available"):
+            selection_ids.difference_update(security_tile.default_section_ids)
 
         license_summary = report["license_summary"]
         if license_summary.get("available"):

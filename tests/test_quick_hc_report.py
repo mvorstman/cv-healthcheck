@@ -358,7 +358,7 @@ def test_quick_hc_report_route_renders_both_summaries_when_artifacts_exist(
     body = response.get_data(as_text=True)
     assert "Security Assessment" in body
     assert "License Summary" in body
-    assert "View Security Assessment" in body
+    assert "Open Quick HC overview" in body
     assert "View License Summary" in body
     assert "Cloud Storage" not in body
     assert "Evidence / Sources" not in body
@@ -500,6 +500,7 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert '"id": "client_growth"' in body
     assert '"id": "capacity_license"' in body
     assert '"id": "backup_job_summary"' in body
+    assert '"id": "security_assessment.metadata"' in body
     assert '"id": "security_assessment.highlights"' in body
     assert '"id": "security_assessment.access_security"' in body
     assert '"id": "security_assessment.auditing"' in body
@@ -1244,6 +1245,8 @@ def test_quick_hc_report_post_security_assessment_summary_only_excludes_findings
     body = response.get_data(as_text=True)
     assert "Security Assessment" in body
     assert "Total checks" in body
+    assert "Generated On" not in body
+    assert "<th>Report</th>" not in body
     assert "Critical / Warning findings" not in body
     assert "Detailed Checks" not in body
     assert "MFA enabled" not in body
@@ -1510,8 +1513,10 @@ def test_quick_hc_report_get_still_uses_default_sections(
     body = response.get_data(as_text=True)
     assert "Environment" in body
     assert "Security Assessment" in body
+    assert "Source Metadata" in body
     assert "Total checks" in body
-    assert "Critical / Warning findings" not in body
+    assert "Critical / Warning findings" in body
+    assert "Detailed Checks" in body
     assert "License Summary" in body
     assert "Workload Summary Sections" in body
     assert "Cloud Storage" not in body

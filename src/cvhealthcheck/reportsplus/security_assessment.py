@@ -117,6 +117,7 @@ def security_assessment_quick_hc() -> dict[str, Any]:
         "exists": True,
         "path": str(payload.get("file_path") or (SECURITY_ASSESSMENT_CATALOG_DIR / NORMALIZED_ARTIFACT)),
         "collected_at": payload.get("imported_at"),
+        "generated_on": payload.get("generated_on"),
         "source": payload.get("source", {}),
         "source_type": payload.get("source_type"),
         "summary": summary,

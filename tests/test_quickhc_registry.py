@@ -113,6 +113,7 @@ def test_backup_job_summary_tile_is_registered() -> None:
 def test_security_assessment_tile_registers_detail_sections() -> None:
     tile = QUICK_HC_TILE_BY_ID["security_assessment"]
     assert tile.section_ids == (
+        "security_assessment.metadata",
         "security_assessment.summary",
         "security_assessment.highlights",
         "security_assessment.access_security",
