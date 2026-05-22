@@ -485,6 +485,8 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert "Capacity Licenses" in body
     assert "Backup Job Summary" in body
     assert "Generate Customer Report" in body
+    assert "Open full details" not in body
+    assert "Full detail page" not in body
     assert "dataset_guid" not in body
     assert "HTTP status" not in body
     assert "data/catalog/" not in body
@@ -586,6 +588,19 @@ def test_quick_hc_renderer_removes_redundant_workspace_include_toggle() -> None:
     assert "toggleSec('" in body
     assert "inp.name = 'selection_ids'; inp.value = s.id;" in body
     assert "si.name = 'selection_ids'; si.value = sec.id;" in body
+
+
+def test_quick_hc_renderer_removes_full_detail_page_actions() -> None:
+    app = create_app()
+    response = app.test_client().get("/static/quick_hc.js")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Open full details" not in body
+    assert "Full detail page" not in body
+    assert "Import via detail page" not in body
+    assert "rf-link" not in body
+    assert "setActiveSrc(this.dataset.subj,this.dataset.src)" in body
 
 
 def test_quick_hc_renderer_uses_shared_data_source_card_structure() -> None:

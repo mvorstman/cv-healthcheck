@@ -245,8 +245,6 @@ function openConfig(id) {
   const srcName = {rest_api:'Direct REST API', rest_report:'REST Report', import:'Import File'};
   rf.style.display = 'flex';
   document.getElementById('rf-source').textContent = s.activeSource ? 'Source: ' + (srcName[s.activeSource] || s.activeSource) : '';
-  const lnk = document.getElementById('rf-link');
-  if (s.fullUrl) { lnk.href = s.fullUrl; lnk.style.display = ''; } else { lnk.style.display = 'none'; }
 
   // Source buttons
   const sl = {v:'● Validated', n:'○ Not configured'};
@@ -278,8 +276,6 @@ function openConfig(id) {
           <button type="submit" class="btn-sm btn-sm-p">Import</button>
         </form>
       </div>`;
-    } else if (activeSrc.hasUpload && s.fullUrl) {
-      srcPanel += `<div class="src-upload" style="margin-top:10px"><a href="${esc(s.fullUrl)}" class="btn-sm btn-sm-s" style="text-decoration:none">Import via detail page →</a></div>`;
     }
     srcPanel += `</div>`;
   }
