@@ -315,10 +315,7 @@ function openConfig(id) {
     </div>` : ''}
     <div class="cfg-sec">
       <div class="cfg-sec-title">Report Sections</div>
-      <div class="cfg-tile">
-        <div style="font-size:11px;color:var(--text-2);margin-top:2px${identityRows ? ';margin-bottom:0' : ''}">${s.sections && s.sections.length ? s.sections.length + ' section' + (s.sections.length === 1 ? '' : 's') + ' available' : 'No report sections configured'}</div>
-        ${identityRows}
-      </div>
+      ${identityRows ? `<div class="cfg-tile">${identityRows}</div>` : ''}
       ${secTiles}
     </div>
     <div class="cfg-sec">
