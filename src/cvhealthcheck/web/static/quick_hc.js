@@ -314,7 +314,7 @@ function openConfig(id) {
     <div class="cfg-sec">
       <div class="cfg-sec-title">Description</div>
       <div class="cfg-tile">
-        <textarea class="cfg-desc-edit" placeholder="Add a description for this subject…" rows="2">${esc(s.description || '')}</textarea>
+        <textarea id="cfg-desc-edit" class="cfg-desc-edit" placeholder="Add a description for this subject…" rows="2" oninput="autoResizeDescription(this)">${esc(s.description || '')}</textarea>
         <div class="cfg-desc-actions">
           <button type="button" class="btn-sm btn-sm-p" onclick="saveDescription('${s.id}')">Save</button>
           <span class="cfg-desc-status${descriptionSaveState.status === 'saved' ? ' cfg-desc-status-saved' : ''}${descriptionSaveState.status === 'error' ? ' cfg-desc-status-error' : ''}">${esc(descriptionSaveState.message || 'Saved description overrides are stored separately from source artifacts.')}</span>
@@ -342,6 +342,7 @@ function openConfig(id) {
       </div>
     </div>
   </div>`;
+  requestAnimationFrame(bindDescriptionEditor);
 }
 
 function toggleSec(sid, secId, val) {
@@ -373,10 +374,9 @@ function autoResizeDescription(el) {
 }
 
 function bindDescriptionEditor() {
-  const input = document.querySelector('.cfg-desc-edit');
+  const input = document.getElementById('cfg-desc-edit');
   if (!input) return;
   autoResizeDescription(input);
-  input.addEventListener('input', () => autoResizeDescription(input));
 }
 
 async function saveDescription(subjId) {
@@ -430,9 +430,3 @@ document.getElementById('btn-gen').addEventListener('click', () => {
 _restoreState();
 renderLeft();
 showOverview();
-
-const _originalOpenConfig = openConfig;
-openConfig = function(id) {
-  _originalOpenConfig(id);
-  bindDescriptionEditor();
-};

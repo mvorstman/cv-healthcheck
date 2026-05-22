@@ -496,9 +496,21 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
 
 
 def test_quick_hc_subjects_always_emit_registry_description() -> None:
+    import cvhealthcheck.quickhc.description_service as description_service_module
+
+    temp_dir = Path("/tmp/test_quick_hc_subjects_always_emit_registry_description")
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    for child in temp_dir.glob("*.json"):
+        child.unlink()
+
+    original_dir = description_service_module.DESCRIPTION_CATALOG_DIR
+    description_service_module.DESCRIPTION_CATALOG_DIR = temp_dir
     app = create_app()
-    with app.test_request_context("/quick-hc"):
-        initial_data = build_subject_initial_data()
+    try:
+        with app.test_request_context("/quick-hc"):
+            initial_data = build_subject_initial_data()
+    finally:
+        description_service_module.DESCRIPTION_CATALOG_DIR = original_dir
 
     subjects = {
         subject["id"]: subject
@@ -653,6 +665,8 @@ def test_quick_hc_renderer_does_not_repeat_subject_title_in_report_sections_pane
     assert "saveDescription('" in body
     assert "Description saved." in body
     assert "Not yet persisted" not in body
+    assert 'oninput="autoResizeDescription(this)"' in body
+    assert "requestAnimationFrame(bindDescriptionEditor);" in body
 
 
 def test_quick_hc_workspace_sources_use_standardized_shape_and_labels(
