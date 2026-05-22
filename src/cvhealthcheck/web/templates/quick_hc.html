@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='quick_hc.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='quick_hc.css', v=asset_version) }}">
   <script>
     window.QUICK_HC_INITIAL_DATA = {{ initial_data | tojson }};
   </script>
@@ -40,6 +40,6 @@
 
 <form id="report-form" method="post" action="{{ url_for('main.quick_hc_report') }}" style="display:none"></form>
 
-<script src="{{ url_for('static', filename='quick_hc.js') }}"></script>
+<script src="{{ url_for('static', filename='quick_hc.js', v=asset_version) }}"></script>
 </body>
 </html>

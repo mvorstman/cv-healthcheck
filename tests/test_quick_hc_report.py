@@ -464,6 +464,8 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert "window.QUICK_HC_INITIAL_DATA" in body
     assert "/static/quick_hc.css" in body
     assert "/static/quick_hc.js" in body
+    assert "quick_hc.css?v=" in body
+    assert "quick_hc.js?v=" in body
     assert 'id="left-scroll"' in body
     assert 'id="right-body"' in body
     assert 'id="report-form"' in body
@@ -487,6 +489,7 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert "Generate Customer Report" in body
     assert "Open full details" not in body
     assert "Full detail page" not in body
+    assert "Not yet persisted" not in body
     assert "dataset_guid" not in body
     assert "HTTP status" not in body
     assert "data/catalog/" not in body
@@ -649,6 +652,7 @@ def test_quick_hc_renderer_does_not_repeat_subject_title_in_report_sections_pane
     assert "${esc(s.subtitle || '')}</textarea>" not in body
     assert "saveDescription('" in body
     assert "Description saved." in body
+    assert "Not yet persisted" not in body
 
 
 def test_quick_hc_workspace_sources_use_standardized_shape_and_labels(

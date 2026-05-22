@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from hashlib import md5
 
 from .shared import (
     LICENSE_SUMMARY_UPLOAD_EXTENSIONS,
@@ -43,11 +44,25 @@ from cvhealthcheck.reportsplus.backup_job_summary import (
 from cvhealthcheck.reportsplus.security_assessment import security_assessment_quick_hc
 
 
+def _quick_hc_asset_version() -> str:
+    base = Path(__file__).resolve().parents[1] / "static"
+    parts = []
+    for name in ("quick_hc.css", "quick_hc.js"):
+        path = base / name
+        try:
+            stat = path.stat()
+            parts.append(f"{name}:{int(stat.st_mtime)}:{stat.st_size}")
+        except FileNotFoundError:
+            parts.append(f"{name}:missing")
+    return md5("|".join(parts).encode("utf-8"), usedforsecurity=False).hexdigest()[:10]
+
+
 @bp.route("/quick-hc")
 def quick_hc():
     return render_template(
         "quick_hc.html",
         initial_data=build_subject_initial_data(),
+        asset_version=_quick_hc_asset_version(),
     )
 
 
