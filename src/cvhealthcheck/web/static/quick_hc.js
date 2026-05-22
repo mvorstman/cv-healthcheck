@@ -366,6 +366,19 @@ function setDescriptionStatus(status, message) {
   el.textContent = message;
 }
 
+function autoResizeDescription(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight}px`;
+}
+
+function bindDescriptionEditor() {
+  const input = document.querySelector('.cfg-desc-edit');
+  if (!input) return;
+  autoResizeDescription(input);
+  input.addEventListener('input', () => autoResizeDescription(input));
+}
+
 async function saveDescription(subjId) {
   const s = findSubj(subjId);
   if (!s) return;
@@ -384,6 +397,7 @@ async function saveDescription(subjId) {
     const saved = await response.json();
     s.description = saved.description || description;
     descriptionSaveState = { status: 'saved', message: 'Description saved.' };
+    autoResizeDescription(input);
     setDescriptionStatus('saved', 'Description saved.');
   } catch (_err) {
     descriptionSaveState = { status: 'error', message: 'Description save failed.' };
@@ -416,3 +430,9 @@ document.getElementById('btn-gen').addEventListener('click', () => {
 _restoreState();
 renderLeft();
 showOverview();
+
+const _originalOpenConfig = openConfig;
+openConfig = function(id) {
+  _originalOpenConfig(id);
+  bindDescriptionEditor();
+};
