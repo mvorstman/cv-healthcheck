@@ -68,7 +68,7 @@ function renderLeft() {
       const isActive = s.id === activeId && mode === 'config';
       h += `<div class="subj-row${isActive ? ' active' : ''}" id="sr-${s.id}">
         <span class="subj-name" onclick="openConfig('${s.id}')">${esc(s.name)}</span>
-        <input type="checkbox" class="subj-cb" ${s.included ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleInclude('${s.id}',this.checked)" title="Include in report">
+        <input type="checkbox" class="subj-cb" ${s.included ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleInclude('${s.id}',this.checked)" title="Select subject" aria-label="Select ${esc(s.name)} for report generation">
       </div>`;
     });
     h += `</div></div>`;
@@ -182,7 +182,7 @@ function secBody(sec) {
 function secTile(subjId, sec, showCheckbox) {
   const body = sec.included ? secBody(sec) : '';
   const right = showCheckbox
-    ? `<label class="sec-inc-label"><span style="color:var(--text-2)">Include in report</span><input type="checkbox" class="sec-inc-cb" ${sec.included ? 'checked' : ''} onchange="toggleSec('${subjId}','${sec.id}',this.checked)"></label>`
+    ? `<label class="sec-inc-label"><input type="checkbox" class="sec-inc-cb" ${sec.included ? 'checked' : ''} onchange="toggleSec('${subjId}','${sec.id}',this.checked)" title="Select section" aria-label="Select ${esc(sec.title)} section for report generation"></label>`
     : (sec.included ? `<span class="inc-pill-yes">Included</span>` : `<span class="inc-pill-no">Not included</span>`);
   return `<div class="sec-tile${sec.included ? '' : ' excluded'}">
     <div class="sec-tile-hdr${body ? ' sec-tile-hdr-border' : ''}">
@@ -316,13 +316,7 @@ function openConfig(id) {
     <div class="cfg-sec">
       <div class="cfg-sec-title">Report Sections</div>
       <div class="cfg-tile">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between${identityRows ? ';margin-bottom:0' : ''}">
-          <div style="font-size:11px;color:var(--text-2);margin-top:2px">${s.sections && s.sections.length ? s.sections.length + ' section' + (s.sections.length === 1 ? '' : 's') + ' available' : 'No report sections configured'}</div>
-          <label class="sec-inc-label">
-            Include in report
-            <input type="checkbox" class="sec-inc-cb" ${s.included ? 'checked' : ''} onchange="toggleInclude('${s.id}',this.checked)">
-          </label>
-        </div>
+        <div style="font-size:11px;color:var(--text-2);margin-top:2px${identityRows ? ';margin-bottom:0' : ''}">${s.sections && s.sections.length ? s.sections.length + ' section' + (s.sections.length === 1 ? '' : 's') + ' available' : 'No report sections configured'}</div>
         ${identityRows}
       </div>
       ${secTiles}

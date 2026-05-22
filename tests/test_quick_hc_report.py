@@ -575,6 +575,19 @@ def test_quick_hc_renderer_scopes_commcell_metadata_to_environment_tile() -> Non
     assert "shown for all subjects" not in body
 
 
+def test_quick_hc_renderer_removes_redundant_workspace_include_toggle() -> None:
+    app = create_app()
+    response = app.test_client().get("/static/quick_hc.js")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "Include in report" not in body
+    assert "toggleInclude('" in body
+    assert "toggleSec('" in body
+    assert "inp.name = 'selection_ids'; inp.value = s.id;" in body
+    assert "si.name = 'selection_ids'; si.value = sec.id;" in body
+
+
 def test_quick_hc_overview_license_summary_previews_real_fields(
     tmp_path, monkeypatch
 ) -> None:
