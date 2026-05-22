@@ -317,10 +317,7 @@ function openConfig(id) {
       <div class="cfg-sec-title">Report Sections</div>
       <div class="cfg-tile">
         <div style="display:flex;align-items:flex-start;justify-content:space-between${identityRows ? ';margin-bottom:0' : ''}">
-          <div>
-            <div style="font-size:13px;font-weight:600">${esc(s.name)}</div>
-            <div style="font-size:11px;color:var(--text-2);margin-top:2px">${s.sections && s.sections.length ? s.sections.length + ' section' + (s.sections.length === 1 ? '' : 's') + ' below' : 'No report sections configured'}</div>
-          </div>
+          <div style="font-size:11px;color:var(--text-2);margin-top:2px">${s.sections && s.sections.length ? s.sections.length + ' section' + (s.sections.length === 1 ? '' : 's') + ' available' : 'No report sections configured'}</div>
           <label class="sec-inc-label">
             Include in report
             <input type="checkbox" class="sec-inc-cb" ${s.included ? 'checked' : ''} onchange="toggleInclude('${s.id}',this.checked)">
