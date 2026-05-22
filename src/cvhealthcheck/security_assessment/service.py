@@ -10,6 +10,8 @@ from uuid import uuid4
 
 from werkzeug.utils import secure_filename
 
+from cvhealthcheck.artifacts.models import CanonicalArtifact
+from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.reportsplus.catalog import collected_at
 from cvhealthcheck.reportsplus.client import ReportsPlusClient
 
@@ -45,6 +47,7 @@ DEFAULT_COMMCELL_CONTEXT = CommCellContext(
     customer_id=DEFAULT_CUSTOMER_CONTEXT.customer_id,
 )
 logger = logging.getLogger(__name__)
+_artifact_store = ArtifactStore()
 
 
 class SecurityAssessmentImportError(ValueError):
@@ -114,6 +117,7 @@ class SecurityAssessmentService:
         source_type: str | None = None,
         engagement_id: str | None = None,
         report_stream_id: str | None = None,
+        limit: int = 10,
     ) -> dict[str, Any]:
         artifacts = self.registry.list_artifacts_for_scope(
             "security_assessment",
@@ -123,6 +127,7 @@ class SecurityAssessmentService:
             engagement_id=engagement_id,
             report_stream_id=report_stream_id,
             descending=True,
+            limit=limit,
         )
         return {
             "artifacts": [artifact.to_dict() for artifact in artifacts],
@@ -148,6 +153,7 @@ class SecurityAssessmentService:
         client: ReportsPlusClient | None = None,
         execute: bool = True,
     ) -> dict[str, Any]:
+        from cvhealthcheck.adapters.security_assessment import adapt_reportsplus_rest
         from cvhealthcheck.reportsplus.security_assessment import (
             extract_security_assessment,
         )
@@ -160,7 +166,12 @@ class SecurityAssessmentService:
             raise SecurityAssessmentImportError(
                 "REST collection produced no Security Assessment findings."
             )
+        canonical = adapt_reportsplus_rest(result.get("extraction") or {})
+        _artifact_store.save_artifact(canonical)
         return result
+
+    def get_canonical(self) -> CanonicalArtifact:
+        return _artifact_store.load_latest_artifact("security_assessment")
 
 
 def import_security_assessment_upload(
@@ -418,6 +429,7 @@ def list_security_assessment_artifacts(
     source_type: str | None = None,
     engagement_id: str | None = None,
     report_stream_id: str | None = None,
+    limit: int = 10,
 ) -> list[dict[str, Any]]:
     registry = SecurityAssessmentArtifactRegistry(
         registry_path or SECURITY_ASSESSMENT_REGISTRY_PATH
@@ -432,6 +444,7 @@ def list_security_assessment_artifacts(
             engagement_id=engagement_id,
             report_stream_id=report_stream_id,
             descending=True,
+            limit=limit,
         )
     ]
 
