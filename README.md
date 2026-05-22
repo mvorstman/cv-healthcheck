@@ -81,8 +81,6 @@ Flask UI:
 ```text
 http://127.0.0.1:5001/quick-hc
 http://127.0.0.1:5001/quick-hc/commcell
-http://127.0.0.1:5001/quick-hc/security-assessment
-http://127.0.0.1:5001/quick-hc/license-summary
 http://127.0.0.1:5001/quick-hc/report
 ```
 

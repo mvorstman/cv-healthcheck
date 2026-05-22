@@ -439,8 +439,8 @@ def test_quick_hc_report_service_uses_registry_detail_urls_and_client_growth_has
     with app.test_request_context():
         report = QuickHcReportService().build_report()
 
-    assert report["security_assessment"]["detail_url"] == "/quick-hc/security-assessment"
-    assert report["license_summary"]["detail_url"] == "/quick-hc/license-summary"
+    assert report["security_assessment"]["detail_url"] == "/quick-hc"
+    assert report["license_summary"]["detail_url"] == "/quick-hc"
     assert report["client_growth"]["detail_url"] == "/metrics/client-growth"
     assert report["capacity_license"]["detail_url"] == "/metrics/capacity-license"
     assert report["backup_job_summary"]["detail_url"] == "/quick-hc/backup-job-summary"
@@ -917,17 +917,8 @@ def test_quick_hc_security_assessment_detail_renders_all_artifact_sections(
     app = create_app()
     response = app.test_client().get("/quick-hc/security-assessment")
 
-    assert response.status_code == 200
-    body = response.get_data(as_text=True)
-    for section_name in (
-        "Access Security",
-        "Auditing",
-        "Platform Security",
-        "Company and Owners Security",
-        "Capabilities",
-        "Hardening",
-    ):
-        assert f"<h4>{section_name}</h4>" in body
+    assert response.status_code == 302
+    assert "/quick-hc" in response.headers["Location"]
 
 
 def test_quick_hc_overview_handles_missing_backup_job_summary_artifact(

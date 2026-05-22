@@ -35,13 +35,10 @@ from cvhealthcheck.quickhc.subject_data_service import build_subject_initial_dat
 from cvhealthcheck.quickhc.source_provenance import (
     build_backup_job_summary_provenance,
     build_commcell_provenance,
-    build_license_summary_provenance,
-    build_security_assessment_provenance,
 )
 from cvhealthcheck.reportsplus.backup_job_summary import (
     load_backup_job_summary_artifact,
 )
-from cvhealthcheck.reportsplus.security_assessment import security_assessment_quick_hc
 
 
 def _quick_hc_asset_version() -> str:
@@ -108,17 +105,7 @@ def quick_hc_commcell():
 
 @bp.route("/quick-hc/security-assessment")
 def quick_hc_security_assessment():
-    assessment = security_assessment_quick_hc()
-    flashes = [
-        {"category": category, "message": text}
-        for category, text in get_flashed_messages(with_categories=True)
-    ]
-    return render_template(
-        "quick_hc_security_assessment.html",
-        assessment=assessment,
-        source_provenance=build_security_assessment_provenance(assessment),
-        flashes=flashes,
-    )
+    return redirect(url_for("main.quick_hc"))
 
 
 @bp.route("/quick-hc/security-assessment/import", methods=["POST"])
@@ -182,21 +169,7 @@ def quick_hc_security_assessment_collect():
 
 @bp.route("/quick-hc/license-summary")
 def quick_hc_license_summary():
-    artifact = None
-    try:
-        artifact = LicenseSummaryService().get_current()
-    except FileNotFoundError:
-        pass
-    flashes = [
-        {"category": category, "message": text}
-        for category, text in get_flashed_messages(with_categories=True)
-    ]
-    return render_template(
-        "license_summary.html",
-        artifact=artifact,
-        source_provenance=build_license_summary_provenance(artifact),
-        flashes=flashes,
-    )
+    return redirect(url_for("main.quick_hc"))
 
 
 @bp.route("/quick-hc/backup-job-summary")

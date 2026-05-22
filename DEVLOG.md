@@ -1,5 +1,11 @@
 # Development Log
 
+## 2026-05-23
+
+- Retired the `/quick-hc/security-assessment` and `/quick-hc/license-summary` detail pages; both GET handlers now redirect to `/quick-hc`.
+- Deleted the `quick_hc_security_assessment.html` and `license_summary.html` templates.
+- Updated `detail_endpoint` in the Quick HC registry and `_try_url` calls in `subject_data_service.py` to point to `main.quick_hc` directly instead of the retired routes.
+
 ## 2026-05-22
 
 - Hardened Quick HC section-contract consistency after discovering that Security Assessment detail sections and customer-report sections had drifted apart.

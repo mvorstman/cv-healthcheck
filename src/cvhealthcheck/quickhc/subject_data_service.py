@@ -318,7 +318,7 @@ def _build_environment_subject(cc: dict | None) -> dict:
 
 
 def _build_security_assessment_subject(sa: dict | None) -> dict:
-    full_url = _try_url("main.quick_hc_security_assessment")
+    full_url = _try_url("main.quick_hc")
     if not sa or not sa.get("exists"):
         subj = _nodata_subject("security_assessment", "Security Assessment", full_url)
         subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
@@ -548,7 +548,7 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
 
 
 def _build_license_summary_subject(ls: dict | None) -> dict:
-    full_url = _try_url("main.quick_hc_license_summary")
+    full_url = _try_url("main.quick_hc")
     if not ls:
         subj = _nodata_subject("license_summary", "License Summary", full_url)
         subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID

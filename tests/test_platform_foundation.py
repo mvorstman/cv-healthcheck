@@ -31,7 +31,8 @@ def test_quick_hc_and_report_pages_still_render() -> None:
     client = app.test_client()
 
     assert client.get("/quick-hc").status_code == 200
-    assert client.get("/quick-hc/license-summary").status_code == 200
+    assert client.get("/quick-hc/license-summary").status_code == 302
+    assert client.get("/quick-hc/security-assessment").status_code == 302
     assert client.get("/quick-hc/backup-job-summary").status_code == 200
     assert client.get("/security-assessment").status_code == 200
 

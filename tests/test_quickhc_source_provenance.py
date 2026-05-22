@@ -162,27 +162,13 @@ def test_license_summary_detail_route_renders_shared_source_provenance(
     app = create_app()
     response = app.test_client().get("/quick-hc/license-summary")
 
-    assert response.status_code == 200
-    body = response.get_data(as_text=True)
-    assert "Source / Acquisition" in body
-    assert "REST / Reports Plus" in body
-    assert "CSV" in body
-    assert "HTML" in body
-    assert "Normalized artifact" not in body
-    assert "Manual/static source" not in body
-    assert body.count("source-provenance-item--primary") == 1
-    assert body.count("source-provenance-item--secondary") == 2
-    assert "artifact_" in body
+    assert response.status_code == 302
+    assert "/quick-hc" in response.headers["Location"]
 
 
 def test_security_assessment_detail_keeps_import_controls_with_simplified_provenance() -> None:
     app = create_app()
     response = app.test_client().get("/quick-hc/security-assessment")
 
-    assert response.status_code == 200
-    body = response.get_data(as_text=True)
-    assert "Source / Acquisition" in body
-    assert "REST / Reports Plus" in body
-    assert "CSV" in body
-    assert "HTML" in body
-    assert "Import Security Assessment" in body
+    assert response.status_code == 302
+    assert "/quick-hc" in response.headers["Location"]
