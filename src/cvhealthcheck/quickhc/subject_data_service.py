@@ -168,12 +168,45 @@ def _nodata_subject(subject_id: str, name: str, full_url: str | None = None) -> 
     }
 
 
+def _source_item(
+    source_id: str,
+    name: str,
+    desc: str,
+    *,
+    status: str = "n",
+    meta: list[dict[str, str]] | None = None,
+    has_upload: bool = False,
+    import_url: str | None = None,
+    import_field: str | None = None,
+) -> dict[str, Any]:
+    item: dict[str, Any] = {
+        "id": source_id,
+        "name": name,
+        "desc": desc,
+        "status": status,
+        "meta": list(meta or []),
+    }
+    if has_upload:
+        item["hasUpload"] = True
+    if import_url:
+        item["importUrl"] = import_url
+    if import_field:
+        item["importField"] = import_field
+    return item
+
+
 def _build_environment_subject(cc: dict | None) -> dict:
     full_url = _try_url("main.quick_hc_commcell")
     if not cc:
         subj = _nodata_subject("environment", "CommCell Details", full_url)
         subj["activeSource"] = "rest_api"
-        subj["sources"] = [{"id": "rest_api", "name": "Direct REST API", "desc": "Live call to CommServ API", "status": "n", "meta": []}]
+        subj["sources"] = [
+            _source_item(
+                "rest_api",
+                "Direct REST API",
+                "Live call to the CommServ identity endpoint.",
+            )
+        ]
         return subj
 
     name = cc.get("hostName") or "CommCell"
@@ -195,16 +228,17 @@ def _build_environment_subject(cc: dict | None) -> dict:
         "fullUrl": full_url,
         "activeSource": "rest_api",
         "sources": [
-            {
-                "id": "rest_api",
-                "name": "Direct REST API",
-                "desc": "Live call to GET /commandcenter/api/CommServ",
-                "status": "v",
-                "meta": [
+            _source_item(
+                "rest_api",
+                "Direct REST API",
+                "Live call to GET /commandcenter/api/CommServ.",
+                status="v",
+                meta=[
+                    {"k": "Endpoint", "v": "GET /commandcenter/api/CommServ"},
                     {"k": "Host", "v": name},
                     {"k": "Version", "v": version or "Unknown"},
                 ],
-            },
+            ),
         ],
         "sections": [
             {
@@ -225,8 +259,20 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
         subj = _nodata_subject("security_assessment", "Security Assessment", full_url)
         subj["activeSource"] = "rest_report"
         subj["sources"] = [
-            {"id": "rest_report", "name": "REST Report", "desc": "Reports Plus report 336 — Security Assessment", "status": "n", "meta": []},
-            {"id": "import", "name": "Import File", "desc": "Upload HTML or CSV export — format auto-detected", "status": "n", "meta": [], "hasUpload": True, "importUrl": "/quick-hc/security-assessment/import", "importField": "assessment_file"},
+            _source_item(
+                "rest_report",
+                "REST / Reports Plus",
+                "Reports Plus report 336 — Security Assessment.",
+                meta=[{"k": "Report ID", "v": "336"}],
+            ),
+            _source_item(
+                "import",
+                "CSV / HTML import",
+                "Upload a Security Assessment CSV or HTML export.",
+                has_upload=True,
+                import_url="/quick-hc/security-assessment/import",
+                import_field="assessment_file",
+            ),
         ]
         return subj
 
@@ -340,23 +386,27 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
         "fullUrl": full_url,
         "activeSource": active_src,
         "sources": [
-            {
-                "id": "rest_report",
-                "name": "REST Report",
-                "desc": "Reports Plus report 336 — Security Assessment",
-                "status": "v" if is_rest else "n",
-                "meta": ([{"k": "Report ID", "v": "336"}, {"k": "Collected", "v": collected_at}, {"k": "Findings", "v": str(total)}] if is_rest and collected_at else [{"k": "Report ID", "v": "336"}] if is_rest else []),
-            },
-            {
-                "id": "import",
-                "name": "Import File",
-                "desc": "Upload HTML or CSV export — format auto-detected",
-                "status": "v" if is_import else "n",
-                "meta": ([{"k": "Source Type", "v": source_type.upper()}, {"k": "Imported", "v": collected_at}] if is_import and collected_at else []),
-                "hasUpload": True,
-                "importUrl": "/quick-hc/security-assessment/import",
-                "importField": "assessment_file",
-            },
+            _source_item(
+                "rest_report",
+                "REST / Reports Plus",
+                "Reports Plus report 336 — Security Assessment.",
+                status="v" if is_rest else "n",
+                meta=(
+                    [{"k": "Report ID", "v": "336"}, {"k": "Last Collected", "v": collected_at}, {"k": "Findings", "v": str(total)}]
+                    if is_rest and collected_at else
+                    ([{"k": "Report ID", "v": "336"}] if is_rest else [{"k": "Report ID", "v": "336"}])
+                ),
+            ),
+            _source_item(
+                "import",
+                "CSV / HTML import",
+                "Upload a Security Assessment CSV or HTML export.",
+                status="v" if is_import else "n",
+                meta=([{"k": "Source Type", "v": source_type.upper()}, {"k": "Last Imported", "v": collected_at}] if is_import and collected_at else []),
+                has_upload=True,
+                import_url="/quick-hc/security-assessment/import",
+                import_field="assessment_file",
+            ),
         ],
         "sections": [
             {
@@ -394,8 +444,20 @@ def _build_license_summary_subject(ls: dict | None) -> dict:
         subj = _nodata_subject("license_summary", "License Summary", full_url)
         subj["activeSource"] = "rest_report"
         subj["sources"] = [
-            {"id": "rest_report", "name": "REST Report", "desc": "Reports Plus report 206 — License Summary", "status": "n", "meta": []},
-            {"id": "import", "name": "Import File", "desc": "Upload CSV or HTML export — format auto-detected", "status": "n", "meta": [], "hasUpload": True, "importUrl": "/quick-hc/license-summary/import", "importField": "license_summary_file"},
+            _source_item(
+                "rest_report",
+                "REST / Reports Plus",
+                "Reports Plus report 206 — License Summary.",
+                meta=[{"k": "Report ID", "v": "206"}],
+            ),
+            _source_item(
+                "import",
+                "CSV / HTML import",
+                "Upload a License Summary CSV or HTML export.",
+                has_upload=True,
+                import_url="/quick-hc/license-summary/import",
+                import_field="license_summary_file",
+            ),
         ]
         return subj
 
@@ -479,23 +541,23 @@ def _build_license_summary_subject(ls: dict | None) -> dict:
         "fullUrl": full_url,
         "activeSource": active_src,
         "sources": [
-            {
-                "id": "rest_report",
-                "name": "REST Report",
-                "desc": "Reports Plus report 206 — License Summary",
-                "status": "v" if is_rest else "n",
-                "meta": [{"k": "Report ID", "v": "206"}, {"k": "Status", "v": "Executable"}] if is_rest else [],
-            },
-            {
-                "id": "import",
-                "name": "Import File",
-                "desc": "Upload CSV or HTML export — format auto-detected",
-                "status": "v" if is_import else "n",
-                "meta": ([{"k": "Source Type", "v": source_type.upper()}, {"k": "Imported", "v": imported_at[:19]}] if is_import and imported_at else []),
-                "hasUpload": True,
-                "importUrl": "/quick-hc/license-summary/import",
-                "importField": "license_summary_file",
-            },
+            _source_item(
+                "rest_report",
+                "REST / Reports Plus",
+                "Reports Plus report 206 — License Summary.",
+                status="v" if is_rest else "n",
+                meta=[{"k": "Report ID", "v": "206"}, {"k": "Source Type", "v": "REST"}] if is_rest else [{"k": "Report ID", "v": "206"}],
+            ),
+            _source_item(
+                "import",
+                "CSV / HTML import",
+                "Upload a License Summary CSV or HTML export.",
+                status="v" if is_import else "n",
+                meta=([{"k": "Source Type", "v": source_type.upper()}, {"k": "Last Imported", "v": imported_at[:19]}] if is_import and imported_at else []),
+                has_upload=True,
+                import_url="/quick-hc/license-summary/import",
+                import_field="license_summary_file",
+            ),
         ],
         "sections": [
             {
@@ -553,7 +615,14 @@ def _build_client_growth_subject(cg: dict | None) -> dict:
     if not cg:
         subj = _nodata_subject("client_growth", "Client Growth", full_url)
         subj["activeSource"] = "rest_report"
-        subj["sources"] = [{"id": "rest_report", "name": "REST Report", "desc": "Reports Plus report 318 — Client Growth", "status": "n", "meta": []}]
+        subj["sources"] = [
+            _source_item(
+                "rest_report",
+                "REST / Reports Plus",
+                "Reports Plus report 318 — Client Growth.",
+                meta=[{"k": "Report ID", "v": "318"}],
+            )
+        ]
         return subj
 
     records = list(cg.get("records") or [])
@@ -618,16 +687,17 @@ def _build_client_growth_subject(cg: dict | None) -> dict:
         "fullUrl": full_url,
         "activeSource": "rest_report",
         "sources": [
-            {
-                "id": "rest_report",
-                "name": "REST Report",
-                "desc": "Reports Plus report 318 — Client Growth",
-                "status": "v",
-                "meta": [
+            _source_item(
+                "rest_report",
+                "REST / Reports Plus",
+                "Reports Plus report 318 — Client Growth.",
+                status="v",
+                meta=[
                     {"k": "Report ID", "v": "318"},
                     {"k": "Records", "v": str(len(records))},
+                    {"k": "Latest Month", "v": latest_month or "Unknown"},
                 ],
-            },
+            ),
         ],
         "sections": [
             {
@@ -664,7 +734,14 @@ def _build_capacity_license_subject(cl: dict | None) -> dict:
     if not cl:
         subj = _nodata_subject("capacity_license", "Capacity Licenses", full_url)
         subj["activeSource"] = "rest_report"
-        subj["sources"] = [{"id": "rest_report", "name": "REST Report", "desc": "Reports Plus report 318 — Capacity License", "status": "n", "meta": []}]
+        subj["sources"] = [
+            _source_item(
+                "rest_report",
+                "REST / Reports Plus",
+                "Reports Plus report 318 — Capacity License.",
+                meta=[{"k": "Report ID", "v": "318"}],
+            )
+        ]
         return subj
 
     records = list(cl.get("records") or [])
@@ -733,16 +810,16 @@ def _build_capacity_license_subject(cl: dict | None) -> dict:
         "fullUrl": full_url,
         "activeSource": "rest_report",
         "sources": [
-            {
-                "id": "rest_report",
-                "name": "REST Report",
-                "desc": "Reports Plus report 318 — Capacity License",
-                "status": "v",
-                "meta": [
+            _source_item(
+                "rest_report",
+                "REST / Reports Plus",
+                "Reports Plus report 318 — Capacity License.",
+                status="v",
+                meta=[
                     {"k": "Report ID", "v": "318"},
-                    {"k": "Period", "v": latest_month},
+                    {"k": "Period", "v": latest_month or "Unknown"},
                 ],
-            },
+            ),
         ],
         "sections": [
             {
@@ -771,7 +848,14 @@ def _build_backup_job_summary_subject(bjs: dict | None) -> dict:
     if not bjs:
         subj = _nodata_subject("backup_job_summary", "Backup Job Summary", full_url)
         subj["activeSource"] = "rest_report"
-        subj["sources"] = [{"id": "rest_report", "name": "REST Report", "desc": "Reports Plus Backup Job Summary dataset", "status": "n", "meta": []}]
+        subj["sources"] = [
+            _source_item(
+                "rest_report",
+                "REST / Reports Plus",
+                "Reports Plus Backup Job Summary dataset.",
+                meta=[{"k": "Dataset", "v": "2638c3d3-adc7-4b61-bb24-2ba509229bf5"}],
+            )
+        ]
         return subj
 
     total_jobs = int(bjs.get("total_jobs") or 0)
@@ -832,16 +916,17 @@ def _build_backup_job_summary_subject(bjs: dict | None) -> dict:
         "fullUrl": full_url,
         "activeSource": "rest_report",
         "sources": [
-            {
-                "id": "rest_report",
-                "name": "REST Report",
-                "desc": "Reports Plus Backup Job Summary dataset",
-                "status": "v",
-                "meta": [
+            _source_item(
+                "rest_report",
+                "REST / Reports Plus",
+                "Reports Plus Backup Job Summary dataset.",
+                status="v",
+                meta=[
+                    {"k": "Dataset", "v": str(bjs.get("source_dataset_guid") or "2638c3d3-adc7-4b61-bb24-2ba509229bf5")},
+                    {"k": "Last Generated", "v": str(bjs.get("generated_at") or "Unknown")},
                     {"k": "Total Jobs", "v": str(total_jobs)},
-                    {"k": "Generated", "v": str(bjs.get("generated_at") or "")},
                 ],
-            },
+            ),
         ],
         "sections": [
             {

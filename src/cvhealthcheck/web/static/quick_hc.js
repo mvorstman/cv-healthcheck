@@ -259,8 +259,13 @@ function openConfig(id) {
   let srcPanel = '';
   if (activeSrc) {
     srcPanel = `<div class="src-meta-panel"><span class="src-status ${sc[activeSrc.status] || 'ss-n'}">${sl[activeSrc.status] || '○ Not configured'}</span>`;
+    if (activeSrc.desc) {
+      srcPanel += `<div class="src-meta-desc">${esc(activeSrc.desc)}</div>`;
+    }
     if (activeSrc.meta && activeSrc.meta.length) {
       srcPanel += `<div style="margin-top:8px">${activeSrc.meta.map(m => `<div class="src-meta-row"><span>${esc(m.k)}</span><span>${esc(m.v)}</span></div>`).join('')}</div>`;
+    } else {
+      srcPanel += `<div class="src-meta-empty">No source metadata is available yet.</div>`;
     }
     if (activeSrc.hasUpload && activeSrc.importUrl) {
       srcPanel += `<div class="src-upload">

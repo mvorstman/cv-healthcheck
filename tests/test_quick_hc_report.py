@@ -588,6 +588,18 @@ def test_quick_hc_renderer_removes_redundant_workspace_include_toggle() -> None:
     assert "si.name = 'selection_ids'; si.value = sec.id;" in body
 
 
+def test_quick_hc_renderer_uses_shared_data_source_card_structure() -> None:
+    app = create_app()
+    response = app.test_client().get("/static/quick_hc.js")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "src-meta-panel" in body
+    assert "src-meta-desc" in body
+    assert "src-meta-empty" in body
+    assert "No source metadata is available yet." in body
+
+
 def test_quick_hc_renderer_does_not_repeat_subject_title_in_report_sections_panel() -> None:
     app = create_app()
     response = app.test_client().get("/static/quick_hc.js")
@@ -598,6 +610,83 @@ def test_quick_hc_renderer_does_not_repeat_subject_title_in_report_sections_pane
     assert "sections available" not in body
     assert '<div style="font-size:13px;font-weight:600">${esc(s.name)}</div>' not in body
     assert "${secTiles}" in body
+
+
+def test_quick_hc_workspace_sources_use_standardized_shape_and_labels(
+    tmp_path, monkeypatch
+) -> None:
+    import cvhealthcheck.quickhc.subject_data_service as subject_data_service_module
+
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+    metrics_dir = _patch_metrics_paths(tmp_path, monkeypatch)
+    backup_catalog_dir = _patch_backup_job_summary_paths(tmp_path, monkeypatch)
+
+    monkeypatch.setattr(
+        subject_data_service_module,
+        "read_json",
+        lambda *_args, **_kwargs: {
+            "identity": {
+                "hostName": "CommServe A",
+                "csGUID": "commcell-01",
+                "csVersionInfo": "11 SP40.47",
+                "timeZone": "UTC",
+            }
+        },
+    )
+
+    security_artifact = build_security_assessment_artifact(
+        [{"section": "Access Security", "parameter": "MFA enabled", "status": "Critical", "remarks": "Missing", "action": "Enable MFA"}],
+        source_type="rest",
+        source={"report_id": "336"},
+    )
+    persist_security_assessment_artifact(
+        security_artifact,
+        catalog_dir=tmp_path / "security_catalog",
+        registry_path=tmp_path / "security_registry.sqlite3",
+    )
+
+    license_artifact = parse_license_summary_csv(
+        LICENSE_CSV_SAMPLE,
+        source_file="/tmp/license-summary.csv",
+    )
+    persist_license_summary_artifact(
+        license_artifact,
+        catalog_dir=tmp_path / "license_catalog",
+        registry_path=tmp_path / "license_registry.sqlite3",
+    )
+
+    _write_metric_artifact(metrics_dir, "client_growth_summary", CLIENT_GROWTH_ARTIFACT)
+    _write_metric_artifact(metrics_dir, "capacity_license_usage", CAPACITY_LICENSE_ARTIFACT)
+    write_backup_job_summary_artifact(
+        BACKUP_JOB_SUMMARY_ARTIFACT,
+        catalog_dir=backup_catalog_dir,
+    )
+
+    app = create_app()
+    with app.test_request_context("/quick-hc"):
+        initial_data = build_subject_initial_data()
+
+    subjects = {
+        subject["id"]: subject
+        for category in initial_data["cats"]
+        for subject in category["subjects"]
+    }
+
+    assert subjects["environment"]["sources"][0]["name"] == "Direct REST API"
+    assert subjects["security_assessment"]["sources"][0]["name"] == "REST / Reports Plus"
+    assert subjects["security_assessment"]["sources"][1]["name"] == "CSV / HTML import"
+    assert subjects["license_summary"]["sources"][0]["name"] == "REST / Reports Plus"
+    assert subjects["client_growth"]["sources"][0]["name"] == "REST / Reports Plus"
+    assert subjects["capacity_license"]["sources"][0]["name"] == "REST / Reports Plus"
+    assert subjects["backup_job_summary"]["sources"][0]["name"] == "REST / Reports Plus"
+
+    for subject in subjects.values():
+        assert subject["sources"]
+        for source in subject["sources"]:
+            assert set(source).issuperset({"id", "name", "desc", "status", "meta"})
+            assert source["status"] in {"v", "n"}
+            assert isinstance(source["meta"], list)
 
 
 def test_quick_hc_overview_license_summary_previews_real_fields(
