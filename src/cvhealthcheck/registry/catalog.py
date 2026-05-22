@@ -4,7 +4,7 @@ from cvhealthcheck.adapters.commcell_details import adapt_rest as _adapt_commcel
 from cvhealthcheck.adapters.security_assessment import adapt_reportsplus_rest
 from cvhealthcheck.artifacts.enums import SourceType
 
-from .tile import SectionDefinition, SourceDefinition, TileDefinition
+from .tile import ArtifactAdapter, SectionDefinition, SourceDefinition, TileDefinition
 
 # ---------------------------------------------------------------------------
 # security_assessment
@@ -69,3 +69,14 @@ REGISTRY: dict[str, TileDefinition] = {
 
 def get_tile(subject_id: str) -> TileDefinition | None:
     return REGISTRY.get(subject_id)
+
+
+def list_tiles() -> tuple[TileDefinition, ...]:
+    return tuple(REGISTRY.values())
+
+
+def get_adapter(subject_id: str, source_type: SourceType) -> ArtifactAdapter | None:
+    tile = REGISTRY.get(subject_id)
+    if tile is None:
+        return None
+    return tile.adapter_map.get(source_type)
