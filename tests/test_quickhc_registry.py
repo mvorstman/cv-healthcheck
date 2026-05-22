@@ -16,6 +16,7 @@ from cvhealthcheck.quickhc.report_service import (
     REPORT_SELECTION_IDS,
     REPORT_SUBSECTION_OPTIONS,
 )
+from cvhealthcheck.quickhc.registry import SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID
 
 
 def test_tile_ids_are_unique() -> None:
@@ -94,7 +95,6 @@ def test_security_assessment_tile_registers_detail_sections() -> None:
     assert tile.section_ids == (
         "security_assessment.summary",
         "security_assessment.highlights",
-        "security_assessment.all_findings",
         "security_assessment.access_security",
         "security_assessment.auditing",
         "security_assessment.platform_security",
@@ -127,7 +127,9 @@ def test_registry_default_overview_selection_ids_are_subset_of_selection_ids() -
 
 def test_report_service_selection_contract_matches_registry() -> None:
     assert REPORT_SUBSECTION_OPTIONS == report_subsection_options()
-    assert REPORT_SELECTION_IDS == QUICK_HC_SELECTION_IDS
+    assert REPORT_SELECTION_IDS == (
+        QUICK_HC_SELECTION_IDS | {SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID}
+    )
     assert REPORT_OVERVIEW_DEFAULT_SELECTION_IDS == report_overview_default_selection_ids()
     assert REPORT_OVERVIEW_DEFAULT_SELECTION_IDS.issubset(REPORT_SELECTION_IDS)
 

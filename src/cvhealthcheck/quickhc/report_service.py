@@ -25,6 +25,7 @@ from cvhealthcheck.quickhc.registry import (
     QUICK_HC_SECTION_IDS,
     QUICK_HC_SELECTION_IDS,
     QUICK_HC_SUBJECT_IDS,
+    SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
     SECURITY_ASSESSMENT_SELECTION_ID,
     SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME,
     report_overview_default_selection_ids,
@@ -42,7 +43,9 @@ from cvhealthcheck.security_assessment.service import SecurityAssessmentService
 REPORT_SUBJECT_IDS = QUICK_HC_SUBJECT_IDS
 REPORT_SUBSECTION_OPTIONS = report_subsection_options()
 REPORT_SECTION_IDS = QUICK_HC_SECTION_IDS
-REPORT_SELECTION_IDS = QUICK_HC_SELECTION_IDS
+REPORT_SELECTION_IDS = QUICK_HC_SELECTION_IDS | {
+    SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID
+}
 REPORT_OVERVIEW_DEFAULT_SELECTION_IDS = report_overview_default_selection_ids()
 REPORT_DEFAULT_SUBJECT_SELECTION_IDS = QUICK_HC_SUBJECT_IDS
 ReportTileBuilder = Callable[[TileDefinition, dict[str, dict[str, Any]]], dict[str, Any]]
@@ -156,11 +159,6 @@ class QuickHcReportService:
     ) -> dict[str, Any]:
         summary_section = tile.sections[0]
         highlights_section = tile.sections[1]
-        all_findings_section = next(
-            section
-            for section in tile.sections
-            if section.id == "security_assessment.all_findings"
-        )
         detail_section_definitions = tuple(
             section
             for section in tile.sections
@@ -178,7 +176,7 @@ class QuickHcReportService:
                 "evidence": None,
                 "summary_section_id": summary_section.id,
                 "highlights_section_id": highlights_section.id,
-                "all_findings_section_id": all_findings_section.id,
+                "all_findings_section_id": SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
                 "detail_section_ids": tuple(
                     section.id for section in detail_section_definitions
                 ),
@@ -228,7 +226,7 @@ class QuickHcReportService:
             "good": counters.get("Good", 0),
             "summary_section_id": summary_section.id,
             "highlights_section_id": highlights_section.id,
-            "all_findings_section_id": all_findings_section.id,
+            "all_findings_section_id": SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
             "detail_section_ids": tuple(
                 section.id for section in detail_section_definitions
             ),

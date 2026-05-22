@@ -1,5 +1,12 @@
 # Development Log
 
+## 2026-05-22
+
+- Hardened Quick HC section-contract consistency after discovering that Security Assessment detail sections and customer-report sections had drifted apart.
+- Made the registry authoritative for the real Security Assessment section set shown in the detail view: summary, highlights, Access Security, Auditing, Platform Security, Company and Owners Security, Capabilities, and Hardening.
+- Removed the stale `security_assessment.all_findings` section from the user-facing registry contract while keeping it as a compatibility alias inside the report service for older selection payloads.
+- Added a cross-tile regression guard that seeds all current Quick HC subjects and fails if the workspace-emitted section IDs diverge from the authoritative registry section IDs.
+
 ## 2026-05-19
 
 - Promoted Quick HC from a simple summary page into the main customer-facing report-composition surface.

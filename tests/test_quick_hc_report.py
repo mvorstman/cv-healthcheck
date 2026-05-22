@@ -5,7 +5,9 @@ from pathlib import Path
 
 from cvhealthcheck.license_summary.import_csv import parse_license_summary_csv
 from cvhealthcheck.license_summary.service import persist_license_summary_artifact
+from cvhealthcheck.quickhc.registry import QUICK_HC_TILE_BY_ID
 from cvhealthcheck.quickhc.report_service import QuickHcReportService
+from cvhealthcheck.quickhc.subject_data_service import build_subject_initial_data
 from cvhealthcheck.reportsplus.backup_job_summary import write_backup_job_summary_artifact
 from cvhealthcheck.security_assessment.artifact import build_security_assessment_artifact
 from cvhealthcheck.security_assessment.service import persist_security_assessment_artifact
@@ -488,6 +490,79 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert "data/catalog/" not in body
     assert "/tmp/" not in body
     assert "registry" not in body.lower()
+
+
+def test_quick_hc_workspace_sections_match_registry_contract_for_all_tiles(
+    tmp_path, monkeypatch
+) -> None:
+    import cvhealthcheck.quickhc.subject_data_service as subject_data_service_module
+
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+    metrics_dir = _patch_metrics_paths(tmp_path, monkeypatch)
+    backup_catalog_dir = _patch_backup_job_summary_paths(tmp_path, monkeypatch)
+
+    monkeypatch.setattr(
+        subject_data_service_module,
+        "read_json",
+        lambda *_args, **_kwargs: {
+            "identity": {
+                "hostName": "CommServe A",
+                "csGUID": "commcell-01",
+                "csVersionInfo": "11 SP40.47",
+                "timeZone": "UTC",
+            }
+        },
+    )
+
+    security_artifact = build_security_assessment_artifact(
+        [
+            {"section": "Access Security", "parameter": "MFA enabled", "status": "Critical", "remarks": "Missing", "action": "Enable MFA"},
+            {"section": "Auditing", "parameter": "Audit retention", "status": "Info", "remarks": "30 days", "action": "Review retention"},
+            {"section": "Platform Security", "parameter": "Threat Indicator alert", "status": "Critical", "remarks": "Disabled", "action": "Enable alert"},
+            {"section": "Company and Owners Security", "parameter": "Owner review", "status": "Good", "remarks": "Completed", "action": "None"},
+            {"section": "Capabilities", "parameter": "Feature lockdown", "status": "Warning", "remarks": "Review", "action": "Tighten scope"},
+            {"section": "Hardening", "parameter": "DR backup", "status": "Warning", "remarks": "Cloud copy missing", "action": "Configure backup"},
+        ],
+        source_type="rest",
+        source={"report_id": "336"},
+    )
+    persist_security_assessment_artifact(
+        security_artifact,
+        catalog_dir=tmp_path / "security_catalog",
+        registry_path=tmp_path / "security_registry.sqlite3",
+    )
+
+    license_artifact = parse_license_summary_csv(
+        LICENSE_CSV_SAMPLE,
+        source_file="/tmp/license-summary.csv",
+    )
+    persist_license_summary_artifact(
+        license_artifact,
+        catalog_dir=tmp_path / "license_catalog",
+        registry_path=tmp_path / "license_registry.sqlite3",
+    )
+
+    _write_metric_artifact(metrics_dir, "client_growth_summary", CLIENT_GROWTH_ARTIFACT)
+    _write_metric_artifact(metrics_dir, "capacity_license_usage", CAPACITY_LICENSE_ARTIFACT)
+    write_backup_job_summary_artifact(
+        BACKUP_JOB_SUMMARY_ARTIFACT,
+        catalog_dir=backup_catalog_dir,
+    )
+
+    app = create_app()
+    with app.test_request_context("/quick-hc"):
+        initial_data = build_subject_initial_data()
+
+    subjects = {
+        subject["id"]: subject
+        for category in initial_data["cats"]
+        for subject in category["subjects"]
+    }
+    assert set(subjects) == set(QUICK_HC_TILE_BY_ID)
+    for tile_id, tile in QUICK_HC_TILE_BY_ID.items():
+        actual_section_ids = tuple(section["id"] for section in subjects[tile_id]["sections"])
+        assert actual_section_ids == tile.section_ids
 
 
 def test_quick_hc_overview_license_summary_previews_real_fields(

@@ -46,6 +46,9 @@ SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME = {
     "Capabilities": SECURITY_ASSESSMENT_CAPABILITIES_SECTION_ID,
     "Hardening": SECURITY_ASSESSMENT_HARDENING_SECTION_ID,
 }
+SECURITY_ASSESSMENT_DETAIL_SECTION_ORDER = tuple(
+    SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME.keys()
+)
 
 QUICK_HC_TILES: tuple[TileDefinition, ...] = (
     TileDefinition(
@@ -91,13 +94,6 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
                 label="Critical / Warning findings",
                 preview_renderer="security_highlights_preview",
                 report_renderer="security_highlights_report",
-            ),
-            SectionDefinition(
-                id=SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
-                label="Info / Good findings",
-                default_selected=False,
-                preview_renderer="security_all_findings_preview",
-                report_renderer="security_all_findings_report",
             ),
             SectionDefinition(
                 id=SECURITY_ASSESSMENT_ACCESS_SECURITY_SECTION_ID,
