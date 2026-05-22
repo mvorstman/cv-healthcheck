@@ -647,6 +647,8 @@ def test_quick_hc_renderer_does_not_repeat_subject_title_in_report_sections_pane
     assert "${secTiles}" in body
     assert "${esc(s.description || '')}" in body
     assert "${esc(s.subtitle || '')}</textarea>" not in body
+    assert "saveDescription('" in body
+    assert "Description saved." in body
 
 
 def test_quick_hc_workspace_sources_use_standardized_shape_and_labels(

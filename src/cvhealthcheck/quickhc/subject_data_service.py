@@ -7,6 +7,7 @@ from typing import Any
 
 from cvhealthcheck.license_summary.service import LicenseSummaryService
 from cvhealthcheck.metrics import get_capacity_license_usage, get_client_growth_summary
+from cvhealthcheck.quickhc.description_service import resolve_tile_description
 from cvhealthcheck.reportsplus.backup_job_summary import load_backup_job_summary_artifact
 from cvhealthcheck.reportsplus.catalog import read_json
 from cvhealthcheck.reportsplus.security_assessment import security_assessment_quick_hc
@@ -161,11 +162,10 @@ def _build_commcell_header(cc: dict | None) -> dict:
 # ── SUBJECT BUILDERS ──
 
 def _nodata_subject(subject_id: str, name: str, full_url: str | None = None) -> dict:
-    tile = QUICK_HC_TILE_BY_ID[subject_id]
     return {
         "id": subject_id,
         "name": name,
-        "description": tile.description,
+        "description": resolve_tile_description(subject_id),
         "state": "nodata",
         "included": True,
         "subtitle": "Not collected",
@@ -240,7 +240,6 @@ def _build_tile_sources(
 
 def _build_environment_subject(cc: dict | None) -> dict:
     full_url = _try_url("main.quick_hc_commcell")
-    tile = QUICK_HC_TILE_BY_ID["environment"]
     if not cc:
         subj = _nodata_subject("environment", "CommCell Details", full_url)
         subj["activeSource"] = REST_COMMAND_CENTER_API_SOURCE_ID
@@ -278,7 +277,7 @@ def _build_environment_subject(cc: dict | None) -> dict:
     return {
         "id": "environment",
         "name": "CommCell Details",
-        "description": tile.description,
+        "description": resolve_tile_description("environment"),
         "state": "ok",
         "included": True,
         "subtitle": subtitle,
@@ -320,7 +319,6 @@ def _build_environment_subject(cc: dict | None) -> dict:
 
 def _build_security_assessment_subject(sa: dict | None) -> dict:
     full_url = _try_url("main.quick_hc_security_assessment")
-    tile = QUICK_HC_TILE_BY_ID["security_assessment"]
     if not sa or not sa.get("exists"):
         subj = _nodata_subject("security_assessment", "Security Assessment", full_url)
         subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
@@ -466,7 +464,7 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
     return {
         "id": "security_assessment",
         "name": "Security Assessment",
-        "description": tile.description,
+        "description": resolve_tile_description("security_assessment"),
         "state": state,
         "included": True,
         "subtitle": subtitle,
@@ -551,7 +549,6 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
 
 def _build_license_summary_subject(ls: dict | None) -> dict:
     full_url = _try_url("main.quick_hc_license_summary")
-    tile = QUICK_HC_TILE_BY_ID["license_summary"]
     if not ls:
         subj = _nodata_subject("license_summary", "License Summary", full_url)
         subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
@@ -669,7 +666,7 @@ def _build_license_summary_subject(ls: dict | None) -> dict:
     return {
         "id": "license_summary",
         "name": "License Summary",
-        "description": tile.description,
+        "description": resolve_tile_description("license_summary"),
         "state": "ok",
         "included": True,
         "subtitle": subtitle,
@@ -778,7 +775,6 @@ def _safe_int_percent(value: object) -> int:
 
 def _build_client_growth_subject(cg: dict | None) -> dict:
     full_url = _try_url("main.metrics_client_growth")
-    tile = QUICK_HC_TILE_BY_ID["client_growth"]
     if not cg:
         subj = _nodata_subject("client_growth", "Client Growth", full_url)
         subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
@@ -855,7 +851,7 @@ def _build_client_growth_subject(cg: dict | None) -> dict:
     return {
         "id": "client_growth",
         "name": "Client Growth",
-        "description": tile.description,
+        "description": resolve_tile_description("client_growth"),
         "state": "ok",
         "included": True,
         "subtitle": subtitle,
@@ -914,7 +910,6 @@ def _build_client_growth_subject(cg: dict | None) -> dict:
 
 def _build_capacity_license_subject(cl: dict | None) -> dict:
     full_url = _try_url("main.metrics_capacity_license")
-    tile = QUICK_HC_TILE_BY_ID["capacity_license"]
     if not cl:
         subj = _nodata_subject("capacity_license", "Capacity Licenses", full_url)
         subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
@@ -995,7 +990,7 @@ def _build_capacity_license_subject(cl: dict | None) -> dict:
     return {
         "id": "capacity_license",
         "name": "Capacity Licenses",
-        "description": tile.description,
+        "description": resolve_tile_description("capacity_license"),
         "state": "ok",
         "included": True,
         "subtitle": subtitle,
@@ -1045,7 +1040,6 @@ def _build_capacity_license_subject(cl: dict | None) -> dict:
 
 def _build_backup_job_summary_subject(bjs: dict | None) -> dict:
     full_url = _try_url("main.quick_hc_backup_job_summary")
-    tile = QUICK_HC_TILE_BY_ID["backup_job_summary"]
     if not bjs:
         subj = _nodata_subject("backup_job_summary", "Backup Job Summary", full_url)
         subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
@@ -1120,7 +1114,7 @@ def _build_backup_job_summary_subject(bjs: dict | None) -> dict:
     return {
         "id": "backup_job_summary",
         "name": "Backup Job Summary",
-        "description": tile.description,
+        "description": resolve_tile_description("backup_job_summary"),
         "state": state,
         "included": True,
         "subtitle": subtitle,

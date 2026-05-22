@@ -5,6 +5,7 @@ const CC = (window.QUICK_HC_INITIAL_DATA && window.QUICK_HC_INITIAL_DATA.commcel
 // ── STATE ──
 let activeId = null;
 let mode = 'overview'; // overview | config
+let descriptionSaveState = { status: 'idle', message: '' };
 
 // ── LOCAL STORAGE ──
 const STATE_KEY = 'quickhc-state-v1';
@@ -236,6 +237,7 @@ function showOverview() {
 // ── CONFIG VIEW ──
 function openConfig(id) {
   activeId = id; mode = 'config';
+  descriptionSaveState = { status: 'idle', message: '' };
   renderLeft();
   const s = findSubj(id);
   if (!s) return;
@@ -313,7 +315,10 @@ function openConfig(id) {
       <div class="cfg-sec-title">Description</div>
       <div class="cfg-tile">
         <textarea class="cfg-desc-edit" placeholder="Add a description for this subject…" rows="2">${esc(s.description || '')}</textarea>
-        <div class="cfg-tile-hint">Not yet persisted — placeholder only</div>
+        <div class="cfg-desc-actions">
+          <button type="button" class="btn-sm btn-sm-p" onclick="saveDescription('${s.id}')">Save</button>
+          <span class="cfg-desc-status${descriptionSaveState.status === 'saved' ? ' cfg-desc-status-saved' : ''}${descriptionSaveState.status === 'error' ? ' cfg-desc-status-error' : ''}">${esc(descriptionSaveState.message || 'Saved description overrides are stored separately from source artifacts.')}</span>
+        </div>
       </div>
     </div>
     ${(s.sources || []).length > 0 ? `<div class="cfg-sec">
@@ -350,6 +355,40 @@ function setActiveSrc(subjId, srcId) {
   findSubj(subjId).activeSource = srcId;
   _saveState();
   openConfig(subjId);
+}
+
+function setDescriptionStatus(status, message) {
+  const el = document.querySelector('.cfg-desc-status');
+  if (!el) return;
+  el.className = 'cfg-desc-status';
+  if (status === 'saved') el.classList.add('cfg-desc-status-saved');
+  if (status === 'error') el.classList.add('cfg-desc-status-error');
+  el.textContent = message;
+}
+
+async function saveDescription(subjId) {
+  const s = findSubj(subjId);
+  if (!s) return;
+  const input = document.querySelector('.cfg-desc-edit');
+  if (!input) return;
+  const description = input.value;
+  descriptionSaveState = { status: 'saving', message: 'Saving…' };
+  setDescriptionStatus('saving', 'Saving…');
+  try {
+    const response = await fetch(`/api/quick-hc/subject/${encodeURIComponent(subjId)}/description`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const saved = await response.json();
+    s.description = saved.description || description;
+    descriptionSaveState = { status: 'saved', message: 'Description saved.' };
+    setDescriptionStatus('saved', 'Description saved.');
+  } catch (_err) {
+    descriptionSaveState = { status: 'error', message: 'Description save failed.' };
+    setDescriptionStatus('error', 'Description save failed.');
+  }
 }
 
 // ── GENERATE REPORT ──
