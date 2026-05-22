@@ -454,6 +454,31 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     _patch_license_summary_paths(tmp_path, monkeypatch)
     _patch_metrics_paths(tmp_path, monkeypatch)
 
+    # reportsplus.security_assessment holds its own module-level copy of
+    # SECURITY_ASSESSMENT_CATALOG_DIR (imported at load time), so patch it too.
+    import cvhealthcheck.reportsplus.security_assessment as rp_sa_module
+    monkeypatch.setattr(rp_sa_module, "SECURITY_ASSESSMENT_CATALOG_DIR", tmp_path / "security_catalog")
+
+    sa_catalog = tmp_path / "security_catalog"
+    sa_catalog.mkdir(parents=True, exist_ok=True)
+    artifact = build_security_assessment_artifact(
+        [
+            {"section": "Access Security", "parameter": "MFA enabled", "status": "Critical", "remarks": "Missing", "action": "Enable MFA"},
+            {"section": "Auditing", "parameter": "Audit retention", "status": "Info", "remarks": "30 days", "action": "Review retention"},
+            {"section": "Platform Security", "parameter": "Threat Indicator", "status": "Critical", "remarks": "Disabled", "action": "Enable"},
+            {"section": "Company and Owners Security", "parameter": "Owner review", "status": "Good", "remarks": "Done", "action": "None"},
+            {"section": "Capabilities", "parameter": "Feature lockdown", "status": "Warning", "remarks": "Review", "action": "Tighten"},
+            {"section": "Hardening", "parameter": "DR backup", "status": "Warning", "remarks": "Missing", "action": "Configure"},
+        ],
+        source_type="rest",
+        source={"report_id": "336"},
+    )
+    persist_security_assessment_artifact(
+        artifact,
+        catalog_dir=sa_catalog,
+        registry_path=tmp_path / "security_registry.sqlite3",
+    )
+
     app = create_app()
 
     response = app.test_client().get("/quick-hc")
