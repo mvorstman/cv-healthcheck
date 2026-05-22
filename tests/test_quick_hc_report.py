@@ -588,6 +588,17 @@ def test_quick_hc_renderer_removes_redundant_workspace_include_toggle() -> None:
     assert "si.name = 'selection_ids'; si.value = sec.id;" in body
 
 
+def test_quick_hc_renderer_does_not_repeat_subject_title_in_report_sections_panel() -> None:
+    app = create_app()
+    response = app.test_client().get("/static/quick_hc.js")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert '<div class="cfg-sec-title">Report Sections</div>' in body
+    assert "No report sections configured" in body
+    assert '<div style="font-size:13px;font-weight:600">${esc(s.name)}</div>' not in body
+
+
 def test_quick_hc_overview_license_summary_previews_real_fields(
     tmp_path, monkeypatch
 ) -> None:
