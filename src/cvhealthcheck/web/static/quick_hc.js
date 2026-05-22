@@ -312,7 +312,7 @@ function openConfig(id) {
     <div class="cfg-sec">
       <div class="cfg-sec-title">Description</div>
       <div class="cfg-tile">
-        <textarea class="cfg-desc-edit" placeholder="Add a description for this subject…" rows="2">${esc(s.subtitle || '')}</textarea>
+        <textarea class="cfg-desc-edit" placeholder="Add a description for this subject…" rows="2">${esc(s.description || '')}</textarea>
         <div class="cfg-tile-hint">Not yet persisted — placeholder only</div>
       </div>
     </div>

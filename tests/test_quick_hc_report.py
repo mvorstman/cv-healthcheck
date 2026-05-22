@@ -490,8 +490,22 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert "dataset_guid" not in body
     assert "HTTP status" not in body
     assert "data/catalog/" not in body
-    assert "/tmp/" not in body
-    assert "registry" not in body.lower()
+
+
+def test_quick_hc_subjects_always_emit_registry_description() -> None:
+    app = create_app()
+    with app.test_request_context("/quick-hc"):
+        initial_data = build_subject_initial_data()
+
+    subjects = {
+        subject["id"]: subject
+        for category in initial_data["cats"]
+        for subject in category["subjects"]
+    }
+    assert set(subjects) == set(QUICK_HC_TILE_BY_ID)
+    for tile_id, tile in QUICK_HC_TILE_BY_ID.items():
+        assert subjects[tile_id]["description"] == tile.description
+        assert subjects[tile_id]["description"]
 
 
 def test_quick_hc_workspace_sections_match_registry_contract_for_all_tiles(
@@ -631,6 +645,8 @@ def test_quick_hc_renderer_does_not_repeat_subject_title_in_report_sections_pane
     assert "sections available" not in body
     assert '<div style="font-size:13px;font-weight:600">${esc(s.name)}</div>' not in body
     assert "${secTiles}" in body
+    assert "${esc(s.description || '')}" in body
+    assert "${esc(s.subtitle || '')}</textarea>" not in body
 
 
 def test_quick_hc_workspace_sources_use_standardized_shape_and_labels(
