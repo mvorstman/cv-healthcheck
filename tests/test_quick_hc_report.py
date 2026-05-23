@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from cvhealthcheck.license_summary.import_csv import parse_license_summary_csv
+from cvhealthcheck.quickhc.models import TileDefinition
 from cvhealthcheck.license_summary.service import persist_license_summary_artifact
 from cvhealthcheck.quickhc.registry import QUICK_HC_TILE_BY_ID
 from cvhealthcheck.quickhc.report_service import QuickHcReportService
@@ -62,6 +63,8 @@ Virtual Server,50,12,10,3,Client A,Agent A,2026-05-01
 def _patch_security_assessment_paths(tmp_path, monkeypatch) -> None:
     import cvhealthcheck.security_assessment.service as security_assessment_service_module
     import cvhealthcheck.security_assessment.artifact as security_assessment_artifact_module
+    import cvhealthcheck.quickhc.subject_data_service as subject_data_service_module
+    from cvhealthcheck.artifacts.store import ArtifactStore
 
     monkeypatch.setattr(
         security_assessment_service_module,
@@ -78,11 +81,18 @@ def _patch_security_assessment_paths(tmp_path, monkeypatch) -> None:
         "SECURITY_ASSESSMENT_CATALOG_DIR",
         tmp_path / "security_catalog",
     )
+    monkeypatch.setattr(
+        subject_data_service_module,
+        "_canonical_store",
+        ArtifactStore(base_dir=tmp_path / "canonical_artifacts"),
+    )
 
 
 def _patch_license_summary_paths(tmp_path, monkeypatch) -> None:
     import cvhealthcheck.license_summary.service as license_summary_service_module
     import cvhealthcheck.license_summary.artifact as license_summary_artifact_module
+    import cvhealthcheck.quickhc.subject_data_service as subject_data_service_module
+    from cvhealthcheck.artifacts.store import ArtifactStore
 
     monkeypatch.setattr(
         license_summary_service_module,
@@ -98,6 +108,11 @@ def _patch_license_summary_paths(tmp_path, monkeypatch) -> None:
         license_summary_artifact_module,
         "LICENSE_SUMMARY_CATALOG_DIR",
         tmp_path / "license_catalog",
+    )
+    monkeypatch.setattr(
+        subject_data_service_module,
+        "_canonical_store",
+        ArtifactStore(base_dir=tmp_path / "canonical_artifacts"),
     )
 
 
@@ -551,6 +566,95 @@ def test_quick_hc_subjects_always_emit_registry_description() -> None:
     for tile_id, tile in QUICK_HC_TILE_BY_ID.items():
         assert subjects[tile_id]["description"] == tile.description
         assert subjects[tile_id]["description"]
+
+
+def test_quick_hc_subject_initial_data_uses_registry_tile_order_and_explicit_dispatch(
+    monkeypatch,
+) -> None:
+    import cvhealthcheck.quickhc.subject_data_service as subject_data_service_module
+
+    custom_tiles = (
+        TileDefinition(
+            id="security_assessment",
+            title="Security Assessment",
+            subtitle="Security",
+            source_type="reportsplus",
+            source_service="security_assessment_service",
+            artifact_type="security_assessment",
+            preview_renderer="security_assessment_preview",
+            report_renderer="security_assessment_report",
+            sources=(),
+            sections=(),
+            category="security",
+            category_label="Security",
+        ),
+        TileDefinition(
+            id="unknown_tile",
+            title="Unknown Tile",
+            subtitle="Unknown",
+            source_type="unknown",
+            source_service="unknown_service",
+            artifact_type="unknown_artifact",
+            preview_renderer="unknown_preview",
+            report_renderer="unknown_report",
+            sources=(),
+            sections=(),
+            category="security",
+            category_label="Security",
+        ),
+        TileDefinition(
+            id="environment",
+            title="CommCell Details",
+            subtitle="Environment",
+            source_type="rest",
+            source_service="commcell_identity",
+            artifact_type="commcell",
+            preview_renderer="commcell_preview",
+            report_renderer="environment_report",
+            sources=(),
+            sections=(),
+            category="identity",
+            category_label="Identity",
+        ),
+    )
+
+    monkeypatch.setattr(subject_data_service_module, "list_tiles", lambda: custom_tiles)
+    monkeypatch.setattr(
+        subject_data_service_module,
+        "_subject_data_loaders",
+        lambda: {
+            "security_assessment": lambda: {"payload": "security"},
+            "environment": lambda: {"payload": "environment"},
+        },
+    )
+    monkeypatch.setattr(
+        subject_data_service_module,
+        "_subject_builders",
+        lambda: {
+            "security_assessment": lambda payload: {"id": "security_assessment", "payload": payload},
+            "environment": lambda payload: {"id": "environment", "payload": payload},
+        },
+    )
+    monkeypatch.setattr(
+        subject_data_service_module,
+        "_build_commcell_header",
+        lambda payload: {"exists": bool(payload), "name": "header"},
+    )
+
+    app = create_app()
+    with app.test_request_context("/quick-hc"):
+        initial_data = build_subject_initial_data()
+
+    assert [category["id"] for category in initial_data["cats"]] == ["security", "identity"]
+    assert [subject["id"] for subject in initial_data["cats"][0]["subjects"]] == [
+        "security_assessment"
+    ]
+    assert [subject["id"] for subject in initial_data["cats"][1]["subjects"]] == [
+        "environment"
+    ]
+    assert initial_data["cats"][0]["subjects"][0]["payload"] == {"payload": "security"}
+    assert initial_data["cats"][1]["subjects"][0]["payload"] == {"payload": "environment"}
+    assert initial_data["commcell"] == {"exists": True, "name": "header"}
 
 
 def test_quick_hc_workspace_sections_match_registry_contract_for_all_tiles(

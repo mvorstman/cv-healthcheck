@@ -1,7 +1,7 @@
 # Canonical Artifact Schema v1
 
 ## Status
-Draft — approved direction, not yet final. Validate all current subjects before implementing migration.
+Draft — approved direction, not yet final. Canonical artifacts are now live for Security Assessment and License Summary, canonical API read endpoints exist, and `quickhc/canonical_view.py` is in place as the translation layer into Quick HC view models. Full migration of Quick HC subject shaping to canonical-view-first rendering remains in progress.
 
 ---
 
@@ -72,6 +72,8 @@ Draft — approved direction, not yet final. Validate all current subjects befor
 
 Use `collected_at` for adapter-collected data. Use `imported_at` for user-imported files.
 Never mix source metadata into artifact data sections.
+
+Canonical artifacts remain separate from business/application state stored in `data/app.db`, and also remain separate from artifact registry metadata persisted in the import-registry SQLite databases.
 
 ---
 
@@ -258,6 +260,18 @@ The renderer selects behavior from `type` alone — no custom rendering logic pe
 ---
 
 ## What belongs in an artifact
+
+- normalized subject data
+- source and collection metadata
+- renderable summary and section data
+- canonical values needed for customer-facing and internal HealthCheck surfaces
+
+## What does not belong in an artifact
+
+- customer and engagement records that now belong in `data/app.db`
+- UI-only local selection state
+- artifact registry bookkeeping that belongs in import-registry SQLite databases
+- unrelated workflow/application state that is not part of the canonical subject artifact
 
 | Belongs | Does not belong |
 |---------|----------------|

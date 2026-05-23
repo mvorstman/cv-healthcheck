@@ -5,8 +5,12 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.license_summary.service import LicenseSummaryService
+
+_canonical_store = ArtifactStore()
 from cvhealthcheck.metrics import get_capacity_license_usage, get_client_growth_summary
+from cvhealthcheck.quickhc import canonical_view as _canonical_view
 from cvhealthcheck.quickhc.description_service import resolve_tile_description
 from cvhealthcheck.reportsplus.backup_job_summary import load_backup_job_summary_artifact
 from cvhealthcheck.reportsplus.catalog import read_json
@@ -21,6 +25,7 @@ from cvhealthcheck.quickhc.registry import (
     REST_REPORTS_PLUS_SOURCE_ID,
     SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME,
     SECURITY_ASSESSMENT_METADATA_SECTION_ID,
+    list_tiles,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,17 +36,27 @@ _MONTH_ABBR = {
     "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dec",
 }
 
+_CATEGORY_ICONS = {
+    "identity": "🖥",
+    "security": "🔒",
+    "licensing": "📋",
+    "performance": "📈",
+    "operations": "🔧",
+}
+
 
 def build_subject_initial_data() -> dict[str, Any]:
     """Build the full initial data structure for the Quick HC frontend."""
-    cc = _load_commcell()
-    sa = _load_security_assessment()
-    ls = _load_license_summary()
-    cg = _load_client_growth()
-    cl = _load_capacity_license()
-    bjs = _load_backup_job_summary()
+    subject_data_loaders = _subject_data_loaders()
+    subject_builders = _subject_builders()
+    tile_payloads: dict[str, Any] = {}
+    for tile in list_tiles():
+        loader = subject_data_loaders.get(tile.id)
+        if loader is None:
+            continue
+        tile_payloads[tile.id] = loader()
 
-    commcell_info = _build_commcell_header(cc)
+    commcell_info = _build_commcell_header(tile_payloads.get("environment"))
 
     try:
         from flask import url_for
@@ -49,31 +64,22 @@ def build_subject_initial_data() -> dict[str, Any]:
     except Exception:
         report_url = "/quick-hc/report"
 
-    cats = [
-        {
-            "id": "identity", "name": "Identity", "icon": "🖥", "open": True,
-            "subjects": [_build_environment_subject(cc)],
-        },
-        {
-            "id": "security", "name": "Security", "icon": "🔒", "open": True,
-            "subjects": [_build_security_assessment_subject(sa)],
-        },
-        {
-            "id": "licensing", "name": "Licensing", "icon": "📋", "open": True,
-            "subjects": [_build_license_summary_subject(ls)],
-        },
-        {
-            "id": "performance", "name": "Performance & Growth", "icon": "📈", "open": True,
-            "subjects": [
-                _build_client_growth_subject(cg),
-                _build_capacity_license_subject(cl),
-            ],
-        },
-        {
-            "id": "operations", "name": "Operations", "icon": "🔧", "open": True,
-            "subjects": [_build_backup_job_summary_subject(bjs)],
-        },
-    ]
+    category_groups: dict[str, dict] = {}
+    for tile in list_tiles():
+        cat_id = tile.category
+        if cat_id not in category_groups:
+            category_groups[cat_id] = {
+                "id": cat_id,
+                "name": tile.category_label,
+                "icon": _CATEGORY_ICONS.get(cat_id, ""),
+                "open": True,
+                "subjects": [],
+            }
+        builder = subject_builders.get(tile.id)
+        if builder is not None:
+            category_groups[cat_id]["subjects"].append(builder(tile_payloads.get(tile.id)))
+
+    cats = list(category_groups.values())
 
     return {
         "commcell": commcell_info,
@@ -146,6 +152,17 @@ def _load_backup_job_summary() -> dict | None:
         return None
 
 
+def _subject_data_loaders() -> dict[str, Any]:
+    return {
+        "environment": _load_commcell,
+        "security_assessment": _load_security_assessment,
+        "license_summary": _load_license_summary,
+        "client_growth": _load_client_growth,
+        "capacity_license": _load_capacity_license,
+        "backup_job_summary": _load_backup_job_summary,
+    }
+
+
 # ── HEADER ──
 
 def _build_commcell_header(cc: dict | None) -> dict:
@@ -157,6 +174,17 @@ def _build_commcell_header(cc: dict | None) -> dict:
         "version": cc.get("csVersionInfo") or "",
         "id": cc.get("csGUID") or "",
         "timezone": cc.get("timeZone") or "",
+    }
+
+
+def _subject_builders() -> dict[str, Any]:
+    return {
+        "environment": _build_environment_subject,
+        "security_assessment": _build_security_assessment_subject,
+        "license_summary": _build_license_summary_subject,
+        "client_growth": _build_client_growth_subject,
+        "capacity_license": _build_capacity_license_subject,
+        "backup_job_summary": _build_backup_job_summary_subject,
     }
 
 
@@ -319,7 +347,16 @@ def _build_environment_subject(cc: dict | None) -> dict:
 
 
 def _build_security_assessment_subject(sa: dict | None) -> dict:
+    try:
+        artifact = _canonical_store.load_latest_artifact("security_assessment")
+        view = _canonical_view.security_assessment_to_view(artifact)
+        view["fullUrl"] = _try_url("main.quick_hc")
+        return view
+    except FileNotFoundError:
+        pass
     full_url = _try_url("main.quick_hc")
+    _sa_tile = QUICK_HC_TILE_BY_ID.get("security_assessment")
+    _sa_import_url = _sa_tile.import_url if _sa_tile and _sa_tile.import_url else "/quick-hc/security-assessment/import"
     if not sa or not sa.get("exists"):
         subj = _nodata_subject("security_assessment", "Security Assessment", full_url)
         subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
@@ -344,13 +381,13 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
             actions={
                 CSV_IMPORT_SOURCE_ID: [
                     _upload_action(
-                        import_url="/quick-hc/security-assessment/import",
+                        import_url=_sa_import_url,
                         import_field="assessment_file",
                     )
                 ],
                 HTML_IMPORT_SOURCE_ID: [
                     _upload_action(
-                        import_url="/quick-hc/security-assessment/import",
+                        import_url=_sa_import_url,
                         import_field="assessment_file",
                     )
                 ],
@@ -510,13 +547,13 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
             actions={
                 CSV_IMPORT_SOURCE_ID: [
                     _upload_action(
-                        import_url="/quick-hc/security-assessment/import",
+                        import_url=_sa_import_url,
                         import_field="assessment_file",
                     )
                 ],
                 HTML_IMPORT_SOURCE_ID: [
                     _upload_action(
-                        import_url="/quick-hc/security-assessment/import",
+                        import_url=_sa_import_url,
                         import_field="assessment_file",
                     )
                 ],
@@ -567,7 +604,16 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
 
 
 def _build_license_summary_subject(ls: dict | None) -> dict:
+    try:
+        artifact = _canonical_store.load_latest_artifact("license_summary")
+        view = _canonical_view.license_summary_to_view(artifact)
+        view["fullUrl"] = _try_url("main.quick_hc")
+        return view
+    except FileNotFoundError:
+        pass
     full_url = _try_url("main.quick_hc")
+    _ls_tile = QUICK_HC_TILE_BY_ID.get("license_summary")
+    _ls_import_url = _ls_tile.import_url if _ls_tile and _ls_tile.import_url else "/quick-hc/license-summary/import"
     if not ls:
         subj = _nodata_subject("license_summary", "License Summary", full_url)
         subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
@@ -592,13 +638,13 @@ def _build_license_summary_subject(ls: dict | None) -> dict:
             actions={
                 CSV_IMPORT_SOURCE_ID: [
                     _upload_action(
-                        import_url="/quick-hc/license-summary/import",
+                        import_url=_ls_import_url,
                         import_field="license_summary_file",
                     )
                 ],
                 HTML_IMPORT_SOURCE_ID: [
                     _upload_action(
-                        import_url="/quick-hc/license-summary/import",
+                        import_url=_ls_import_url,
                         import_field="license_summary_file",
                     )
                 ],
@@ -729,13 +775,13 @@ def _build_license_summary_subject(ls: dict | None) -> dict:
             actions={
                 CSV_IMPORT_SOURCE_ID: [
                     _upload_action(
-                        import_url="/quick-hc/license-summary/import",
+                        import_url=_ls_import_url,
                         import_field="license_summary_file",
                     )
                 ],
                 HTML_IMPORT_SOURCE_ID: [
                     _upload_action(
-                        import_url="/quick-hc/license-summary/import",
+                        import_url=_ls_import_url,
                         import_field="license_summary_file",
                     )
                 ],

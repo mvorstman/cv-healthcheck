@@ -90,6 +90,8 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         id=ENVIRONMENT_SELECTION_ID,
         title="CommCell Details",
         subtitle="Platform identity and environment context for the customer-facing summary.",
+        category="identity",
+        category_label="Identity",
         source_type="rest",
         source_service="commcell_identity",
         artifact_type="commcell",
@@ -110,6 +112,8 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         id=SECURITY_ASSESSMENT_SELECTION_ID,
         title="Security Assessment",
         subtitle="Posture summary with emphasis on the most important findings to address.",
+        category="security",
+        category_label="Security",
         source_type="reportsplus",
         source_service="security_assessment_service",
         artifact_type="security_assessment",
@@ -119,6 +123,8 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         detail_endpoint="main.quick_hc",
         collect_capable=True,
         import_capable=True,
+        import_url="/quick-hc/security-assessment/import",
+        collect_url="/quick-hc/security-assessment/collect",
         sections=(
             SectionDefinition(
                 id=SECURITY_ASSESSMENT_METADATA_SECTION_ID,
@@ -180,6 +186,8 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         id=LICENSE_SUMMARY_SELECTION_ID,
         title="License Summary",
         subtitle="Consumption snapshot across workloads, other licenses, and agent or feature usage.",
+        category="licensing",
+        category_label="Licensing",
         source_type="reportsplus",
         source_service="license_summary_service",
         artifact_type="license_summary",
@@ -189,6 +197,8 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         detail_endpoint="main.quick_hc",
         collect_capable=True,
         import_capable=True,
+        import_url="/quick-hc/license-summary/import",
+        collect_url="/quick-hc/license-summary/collect",
         sections=(
             SectionDefinition(
                 id=LICENSE_SUMMARY_METADATA_SECTION_ID,
@@ -220,6 +230,8 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         id=CLIENT_GROWTH_SELECTION_ID,
         title="Client Growth",
         subtitle="Trend snapshot showing recent protected client count and change over time.",
+        category="performance",
+        category_label="Performance & Growth",
         source_type="metrics",
         source_service="client_growth_metrics",
         artifact_type="client_growth",
@@ -252,6 +264,8 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         id=CAPACITY_LICENSE_SELECTION_ID,
         title="Capacity Licenses",
         subtitle="Capacity utilization summary for the latest available reporting period.",
+        category="performance",
+        category_label="Performance & Growth",
         source_type="metrics",
         source_service="capacity_license_metrics",
         artifact_type="capacity_license",
@@ -278,6 +292,8 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         id=BACKUP_JOB_SUMMARY_SELECTION_ID,
         title="Backup Job Summary",
         subtitle="Operational backup job visibility from the latest Reports Plus Backup Job Summary artifact.",
+        category="operations",
+        category_label="Operations",
         source_type="reportsplus",
         source_service="backup_job_summary_collector",
         artifact_type="backup_job_summary",
@@ -322,6 +338,10 @@ QUICK_HC_SECTION_IDS = {
     section.id for tile in QUICK_HC_TILES for section in tile.sections
 }
 QUICK_HC_SELECTION_IDS = QUICK_HC_SUBJECT_IDS | QUICK_HC_SECTION_IDS
+
+
+def list_tiles() -> tuple[TileDefinition, ...]:
+    return QUICK_HC_TILES
 
 
 def report_subsection_options() -> dict[str, tuple[dict[str, str], ...]]:

@@ -60,6 +60,12 @@ web/
 * No business logic in templates
 * No health evaluation logic in routes
 
+db/
+
+* Business/application state only
+* Customers and engagements currently use raw SQL helpers
+* data/app.db is separate from import registries and canonical artifact storage
+
 catalog/
 
 * Local inventory and discovery persistence
@@ -134,16 +140,24 @@ Characteristics:
 
 Current UI direction:
 
-* Keep navigation simple: Login / Logout, Quick HC, Development
-* Quick HC is the customer-facing healthcheck output area
+* Keep navigation simple and product-oriented
+* Quick HC is the current customer-facing healthcheck output area and bridge toward the broader HealthCheck workspace
 * Development is the raw/debug/API/report exploration area
 * Do not add broad Dashboard / Admin / Data Sources navigation unless explicitly requested
+
+Current product structure direction:
+
+* HealthCheck
+* Customers
+* Advanced
+* Development
 
 Current Quick HC items include:
 
 * CommCell Identity / Version
 * Client Growth and Capacity License metric pages
 * Security Assessment from Reports Plus report 336
+* License Summary canonical and customer-report flows
 
 Security Assessment:
 
@@ -152,6 +166,23 @@ Security Assessment:
 * Sections: Access Security, Auditing, Platform Security, Company and Owners Security, Capabilities, Hardening
 * Current artifact summary: 32 total checks, 2 Critical, 0 Warning, 18 Info, 12 Good
 * Checklist normalization lives in src/cvhealthcheck/reportsplus/checklist.py
+* Legacy GET detail page under /quick-hc redirects to /quick-hc
+* POST import and collect handlers remain active
+
+License Summary:
+
+* Canonical adapter exists
+* Canonical side-write is wired for REST collection and file import
+* Legacy GET detail page under /quick-hc redirects to /quick-hc
+* POST import and collect handlers remain active
+
+Current Quick HC platform notes:
+
+* TileDefinition now includes category, category_label, import_url, and collect_url
+* Quick HC initial subject data is registry-driven via list_tiles()
+* Import and collect URLs should come from tile metadata / initial subject data
+* quickhc/canonical_view.py exists as the translation layer from canonical artifacts to Quick HC JS view models
+* Continue preserving legacy fallback in subject_data_service.py while canonical-view migration completes
 
 FULL HEALTHCHECK
 

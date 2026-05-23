@@ -10,7 +10,10 @@ from uuid import uuid4
 
 from werkzeug.utils import secure_filename
 
+from cvhealthcheck.adapters.license_summary import adapt as _adapt_license_summary
 from cvhealthcheck.artifact_registry import ArtifactRegistry, create_artifact_registry
+from cvhealthcheck.artifacts.models import CanonicalArtifact
+from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.reportsplus.catalog import collected_at
 from cvhealthcheck.reportsplus.client import ReportsPlusClient
 
@@ -47,6 +50,7 @@ DEFAULT_COMMCELL_CONTEXT = CommCellContext(
     customer_id=DEFAULT_CUSTOMER_CONTEXT.customer_id,
 )
 logger = logging.getLogger(__name__)
+_artifact_store = ArtifactStore()
 
 
 class LicenseSummaryImportError(ValueError):
@@ -82,6 +86,9 @@ class LicenseSummaryService:
             report_stream=report_stream,
             source_type=source_type,
         )
+
+    def get_canonical(self) -> CanonicalArtifact:
+        return _artifact_store.load_latest_artifact("license_summary")
 
     def collect_from_rest(
         self,
@@ -121,6 +128,7 @@ class LicenseSummaryService:
             imported_by=imported_by,
             import_method="rest",
         )
+        _artifact_store.save_artifact(_adapt_license_summary(persisted))
         return {
             "extraction": collected["extraction"],
             "normalized": persisted,
@@ -168,7 +176,7 @@ def import_license_summary_upload(
     if not artifact.get("other_licenses") and not artifact.get("agent_feature_licenses"):
         raise LicenseSummaryImportError(f"{source_type.upper()} import produced no license rows.")
 
-    return persist_license_summary_artifact(
+    persisted = persist_license_summary_artifact(
         artifact,
         catalog_dir=catalog_dir,
         registry_path=registry_path,
@@ -179,6 +187,8 @@ def import_license_summary_upload(
         report_run=report_run,
         imported_by=imported_by,
     )
+    _artifact_store.save_artifact(_adapt_license_summary(persisted))
+    return persisted
 
 
 def persist_license_summary_artifact(

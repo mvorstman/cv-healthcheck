@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from cvhealthcheck.adapters.commcell_details import adapt_rest as _adapt_commcell_rest
+from cvhealthcheck.adapters.license_summary import adapt as _adapt_license_summary
 from cvhealthcheck.adapters.security_assessment import adapt_reportsplus_rest
 from cvhealthcheck.artifacts.enums import SourceType
 
@@ -27,6 +28,23 @@ _SA_SOURCES: tuple[SourceDefinition, ...] = (
 )
 
 # ---------------------------------------------------------------------------
+# license_summary
+# ---------------------------------------------------------------------------
+
+_LS_SECTIONS: tuple[SectionDefinition, ...] = (
+    SectionDefinition(id="commcell_info",         title="CommCell Info",           type="metric"),
+    SectionDefinition(id="other_licenses",         title="Other Licenses",          type="table"),
+    SectionDefinition(id="agent_feature_licenses", title="Agent / Feature Licenses", type="table"),
+    SectionDefinition(id="workload_summary",       title="Workload Summary",         type="table"),
+)
+
+_LS_SOURCES: tuple[SourceDefinition, ...] = (
+    SourceDefinition(SourceType.rest,        "REST",        "Live collection via Commvault REST API.", implemented=True),
+    SourceDefinition(SourceType.csv_import,  "CSV import",  "Offline CSV import.",                    implemented=True),
+    SourceDefinition(SourceType.html_import, "HTML import", "Offline HTML import.",                   implemented=True),
+)
+
+# ---------------------------------------------------------------------------
 # environment (CommCell Details)
 # ---------------------------------------------------------------------------
 
@@ -46,6 +64,19 @@ _ENV_SOURCES: tuple[SourceDefinition, ...] = (
 # ---------------------------------------------------------------------------
 
 REGISTRY: dict[str, TileDefinition] = {
+    "license_summary": TileDefinition(
+        id="license_summary",
+        title="License Summary",
+        description="License usage summary across capacity, other, and agent/feature license categories.",
+        artifact_type="license_summary",
+        supported_sources=_LS_SOURCES,
+        sections=_LS_SECTIONS,
+        adapter_map={
+            SourceType.rest:        _adapt_license_summary,
+            SourceType.csv_import:  _adapt_license_summary,
+            SourceType.html_import: _adapt_license_summary,
+        },
+    ),
     "security_assessment": TileDefinition(
         id="security_assessment",
         title="Security Assessment",

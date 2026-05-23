@@ -56,11 +56,15 @@ class TileDefinition:
     report_renderer: str
     sources: tuple[SourceDefinition, ...]
     sections: tuple[SectionDefinition, ...]
+    category: str = ""
+    category_label: str = ""
     report_label: str | None = None
     detail_endpoint: str | None = None
     status_behavior: str = "available_or_missing"
     collect_capable: bool = False
     import_capable: bool = False
+    import_url: str | None = None
+    collect_url: str | None = None
 
     @property
     def display_label(self) -> str:

@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from hashlib import md5
 
+from flask import jsonify
+
 from .shared import (
     LICENSE_SUMMARY_UPLOAD_EXTENSIONS,
     LicenseSummaryImportError,
@@ -249,3 +251,12 @@ def quick_hc_license_summary_collect():
         "success",
     )
     return redirect(url_for("main.quick_hc_license_summary"))
+
+
+@bp.route("/api/license-summary/canonical")
+def license_summary_canonical():
+    try:
+        canonical = LicenseSummaryService().get_canonical()
+    except FileNotFoundError:
+        return jsonify({"error": "No canonical artifact exists yet."}), 404
+    return jsonify(canonical.model_dump(mode="json"))

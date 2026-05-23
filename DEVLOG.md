@@ -1,5 +1,27 @@
 # Development Log
 
+## 2026-05-24
+
+- Continued the shift from Quick HC toward a broader HealthCheck primary workspace while keeping collectors and report generation behavior stable.
+- Confirmed that legacy Quick HC GET detail pages for Security Assessment and License Summary now redirect to `/quick-hc`.
+- Kept POST import and collect handlers active for both subjects; only the GET detail pages redirect.
+- Added `TileDefinition.category`, `TileDefinition.category_label`, `TileDefinition.import_url`, and `TileDefinition.collect_url` so category structure and action URLs are now first-class registry metadata.
+- Moved Quick HC initial subject assembly to a registry-driven path via `quickhc.registry.list_tiles()` with explicit tile-id loader/builder dispatch in `subject_data_service.py`.
+- Added `quickhc/canonical_view.py` as a translation layer from canonical artifacts into the Quick HC JavaScript view-model contract.
+- Wired canonical-view read paths into `subject_data_service.py` for Security Assessment and License Summary while preserving legacy fallback behavior when canonical artifacts are absent.
+- Added canonical JSON API endpoints for both imported subjects:
+  `GET /api/security-assessment/canonical`
+  `GET /api/license-summary/canonical`
+- Added a License Summary canonical adapter and canonical side-write support for both live REST collection and file import.
+- Added `data/app.db` for business/application state.
+- Added a new raw-SQL `db/` package for customers and engagements, with artifact registries intentionally kept separate from the business/application DB.
+- Documented the product structure direction as:
+  HealthCheck,
+  Customers,
+  Advanced,
+  Development.
+- Current local validation for this session is `298` passing tests.
+
 ## 2026-05-23
 
 - Retired the `/quick-hc/security-assessment` and `/quick-hc/license-summary` detail pages; both GET handlers now redirect to `/quick-hc`.

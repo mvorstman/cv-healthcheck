@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from flask import jsonify
+
 from .shared import (
     SecurityAssessmentImportError,
     SecurityAssessmentService,
@@ -94,6 +96,15 @@ def reportsplus_security_assessment():
 @bp.route("/reportsplus/security-assessment")
 def reportsplus_security_assessment_legacy():
     return redirect(url_for("main.reportsplus_security_assessment", **request.args))
+
+
+@bp.route("/api/security-assessment/canonical")
+def security_assessment_canonical():
+    try:
+        canonical = SecurityAssessmentService().get_canonical()
+    except FileNotFoundError:
+        return jsonify({"error": "No canonical artifact exists yet."}), 404
+    return jsonify(canonical.model_dump(mode="json"))
 
 
 @bp.route("/security-assessment/import", methods=["POST"])
