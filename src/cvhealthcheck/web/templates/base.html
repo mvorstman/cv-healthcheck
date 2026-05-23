@@ -37,16 +37,12 @@
              class="sidebar-link{% if ep == 'main.login' %} is-active{% endif %}">
             Connect to CS
           </a>
-          <a href="{{ url_for('main.index') }}"
-             class="sidebar-link{% if ep in ('main.index', 'main.lab_readiness', 'main.api_test') %} is-active{% endif %}">
-            Status
-          </a>
           <a href="{{ url_for('main.quick_hc') }}"
              class="sidebar-link{% if 'quick_hc' in ep or 'metrics_' in ep %} is-active{% endif %}">
             Quick HC
           </a>
           <a href="{{ url_for('main.development') }}"
-             class="sidebar-link{% if 'development' in ep or 'security_assessment_registry' in ep %} is-active{% endif %}">
+             class="sidebar-link{% if ep in ('main.lab_readiness', 'main.api_test') or 'development' in ep or 'security_assessment_registry' in ep %} is-active{% endif %}">
             Development
           </a>
         </nav>

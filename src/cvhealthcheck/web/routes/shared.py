@@ -103,7 +103,7 @@ def _safe_next(default: str | None = None) -> str:
     value = request.values.get("next", "")
     if value.startswith("/") and not value.startswith("//"):
         return value
-    return default or url_for("main.lab_readiness")
+    return default or url_for("main.quick_hc")
 
 
 def _parameters_from_form() -> dict[str, str]:

@@ -30,6 +30,9 @@ def test_quick_hc_and_report_pages_still_render() -> None:
     app = create_app()
     client = app.test_client()
 
+    root_response = client.get("/")
+    assert root_response.status_code == 302
+    assert "/quick-hc" in root_response.headers["Location"]
     assert client.get("/quick-hc").status_code == 200
     assert client.get("/quick-hc/license-summary").status_code == 302
     assert client.get("/quick-hc/security-assessment").status_code == 302

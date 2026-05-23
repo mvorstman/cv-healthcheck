@@ -9,18 +9,43 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='quick_hc.css', v=asset_version) }}">
   <script>
+    (function () {
+      var theme = localStorage.getItem('quickhc-theme-v1');
+      if (theme === 'dark' || theme === 'light') {
+        document.documentElement.dataset.theme = theme;
+      } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.dataset.theme = 'dark';
+      } else {
+        document.documentElement.dataset.theme = 'light';
+      }
+    })();
+  </script>
+  <script>
     window.QUICK_HC_INITIAL_DATA = {{ initial_data | tojson }};
   </script>
 </head>
 <body>
 
 <header class="hdr">
-  <span class="hdr-title" onclick="showOverview()">Quick HC</span>
+  <a href="{{ url_for('main.quick_hc') }}" class="hdr-brand" aria-label="cvThing by Purple">
+    <img
+      src="{{ url_for('static', filename='img/cvthing-logo-dark.png') }}"
+      data-light-logo="{{ url_for('static', filename='img/cvthing-logo-light.png') }}"
+      data-dark-logo="{{ url_for('static', filename='img/cvthing-logo-dark.png') }}"
+      alt="cvThing by Purple"
+      class="hdr-logo">
+  </a>
+  <button type="button" class="hdr-title" onclick="showOverview()">Quick HC</button>
   <span class="hdr-sep"></span>
-  <span id="hdr-subtitle" style="font-family:var(--mono);font-size:11px;color:var(--text-2)"></span>
+  <span id="hdr-subtitle" class="hdr-subtitle"></span>
   <span class="hdr-spacer"></span>
+  <div class="quickhc-theme-toggle" data-theme-toggle>
+    <span class="quickhc-theme-label">Theme</span>
+    <button type="button" class="quickhc-theme-button" data-theme-choice="light">Light</button>
+    <button type="button" class="quickhc-theme-button" data-theme-choice="dark">Dark</button>
+  </div>
   <span class="hdr-avail" id="hdr-avail"></span>
-  <a href="{{ url_for('main.index') }}" class="btn-ghost">← Dashboard</a>
+  <a href="{{ url_for('main.development') }}" class="btn-ghost">Development</a>
 </header>
 
 <div class="body">
@@ -41,5 +66,40 @@
 <form id="report-form" method="post" action="{{ url_for('main.quick_hc_report') }}" style="display:none"></form>
 
 <script src="{{ url_for('static', filename='quick_hc.js', v=asset_version) }}"></script>
+<script>
+  (function () {
+    var themeKey = 'quickhc-theme-v1';
+    var buttons = Array.from(document.querySelectorAll('[data-theme-toggle] [data-theme-choice]'));
+    var logo = document.querySelector('.hdr-logo');
+
+    var syncButtons = function (theme) {
+      for (var i = 0; i < buttons.length; i++) {
+        buttons[i].dataset.active = String(buttons[i].dataset.themeChoice === theme);
+      }
+    };
+
+    var syncLogo = function (theme) {
+      if (!logo) return;
+      logo.src = theme === 'dark' ? logo.dataset.darkLogo : logo.dataset.lightLogo;
+    };
+
+    var current = document.documentElement.dataset.theme || 'light';
+    syncButtons(current);
+    syncLogo(current);
+
+    for (var i = 0; i < buttons.length; i++) {
+      (function (btn) {
+        btn.addEventListener('click', function () {
+          var theme = btn.dataset.themeChoice;
+          if (theme !== 'light' && theme !== 'dark') return;
+          document.documentElement.dataset.theme = theme;
+          localStorage.setItem(themeKey, theme);
+          syncButtons(theme);
+          syncLogo(theme);
+        });
+      })(buttons[i]);
+    }
+  })();
+</script>
 </body>
 </html>

@@ -512,7 +512,11 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert "Client Growth" in body
     assert "Capacity Licenses" in body
     assert "Backup Job Summary" in body
+    assert "cvthing-logo-dark.png" in body
+    assert "data-theme-toggle" in body
+    assert "Development" in body
     assert "Generate Customer Report" in body
+    assert "Dashboard" not in body
     assert "Open full details" not in body
     assert "Full detail page" not in body
     assert "Not yet persisted" not in body

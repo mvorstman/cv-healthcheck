@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from .shared import (
     AuthError,
-    CommvaultApiClient,
     _api_client,
     _auth_failure_redirect,
     _current_token,
@@ -10,8 +9,8 @@ from .shared import (
     assess_lab_readiness,
     bp,
     clear_current_token,
-    load_settings,
     login_required,
+    load_settings,
     login_to_commvault,
     redirect,
     render_template,
@@ -40,7 +39,7 @@ def login():
             error = str(exc)
         else:
             set_current_token(token)
-            return redirect(next_url or url_for("main.lab_readiness"))
+            return redirect(next_url or url_for("main.quick_hc"))
 
     return render_template(
         "login.html",
@@ -57,24 +56,8 @@ def logout():
 
 
 @bp.route("/")
-@login_required
 def index():
-    settings = load_settings()
-    client = CommvaultApiClient(settings=settings, token=_current_token())
-    ping = client.ping() if settings.base_url else None
-    if ping:
-        auth_redirect = _auth_failure_redirect(ping)
-        if auth_redirect:
-            return auth_redirect
-    return render_template(
-        "index.html",
-        base_url=settings.base_url,
-        verify_ssl=settings.verify_ssl,
-        token_loaded=client.token_loaded,
-        api_reachable=bool(ping and ping.ok),
-        api_status_code=ping.status_code if ping else None,
-        api_error=ping.error if ping else None,
-    )
+    return redirect(url_for("main.quick_hc"))
 
 
 @bp.route("/lab-readiness")

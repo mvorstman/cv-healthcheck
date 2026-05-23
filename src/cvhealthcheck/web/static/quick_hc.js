@@ -61,7 +61,6 @@ function renderLeft() {
   CATS.forEach((cat, ci) => {
     h += `<div class="cat-group">
       <div class="cat-hdr" onclick="toggleCat('${cat.id}',this)">
-        <span class="cat-icon">${cat.icon}</span>
         <span class="cat-label">${esc(cat.name)}</span>
       </div>
       <div class="cat-body" id="cb-${cat.id}" style="max-height:${cat.open ? '2000px' : '0'}">`;
