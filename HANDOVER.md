@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-29
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** _(set by the wrap-up commit that publishes this file)_
+**Last commit:** `c3e5fff` — Wrap up: CHANGELOG entry for 2026-05-29, HANDOVER points at Settings nav
 **Test status:** 468 passing
 
 ---
