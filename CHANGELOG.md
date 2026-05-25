@@ -10,6 +10,39 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-29
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `2a57cdf`, plus the wrap-up commit that publishes this entry.
+**Test status:** 468 passing (up from 466; +2 new tests in `tests/test_api_auth_status.py`).
+
+### Added
+
+- **Connect modal sign-out branch** (`templates/quick_hc.html`). Modal body is now split into `#connect-modal-signin` (existing username/password form) and `#connect-modal-signout` (new). Sign-out branch shows "Signed in as `<user>`. Sign out?" plus a `#signout-error` div and a `#signout-submit` button. Modal title switches between "Connect to Commvault" and "Sign out of Commvault".
+- **`SESSION_USERNAME_KEY`** in `auth/commvault_auth.py`. New `get_current_username()` helper. `set_current_token()` now accepts an optional `username=` kwarg.
+- **`username` field on `/api/auth/status`** — `{"authenticated": <bool>, "username": <str | null>}`. Null for anonymous sessions and for legacy authenticated sessions created before this field existed.
+- **`window.CURRENT_USERNAME`** in the page template alongside `window.IS_AUTHENTICATED`. Kept in sync by the polling fetch.
+- **`submitSignOut()` in `quick_hc.js`** — POSTs to `/logout` with `redirect: 'manual'`, treats 2xx/3xx/opaqueredirect as success, clears `window.IS_AUTHENTICATED` + `window.CURRENT_USERNAME`, calls `_updateConnBadge()`, closes the modal. On failure, shows an inline error and leaves the modal open. Mirrors `submitConnect()`'s busy-state and error-display pattern exactly.
+- New tests in `tests/test_api_auth_status.py`: authenticated-without-username (pins the legacy-session contract) and end-to-end sign-out (seeds session, POSTs `/logout`, asserts 302 → `/login`, asserts the status endpoint flips, asserts both session keys are gone).
+
+### Changed
+
+- `openConnectModal()` branches on `window.IS_AUTHENTICATED`. Sign-in branch focuses the username input as before; sign-out branch populates `#signout-username` from `window.CURRENT_USERNAME` and falls back to "this Commvault session" when unknown.
+- `submitConnect()` now caches `window.CURRENT_USERNAME` on successful login so the next open of the modal shows the right name without waiting for the next polling fetch.
+- `_updateConnBadge()`'s polling fetch updates `window.CURRENT_USERNAME` from the response. Network failure still leaves both `IS_AUTHENTICATED` and `CURRENT_USERNAME` in their last-known state.
+- Both login call sites (`basic.py::login`, `quick_hc_api.py::api_login`) pass the username through to `set_current_token()`.
+- `clear_current_token()` now also drops `SESSION_USERNAME_KEY`.
+
+### Notes
+
+- **`/logout` POST support was NOT added — it already existed.** `basic.py` declares `methods=["POST"]` and `base.html` already POSTs to it from the sidebar's user menu. The handover's worry about it being GET-only turned out to be unfounded; verified before changing anything.
+- **No CSRF middleware in this app**, and no existing POST route uses a CSRF token (`/api/login` and the sidebar logout form both POST without one). `submitSignOut()` follows the same pattern. If CSRF protection is added in a future session, `/logout`, `/api/login`, the sidebar logout form, and the new sign-out fetch all need updating together.
+- **`username` is gated on `authenticated` in `/api/auth/status`.** Even if a stale `SESSION_USERNAME_KEY` survives a half-cleared session, the endpoint surfaces `username: null` until the token is also valid. This avoids exposing a username for an effectively-anonymous session.
+- **The signout branch shows "this Commvault session"** when `window.CURRENT_USERNAME` is null. This covers two real cases: legacy sessions created before `SESSION_USERNAME_KEY` existed, and sessions where the polling fetch has not yet populated the cache (rare — the template seeds it).
+- **No CSRF tokens, no PDF export, no scoring engine** — all carried forward unchanged.
+
+---
+
 ## 2026-05-28
 
 **Branch:** `feature/basic-healthcheck-report-output`
