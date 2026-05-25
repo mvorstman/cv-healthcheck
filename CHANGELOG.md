@@ -10,6 +10,52 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-05
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `c06309d`, `b873431` (step 2 split — the first commit landed only the template deletion because a `git add` invocation died silently on the already-deleted path; the second commit landed the route bodies and comment updates). `6e0b1ed` (step 3 test cleanup). Plus the wrap-up commit that publishes this entry.
+**Test status:** 472 passing (down from 477; -5 route-coupled tests deleted).
+
+Session 4 of the unified-upload refactor — **the old upload routes are deleted.** Only the unified route `POST /quick-hc/<subject_id>/import` remains.
+
+### Removed
+
+- **`POST /quick-hc/security-assessment/import`** — handler `quick_hc_security_assessment_import` deleted from `src/cvhealthcheck/web/routes/quick_hc.py`.
+- **`POST /quick-hc/license-summary/import`** — handler `quick_hc_license_summary_import` deleted.
+- **`GET, POST /quick-hc/import`** — handler `quick_hc_generic_import` deleted (the multi-purpose old generic route, including its `?subject_id=`, `?stage=1`, and `X-Inline: 1` features).
+- **`src/cvhealthcheck/web/templates/quick_hc_import.html`** — template only used by the GET branch of the deleted generic route.
+- **5 route-coupled tests deleted** (per investigation report Section 5 categorisation):
+  - `tests/test_recognition.py::test_import_route_{direct_save,staged,unrecognized,not_extractable}` — exercised behavior specific to the deleted generic route (recognition-from-payload without an explicit subject_id in the URL). The dispatcher's recognition + extractability mechanics remain covered by the unit tests in `test_recognition.py` (`test_recognize_*`, `test_dispatcher_*`) which exercise `extract_file` directly without going through any HTTP route.
+  - `tests/test_import_flow.py::test_import_route_passes_subject_id` — exercised the deleted generic route's `?subject_id=` query-string handling. The unified route always has `subject_id` in the URL path; no equivalent test needed.
+
+### Changed
+
+- **`_unified_dispatcher_upload` redirect target.** Previously `url_for("main.quick_hc_generic_import")` (the deleted route) to be byte-equivalent with the old generic route's "redirect to self after upload" pattern. Now `url_for("main.quick_hc")` — the natural landing after a Quick HC upload. The docstring on `_unified_dispatcher_upload` documents this behavior change.
+- **3 URL-coupled tests updated** to point at the unified URL (was the deleted hyphenated form):
+  - `tests/test_security_assessment_import.py::test_quick_hc_security_assessment_upload_imports_html_and_redirects`
+  - `tests/test_license_summary_web.py::test_quick_hc_license_summary_upload_imports_csv_and_redirects`
+  - `tests/test_license_summary_web.py::test_quick_hc_license_summary_upload_rejects_unsupported_type`
+- **3 parity tests in `tests/test_unified_upload_route.py` updated** to drop the OLD-route POST half (the OLD route no longer exists to compare against). Each test now POSTs only to the unified route and asserts directly on the outcome. `test_unified_route_ai_branch_produces_same_artifact_as_old_route` renamed to `test_unified_route_ai_branch_saves_artifact` since it no longer tests parity.
+- **Module docstring** in `test_unified_upload_route.py` updated to reflect session-4 state.
+- **Docstrings on `quick_hc_subject_import`, `_unified_security_assessment_upload`, `_unified_license_summary_upload`, `_unified_dispatcher_upload`** rewritten to describe behavior directly instead of as "mirror of <deleted route>".
+- **`subject_data_service.py:170` comment** about "legacy aliases until session 4 deletes them" updated. `_SA_IMPORT_URL` / `_LS_IMPORT_URL` header comment also updated.
+
+### Notes
+
+- **Step 1 pre-deletion grep surfaced one critical not-quite-production issue:** the `_unified_dispatcher_upload` helper had two `url_for("main.quick_hc_generic_import")` calls (inside the no-file-selected branch and the after-completion fallthrough). These would have failed at request time once the generic route was deleted, but they weren't user-facing references — they were inside the unified route's helper that was specifically designed to be byte-equivalent with the old generic route in session 2. Fixed both to redirect to `main.quick_hc`.
+- **Two dead-data sites NOT touched (out of session 4 scope):** `src/cvhealthcheck/quickhc/registry.py:131, 205` hold `TileDefinition.import_url=` with the OLD hyphenated URLs. The field has been unread since session 2 deleted `canonical_view._build_sources` (its sole consumer). These can be removed in a future cleanup pass; not session 4's scope.
+- **`src/cv_healthcheck.egg-info/PKG-INFO`** mentions the deleted URLs ("POST /quick-hc/security-assessment/import remains active"). Built artifact; regenerated on next build. Not edited.
+- **Historical references in `docs/refactor_unified_upload_2026-05-31.md`, `docs/refactor_unified_upload_session_3b_inventory.md`, and `docs/adr/0001-source-building-fork.md`** — left untouched. These are records of what was once true and should remain accurate to the moment they were written.
+- **Source-building fork still in place** per ADR 0001. Not reopened. `_legacy_builders` and the AI/system dispatch in `build_subject_initial_data` continue to function as documented.
+- **Snapshot test passes** (frontend was already on the unified URLs since session 3 step 3; this session only deleted route handlers, no source-building change).
+- **3 `FIXME(refactor-unified-upload-session-5)` tags** unchanged at the dispatch sites in `quick_hc.py`. They mark the branch-dispatch smell — session 5's target, not session 4's.
+
+### Carry-forward for session 5
+
+The unified route is now the sole upload path. Session 5 replaces the branch dispatch (which currently hard-codes `security_assessment` and `license_summary` sub-branches in `quick_hc_subject_import`) with data-driven dispatch — likely a new column or JSON field on the `subjects` table describing each subject's upload behavior (form-field name, allowed extensions, success-message format, persist function reference).
+
+---
+
 ## 2026-06-04
 
 **Branch:** `feature/basic-healthcheck-report-output`

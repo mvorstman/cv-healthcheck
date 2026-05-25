@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04
+**Last updated:** 2026-06-05
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `60cf857` — Session 3c wrap-up: HANDOVER points at session 4, CHANGELOG entry
-**Test status:** 477 passing
+**Last commit:** _(set by the wrap-up commit that publishes this file)_
+**Test status:** 472 passing
 
 ---
 
@@ -16,122 +16,132 @@ If you are a new chat / new session, read these files in order before doing anyt
 1. `README.md` — what the project is, how to run it, the stack
 2. `HANDOVER.md` (this file) — what to do next
 3. `ROADMAP.md` — where the project is heading
-4. **`docs/adr/`** — Architecture decision records. Required reading if your work touches source-building, the canonical schema, or the unified upload route. Currently one ADR: `0001-source-building-fork.md`.
+4. **`docs/adr/0001-source-building-fork.md`** — load-bearing architecture decision. Required reading if your work touches source-building, the canonical schema, or the unified upload route.
+5. **`docs/refactor_unified_upload_2026-05-31.md`** — the original investigation report driving the refactor. Section 5's test-categorisation framework remains useful for session 5.
 
-`CHANGELOG.md` is the dated history. The most recent entries cover sessions 1-3c of the unified-upload refactor.
+`CHANGELOG.md` is the dated history. The 2026-06-05 entry covers what session 4 just shipped.
 
 ---
 
 ## What was just completed
 
-**Session 3c — source-building unification question closed via ADR 0001** (commit `c7a1a12`).
+**Session 4 of the unified-upload refactor — old upload routes deleted.**
 
-The user chose Option γ4: hold position on source-building. The upload route is unified (sessions 1-3 stand); `_legacy_builders` continues to serve the six system subjects with custom view shapes.
+Commits: `c06309d`, `b873431` (step 2 split), `6e0b1ed` (step 3). The unified route `POST /quick-hc/<subject_id>/import` is now the sole upload path. Three old routes are gone:
 
-This session committed:
+- `POST /quick-hc/security-assessment/import`
+- `POST /quick-hc/license-summary/import`
+- `GET, POST /quick-hc/import`
 
-- `docs/adr/0001-source-building-fork.md` — full decision record with alternatives, consequences, and revisit triggers.
-- `docs/adr/README.md` — sets up the ADR directory and conventions.
-- Three short in-code annotations in `src/cvhealthcheck/quickhc/subject_data_service.py` pointing at the ADR (at the dispatch in `build_subject_initial_data`, at `_legacy_loaders`, at `_legacy_builders`).
+Plus `templates/quick_hc_import.html` (only consumer of the deleted generic GET branch). Plus 5 route-coupled tests deleted, 3 URL-coupled tests updated to new URLs, 3 parity tests in `test_unified_upload_route.py` simplified to single-route assertions.
 
-No code logic changed. 477 tests pass.
+One forced behavior change: `_unified_dispatcher_upload` used to redirect to `main.quick_hc_generic_import` (the deleted endpoint); now redirects to `main.quick_hc`.
+
+477 → 472 tests passing (-5 route-coupled deletions). 3 `FIXME(refactor-unified-upload-session-5)` tags unchanged. Snapshot test still passes.
 
 ---
 
 ## What is in-flight
 
-Nothing. Working tree is clean. The refactor's blocker is resolved (decision recorded). Sessions 4 and 5 of the original plan can proceed.
+Nothing. Working tree is clean.
 
 ---
 
 ## Single recommended next action
 
-**Session 4 of the unified-upload refactor — delete the old upload routes.**
+**Session 5 of the unified-upload refactor — replace the dispatch smell in `quick_hc_subject_import` with data-driven dispatch.**
 
-After session 3 flipped the frontend to the new unified URLs (`/quick-hc/<subject_id>/import`), the old routes have been dormant. Session 4 deletes them.
+### Where the smell is
 
-### Scope
+In `src/cvhealthcheck/web/routes/quick_hc.py`, the unified route handler `quick_hc_subject_import` branches by `subjects.created_by`, then hard-codes a sub-branch by `subject_id` for the two system subjects with upload paths:
 
-**Routes to delete** (in `src/cvhealthcheck/web/routes/quick_hc.py`):
-
-- `POST /quick-hc/security-assessment/import` — handler `quick_hc_security_assessment_import` at around line 236.
-- `POST /quick-hc/license-summary/import` — handler `quick_hc_license_summary_import` at around line 319.
-- `GET, POST /quick-hc/import` — handler `quick_hc_generic_import` at around line 379.
-
-**Templates to delete**:
-
-- `src/cvhealthcheck/web/templates/quick_hc_import.html` — only served by the GET branch of `quick_hc_generic_import`.
-
-### Verification
-
-```bash
-# Confirm no production code still references the old URLs.
-grep -rn "/quick-hc/security-assessment/import\|/quick-hc/license-summary/import\|/quick-hc/import\b\|quick_hc_generic_import\|quick_hc_security_assessment_import\|quick_hc_license_summary_import\|quick_hc_import.html" src/ templates/
+```python
+if created_by == "system":
+    if subject_id == "security_assessment":
+        return _unified_security_assessment_upload()
+    if subject_id == "license_summary":
+        return _unified_license_summary_upload()
+    return ("Subject does not support uploads.", 404)
+return _unified_dispatcher_upload(subject_id)
 ```
 
-Expected: hits only in the files being deleted. If anything in production still references the old URLs, stop and investigate — the frontend flip in session 3 should have left no references.
+Three `FIXME(refactor-unified-upload-session-5)` tags mark the dispatch lines. The two `_unified_<subject>_upload` helpers are deliberately near-duplicate functions — each is a thin wrapper around `import_<subject>_upload(...)` with subject-specific form field name, error-message text, and success-message format.
 
-The dev-page mirror `/security-assessment/import` (in `src/cvhealthcheck/web/routes/development.py`) is **independent** of the Quick HC upload routes and is NOT being deleted. It uses the same `import_security_assessment_upload` function but is a different route. Leave it alone.
+The smell: subject-specific knowledge in route-handler code is exactly what the refactor exists to eliminate. The session 2-4 plan was to ship the unified route first, defer the dispatch question to session 5.
 
-### Tests to update or delete
+### The shape of the replacement
 
-Per the investigation report's Section 5 categorization (`docs/refactor_unified_upload_2026-05-31.md`):
+The dispatch becomes data-driven: each subject in the `subjects` table carries enough metadata to handle its own upload without route-side branching. Concretely, the dispatch reads from the subject row:
 
-- **URL-coupled tests** (POSTed to the old URL but tested behavior that the new route still provides): update to the new URL.
-- **Route-coupled tests** (tested mechanics specific to the deleted route handler, e.g. exercising the generic dispatcher's three error outcomes via the generic route): delete or rewrite against the unified route. The unified route's tests in `tests/test_unified_upload_route.py` (session 2) already cover the same dispatcher mechanics from the new URL — likely the route-coupled ones can be deleted outright.
-- **Behavior-coupled tests** (test outcomes that don't depend on the route at all): already passing against the new route, no change needed.
+- **Form field name** (`assessment_file` for SA, `license_summary_file` for LS, `file` for AI).
+- **Allowed file extensions** (SA accepts `.html .htm .csv`; LS accepts `.csv .htm .html .xlsx`; AI subjects use what's declared in `subject_sources.recognition_hints`).
+- **Persist function reference** (which `persist_*_artifact` to call; AI subjects use `extract_file` + canonical save).
+- **Success-message format** (template string with placeholders for `source_type`, `source_file`, and any per-subject counters like `finding_count` for SA or `other_count` / `agent_count` for LS).
 
-Suggested grep starting points:
+The likely shape is a new column on `subjects` — JSON or a separate `subject_upload_behavior` table. The decision is whether to:
 
-```bash
-grep -rn "/quick-hc/security-assessment/import\|/quick-hc/license-summary/import" tests/
-grep -rn "/quick-hc/import" tests/
-```
+- **5a — Inline JSON column.** Schema migration adds `subjects.upload_behavior JSON`. Each row stores its config. Smallest schema change. JSON is less queryable than first-class columns but the dispatch only ever reads it whole.
+- **5b — Separate columns.** Schema migration adds `subjects.upload_form_field`, `subjects.upload_extensions`, `subjects.upload_persist`, `subjects.upload_message_template`. More normalised, more verbose, more migration work.
+- **5c — Separate table.** `subject_upload_behaviors` joined by `subject_id`. Most flexible but heaviest schema change.
 
-The investigation report's Section 5 estimated 14 tests touch these URLs; some have already been updated by session 3 step 3.
+I'd lean **5a** — keeps the migration small, the dispatch reads it once, and if the model evolves later it's easier to split the JSON than to merge separate tables.
 
-### No redirects
+### Session 5 might be its own investigation pass first
 
-Don't add HTTP redirects from old URLs to new ones. The investigation report (Section 6) confirmed no external links to the old URLs exist. A 404 is correct behavior.
+The data-driven dispatch needs to handle:
+- **Different persist function signatures.** `persist_security_assessment_artifact` and `persist_license_summary_artifact` take different keyword arguments. Either unify their signatures (out of scope without breaking other callers) or carry per-subject argument-passing logic in the dispatch.
+- **Different success-message data sources.** SA reads `finding_count` from the persisted artifact; LS reads `other_count` and `agent_count`. The dispatch needs to know which fields to extract for each subject's success message.
+- **AI subjects' upload path (`extract_file` + canonical save) doesn't use a `persist_*_artifact` function at all.** It uses the dispatcher. The data model needs to express "use the dispatcher" vs "use this specific persist function" as a first-class case.
 
-### Heads-up
+These shape questions may need an investigation pass before session 5 writes code. Either:
+- **5-light**: spend session 5 on an investigation, defer the implementation to session 6.
+- **5-direct**: do the investigation inline and ship the implementation in one session.
 
-- **Source-building unification is settled by ADR 0001.** Do not reopen the question in session 4. If a comment in `_legacy_builders` or the dispatch site catches your eye, read the ADR before touching the surrounding code.
-- **The unified route handler stays untouched.** Its 3 `FIXME(refactor-unified-upload-session-5)` tags belong to session 5, not session 4.
-- **Test count is likely to drop** after deletions. Report the new count in the commit message. Don't manufacture replacement tests.
+My read: **5-direct is plausible** if the answer to the persist-signature question is "carry a small per-subject dispatcher function reference in the row's JSON, keep using the existing `persist_*_artifact` functions unchanged." That avoids the signature-unification rabbit hole. Pick that path and the rest is bookkeeping.
+
+### Constraints session 5 should respect
+
+- **Source-building fork stays.** Per ADR 0001. Don't touch `_legacy_builders`, `_legacy_loaders`, `_build_generic_subject`. Their fork serves source-BUILDING (view shapes); session 5's work is on dispatch for upload-HANDLING. These are different concerns.
+- **The unified route's HTTP contract stays.** URL `POST /quick-hc/<subject_id>/import`, form-field names per-subject, redirect targets per-subject, X-Inline / ?stage=1 for the AI branch. Session 5 makes the dispatch data-driven without changing what the routes do.
+- **Snapshot test pins behavior.** Run `tests/test_subject_initial_data_snapshot.py` whenever you touch the source-building path. Run `tests/test_unified_upload_route.py` whenever you touch the dispatch.
+- **No new tests beyond what's needed.** If the dispatch refactor is purely internal, existing tests cover it. If the data-driven dispatch introduces new failure modes (e.g. a subject without upload behavior data), add ONE test per new failure mode.
 
 ### Verification
 
 ```bash
 python -m compileall -q src
-python -m pytest -q                                # expect 477 minus any deleted tests
-grep -rn "FIXME(refactor-unified-upload-session-5)" src/   # expect 3 hits in quick_hc.py
+python -m pytest -q                                # expect 472 passing (or higher if session 5 adds tests)
+grep -rn "FIXME(refactor-unified-upload-session-5)" src/  # expect 0 after session 5; 3 today
 ```
 
 ---
 
-## After session 4
+## After session 5, the refactor is functionally complete
 
-1. **Session 5** — Replace the branch-dispatch shim in `quick_hc_subject_import` with data-driven dispatch. The 3 FIXME tags mark the dispatch sites. Likely adds a new column on the `subjects` table describing import behavior (form-field name, allowed extensions, success-message format, persist function reference).
-2. **Session 6 (optional)** — Final cleanup.
+Session 6 (optional) is the cleanup pass. Candidates already on the list:
 
-After the refactor: `data/app.db` out of git, `README.md` refresh, 2026-05-20 review backlog, workflow tooling decisions.
+- Delete `registry.py:131, 205` `TileDefinition.import_url=` dead data.
+- Refresh `README.md` (test count "298" → 472+).
+- Possibly delete the legacy `/security-assessment` development page (`web/routes/development.py`) if no one uses it any more.
+
+After the refactor: `data/app.db` out of git, 2026-05-20 review backlog, workflow tooling decisions.
 
 ---
 
 ## Context the next session needs that is not yet in README/ROADMAP/CHANGELOG
 
-- **Source-building fork is intentional.** See `docs/adr/0001-source-building-fork.md`. `_legacy_builders` serves the six system subjects with legacy-shape tile data (counters, findings_grid, workload, chart_growth) that the canonical schema cannot represent. Do not "clean up" this fork without reading the ADR. The fork is documented in code at three sites in `subject_data_service.py`.
-- **Unified upload route from session 2** is live, tested, and used by the frontend. Its 3 `FIXME(refactor-unified-upload-session-5)` tags are in place. Replacement is session 5/6 work, not session 4.
-- **Frontend uses underscored URLs** since session 3 commit `389bc4d`. Old hyphenated routes still exist at the route layer until session 4 deletes them.
+- **Source-building fork is intentional.** See `docs/adr/0001-source-building-fork.md`. The fork serves subject-specific view shapes (counters, findings_grid, workload, chart_growth) that the canonical schema can't represent. Do not "clean up" this fork without reading the ADR.
+- **Unified upload route is the sole upload path** since session 4. `POST /quick-hc/<subject_id>/import` handles everything. Old URLs return 404 by design.
+- **3 `FIXME(refactor-unified-upload-session-5)` tags** in `quick_hc.py` mark the dispatch smell — session 5's target.
 - **Snapshot test (`tests/test_subject_initial_data_snapshot.py`)** is the behavior-preservation pin. Run it whenever you touch source-building or view-producing code.
-- **Legacy artifact READS preserved.** Option A invariant retired writes; reads through `load_active_security_assessment_artifact` / `load_active_license_summary_artifact` stay alive.
+- **Legacy artifact READS preserved.** The Option A invariant (write_legacy retired; reads through `load_active_security_assessment_artifact` / `load_active_license_summary_artifact` still alive) holds.
 - **`/logout` is POST-only**. No CSRF middleware in the app.
 - **localStorage surface is exactly two keys**: `quickhc-theme-v1`, `quickhc-state-v1`. Settings page (`/quick-hc/settings`) inspects and resets them.
 - **Quick HC subject naming rule (load-bearing).** Sidebar display name from `tile["title"]`, not `artifact.subject.title`. Override at `subject_data_service.py:213`.
 - **`execute_approval()` requires an injected `store` in tests.** Pattern in `tests/test_core_solidity.py::test_execute_approval_artifact`.
 - **Section ID prefix invariant** (landed 2026-05-26). `canonical_view` guards both prefix sites against re-prefixing.
-- **Hyphen-vs-underscore URL convention.** Unified route is `/quick-hc/<subject_id>/import` (underscored, matches DB). Old per-subject routes used hyphens. After session 4, only the underscored form exists.
+- **`_unified_dispatcher_upload` redirects to `main.quick_hc`** (was `main.quick_hc_generic_import` until session 4 deleted that endpoint). Tests assume the new target.
+- **Dead data in `registry.py:131, 205`** — `TileDefinition.import_url=` holds the old hyphenated URLs. Field is unread since session 2. Cleanup candidate for session 6.
 
 ---
 
@@ -141,7 +151,7 @@ After the refactor: `data/app.db` out of git, `README.md` refresh, 2026-05-20 re
 cd /home/michiel/dev/cv-healthcheck
 source venv/bin/activate
 python -m compileall -q src
-python -m pytest -q                                # expect 477 passing
+python -m pytest -q                                # expect 472 passing
 git status --short                                 # expect clean
 sqlite3 data/app.db "SELECT subject_id,created_by,status FROM subjects;"
 grep -rn "FIXME(refactor-unified-upload-session-5)" src/  # expect 3 hits
