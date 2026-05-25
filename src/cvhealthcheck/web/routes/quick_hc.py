@@ -19,7 +19,6 @@ from cvhealthcheck.reportsplus.report_definitions import REPORT_DEFINITIONS
 from cvhealthcheck.reportsplus.session import CommvaultSession
 
 from .shared import (
-    LICENSE_SUMMARY_UPLOAD_EXTENSIONS,
     LicenseSummaryImportError,
     LicenseSummaryService,
     SecurityAssessmentImportError,
@@ -32,8 +31,6 @@ from .shared import (
     get_commcell_identity,
     get_current_username,
     get_flashed_messages,
-    import_license_summary_upload,
-    import_security_assessment_upload,
     is_authenticated,
     login_required,
     read_json,
@@ -54,6 +51,10 @@ from cvhealthcheck.quickhc.source_provenance import (
 )
 from cvhealthcheck.reportsplus.backup_job_summary import (
     load_backup_job_summary_artifact,
+)
+from cvhealthcheck.web.routes.upload_dispatch import (
+    UploadHandler,
+    get_handler as _get_upload_handler,
 )
 
 
@@ -329,21 +330,20 @@ def quick_hc_license_summary_collect():
 
 @bp.route("/quick-hc/<subject_id>/import", methods=["POST"])
 def quick_hc_subject_import(subject_id: str):
-    """Unified upload route — dispatches by subjects.created_by.
+    """Unified upload route — dispatches via the upload_dispatch module.
 
-    Behavior contract (verified by tests/test_unified_upload_route.py):
-      - Unknown subject_id → 404.
-      - 'system' subject_id == 'security_assessment' → SA upload path
-        (assessment_file form field; SA-specific persist + flash text).
-      - 'system' subject_id == 'license_summary' → LS upload path
-        (license_summary_file form field; LS-specific extension check,
-        persist, and flash text).
-      - 'system' subject_id == anything else → 404 (the other four
-        system subjects are REST/metrics-only, no upload path).
-      - 'ai' or 'user' subject_id → dispatcher branch: extract_file
-        with the subject_id from the URL, supports X-Inline JSON-
-        response mode, ?stage=1 staging, and the three-way error
-        reporting (recognition / extractable / extraction).
+    Behavior contract (verified by tests/test_unified_upload_route.py
+    and tests/test_upload_dispatch.py):
+      - Unknown subject_id (not in the db) → 404.
+      - subject_id in upload_dispatch.UPLOAD_HANDLERS → run that
+        handler. Today: security_assessment, license_summary.
+      - subject_id is a system subject with no handler entry → 404.
+        Today: environment, client_growth, capacity_license,
+        backup_job_summary (all REST/metrics-only, no upload path).
+      - Anything else (AI, user, future created_by values) → generic
+        dispatcher branch with X-Inline JSON-response mode, ?stage=1
+        staging, and the three-way error reporting
+        (recognition / extractable / extraction).
     """
     db = get_db()
     try:
@@ -354,100 +354,41 @@ def quick_hc_subject_import(subject_id: str):
     if subject is None:
         return ("Unknown subject.", 404)
 
-    # FIXME(refactor-unified-upload-session-5): branch dispatch by
-    # subjects.created_by + sub-branch by subject_id is a deliberate
-    # migration shim. The two system subjects with upload paths are
-    # hard-coded here so session 2 can ship a small, obvious diff
-    # without committing to a data-model decision. Session 5/6 will
-    # replace this with data-driven dispatch — likely a new column on
-    # `subjects` describing import behavior (form-field name, allowed
-    # extensions, success-message format, persist function, etc.).
-    # Do not refactor this into a registry/plugin system in the
-    # meantime — the point of the FIXME is to defer that choice.
-    created_by = subject.get("created_by") or "ai"
+    handler = _get_upload_handler(subject_id)
+    if handler is not None:
+        return _handle_system_upload(handler)
 
-    if created_by == "system":
-        # FIXME(refactor-unified-upload-session-5): hard-coded subject IDs.
-        if subject_id == "security_assessment":
-            return _unified_security_assessment_upload()
-        # FIXME(refactor-unified-upload-session-5): hard-coded subject IDs.
-        if subject_id == "license_summary":
-            return _unified_license_summary_upload()
-        # The other four system subjects (environment, client_growth,
-        # capacity_license, backup_job_summary) are REST/metrics-only.
+    if (subject.get("created_by") or "ai") == "system":
+        # System subject without an upload handler entry — REST/metrics
+        # only (environment, client_growth, capacity_license,
+        # backup_job_summary).
         return ("Subject does not support uploads.", 404)
 
-    # 'ai', 'user', or any other created_by → dispatcher branch.
+    # 'ai', 'user', or any other created_by → generic dispatcher.
     return _unified_dispatcher_upload(subject_id)
 
 
-def _unified_security_assessment_upload():
-    """SA upload branch of the unified route — sole SA upload path
-    since session 4 deleted the per-subject /quick-hc/security-
-    assessment/import route. Form field: assessment_file. Redirects
-    to main.quick_hc_security_assessment on completion (which itself
-    redirects to /quick-hc since 2026-05-23).
+def _handle_system_upload(handler: UploadHandler):
+    """Run an upload through the handler's import function and flash
+    the result. Behavior parameters (form field name, import function,
+    error class, success-message format, redirect endpoint) all come
+    from the handler — no subject-specific code in this function.
     """
-    upload = request.files.get("assessment_file")
+    upload = request.files.get(handler.form_field)
     filename = (upload.filename if upload else "") or ""
     if not filename:
         flash("No file selected.", "error")
-        return redirect(url_for("main.quick_hc_security_assessment"))
+        return redirect(url_for(handler.redirect_endpoint))
 
     try:
-        artifact = import_security_assessment_upload(
-            upload.stream,
-            original_filename=filename,
-        )
-    except SecurityAssessmentImportError as exc:
+        artifact = handler.import_fn(upload.stream, original_filename=filename)
+    except handler.error_class as exc:
         flash(str(exc), "error")
     except Exception as exc:
-        flash(f"Security Assessment import failed: {exc}", "error")
+        flash(f"Import failed: {exc}", "error")
     else:
-        source_type = str(artifact.get("source_type") or "unknown").upper()
-        finding_count = int(artifact.get("finding_count") or 0)
-        flash(
-            f"{source_type} import completed for {artifact.get('source_file')} with {finding_count} findings.",
-            "success",
-        )
-    return redirect(url_for("main.quick_hc_security_assessment"))
-
-
-def _unified_license_summary_upload():
-    """LS upload branch of the unified route — sole LS upload path
-    since session 4 deleted the per-subject /quick-hc/license-summary/
-    import route. Form field: license_summary_file. Rejects unsupported
-    file extensions before invoking the importer.
-    """
-    upload = request.files.get("license_summary_file")
-    filename = (upload.filename if upload else "") or ""
-    if not filename:
-        flash("No file selected.", "error")
-        return redirect(url_for("main.quick_hc_license_summary"))
-
-    suffix = Path(filename).suffix.lower()
-    if suffix not in LICENSE_SUMMARY_UPLOAD_EXTENSIONS:
-        flash("Unsupported file type. Upload a License Summary CSV or HTML export.", "error")
-        return redirect(url_for("main.quick_hc_license_summary"))
-
-    try:
-        artifact = import_license_summary_upload(
-            upload.stream,
-            original_filename=filename,
-        )
-    except LicenseSummaryImportError as exc:
-        flash(str(exc), "error")
-    except Exception as exc:
-        flash(f"License Summary import failed: {exc}", "error")
-    else:
-        source_type = str(artifact.get("source_type") or "unknown").upper()
-        other_count = len(artifact.get("other_licenses") or [])
-        agent_count = len(artifact.get("agent_feature_licenses") or [])
-        flash(
-            f"{source_type} import completed for {artifact.get('source_file')} with {other_count} other licenses and {agent_count} agent/feature licenses.",
-            "success",
-        )
-    return redirect(url_for("main.quick_hc_license_summary"))
+        flash(handler.success_format(artifact), "success")
+    return redirect(url_for(handler.redirect_endpoint))
 
 
 def _unified_dispatcher_upload(subject_id: str):
