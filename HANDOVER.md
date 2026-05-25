@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-06-03
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** _(set by the wrap-up commit that publishes this file)_
+**Last commit:** `7b0b0c1` — Session 3b wrap-up: CHANGELOG entry, HANDOVER points at the decision
 **Test status:** 477 passing
 
 ---
