@@ -51,22 +51,53 @@ function esc(s) {
 }
 
 // ── CONNECTION BADGE ──
-function _updateConnBadge() {
-  const avail = allSubjs().filter(s => s.state !== 'nodata').length;
+// Badge state precedence:
+//   1. Synchronous repaint from window.IS_AUTHENTICATED (server-rendered on
+//      page load, updated locally after sign-in / sign-out).
+//   2. Async refresh against /api/auth/status — keeps the badge accurate on
+//      long-lived sessions after token expiry without reloading the page.
+//   3. On fetch failure, leave the badge in its last known state rather
+//      than flipping to "disconnected".
+
+function _paintConnBadge(isAuth) {
   const dot = document.getElementById('conn-dot');
   const label = document.getElementById('conn-label');
   if (!label) return;
-
-  const isAuth = !!window.IS_AUTHENTICATED;
   if (isAuth) {
     label.textContent = 'Connected';
-    if (dot) { dot.className = 'conn-dot conn-dot-ok'; }
+    if (dot) dot.className = 'conn-dot conn-dot-ok';
     const badge = document.getElementById('conn-badge');
     if (badge) badge.title = 'Connected — click to sign out';
   } else {
     label.textContent = 'Connect';
     if (dot) dot.className = 'conn-dot conn-dot-idle';
+    const badge = document.getElementById('conn-badge');
+    if (badge) badge.title = 'Click to connect';
   }
+}
+
+function _updateConnBadge() {
+  // First, repaint synchronously from the last known value so callers like
+  // renderLeft() see an immediate result.
+  _paintConnBadge(!!window.IS_AUTHENTICATED);
+  // Then, refresh from the server. Network errors leave the badge as is.
+  fetch('/api/auth/status', { credentials: 'same-origin' })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data || typeof data.authenticated !== 'boolean') return;
+      window.IS_AUTHENTICATED = data.authenticated;
+      _paintConnBadge(data.authenticated);
+    })
+    .catch(() => { /* leave badge in last known state */ });
+}
+
+// Module-level interval handle so the 60s poll does not stack if
+// _startConnBadgePolling() is invoked more than once.
+let _connBadgeIntervalId = null;
+function _startConnBadgePolling() {
+  if (_connBadgeIntervalId !== null) return;
+  _connBadgeIntervalId = setInterval(_updateConnBadge, 60000);
+  window.addEventListener('focus', _updateConnBadge);
 }
 
 // ── REPORT ACTION BAR ──
@@ -611,6 +642,7 @@ document.getElementById('btn-gen').addEventListener('click', () => {
 // ── INIT ──
 _restoreState();
 renderLeft();
+_startConnBadgePolling();
 const _firstSubj = allSubjs().find(s => s.id === 'environment') || allSubjs()[0];
 if (_firstSubj) openConfig(_firstSubj.id);
 else showOverview();
