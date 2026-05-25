@@ -103,6 +103,23 @@ def quick_hc():
     )
 
 
+@bp.route("/quick-hc/settings")
+def quick_hc_settings():
+    """Placeholder Settings page.
+
+    Reachable for anonymous users so that signed-out users can still reset
+    their local preferences. The actual preference inspection and reset
+    happens client-side via inline JS in the template — these preferences
+    live in localStorage only (no server-side state yet).
+    """
+    return render_template(
+        "quick_hc_settings.html",
+        asset_version=_quick_hc_asset_version(),
+        is_authenticated=is_authenticated(),
+        current_username=get_current_username() if is_authenticated() else None,
+    )
+
+
 @bp.route("/quick-hc/<subject_id>/delete", methods=["POST"])
 def quick_hc_delete_subject(subject_id: str):
     db = get_db()

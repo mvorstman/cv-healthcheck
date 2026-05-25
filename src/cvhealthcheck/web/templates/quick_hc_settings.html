@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Settings — Quick HC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='quick_hc.css', v=asset_version) }}">
+  <script>
+    (function () {
+      var theme = localStorage.getItem('quickhc-theme-v1');
+      if (theme === 'dark' || theme === 'light') {
+        document.documentElement.dataset.theme = theme;
+      } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.dataset.theme = 'dark';
+      } else {
+        document.documentElement.dataset.theme = 'light';
+      }
+    })();
+  </script>
+  <style>
+    html, body { overflow: auto; }
+    .settings-page {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 48px 24px 64px;
+      font-family: var(--font);
+      color: var(--text-1);
+    }
+    .settings-back {
+      display: inline-block;
+      font-size: 12px;
+      color: var(--text-2);
+      text-decoration: none;
+      margin-bottom: 24px;
+    }
+    .settings-back:hover { color: var(--accent); }
+    .settings-title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .settings-lede {
+      font-size: 13px;
+      color: var(--text-2);
+      margin-bottom: 32px;
+      line-height: 1.5;
+    }
+    .settings-section {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+      background: var(--bg-panel);
+    }
+    .settings-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      font-family: var(--mono);
+      margin-bottom: 12px;
+    }
+    .settings-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 6px 0;
+      font-size: 13px;
+    }
+    .settings-row + .settings-row {
+      border-top: 1px solid var(--border);
+    }
+    .settings-label { color: var(--text-2); }
+    .settings-value {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-1);
+    }
+    .settings-actions {
+      margin-top: 20px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .btn-reset {
+      background: var(--bg-panel);
+      color: var(--text-1);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 8px 14px;
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-reset:hover { border-color: var(--accent); color: var(--accent); }
+    .settings-reset-msg {
+      font-size: 12px;
+      color: var(--accent);
+      margin-left: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="settings-page">
+  <a class="settings-back" href="{{ url_for('main.quick_hc') }}">← Back to Quick HC</a>
+
+  <div class="settings-title">Settings</div>
+  <p class="settings-lede">
+    These preferences are stored in your browser only. Resetting will not
+    affect imported data or catalog state.
+  </p>
+
+  <div class="settings-section">
+    <div class="settings-section-title">Local preferences</div>
+    <div class="settings-row">
+      <span class="settings-label">Theme</span>
+      <span class="settings-value" id="settings-theme">—</span>
+    </div>
+    <div class="settings-row">
+      <span class="settings-label">Subjects included in report</span>
+      <span class="settings-value" id="settings-included-count">—</span>
+    </div>
+    <div class="settings-row">
+      <span class="settings-label">Sections included in report</span>
+      <span class="settings-value" id="settings-section-count">—</span>
+    </div>
+    <div class="settings-actions">
+      <button type="button" class="btn-reset" id="btn-reset-prefs" onclick="resetLocalPreferences()">
+        Reset local preferences
+      </button>
+      <span class="settings-reset-msg" id="settings-reset-msg" hidden>Cleared.</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── LOCAL PREFERENCE INSPECTION ──
+  // These two keys are the entire localStorage surface today. Keep them in
+  // sync with:
+  //   src/cvhealthcheck/web/static/quick_hc.js          ('quickhc-state-v1')
+  //   src/cvhealthcheck/web/templates/base.html         ('quickhc-theme-v1')
+  //   src/cvhealthcheck/web/templates/quick_hc.html     ('quickhc-theme-v1')
+  // If a future change introduces a new key, add it here too.
+  var THEME_KEY = 'quickhc-theme-v1';
+  var STATE_KEY = 'quickhc-state-v1';
+
+  function readState() {
+    try { return JSON.parse(localStorage.getItem(STATE_KEY) || '{}'); }
+    catch (e) { return {}; }
+  }
+
+  function renderSummary() {
+    var theme = localStorage.getItem(THEME_KEY);
+    document.getElementById('settings-theme').textContent =
+      (theme === 'dark' || theme === 'light') ? theme : 'system default';
+
+    var state = readState();
+    var includedSubjects = 0;
+    var includedSections = 0;
+    Object.keys(state).forEach(function (sid) {
+      var s = state[sid] || {};
+      if (s.included) includedSubjects++;
+      var secs = s.sections || {};
+      Object.keys(secs).forEach(function (secId) {
+        if (secs[secId]) includedSections++;
+      });
+    });
+    document.getElementById('settings-included-count').textContent = String(includedSubjects);
+    document.getElementById('settings-section-count').textContent = String(includedSections);
+  }
+
+  function resetLocalPreferences() {
+    localStorage.removeItem(THEME_KEY);
+    localStorage.removeItem(STATE_KEY);
+    var msg = document.getElementById('settings-reset-msg');
+    if (msg) msg.hidden = false;
+    // Brief delay so the user sees the confirmation before the reload.
+    setTimeout(function () { window.location.reload(); }, 350);
+  }
+
+  renderSummary();
+</script>
+</body>
+</html>
