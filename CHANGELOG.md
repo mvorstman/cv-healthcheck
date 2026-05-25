@@ -10,6 +10,58 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-03
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `11df86c`, plus the wrap-up commit that publishes this entry.
+**Test status:** 477 passing (unchanged from session 3).
+
+Session 3b of the unified-upload refactor — **STOP-and-report at the architectural assessment stage.** No code changes. One docs commit. The brief's Option γ plan cannot land cleanly without a companion architectural decision that the user needs to make.
+
+### What happened
+
+The session-3b brief was Option γ from the 2026-06-02 HANDOVER: move legacy on-disk reads into a fallback inside `_load_from_canonical_store`, return `CanonicalArtifact`, let `_build_generic_subject` render. Then delete `_legacy_builders` cleanly.
+
+Before writing the adapter, I traced the legacy builder output vs. what `_build_generic_subject` + `artifact_to_view` would produce given a `CanonicalArtifact`. They diverge significantly:
+
+- Legacy SA produces `counters` and `findings_grid` section types. The generic view producer doesn't.
+- Legacy LS produces a `workload` section type. The generic view producer doesn't.
+- Legacy CG produces a `chart_growth` section type. The generic view producer doesn't.
+- Even simple subjects (environment) diff on subject-level fields the generic path doesn't synthesise: subtitle, fullUrl, per-source meta/status.
+- The canonical schema is frozen, so we can't add these section types.
+
+Per the brief's STOP-and-report rule, this session stopped at the inventory + architectural finding stage rather than writing an adapter that would produce the same proof 200 lines later.
+
+### Inventory of legacy on-disk reads
+
+Full inventory in `docs/refactor_unified_upload_session_3b_inventory.md` (Section A). Six file-based reads:
+
+- `environment` → `data/catalog/rest/commserv.json`
+- `security_assessment` → `data/catalog/security_assessment/latest.json` (via the SA service)
+- `license_summary` → `data/catalog/license_summary/latest.json` (via the LS service)
+- `client_growth` → `data/catalog/metrics/{client_count_history,client_growth_summary,client_growth_details}.json`
+- `capacity_license` → `data/catalog/metrics/capacity_license_usage.json`
+- `backup_job_summary` → `data/catalog/quickhc/backup_job_summary_latest.json`
+
+### Four options forward
+
+Documented in detail in the docs commit. Summary:
+
+- **γ1** — Restore per-subject view producers in `canonical_view.py` (`security_assessment_to_view`, `license_summary_to_view`, `client_growth_to_view`). Make `artifact_to_view` dispatch by `artifact_type`. Then delete `_legacy_builders`. Largest scope; cleanest end state with the canonical schema intact.
+- **γ2** — Accept the regression: delete `_legacy_builders`, all subjects render via the generic view producer, lose `counters`/`findings_grid`/`workload`/`chart_growth` shapes. Smallest end state; meaningful visible UX change.
+- **γ3** — Extend the canonical schema with new section types. Violates "schema is frozen" rule, large blast radius.
+- **γ4** — Hold position. Don't unify source-building further. Sessions 4-5 (route deletion + data-driven dispatch) proceed independently. The source-building stays split (`_legacy_builders` lives, alongside `_build_generic_subject`).
+
+### Notes
+
+- **No code changes this session.** Test count unchanged at 477.
+- **FIXME tags intact.** `grep -rn "FIXME(refactor-unified-upload-session-5)" src/` returns the same 3 hits in `quick_hc.py`.
+- **The unified upload route is still live and tested** (from session 2). The frontend uses the new URLs (from session 3). The architectural blocker is specifically the source-building unification half of the refactor, not the route half.
+- **This is the second time the source-building unification has hit an architectural wall.** Session 3 hit "deleting `_legacy_builders` loses access to legacy on-disk file data." Session 3b hit "the canonical schema can't carry subject-specific view shapes." Both walls are real; both reflect the legacy builders doing two distinct jobs (file reading + view synthesis) that the architecture has implicitly bundled together for years.
+- **Sessions 4 and 5 can still proceed if option γ4 is picked.** The unified upload route exists, the URL flip happened, the FIXME branch dispatch can be replaced with data-driven dispatch independently of how source-building resolves.
+
+---
+
 ## 2026-06-02
 
 **Branch:** `feature/basic-healthcheck-report-output`
