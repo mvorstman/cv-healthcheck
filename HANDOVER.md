@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-28
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** _(set by the wrap-up commit that publishes this file)_
+**Last commit:** `e8728ca` — Wrap up: CHANGELOG entry for 2026-05-28, HANDOVER points at modal sign-out
 **Test status:** 466 passing
 
 ---
