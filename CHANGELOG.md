@@ -10,6 +10,36 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `c7a1a12`, plus the wrap-up commit that publishes this entry.
+**Test status:** 477 passing (unchanged from session 3b).
+
+Session 3c — short wrap-up session that closes out the source-building unification question. No code changes beyond comments.
+
+### Added
+
+- **`docs/adr/0001-source-building-fork.md`** — Architecture decision record for the γ4 outcome. The upload routing path is unified (`POST /quick-hc/<subject_id>/import` handles all subjects); the source-building path is intentionally not unified (`_legacy_builders` continues to serve the six system subjects whose view shapes the canonical schema can't represent). Full reasoning: alternatives considered (γ1/γ2/γ3 rejected), consequences (both preserved goals and accepted tradeoffs), references to the session 3 + 3b CHANGELOG entries and investigation reports, and revisit triggers (when to reopen).
+- **`docs/adr/README.md`** — Sets up the ADR directory. Documents what an ADR is, when to add one, the required sections, and how to read existing ADRs from code annotations.
+
+### Changed
+
+- **In-code annotations in `src/cvhealthcheck/quickhc/subject_data_service.py`** at three sites pointing at ADR 0001:
+  - The dispatch block inside `build_subject_initial_data` (around line 94 — comment above the `_load_from_canonical_store` call).
+  - The `_legacy_loaders` function definition (around line 299).
+  - The `_legacy_builders` function definition (around line 324).
+
+  Each annotation is short (4-6 lines): a one-line pointer to the ADR plus the minimum context to understand why the fork is intentional. The detail lives in the ADR.
+
+### Notes
+
+- **γ4 decision rationale**: the canonical schema is frozen, and the legacy tile data uses section shapes (`counters`, `findings_grid`, `workload`, `chart_growth`) the schema can't carry. Sessions 3 and 3b both hit this wall. γ4 accepts the fork as honest reflection of two genuinely different shapes of tile data, not technical debt.
+- **The annotations short-circuit re-derivation.** Without them, the next session that wonders why `_legacy_builders` still exists would repeat sessions 3 and 3b's investigation from scratch. The pattern is: comment in code → ADR → done.
+- **Sessions 4 and 5 are unblocked.** Session 4 deletes the old upload routes. Session 5 replaces the unified route's branch-dispatch shim with data-driven dispatch. Both are independent of the source-building fork.
+
+---
+
 ## 2026-06-03
 
 **Branch:** `feature/basic-healthcheck-report-output`
