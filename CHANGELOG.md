@@ -10,6 +10,32 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-28
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `489c970`, plus the wrap-up commit that publishes this entry.
+**Test status:** 466 passing (up from 463; +3 new tests in a new file).
+
+### Added
+
+- **`GET /api/auth/status` endpoint** (`src/cvhealthcheck/web/routes/quick_hc_api.py`). Returns `{"authenticated": <bool>}`. Session read only — no Commvault round-trip. Used by the Quick HC connection badge to refresh state without reloading.
+- **`_paintConnBadge(isAuth)`** — extracted from the old `_updateConnBadge()` to keep the DOM-write logic pure and testable.
+- **`_startConnBadgePolling()`** in `quick_hc.js` — sets up a 60s `setInterval` plus a `window.focus` listener, both calling `_updateConnBadge`. Guarded by a module-level `_connBadgeIntervalId` so the interval cannot stack on repeated calls. Invoked once from the `// ── INIT ──` block.
+- `tests/test_api_auth_status.py` — three tests covering unauthenticated, authenticated, and empty-token-treated-as-unauthenticated states.
+
+### Changed
+
+- **`_updateConnBadge()`** in `quick_hc.js` now (1) repaints synchronously from `window.IS_AUTHENTICATED` so the first paint is immediate, then (2) fetches `/api/auth/status` and updates both `window.IS_AUTHENTICATED` and the badge from the JSON. On fetch failure, the badge is left in its last-known state — a flaky network must not flip the user to "disconnected".
+- The dead `avail = allSubjs().filter(s => s.state !== 'nodata').length` line in the old `_updateConnBadge()` was removed during the refactor; it was unused.
+
+### Notes
+
+- **Badge state precedence**: synchronous server-rendered initial value → asynchronous refresh from `/api/auth/status` → preserve last-known on network error. Documented inline at the top of the connection-badge section in `quick_hc.js`.
+- **Sign-out flow is not yet wired up.** The badge `title` still says "click to sign out" when authenticated, but clicking the badge opens the connect modal in its sign-in form regardless of state. The modal sign-out branch is item 2 of the Quick HC UX queue and is the next recommended action — see `HANDOVER.md`.
+- **No new endpoints invoked during tests.** The three new tests hit `/api/auth/status` directly via `client.test_client()`; they do not touch Commvault. Total run time for the new file is under 200ms.
+
+---
+
 ## 2026-05-27
 
 **Branch:** `feature/basic-healthcheck-report-output`
