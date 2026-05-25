@@ -10,6 +10,42 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-01
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `dff43f1`, plus the wrap-up commit that publishes this entry.
+**Test status:** 476 passing (up from 469; +7 new tests in `tests/test_unified_upload_route.py`).
+
+Session 2 of the unified-upload-route refactor (see `docs/refactor_unified_upload_2026-05-31.md` for the full plan).
+
+### Added
+
+- **`POST /quick-hc/<subject_id>/import`** — the unified upload route. Lives alongside the existing per-subject (`/quick-hc/security-assessment/import`, `/quick-hc/license-summary/import`) and generic (`/quick-hc/import?subject_id=…`) routes. Dispatches by `subjects.created_by`:
+  - Unknown subject_id → 404.
+  - `created_by == 'system'`: sub-branches by subject_id. `'security_assessment'` and `'license_summary'` mirror their existing per-subject route bodies; any other system subject → 404 (the other four are REST/metrics-only).
+  - `created_by == 'ai'` / `'user'` / other → mirrors the existing generic route, including X-Inline JSON mode, ?stage=1 staging routing, and three-way error reporting.
+- **Three private helpers** in `quick_hc.py` — `_unified_security_assessment_upload`, `_unified_license_summary_upload`, `_unified_dispatcher_upload`. Each is a deliberate body-duplicate of the matching old route. Docstrings call out the duplication and point at the session-5/6 collapse.
+- **`tests/test_unified_upload_route.py`** — 7 new tests covering every dispatch branch (see commit `dff43f1` for the per-test breakdown). Includes the License Summary Option A regression test that the 2026-05-27 HANDOVER flagged as missing.
+
+### Removed
+
+- **`canonical_view._build_sources`** — confirmed unreachable from production. Its only callers were `security_assessment_to_view` and `license_summary_to_view`, both only reached via dead try-blocks inside the legacy builders in `subject_data_service.py:480-486` and `:735-741`. The dead try-blocks themselves are NOT touched here — that's session 3 work alongside the rest of the source-building unification.
+- **`canonical_view._IMPORT_FIELDS`, `_IMPORT_ACCEPT`, `_SOURCE_DEFAULT_STATUS`** — private constants used only by the deleted `_build_sources`.
+
+### Changed
+
+- `security_assessment_to_view` and `license_summary_to_view` now return `"sources": []` instead of calling `_build_sources(...)`. Reachability of these view functions themselves is also dead in production; their `sources` field was never asserted on by any test.
+
+### Notes
+
+- **The dispatch in the new route is an architectural smell.** Branching by `subjects.created_by` and sub-branching by hard-coded subject IDs (security_assessment / license_summary) embeds subject-specific knowledge in route-handler code — which is exactly what the refactor exists to eliminate. The choice was deliberate: keep session 2 small and obvious, defer the data-model question. Every dispatch line carries a `# FIXME(refactor-unified-upload-session-5)` tag so future grep finds them. Session 5/6 replaces the branch dispatch with data-driven dispatch — likely a new column on `subjects` describing import behavior (form-field name, allowed extensions, success-message format, persist function). **Do NOT** add an intermediate abstraction (registry of hooks, plugin system, etc.) before session 5/6 — that would lock in the data-model choice prematurely.
+- **The three handler bodies (`_unified_security_assessment_upload`, `_unified_license_summary_upload`, `_unified_dispatcher_upload`) are byte-equivalent to their old counterparts.** Edits to one must be mirrored to the other until session 5/6 collapses them. The docstrings say this.
+- **Old routes still work, frontend still uses them.** This was the safety boundary for session 2. The frontend flip happens in session 3.
+- **License Summary now has an Option A regression test.** The 2026-05-27 HANDOVER's "Context the next session needs" flagged its absence; landing it via the new route was a natural side-quest because session 2 touches the LS import path anyway.
+- **The verification report's "production-vs-test divergence" concern (Section 3 of `docs/refactor_unified_upload_2026-05-31.md`) is still open.** I did NOT run an actual end-to-end import through the running server this session. The new route exists and tests pass, but the old generic-route-via-canonical-artifact path that the report flagged has not been exercised against a real running app. Session 3 will need to verify this before session 4 deletes the old URLs.
+
+---
+
 ## 2026-05-30
 
 **Branch:** `feature/basic-healthcheck-report-output`
