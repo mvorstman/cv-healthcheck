@@ -10,6 +10,45 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-26 (session 5b)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `d04640d` (step 1 — dispatch module + tests), `ae58c21` (step 2 — route handler reads from the module, FIXME tags retired), plus the wrap-up commit that publishes this entry.
+**Test status:** 477 passing (up from 472; +5 dispatch tests added in step 1, ±0 in step 2).
+
+Session 5b — implements Option δ from the session 5a design. **The unified-upload refactor is now complete.** All three `FIXME(refactor-unified-upload-session-5)` tags are retired.
+
+### Added
+
+- **`src/cvhealthcheck/web/routes/upload_dispatch.py`** — data-only module containing the `UploadHandler` frozen dataclass and the `UPLOAD_HANDLERS: dict[str, UploadHandler]` lookup table. Two entries today: `security_assessment` and `license_summary`. Each handler bundles the five subject-specific behaviors the route needs (form field name, import function reference, error class, success-message format function, redirect endpoint). No Flask imports — the route handler is the only consumer.
+- **`tests/test_upload_dispatch.py`** — 5 tests covering the SA handler wiring, the LS handler wiring, AI subjects returning `None` from `get_handler`, unknown subjects returning `None`, and a keys-pin asserting `UPLOAD_HANDLERS` has exactly the two known entries.
+
+### Changed
+
+- **`quick_hc_subject_import`** rewritten as a four-line dispatch: look up the subject in the db (404 if unknown), look up the subject_id in `UPLOAD_HANDLERS`, run `_handle_system_upload(handler)` if a handler exists, otherwise either 404 (system subjects with no handler entry) or fall through to `_unified_dispatcher_upload` (AI/user subjects). The hard-coded `if subject_id == "security_assessment"` / `if subject_id == "license_summary"` branches are gone.
+- **`_handle_system_upload(handler: UploadHandler)`** — single new function consuming a handler. Reads the form file under the handler's form-field name, calls the handler's import function, catches the handler's error class for known failures (flashes `str(exc)`), catches `Exception` for unexpected failures (flashes `"Import failed: {exc}"` — note: the subject-specific prefix "Security Assessment import failed" / "License Summary import failed" is replaced by the generic phrasing, since the subject is already implied by the redirect destination and no test asserted on the old prefix), flashes the handler's success-format text on success, and redirects to the handler's endpoint.
+
+### Removed
+
+- **`_unified_security_assessment_upload`** in `quick_hc.py` — its job is now done by `_handle_system_upload` reading the SA handler.
+- **`_unified_license_summary_upload`** in `quick_hc.py` — same. Note: the explicit extension pre-check (`if suffix not in LICENSE_SUMMARY_UPLOAD_EXTENSIONS`) is dropped; the importer itself already raises `LicenseSummaryImportError("Unsupported file type. Upload a License Summary CSV or HTML export.")` for the same case, which the handler's `error_class` catch translates into the same flash text.
+- **All 3 `FIXME(refactor-unified-upload-session-5)` tags** in `quick_hc.py` — the data-driven dispatch they pointed at now exists.
+- **Dead imports in `quick_hc.py`:** `LICENSE_SUMMARY_UPLOAD_EXTENSIONS`, `import_security_assessment_upload`, `import_license_summary_upload`. `SecurityAssessmentImportError` and `LicenseSummaryImportError` stay — the REST collect routes still raise them.
+
+### Notes
+
+- **The refactor is complete.** Sessions 1 (template wiring), 2 (unified-route shim with FIXMEs in place), 3 (dispatcher hardening), 3b (stop-and-report inventory), 3c (ADR 0001), 4 (old-route deletion), 5a (design proposal), 5b (data-driven dispatch). The dispatch smell that the FIXMEs marked is resolved. `POST /quick-hc/<subject_id>/import` is the sole upload path; the route handler is a four-line dispatch; subject-specific behavior lives in the dispatch module's data and in the importer functions themselves.
+- **Option δ vs the alternatives.** The dict-based approach added 5 tests and ~120 lines of well-named data; a schema migration (Option β) would have added ~50 lines of SQL + Python plus a `propose_new_subject` change for two subjects with three differing fields each. The δ → β migration path stays clean — `UploadHandler` fields are typed scalars that map naturally to SQL columns if the set of upload-special subjects grows.
+- **No behavior change from the user's perspective.** The route accepts the same form-field names, redirects to the same endpoints, returns the same 404s, and produces the same artifacts. The flash for unexpected exceptions reads "Import failed: ..." instead of "Security Assessment import failed: ..." / "License Summary import failed: ..." — no test exercised that exact prefix.
+- **Snapshot test passes.** No source-building code was touched.
+- **3 FIXME tags retired.** `grep -rn "FIXME(refactor-unified-upload-session-5)" src/ tests/` returns zero hits.
+
+### Carry-forward
+
+The refactor is done. `HANDOVER.md` is rewritten to drop the refactor-state tracking and to promote the next backlog item — moving `data/app.db` out of git — as the single recommended next action. Earlier session-6 candidates (the `TileDefinition.import_url=` dead data at `registry.py:131, 205`, the legacy `/security-assessment` dev page, the README test-count refresh) stay as smaller follow-ups.
+
+---
+
 ## 2026-05-26 (session 5a)
 
 **Branch:** `feature/basic-healthcheck-report-output`
