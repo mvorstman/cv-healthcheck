@@ -20,7 +20,7 @@ function _saveState() {
     for (const s of cat.subjects) {
       const secs = {};
       for (const sec of (s.sections || [])) secs[sec.id] = sec.included;
-      state[s.id] = { included: s.included, sections: secs, activeSource: s.activeSource };
+      state[s.id] = { included: s.included, sections: secs };
     }
   }
   localStorage.setItem(STATE_KEY, JSON.stringify(state));
@@ -33,7 +33,6 @@ function _restoreState() {
       if (!(s.id in saved)) continue;
       const sv = saved[s.id];
       if (sv.included !== undefined) s.included = sv.included;
-      if (sv.activeSource !== undefined) s.activeSource = sv.activeSource;
       const secState = sv.sections || {};
       for (const sec of (s.sections || [])) {
         if (sec.id in secState) sec.included = secState[sec.id];
@@ -51,45 +50,89 @@ function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ── LEFT NAV ──
-function renderLeft() {
+// ── CONNECTION BADGE ──
+function _updateConnBadge() {
   const avail = allSubjs().filter(s => s.state !== 'nodata').length;
-  const hdrAvail = document.getElementById('hdr-avail');
-  if (hdrAvail) hdrAvail.textContent = avail + ' available';
+  const dot = document.getElementById('conn-dot');
+  const label = document.getElementById('conn-label');
+  if (!label) return;
+
+  const isAuth = !!window.IS_AUTHENTICATED;
+  if (isAuth) {
+    label.textContent = 'Connected';
+    if (dot) { dot.className = 'conn-dot conn-dot-ok'; }
+    const badge = document.getElementById('conn-badge');
+    if (badge) badge.title = 'Connected — click to sign out';
+  } else {
+    label.textContent = 'Connect';
+    if (dot) dot.className = 'conn-dot conn-dot-idle';
+  }
+}
+
+// ── REPORT ACTION BAR ──
+function _updateReportBar() {
+  const included = allSubjs().filter(s => s.included);
+  const bar = document.getElementById('report-bar');
+  const label = document.getElementById('report-bar-label');
+  if (!bar) return;
+  if (included.length > 0) {
+    bar.hidden = false;
+    if (label) label.textContent = included.length + ' subject' + (included.length !== 1 ? 's' : '') + ' selected for report';
+  } else {
+    bar.hidden = true;
+  }
+}
+
+// ── SIDEBAR NAV ACTIVE STATE ──
+function _setNavActive(id) {
+  document.querySelectorAll('.lnav-item').forEach(el => el.classList.remove('lnav-active'));
+  if (id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('lnav-active');
+  }
+}
+
+// ── LEFT CATALOG (no checkboxes) ──
+function renderLeft() {
+  _updateConnBadge();
+  _updateReportBar();
 
   let h = '';
   CATS.forEach((cat, ci) => {
     h += `<div class="cat-group">
       <div class="cat-hdr" onclick="toggleCat('${cat.id}',this)">
+        <span class="cat-chevron">${cat.open ? '▾' : '▸'}</span>
         <span class="cat-label">${esc(cat.name)}</span>
       </div>
       <div class="cat-body" id="cb-${cat.id}" style="max-height:${cat.open ? '2000px' : '0'}">`;
     cat.subjects.forEach(s => {
       const isActive = s.id === activeId && mode === 'config';
-      h += `<div class="subj-row${isActive ? ' active' : ''}" id="sr-${s.id}">
-        <span class="subj-name" onclick="openConfig('${s.id}')">${esc(s.name)}</span>
-        <input type="checkbox" class="subj-cb" ${s.included ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleInclude('${s.id}',this.checked)" title="Select subject" aria-label="Select ${esc(s.name)} for report generation">
+      const hasData = s.state !== 'nodata';
+      const isDraft = s.status && s.status !== 'active';
+      h += `<div class="subj-row${isActive ? ' active' : ''}" id="sr-${s.id}" onclick="openConfig('${s.id}')">
+        <span class="subj-dot${hasData ? ' dot-ok' : ''}"></span>
+        <span class="subj-name">${esc(s.name)}</span>
+        ${isDraft ? `<span class="subj-badge-draft">${esc(s.status)}</span>` : ''}
       </div>`;
     });
     h += `</div></div>`;
     if (ci < CATS.length - 1) h += `<div class="cat-div"></div>`;
   });
-  document.getElementById('left-scroll').innerHTML = h;
-  document.getElementById('btn-gen').disabled = !allSubjs().some(s => s.included);
+  document.getElementById('left-catalog').innerHTML = h;
 }
 
-function toggleCat(id, el) {
+function toggleCat(id) {
   const cat = CATS.find(c => c.id === id);
   cat.open = !cat.open;
   document.getElementById('cb-' + id).style.maxHeight = cat.open ? '2000px' : '0';
+  renderLeft();
 }
 
 function toggleInclude(id, val) {
   findSubj(id).included = val;
   _saveState();
-  document.getElementById('btn-gen').disabled = !allSubjs().some(s => s.included);
-  if (mode === 'overview') showOverview();
-  else renderLeft();
+  _updateReportBar();
+  renderLeft();
 }
 
 // ── SECTION BODY RENDERER ──
@@ -197,11 +240,11 @@ function secTile(subjId, sec, showCheckbox) {
 // ── OVERVIEW ──
 function showOverview() {
   activeId = null; mode = 'overview';
+  _setNavActive('nav-overview');
   renderLeft();
   document.getElementById('right-footer').style.display = 'none';
+
   const subtitle = CC.name ? (CC.version ? CC.name + ' · ' + CC.version : CC.name) : '';
-  const hdrSub = document.getElementById('hdr-subtitle');
-  if (hdrSub) hdrSub.textContent = subtitle;
 
   const bycat = CATS.map(cat => ({cat, subjects: cat.subjects.filter(s => s.included)})).filter(c => c.subjects.length);
   let subjList = '';
@@ -215,21 +258,12 @@ function showOverview() {
       });
     });
   } else {
-    subjList = `<div class="cfg-tile" style="color:var(--text-3);font-size:12px">No subjects included. Use the checkboxes on the left.</div>`;
+    subjList = `<div class="cfg-tile" style="color:var(--text-3);font-size:12px">No subjects selected. Open a subject and toggle "Include in report".</div>`;
   }
   document.getElementById('right-body').innerHTML = `<div class="cfg-wrap">
     <div class="cfg-title">Quick HealthCheck</div>
     ${subtitle ? `<div style="font-size:12px;color:var(--text-2);margin-top:2px">${esc(subtitle)}</div>` : ''}
     <div class="cfg-sec"><div class="cfg-sec-title">Report Sections</div>${subjList}</div>
-    <div class="cfg-sec"><div class="cfg-sec-title">Compliance Status</div>
-      <div class="placeholder-tile">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <span style="font-size:13px;font-weight:600">Compliance overview</span>
-          <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;background:rgba(136,136,160,.1);color:var(--text-3);font-family:var(--mono)">Not yet implemented</span>
-        </div>
-        <div style="font-size:12px;color:var(--text-2);line-height:1.6">Pass/fail compliance status across all included subjects will appear here once compliance rules are configured.</div>
-      </div>
-    </div>
   </div>`;
 }
 
@@ -237,11 +271,12 @@ function showOverview() {
 function openConfig(id) {
   activeId = id; mode = 'config';
   descriptionSaveState = { status: 'idle', message: '' };
+  _setNavActive(null);
   renderLeft();
   const s = findSubj(id);
   if (!s) return;
 
-  // Footer
+  // Footer (source attribution)
   const rf = document.getElementById('right-footer');
   const srcName = {
     rest_command_center_api:'REST / Command Center API',
@@ -272,23 +307,42 @@ function openConfig(id) {
     } else {
       srcPanel += `<div class="src-meta-empty">No source metadata is available yet.</div>`;
     }
+
+    // Upload action (inline — no page navigation)
     const uploadAction = (activeSrc.actions || []).find(action => action.kind === 'upload' && action.importUrl);
     if (uploadAction) {
-      srcPanel += `<div class="src-upload">
-        <form method="post" action="${esc(uploadAction.importUrl)}" enctype="multipart/form-data" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      const fid = 'file-' + s.id.replace(/[^a-z0-9]/g, '_');
+      srcPanel += `<div class="src-upload" id="src-upload-${esc(s.id)}">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <label class="btn-sm btn-sm-s" style="cursor:pointer">
             Choose File
-            <input type="file" name="${esc(uploadAction.importField || 'file')}" hidden accept="${esc(uploadAction.accept || '.html,.htm,.csv,.json')}" onchange="this.closest('.src-upload').querySelector('.src-filename').textContent=this.files[0]?this.files[0].name:''">
+            <input type="file" id="${fid}" name="${esc(uploadAction.importField || 'file')}" hidden
+              accept="${esc(uploadAction.accept || '.html,.htm,.csv,.json')}"
+              onchange="document.getElementById('fn-${esc(s.id)}').textContent=this.files[0]?this.files[0].name:''">
           </label>
-          <span class="src-filename"></span>
-          <button type="submit" class="btn-sm btn-sm-p">${esc(uploadAction.label || 'Import')}</button>
+          <span class="src-filename" id="fn-${esc(s.id)}"></span>
+          <button type="button" class="btn-sm btn-sm-p"
+            onclick="submitImport('${esc(s.id)}','${esc(uploadAction.importUrl)}','${esc(uploadAction.importField || 'file')}')">
+            ${esc(uploadAction.label || 'Import')}
+          </button>
+        </div>
+        <div class="import-result" id="import-result-${esc(s.id)}" hidden></div>
+      </div>`;
+    }
+
+    // Collect action (REST)
+    const collectAction = (activeSrc.actions || []).find(action => action.kind === 'collect' && action.collectUrl);
+    if (collectAction) {
+      srcPanel += `<div class="src-upload">
+        <form method="post" action="${esc(collectAction.collectUrl)}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button type="submit" class="btn-sm btn-sm-p">${esc(collectAction.label || 'Collect')}</button>
         </form>
       </div>`;
     }
     srcPanel += `</div>`;
   }
 
-  // Identity tile (CommCell context, only shown for the CommCell subject)
+  // CommCell identity (environment subject only)
   let identityRows = '';
   if (s.id === 'environment' && CC.exists) {
     const rows = [
@@ -308,8 +362,35 @@ function openConfig(id) {
   // Section tiles
   const secTiles = (s.sections || []).map(sec => secTile(s.id, sec, true)).join('');
 
+  const includeToggle = `<div class="include-row">
+    <span class="include-label">Include in report</span>
+    <label class="toggle-wrap">
+      <input type="checkbox" class="toggle-cb" ${s.included ? 'checked' : ''} onchange="toggleInclude('${s.id}',this.checked)">
+      <span class="toggle-track"><span class="toggle-thumb"></span></span>
+    </label>
+  </div>`;
+
+  // Danger zone (non-system subjects only)
+  const deleteSection = s.created_by !== 'system' ? `
+    <div class="cfg-sec">
+      <div class="cfg-sec-title">Danger Zone</div>
+      <div class="cfg-tile" style="border-color:var(--c-crit-bd)">
+        <form method="post" action="/quick-hc/${encodeURIComponent(s.id)}/delete" onsubmit="return confirm('Remove \\'${s.name.replace(/'/g, "\\'")}\\'  from the catalog?\\nThis will also delete any imported data. This cannot be undone.')">
+          <button type="submit" class="btn-danger">Delete Subject</button>
+        </form>
+      </div>
+    </div>` : '';
+
+  // Draft badge (non-active subjects)
+  const draftBadge = (s.status && s.status !== 'active')
+    ? `<span class="cfg-badge-draft">${esc(s.status)}</span>`
+    : '';
+
   document.getElementById('right-body').innerHTML = `<div class="cfg-wrap">
-    <div class="cfg-title">${esc(s.name)}</div>
+    <div class="cfg-title-row">
+      <div class="cfg-title">${esc(s.name)}${draftBadge}</div>
+      ${includeToggle}
+    </div>
     <div class="cfg-sec">
       <div class="cfg-sec-title">Description</div>
       <div class="cfg-tile">
@@ -330,16 +411,7 @@ function openConfig(id) {
       ${identityRows ? `<div class="cfg-tile">${identityRows}</div>` : ''}
       ${secTiles}
     </div>
-    <div class="cfg-sec">
-      <div class="cfg-sec-title">Compliance</div>
-      <div class="placeholder-tile">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <span style="font-size:13px;font-weight:600">Compliance rules</span>
-          <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;background:rgba(136,136,160,.1);color:var(--text-3);font-family:var(--mono)">Not yet implemented</span>
-        </div>
-        <div style="font-size:12px;color:var(--text-2);line-height:1.6">Compliance rules for this subject will be configurable here.</div>
-      </div>
-    </div>
+    ${deleteSection}
   </div>`;
   requestAnimationFrame(bindDescriptionEditor);
 }
@@ -404,6 +476,117 @@ async function saveDescription(subjId) {
   }
 }
 
+// ── INLINE FILE IMPORT ──
+async function submitImport(subjId, importUrl, fieldName) {
+  const safeId = subjId.replace(/[^a-z0-9_]/gi, '_');
+  const fileInput = document.getElementById('file-' + safeId);
+  const resultEl = document.getElementById('import-result-' + subjId);
+
+  if (!fileInput || !fileInput.files[0]) {
+    _showImportResult(resultEl, 'error', 'Please select a file first.');
+    return;
+  }
+
+  _showImportResult(resultEl, 'loading', 'Importing…');
+
+  const formData = new FormData();
+  formData.append(fieldName, fileInput.files[0]);
+
+  try {
+    const resp = await fetch(importUrl, {
+      method: 'POST',
+      headers: { 'X-Inline': '1' },
+      body: formData,
+    });
+    const data = await resp.json();
+    if (data.success) {
+      _showImportResult(resultEl, 'success', data.message || 'Import successful.');
+      // Reload subject data from the API to reflect new artifact
+      _reloadSubject(subjId);
+    } else {
+      _showImportResult(resultEl, 'error', data.error || 'Import failed.');
+    }
+  } catch (err) {
+    _showImportResult(resultEl, 'error', 'Import failed: ' + err.message);
+  }
+}
+
+function _showImportResult(el, status, message) {
+  if (!el) return;
+  el.hidden = false;
+  el.className = 'import-result import-' + status;
+  el.textContent = message;
+}
+
+async function _reloadSubject(subjId) {
+  try {
+    const resp = await fetch(`/api/quick-hc/subject/${encodeURIComponent(subjId)}`);
+    if (!resp.ok) return;
+    const updated = await resp.json();
+    // Patch into CATS so subsequent renders reflect new artifact
+    for (const cat of CATS) {
+      const idx = cat.subjects.findIndex(s => s.id === subjId);
+      if (idx !== -1) {
+        const prev = cat.subjects[idx];
+        cat.subjects[idx] = Object.assign({}, prev, updated, {
+          included: prev.included,
+          activeSource: prev.activeSource,
+        });
+        break;
+      }
+    }
+    renderLeft();
+  } catch (_) {
+    // Non-critical: subject panel still shows success message
+  }
+}
+
+// ── CONNECT MODAL ──
+function openConnectModal() {
+  const modal = document.getElementById('connect-modal');
+  if (!modal) return;
+  const errEl = document.getElementById('connect-error');
+  if (errEl) errEl.hidden = true;
+  modal.hidden = false;
+  const uInput = document.getElementById('connect-username');
+  if (uInput) uInput.focus();
+}
+
+function closeConnectModal() {
+  const modal = document.getElementById('connect-modal');
+  if (modal) modal.hidden = true;
+}
+
+async function submitConnect() {
+  const username = (document.getElementById('connect-username') || {}).value || '';
+  const password = (document.getElementById('connect-password') || {}).value || '';
+  const errEl = document.getElementById('connect-error');
+  const btn = document.getElementById('connect-submit');
+
+  if (errEl) errEl.hidden = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+
+  try {
+    const resp = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      window.IS_AUTHENTICATED = true;
+      closeConnectModal();
+      _updateConnBadge();
+    } else {
+      if (errEl) { errEl.textContent = data.error || 'Login failed.'; errEl.hidden = false; }
+    }
+  } catch (err) {
+    if (errEl) { errEl.textContent = 'Connection error: ' + err.message; errEl.hidden = false; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Connect'; }
+  }
+}
+
 // ── GENERATE REPORT ──
 document.getElementById('btn-gen').addEventListener('click', () => {
   const form = document.getElementById('report-form');
@@ -428,4 +611,6 @@ document.getElementById('btn-gen').addEventListener('click', () => {
 // ── INIT ──
 _restoreState();
 renderLeft();
-showOverview();
+const _firstSubj = allSubjs().find(s => s.id === 'environment') || allSubjs()[0];
+if (_firstSubj) openConfig(_firstSubj.id);
+else showOverview();

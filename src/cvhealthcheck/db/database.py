@@ -3,7 +3,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path("data/app.db")
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+DB_PATH = _PROJECT_ROOT / "data" / "app.db"
 _SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
 
@@ -14,6 +15,10 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout = 5000")
     conn.execute("PRAGMA journal_mode = WAL")
     return conn
+
+
+def get_db(db_path: Path | None = None) -> sqlite3.Connection:
+    return _connect(db_path or DB_PATH)
 
 
 def init_db(db_path: Path | None = None) -> None:

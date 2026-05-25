@@ -102,7 +102,9 @@ def _table_headers(table: Tag) -> list[str]:
 
 
 def _infer_section_name(table: Tag) -> str:
-    for node in table.find_all_previous(["h1", "h2", "h3", "h4", "h5", "h6"]):
+    for node in table.find_all_previous(["h1", "h2", "h3", "h4", "h5", "h6", "div"]):
+        if node.name == "div" and "reportstabletitle" not in (node.get("class") or []):
+            continue
         text = _cell_text(node)
         if not text:
             continue

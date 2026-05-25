@@ -1,0 +1,398 @@
+{% extends "base.html" %}
+
+{% macro artifact_card(artifact, section) -%}
+  <article class="staging-card">
+    <div class="staging-card-top">
+      <div>
+        <p class="staging-subject">{{ artifact.subject_id }}</p>
+        <p class="staging-stage-id">{{ artifact.stage_id }}</p>
+      </div>
+      <span class="staging-badge staging-badge-{{ section }}">{{ section }}</span>
+    </div>
+
+    <dl class="staging-meta-grid">
+      <div class="staging-meta-item">
+        <dt>Created</dt>
+        <dd>{{ artifact.created_at }}</dd>
+      </div>
+      {% if artifact.source_file %}
+        <div class="staging-meta-item">
+          <dt>Source file</dt>
+          <dd>{{ artifact.source_file }}</dd>
+        </div>
+      {% endif %}
+      {% if artifact.source_type %}
+        <div class="staging-meta-item">
+          <dt>Source type</dt>
+          <dd>{{ artifact.source_type }}</dd>
+        </div>
+      {% endif %}
+      {% if artifact.reviewed_at %}
+        <div class="staging-meta-item">
+          <dt>Reviewed at</dt>
+          <dd>{{ artifact.reviewed_at }}</dd>
+        </div>
+      {% endif %}
+      {% if artifact.reviewed_by %}
+        <div class="staging-meta-item">
+          <dt>Reviewed by</dt>
+          <dd>{{ artifact.reviewed_by }}</dd>
+        </div>
+      {% endif %}
+    </dl>
+
+    {% if artifact.ai_notes %}
+      <details class="staging-notes">
+        <summary>AI notes</summary>
+        <p>{{ artifact.ai_notes }}</p>
+      </details>
+    {% endif %}
+
+    {% if section == "pending" %}
+      <div class="staging-actions">
+        <form method="post" action="{{ url_for('main.quick_hc_staging_approve', stage_id=artifact.stage_id) }}">
+          <button type="submit" class="staging-btn staging-btn-approve">Approve</button>
+        </form>
+        <form method="post" action="{{ url_for('main.quick_hc_staging_reject', stage_id=artifact.stage_id) }}">
+          <button type="submit" class="staging-btn staging-btn-reject">Reject</button>
+        </form>
+      </div>
+    {% endif %}
+  </article>
+{%- endmacro %}
+
+{% block content %}
+  <style>
+    .staging-page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .staging-header {
+      margin-bottom: 1.5rem;
+    }
+
+    .staging-kicker {
+      margin: 0 0 0.4rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+
+    .staging-title {
+      margin: 0;
+      font-size: 1.9rem;
+      line-height: 1.1;
+    }
+
+    .staging-copy {
+      margin: 0.65rem 0 0;
+      max-width: 60rem;
+      color: var(--text-secondary);
+    }
+
+    .staging-flashes {
+      display: grid;
+      gap: 0.75rem;
+      margin: 1.25rem 0 1.75rem;
+    }
+
+    .staging-flash {
+      padding: 0.85rem 1rem;
+      border: 1px solid var(--border);
+      border-left-width: 4px;
+      border-radius: 10px;
+      background: var(--bg-surface);
+      box-shadow: var(--shadow);
+    }
+
+    .staging-flash-error {
+      border-left-color: var(--critical);
+    }
+
+    .staging-flash-success {
+      border-left-color: var(--good);
+    }
+
+    .staging-sections {
+      display: grid;
+      gap: 1.4rem;
+    }
+
+    .staging-section {
+      padding: 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--bg-surface);
+      box-shadow: var(--shadow);
+    }
+
+    .staging-section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .staging-section-title {
+      margin: 0;
+      font-size: 1.15rem;
+    }
+
+    .staging-count {
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+
+    .staging-empty {
+      margin: 0;
+      padding: 1rem;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      color: var(--text-secondary);
+      background: var(--bg-elevated);
+    }
+
+    .staging-card-list {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .staging-card {
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--bg-elevated);
+    }
+
+    .staging-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.9rem;
+    }
+
+    .staging-subject {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .staging-stage-id {
+      margin: 0.25rem 0 0;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      word-break: break-all;
+    }
+
+    .staging-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 84px;
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .staging-badge-pending {
+      background: var(--warning-subtle);
+      color: var(--warning);
+    }
+
+    .staging-badge-approved {
+      background: var(--good-subtle);
+      color: var(--good);
+    }
+
+    .staging-badge-rejected {
+      background: var(--critical-subtle);
+      color: var(--critical);
+    }
+
+    .staging-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 0.85rem;
+      margin: 0;
+    }
+
+    .staging-meta-item {
+      padding: 0.75rem 0.85rem;
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      background: var(--bg-surface);
+    }
+
+    .staging-meta-item dt {
+      margin: 0 0 0.25rem;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+
+    .staging-meta-item dd {
+      margin: 0;
+      color: var(--text-primary);
+      word-break: break-word;
+    }
+
+    .staging-notes {
+      margin-top: 0.85rem;
+      padding: 0.85rem 0.95rem;
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      background: var(--bg-surface);
+    }
+
+    .staging-notes summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .staging-notes p {
+      margin: 0.7rem 0 0;
+      color: var(--text-secondary);
+      white-space: pre-wrap;
+    }
+
+    .staging-actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .staging-actions form {
+      margin: 0;
+    }
+
+    .staging-btn {
+      appearance: none;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 0.65rem 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .staging-btn-approve {
+      background: var(--good);
+      color: #fff;
+    }
+
+    .staging-btn-approve:hover {
+      filter: brightness(1.05);
+    }
+
+    .staging-btn-reject {
+      background: transparent;
+      border-color: var(--critical);
+      color: var(--critical);
+    }
+
+    .staging-btn-reject:hover {
+      background: var(--critical-subtle);
+    }
+
+    @media (max-width: 720px) {
+      .staging-page {
+        padding: 1.2rem;
+      }
+
+      .staging-section {
+        padding: 1rem;
+      }
+
+      .staging-card-top,
+      .staging-section-head {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+
+  <section class="staging-page">
+    <header class="staging-header">
+      <p class="staging-kicker">Quick HC</p>
+      <h1 class="staging-title">Staging Review</h1>
+      <p class="staging-copy">
+        Review AI-interpreted canonical artifacts before promoting them into the production store.
+      </p>
+    </header>
+
+    {% with flashes = get_flashed_messages(with_categories=true) %}
+      {% if flashes %}
+        <div class="staging-flashes">
+          {% for category, message in flashes %}
+            <div class="staging-flash staging-flash-{{ 'error' if category == 'error' else 'success' }}">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="staging-sections">
+      <section class="staging-section">
+        <div class="staging-section-head">
+          <h2 class="staging-section-title">Pending</h2>
+          <span class="staging-count">{{ pending|length }} artifact{{ '' if pending|length == 1 else 's' }}</span>
+        </div>
+        {% if pending %}
+          <div class="staging-card-list">
+            {% for artifact in pending %}
+              {{ artifact_card(artifact, "pending") }}
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="staging-empty">No pending staged artifacts.</p>
+        {% endif %}
+      </section>
+
+      <section class="staging-section">
+        <div class="staging-section-head">
+          <h2 class="staging-section-title">Approved</h2>
+          <span class="staging-count">{{ approved|length }} artifact{{ '' if approved|length == 1 else 's' }}</span>
+        </div>
+        {% if approved %}
+          <div class="staging-card-list">
+            {% for artifact in approved %}
+              {{ artifact_card(artifact, "approved") }}
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="staging-empty">No approved staged artifacts yet.</p>
+        {% endif %}
+      </section>
+
+      <section class="staging-section">
+        <div class="staging-section-head">
+          <h2 class="staging-section-title">Rejected</h2>
+          <span class="staging-count">{{ rejected|length }} artifact{{ '' if rejected|length == 1 else 's' }}</span>
+        </div>
+        {% if rejected %}
+          <div class="staging-card-list">
+            {% for artifact in rejected %}
+              {{ artifact_card(artifact, "rejected") }}
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="staging-empty">No rejected staged artifacts.</p>
+        {% endif %}
+      </section>
+    </div>
+  </section>
+{% endblock %}

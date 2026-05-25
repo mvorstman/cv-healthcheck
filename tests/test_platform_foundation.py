@@ -21,9 +21,7 @@ def test_route_split_keeps_expected_endpoints_registered() -> None:
     assert rules["/quick-hc"] == "main.quick_hc"
     assert rules["/quick-hc/license-summary"] == "main.quick_hc_license_summary"
     assert rules["/quick-hc/backup-job-summary"] == "main.quick_hc_backup_job_summary"
-    assert rules["/security-assessment"] == "main.reportsplus_security_assessment"
     assert rules["/development"] == "main.development"
-    assert rules["/reportsplus/reports"] == "main.reportsplus_reports"
 
 
 def test_quick_hc_and_report_pages_still_render() -> None:
@@ -40,7 +38,7 @@ def test_quick_hc_and_report_pages_still_render() -> None:
     assert client.get("/security-assessment").status_code == 200
 
 
-def test_operational_metrics_and_reportsplus_routes_require_login() -> None:
+def test_development_routes_require_login() -> None:
     app = create_app()
     client = app.test_client()
 
@@ -56,7 +54,7 @@ def test_operational_metrics_and_reportsplus_routes_require_login() -> None:
         assert "/login" in response.headers["Location"]
 
 
-def test_operational_metrics_and_reportsplus_routes_render_after_login() -> None:
+def test_development_routes_render_after_login() -> None:
     app = create_app()
     client = app.test_client()
     with client.session_transaction() as session:

@@ -22,55 +22,113 @@
   </script>
   <script>
     window.QUICK_HC_INITIAL_DATA = {{ initial_data | tojson }};
+    window.QUICK_HC_FLASHES = {{ flashes | tojson }};
+    window.IS_AUTHENTICATED = {{ is_authenticated | tojson }};
   </script>
 </head>
 <body>
 
-<header class="hdr">
-  <a href="{{ url_for('main.quick_hc') }}" class="hdr-brand" aria-label="cvThing by Purple">
-    <img
-      src="{{ url_for('static', filename='img/cvthing-logo-dark.png') }}"
-      data-light-logo="{{ url_for('static', filename='img/cvthing-logo-light.png') }}"
-      data-dark-logo="{{ url_for('static', filename='img/cvthing-logo-dark.png') }}"
-      alt="cvThing by Purple"
-      class="hdr-logo">
-  </a>
-  <button type="button" class="hdr-title" onclick="showOverview()">Quick HC</button>
-  <span class="hdr-sep"></span>
-  <span id="hdr-subtitle" class="hdr-subtitle"></span>
-  <span class="hdr-spacer"></span>
-  <div class="quickhc-theme-toggle" data-theme-toggle>
-    <span class="quickhc-theme-label">Theme</span>
-    <button type="button" class="quickhc-theme-button" data-theme-choice="light">Light</button>
-    <button type="button" class="quickhc-theme-button" data-theme-choice="dark">Dark</button>
-  </div>
-  <span class="hdr-avail" id="hdr-avail"></span>
-  <a href="{{ url_for('main.development') }}" class="btn-ghost">Development</a>
-</header>
-
 <div class="body">
+
+  <!-- ── SIDEBAR ── -->
   <aside class="left">
-    <div class="left-scroll" id="left-scroll"></div>
-    <div class="left-footer">
-      <button class="btn-gen" id="btn-gen">⬇ Generate Customer Report</button>
+
+    <!-- 1. App header: logo + connection badge -->
+    <div class="left-hdr">
+      <a href="{{ url_for('main.quick_hc') }}" class="left-brand" aria-label="cvThing">
+        <img
+          src="{{ url_for('static', filename='img/cvthing-logo-dark.png') }}"
+          data-light-logo="{{ url_for('static', filename='img/cvthing-logo-light.png') }}"
+          data-dark-logo="{{ url_for('static', filename='img/cvthing-logo-dark.png') }}"
+          alt="cvThing"
+          class="left-logo">
+      </a>
+      <button class="conn-badge" id="conn-badge" onclick="openConnectModal()" title="Click to connect">
+        <span class="conn-dot" id="conn-dot"></span>
+        <span id="conn-label">–</span>
+      </button>
+    </div>
+
+    <!-- 2. Primary navigation -->
+    <nav class="left-primary-nav">
+      <button class="lnav-item" id="nav-overview" onclick="showOverview()">Overview</button>
+      <a class="lnav-item" href="{{ url_for('main.quick_hc_report') }}">Reports</a>
+      <a class="lnav-item" href="{{ url_for('main.quick_hc_staging') }}">Staging</a>
+    </nav>
+
+    <div class="left-sep"></div>
+    <div class="left-section-hdr">Subjects</div>
+
+    <!-- 3. Subject catalog (JS-rendered, no checkboxes) -->
+    <div class="left-catalog" id="left-catalog"></div>
+
+    <!-- 4. Bottom: theme toggle + dev tools -->
+    <div class="left-bottom">
+      <div class="quickhc-theme-toggle" data-theme-toggle>
+        <span class="quickhc-theme-label">Theme</span>
+        <button type="button" class="quickhc-theme-button" data-theme-choice="light">Light</button>
+        <button type="button" class="quickhc-theme-button" data-theme-choice="dark">Dark</button>
+      </div>
+      <a href="{{ url_for('main.development') }}" class="lnav-sm">Dev tools</a>
     </div>
   </aside>
+
+  <!-- ── MAIN CONTENT ── -->
   <main class="right">
+
     <div class="right-body" id="right-body"></div>
-    <footer class="right-footer" id="right-footer">
+
+    <!-- Report action bar — shown when subjects are selected for a report -->
+    <div class="report-bar" id="report-bar" hidden>
+      <span id="report-bar-label" class="report-bar-label"></span>
+      <button class="btn-gen-bar" id="btn-gen">Generate Report</button>
+    </div>
+
+    <footer class="right-footer" id="right-footer" style="display:none">
       <span class="rf-source" id="rf-source"></span>
     </footer>
   </main>
 </div>
 
+<!-- ── HIDDEN REPORT FORM ── -->
 <form id="report-form" method="post" action="{{ url_for('main.quick_hc_report') }}" style="display:none"></form>
+
+<!-- ── CONNECT MODAL ── -->
+<div class="modal-overlay" id="connect-modal" hidden aria-modal="true" role="dialog">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <span class="modal-title">Connect to Commvault</span>
+      <button class="modal-close" type="button" onclick="closeConnectModal()" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body-inner">
+      <div class="modal-field">
+        <label class="modal-label" for="connect-username">Username</label>
+        <input class="modal-input" id="connect-username" type="text" autocomplete="username" placeholder="admin">
+      </div>
+      <div class="modal-field">
+        <label class="modal-label" for="connect-password">Password</label>
+        <input class="modal-input" id="connect-password" type="password" autocomplete="current-password" placeholder="••••••••">
+      </div>
+      <div class="modal-error" id="connect-error" hidden></div>
+      <button class="btn-modal-submit" id="connect-submit" type="button" onclick="submitConnect()">Connect</button>
+    </div>
+  </div>
+</div>
+
+{% if flashes %}
+<div id="flash-messages" class="flash-list">
+  {% for f in flashes %}
+  <div class="flash flash-{{ f.category }}">{{ f.message }}</div>
+  {% endfor %}
+</div>
+{% endif %}
 
 <script src="{{ url_for('static', filename='quick_hc.js', v=asset_version) }}"></script>
 <script>
   (function () {
     var themeKey = 'quickhc-theme-v1';
     var buttons = Array.from(document.querySelectorAll('[data-theme-toggle] [data-theme-choice]'));
-    var logo = document.querySelector('.hdr-logo');
+    var logo = document.querySelector('.left-logo');
 
     var syncButtons = function (theme) {
       for (var i = 0; i < buttons.length; i++) {
@@ -98,6 +156,27 @@
           syncLogo(theme);
         });
       })(buttons[i]);
+    }
+
+    // Close modal on overlay click
+    var overlay = document.getElementById('connect-modal');
+    if (overlay) {
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) closeConnectModal();
+      });
+    }
+
+    // Close modal on Escape
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeConnectModal();
+    });
+
+    // Connect form — submit on Enter in password field
+    var pwInput = document.getElementById('connect-password');
+    if (pwInput) {
+      pwInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') submitConnect();
+      });
     }
   })();
 </script>

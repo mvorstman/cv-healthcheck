@@ -9,12 +9,14 @@ from .enums import ArtifactStatus, ChartType, FindingSeverity, FindingStatus, So
 
 
 class ArtifactSource(BaseModel):
-    type:         SourceType
-    report_id:    int | None      = None
-    report_name:  str | None      = None
-    endpoint:     str | None      = None
-    collected_at: datetime | None = None
-    imported_at:  datetime | None = None
+    type:          SourceType
+    report_id:     int | None      = None
+    report_name:   str | None      = None
+    endpoint:      str | None      = None
+    collected_at:  datetime | None = None
+    imported_at:   datetime | None = None
+    commcell_id:   str | None      = None
+    commcell_name: str | None      = None
 
 
 class ArtifactSubject(BaseModel):

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sqlite3
+from typing import Any
+
 from .models import SectionDefinition, SourceDefinition, TileDefinition
 
 
@@ -16,32 +19,34 @@ JSON_IMPORT_SOURCE_ID = "json_import"
 CSV_IMPORT_SOURCE_ID = "csv_import"
 HTML_IMPORT_SOURCE_ID = "html_import"
 
-UNIVERSAL_SOURCE_DEFINITIONS: tuple[SourceDefinition, ...] = (
-    SourceDefinition(
-        id=REST_COMMAND_CENTER_API_SOURCE_ID,
-        label="REST / Command Center API",
-        description="Live collection through Command Center API endpoints.",
-    ),
-    SourceDefinition(
-        id=REST_REPORTS_PLUS_SOURCE_ID,
-        label="REST / Reports Plus",
-        description="Live collection through Reports Plus report and dataset endpoints.",
-    ),
-    SourceDefinition(
-        id=JSON_IMPORT_SOURCE_ID,
-        label="JSON import",
-        description="Offline JSON import into the canonical Quick HC artifact contract.",
-    ),
-    SourceDefinition(
-        id=CSV_IMPORT_SOURCE_ID,
-        label="CSV import",
-        description="Offline CSV import into the canonical Quick HC artifact contract.",
-    ),
-    SourceDefinition(
-        id=HTML_IMPORT_SOURCE_ID,
-        label="HTML import",
-        description="Offline HTML import into the canonical Quick HC artifact contract.",
-    ),
+STANDARD_SOURCES: list[str] = [
+    REST_COMMAND_CENTER_API_SOURCE_ID,
+    REST_REPORTS_PLUS_SOURCE_ID,
+    JSON_IMPORT_SOURCE_ID,
+    CSV_IMPORT_SOURCE_ID,
+    HTML_IMPORT_SOURCE_ID,
+]
+
+SOURCE_LABELS: dict[str, str] = {
+    REST_COMMAND_CENTER_API_SOURCE_ID: "REST / Command Center API",
+    REST_REPORTS_PLUS_SOURCE_ID:       "REST / Reports Plus",
+    JSON_IMPORT_SOURCE_ID:             "JSON import",
+    CSV_IMPORT_SOURCE_ID:              "CSV import",
+    HTML_IMPORT_SOURCE_ID:             "HTML import",
+}
+
+SOURCE_DESCRIPTIONS: dict[str, str] = {
+    REST_COMMAND_CENTER_API_SOURCE_ID: "Live collection through Command Center API endpoints.",
+    REST_REPORTS_PLUS_SOURCE_ID:       "Live collection through Reports Plus report and dataset endpoints.",
+    JSON_IMPORT_SOURCE_ID:             "Offline JSON import into the canonical Quick HC artifact contract.",
+    CSV_IMPORT_SOURCE_ID:              "Offline CSV import into the canonical Quick HC artifact contract.",
+    HTML_IMPORT_SOURCE_ID:             "Offline HTML import into the canonical Quick HC artifact contract.",
+}
+
+# Private tuple kept for canonical_view.py backward compatibility (legacy subject builders).
+_UNIVERSAL_SOURCES: tuple[SourceDefinition, ...] = tuple(
+    SourceDefinition(id=sid, label=SOURCE_LABELS[sid], description=SOURCE_DESCRIPTIONS[sid])
+    for sid in STANDARD_SOURCES
 )
 
 ENVIRONMENT_METADATA_SECTION_ID = "environment.metadata"
@@ -85,7 +90,7 @@ SECURITY_ASSESSMENT_DETAIL_SECTION_ORDER = tuple(
     SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME.keys()
 )
 
-QUICK_HC_TILES: tuple[TileDefinition, ...] = (
+_SYSTEM_TILES: tuple[TileDefinition, ...] = (
     TileDefinition(
         id=ENVIRONMENT_SELECTION_ID,
         title="CommCell Details",
@@ -97,7 +102,7 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         artifact_type="commcell",
         preview_renderer="commcell_preview",
         report_renderer="environment_report",
-        sources=UNIVERSAL_SOURCE_DEFINITIONS,
+        sources=_UNIVERSAL_SOURCES,
         detail_endpoint="main.quick_hc_commcell",
         sections=(
             SectionDefinition(
@@ -119,7 +124,7 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         artifact_type="security_assessment",
         preview_renderer="security_assessment_preview",
         report_renderer="security_assessment_report",
-        sources=UNIVERSAL_SOURCE_DEFINITIONS,
+        sources=_UNIVERSAL_SOURCES,
         detail_endpoint="main.quick_hc",
         collect_capable=True,
         import_capable=True,
@@ -193,7 +198,7 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         artifact_type="license_summary",
         preview_renderer="license_summary_preview",
         report_renderer="license_summary_report",
-        sources=UNIVERSAL_SOURCE_DEFINITIONS,
+        sources=_UNIVERSAL_SOURCES,
         detail_endpoint="main.quick_hc",
         collect_capable=True,
         import_capable=True,
@@ -237,7 +242,7 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         artifact_type="client_growth",
         preview_renderer="client_growth_preview",
         report_renderer="client_growth_report",
-        sources=UNIVERSAL_SOURCE_DEFINITIONS,
+        sources=_UNIVERSAL_SOURCES,
         detail_endpoint="main.metrics_client_growth",
         sections=(
             SectionDefinition(
@@ -271,7 +276,7 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         artifact_type="capacity_license",
         preview_renderer="capacity_license_preview",
         report_renderer="capacity_license_report",
-        sources=UNIVERSAL_SOURCE_DEFINITIONS,
+        sources=_UNIVERSAL_SOURCES,
         detail_endpoint="main.metrics_capacity_license",
         sections=(
             SectionDefinition(
@@ -299,7 +304,7 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
         artifact_type="backup_job_summary",
         preview_renderer="backup_job_summary_preview",
         report_renderer="backup_job_summary_report",
-        sources=UNIVERSAL_SOURCE_DEFINITIONS,
+        sources=_UNIVERSAL_SOURCES,
         detail_endpoint="main.quick_hc_backup_job_summary",
         sections=(
             SectionDefinition(
@@ -331,33 +336,134 @@ QUICK_HC_TILES: tuple[TileDefinition, ...] = (
 )
 
 QUICK_HC_TILE_BY_ID: dict[str, TileDefinition] = {
-    tile.id: tile for tile in QUICK_HC_TILES
+    tile.id: tile for tile in _SYSTEM_TILES
 }
-QUICK_HC_SUBJECT_IDS = {tile.id for tile in QUICK_HC_TILES}
+QUICK_HC_SUBJECT_IDS = {tile.id for tile in _SYSTEM_TILES}
 QUICK_HC_SECTION_IDS = {
-    section.id for tile in QUICK_HC_TILES for section in tile.sections
+    section.id for tile in _SYSTEM_TILES for section in tile.sections
 }
 QUICK_HC_SELECTION_IDS = QUICK_HC_SUBJECT_IDS | QUICK_HC_SECTION_IDS
 
 
 def list_tiles() -> tuple[TileDefinition, ...]:
-    return QUICK_HC_TILES
+    return _SYSTEM_TILES
+
+
+def get_tiles(db: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Return all active subjects as tile dicts (system tiles + db-registered subjects)."""
+    from cvhealthcheck.db.subjects import get_all_active_subjects
+    subjects = get_all_active_subjects(db)
+    return [_subject_to_tile(subject) for subject in subjects]
+
+
+_SOURCE_TYPE_TO_CANONICAL_ID: dict[str, str] = {
+    "html": HTML_IMPORT_SOURCE_ID,
+    "csv":  CSV_IMPORT_SOURCE_ID,
+    "rest": REST_REPORTS_PLUS_SOURCE_ID,
+    "json": JSON_IMPORT_SOURCE_ID,
+}
+
+_SOURCE_TYPE_TO_LABEL: dict[str, str] = {
+    "html": "HTML import",
+    "csv":  "CSV import",
+    "rest": "REST / Reports Plus",
+    "json": "JSON import",
+}
+
+
+def _build_db_source_entries(
+    source_rows: list[dict[str, Any]],
+    subject_id: str = "",
+) -> list[dict[str, Any]]:
+    if not source_rows:
+        return [
+            {"id": sid, "label": SOURCE_LABELS.get(sid, sid), "description": SOURCE_DESCRIPTIONS.get(sid, "")}
+            for sid in STANDARD_SOURCES
+        ]
+    entries = []
+    for src in source_rows:
+        source_type = src.get("source_type", "")
+        src_id = _SOURCE_TYPE_TO_CANONICAL_ID.get(source_type)
+        if src_id is None:
+            continue
+        has_instructions = bool(src.get("has_section_instructions", 0))
+        collect_url = (
+            f"/quick-hc/{subject_id}/collect"
+            if source_type == "rest" and has_instructions and subject_id
+            else None
+        )
+        entries.append({
+            "id": src_id,
+            "label": _SOURCE_TYPE_TO_LABEL.get(source_type, source_type.upper()),
+            "description": "",
+            "source_type": source_type,
+            "extractable": bool(src.get("extractable", 1)),
+            "has_section_instructions": has_instructions,
+            "collect_url": collect_url,
+        })
+    return entries or [
+        {"id": sid, "label": SOURCE_LABELS.get(sid, sid), "description": SOURCE_DESCRIPTIONS.get(sid, "")}
+        for sid in STANDARD_SOURCES
+    ]
+
+
+def _subject_to_tile(subject: dict[str, Any]) -> dict[str, Any]:
+    """Convert a db subject row (with sections/sources lists) to a tile dict."""
+    subject_id = subject["subject_id"]
+    tile_def = QUICK_HC_TILE_BY_ID.get(subject_id)
+
+    section_renderers: dict[str, tuple[str | None, str | None]] = {}
+    if tile_def is not None:
+        for sec in tile_def.sections:
+            section_renderers[sec.id] = (sec.preview_renderer, sec.report_renderer)
+
+    sections = []
+    for sec in subject.get("sections", []):
+        sec_id = sec["section_id"]
+        preview_r, report_r = section_renderers.get(sec_id, (None, None))
+        sections.append({
+            "id": sec_id,
+            "label": sec["title"],
+            "default_selected": bool(sec["default_selected"]),
+            "preview_renderer": preview_r,
+            "report_renderer": report_r,
+        })
+
+    sources = _build_db_source_entries(subject.get("sources", []), subject_id)
+
+    return {
+        "id": subject_id,
+        "title": tile_def.title if tile_def else subject["title"],
+        "subtitle": tile_def.subtitle if tile_def else (subject.get("description") or ""),
+        "description": tile_def.subtitle if tile_def else (subject.get("description") or ""),
+        "category": subject["category"],
+        "category_label": subject["category_label"],
+        "source_type": tile_def.source_type if tile_def else (subject.get("preferred_source") or "rest"),
+        "artifact_type": tile_def.artifact_type if tile_def else subject_id,
+        "preview_renderer": tile_def.preview_renderer if tile_def else None,
+        "report_renderer": tile_def.report_renderer if tile_def else None,
+        "detail_endpoint": tile_def.detail_endpoint if tile_def else None,
+        "sections": sections,
+        "sources": sources,
+        "created_by": subject.get("created_by", "system"),
+        "status": subject.get("status", "active"),
+    }
 
 
 def report_subsection_options() -> dict[str, tuple[dict[str, str], ...]]:
     return {
         tile.id: tuple({"id": section.id, "label": section.label} for section in tile.sections)
-        for tile in QUICK_HC_TILES
+        for tile in _SYSTEM_TILES
     }
 
 
 def report_overview_default_selection_ids() -> set[str]:
     return {
         tile.id
-        for tile in QUICK_HC_TILES
+        for tile in _SYSTEM_TILES
     } | {
         section.id
-        for tile in QUICK_HC_TILES
+        for tile in _SYSTEM_TILES
         for section in tile.sections
         if section.default_selected
     }

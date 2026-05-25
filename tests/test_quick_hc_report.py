@@ -500,13 +500,12 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "Customer Report" in body
     assert "window.QUICK_HC_INITIAL_DATA" in body
     assert "/static/quick_hc.css" in body
     assert "/static/quick_hc.js" in body
     assert "quick_hc.css?v=" in body
     assert "quick_hc.js?v=" in body
-    assert 'id="left-scroll"' in body
+    assert 'id="left-catalog"' in body
     assert 'id="right-body"' in body
     assert 'id="report-form"' in body
     assert '"id": "environment"' in body
@@ -529,8 +528,7 @@ def test_quick_hc_overview_shows_report_selection_checkboxes(
     assert "Backup Job Summary" in body
     assert "cvthing-logo-dark.png" in body
     assert "data-theme-toggle" in body
-    assert "Development" in body
-    assert "Generate Customer Report" in body
+    assert "Generate Report" in body
     assert "Dashboard" not in body
     assert "Open full details" not in body
     assert "Full detail page" not in body
@@ -621,7 +619,7 @@ def test_quick_hc_subject_initial_data_uses_registry_tile_order_and_explicit_dis
     monkeypatch.setattr(subject_data_service_module, "list_tiles", lambda: custom_tiles)
     monkeypatch.setattr(
         subject_data_service_module,
-        "_subject_data_loaders",
+        "_legacy_loaders",
         lambda: {
             "security_assessment": lambda: {"payload": "security"},
             "environment": lambda: {"payload": "environment"},
@@ -629,7 +627,7 @@ def test_quick_hc_subject_initial_data_uses_registry_tile_order_and_explicit_dis
     )
     monkeypatch.setattr(
         subject_data_service_module,
-        "_subject_builders",
+        "_legacy_builders",
         lambda: {
             "security_assessment": lambda payload: {"id": "security_assessment", "payload": payload},
             "environment": lambda payload: {"id": "environment", "payload": payload},
@@ -746,7 +744,8 @@ def test_quick_hc_renderer_removes_redundant_workspace_include_toggle() -> None:
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "Include in report" not in body
+    # Include toggle lives in config panel (toggle-switch), not as overview/sidebar checkboxes.
+    assert 'class="toggle-track"' in body
     assert "toggleInclude('" in body
     assert "toggleSec('" in body
     assert "inp.name = 'selection_ids'; inp.value = s.id;" in body

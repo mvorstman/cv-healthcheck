@@ -10,7 +10,7 @@ from cvhealthcheck.metrics import (
 )
 from cvhealthcheck.quickhc.commcell import normalize_commserv
 from cvhealthcheck.quickhc.models import TileDefinition
-from cvhealthcheck.quickhc.registry import QUICK_HC_TILE_BY_ID, QUICK_HC_TILES
+from cvhealthcheck.quickhc.registry import QUICK_HC_TILE_BY_ID, list_tiles
 from cvhealthcheck.quickhc.report_service import (
     REPORT_OVERVIEW_DEFAULT_SELECTION_IDS,
     REPORT_SUBSECTION_OPTIONS,
@@ -56,8 +56,10 @@ def build_quick_hc_overview_context() -> dict[str, Any]:
 
 
 def build_quick_hc_tile_previews(
-    tiles: tuple[TileDefinition, ...] = QUICK_HC_TILES,
+    tiles: tuple[TileDefinition, ...] | None = None,
 ) -> dict[str, dict[str, Any]]:
+    if tiles is None:
+        tiles = list_tiles()
     return {
         tile.id: build_quick_hc_tile_preview(tile)
         for tile in tiles

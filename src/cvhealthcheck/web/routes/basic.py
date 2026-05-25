@@ -2,21 +2,15 @@ from __future__ import annotations
 
 from .shared import (
     AuthError,
-    _api_client,
-    _auth_failure_redirect,
-    _current_token,
     _safe_next,
-    assess_lab_readiness,
     bp,
     clear_current_token,
-    login_required,
     load_settings,
     login_to_commvault,
     redirect,
     render_template,
     request,
     set_current_token,
-    to_pretty_json,
     url_for,
 )
 
@@ -58,43 +52,3 @@ def logout():
 @bp.route("/")
 def index():
     return redirect(url_for("main.quick_hc"))
-
-
-@bp.route("/lab-readiness")
-@login_required
-def lab_readiness():
-    result = assess_lab_readiness(write=True, token=_current_token())
-    indicators = result.get("indicators", {})
-    for name in ("commserve_reachable", "reports_plus_reachable"):
-        indicator = indicators.get(name, {})
-        if indicator.get("notes") == "HTTP 401":
-            clear_current_token()
-            return redirect(url_for("main.login", next=request.path, expired="1"))
-    states = [
-        "NOT_READY",
-        "READY_FOR_DISCOVERY",
-        "READY_FOR_DATA_EXECUTION",
-        "READY_FOR_HEALTH_RULE_TESTING",
-    ]
-    return render_template(
-        "lab_readiness.html",
-        result=result,
-        states=states,
-        indicators=result.get("indicators", {}),
-    )
-
-
-@bp.route("/api/test")
-@login_required
-def api_test():
-    result = _api_client().ping()
-    auth_redirect = _auth_failure_redirect(result)
-    if auth_redirect:
-        return auth_redirect
-    running = "WebService is Running!" in result.text
-    return render_template(
-        "api_test.html",
-        result=result,
-        running=running,
-        formatted=to_pretty_json(result.data) if result.data is not None else result.text,
-    )

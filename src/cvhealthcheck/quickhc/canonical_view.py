@@ -9,6 +9,7 @@ from cvhealthcheck.artifacts.models import (
     FindingsSection,
     MetricSection,
     TableSection,
+    ChartSection,
 )
 from cvhealthcheck.quickhc.registry import (
     CSV_IMPORT_SOURCE_ID,
@@ -73,11 +74,97 @@ _IMPORT_FIELDS: dict[str, str] = {
     "license_summary":     "license_summary_file",
 }
 
+_IMPORT_ACCEPT: dict[str, str] = {
+    "security_assessment": ".html,.htm",
+    "license_summary":     ".html,.htm,.csv,.xlsx",
+}
+
 # TableSection IDs that are not workload sections in license_summary.
-_LS_NON_WORKLOAD_IDS = {"other_licenses", "agent_feature_licenses"}
+# Accept both short form (legacy) and fully-qualified form stored by the extractor.
+_LS_NON_WORKLOAD_IDS = {
+    "other_licenses",
+    "agent_feature_licenses",
+    "license_summary.other_licenses",
+    "license_summary.agent_feature_licenses",
+}
 
 
 # ── public API ──
+
+def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
+    """Generic view builder for any canonical artifact."""
+    state = _artifact_state(artifact)
+
+    metrics = {m.id: m.value for m in artifact.summary.metrics}
+    if metrics:
+        parts = [f"{int(v)} {k.replace('_', ' ')}" for k, v in list(metrics.items())[:3] if v]
+        subtitle = " · ".join(parts) if parts else "Data available"
+    else:
+        total_rows = sum(
+            len(sec.items)
+            for sec in artifact.sections
+            if isinstance(sec, (TableSection, FindingsSection))
+        )
+        subtitle = f"{total_rows} rows" if total_rows else "Data available"
+
+    src = artifact.source
+    active_src = _SOURCE_TYPE_TO_ID.get(src.type, REST_REPORTS_PLUS_SOURCE_ID)
+    subject_id = artifact.subject.id
+
+    sections: list[dict] = []
+    for sec in artifact.sections:
+        sec_id = f"{subject_id}.{sec.id}"
+        if isinstance(sec, FindingsSection):
+            count = len(sec.items)
+            sections.append({
+                "id": sec_id,
+                "title": sec.title,
+                "meta": f"{count} finding{'s' if count != 1 else ''}",
+                "included": True,
+                "type": "findings_list",
+                "findings": [_finding_view(f) for f in sec.items],
+                "rows": [],
+            })
+        elif isinstance(sec, TableSection):
+            count = len(sec.items)
+            columns = [col.label for col in sec.columns]
+            rows = [
+                [str(item.get(col.id) if item.get(col.id) is not None else "") for col in sec.columns]
+                for item in sec.items
+            ]
+            sections.append({
+                "id": sec_id,
+                "title": sec.title,
+                "meta": f"{count} row{'s' if count != 1 else ''}",
+                "included": True,
+                "type": "table",
+                "columns": columns,
+                "rows": rows,
+            })
+        elif isinstance(sec, MetricSection):
+            meta_rows = [{"k": item.label.upper(), "v": str(item.value)} for item in sec.items]
+            sections.append({
+                "id": sec_id,
+                "title": sec.title,
+                "meta": "",
+                "included": True,
+                "type": "meta",
+                "rows": meta_rows,
+            })
+
+    return {
+        "id": subject_id,
+        "name": artifact.subject.title,
+        "description": "",
+        "state": state,
+        "included": True,
+        "subtitle": subtitle,
+        "fullUrl": None,
+        "activeSource": active_src,
+        "sources": [],
+        "sections": sections,
+    }
+
 
 def security_assessment_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
     state = _artifact_state(artifact)
@@ -215,9 +302,9 @@ def license_summary_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
     imported_at = str(src.imported_at or src.collected_at or "")
     source_label = _SOURCE_TYPE_LABEL.get(src.type, str(src.type or "").upper())
 
-    info_sec  = next((s for s in artifact.sections if isinstance(s, MetricSection) and s.id == "commcell_info"), None)
-    other_sec = next((s for s in artifact.sections if isinstance(s, TableSection)  and s.id == "other_licenses"), None)
-    agent_sec = next((s for s in artifact.sections if isinstance(s, TableSection)  and s.id == "agent_feature_licenses"), None)
+    info_sec  = next((s for s in artifact.sections if isinstance(s, MetricSection) and s.id in {"commcell_info", "license_summary.commcell_info"}), None)
+    other_sec = next((s for s in artifact.sections if isinstance(s, TableSection)  and s.id in {"other_licenses", "license_summary.other_licenses"}), None)
+    agent_sec = next((s for s in artifact.sections if isinstance(s, TableSection)  and s.id in {"agent_feature_licenses", "license_summary.agent_feature_licenses"}), None)
     workload_secs = [
         s for s in artifact.sections
         if isinstance(s, TableSection) and s.id not in _LS_NON_WORKLOAD_IDS
@@ -357,19 +444,20 @@ def _build_sources(tile_id: str, active_src_id: str) -> list[dict[str, Any]]:
         return []
     import_url   = tile.import_url or ""
     import_field = _IMPORT_FIELDS.get(tile_id, "")
+    import_accept = _IMPORT_ACCEPT.get(tile_id, ".html,.htm,.csv")
     result = []
     for source in tile.sources:
         is_active = source.id == active_src_id
         status    = "v" if is_active else _SOURCE_DEFAULT_STATUS.get(source.id, "ni")
         is_import = source.id in (CSV_IMPORT_SOURCE_ID, HTML_IMPORT_SOURCE_ID)
         actions: list[dict] = []
-        if is_import and import_url and not is_active:
+        if is_import and import_url:
             actions = [{
                 "kind":        "upload",
                 "label":       "Import",
                 "importUrl":   import_url,
                 "importField": import_field,
-                "accept":      ".html,.htm,.csv,.json",
+                "accept":      import_accept,
             }]
         result.append({
             "id":      source.id,

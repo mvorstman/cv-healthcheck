@@ -497,9 +497,9 @@ def test_flask_rest_refresh_redirects_to_single_artifact_render_path(
         source={"report_id": "336", "report_name": "Security Assessment", "http_status": 200},
     )
 
-    import cvhealthcheck.web.routes.main as main_routes
+    import cvhealthcheck.web.routes.development as dev_routes
 
-    monkeypatch.setattr(main_routes, "is_authenticated", lambda: True)
+    monkeypatch.setattr(dev_routes, "is_authenticated", lambda: True)
 
     def _fake_extract_security_assessment(**kwargs):
         artifact["artifact_paths"] = write_security_assessment_artifact(
@@ -513,7 +513,7 @@ def test_flask_rest_refresh_redirects_to_single_artifact_render_path(
         }
 
     monkeypatch.setattr(
-        main_routes,
+        dev_routes,
         "extract_security_assessment",
         _fake_extract_security_assessment,
     )

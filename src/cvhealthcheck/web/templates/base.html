@@ -33,23 +33,19 @@
         </div>
         {% set ep = request.endpoint or '' %}
         <nav class="sidebar-nav">
-          <a href="{{ url_for('main.login') }}"
-             class="sidebar-link{% if ep == 'main.login' %} is-active{% endif %}">
-            Connect to CS
-          </a>
           <a href="{{ url_for('main.quick_hc') }}"
              class="sidebar-link{% if 'quick_hc' in ep or 'metrics_' in ep %} is-active{% endif %}">
-            Quick HC
-          </a>
-          <a href="{{ url_for('main.development') }}"
-             class="sidebar-link{% if ep in ('main.lab_readiness', 'main.api_test') or 'development' in ep or 'security_assessment_registry' in ep %} is-active{% endif %}">
-            Development
+            HealthCheck
           </a>
         </nav>
         <div class="sidebar-footer">
           <form method="post" action="{{ url_for('main.logout') }}">
             <button type="submit" class="sidebar-logout">Sign out</button>
           </form>
+          <a href="{{ url_for('main.development') }}"
+             class="sidebar-dev-link{% if ep in ('main.lab_readiness', 'main.api_test') or 'development' in ep or 'security_assessment_registry' in ep %} is-active{% endif %}">
+            Dev tools
+          </a>
         </div>
       </aside>
       <div class="main">

@@ -21,7 +21,6 @@ from cvhealthcheck.quickhc.registry import (
     ENVIRONMENT_SELECTION_ID,
     LICENSE_SUMMARY_SELECTION_ID,
     QUICK_HC_TILE_BY_ID,
-    QUICK_HC_TILES,
     QUICK_HC_SECTION_IDS,
     QUICK_HC_SELECTION_IDS,
     QUICK_HC_SUBJECT_IDS,
@@ -29,6 +28,7 @@ from cvhealthcheck.quickhc.registry import (
     SECURITY_ASSESSMENT_SELECTION_ID,
     SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME,
     SECURITY_ASSESSMENT_METADATA_SECTION_ID,
+    list_tiles,
     report_overview_default_selection_ids,
     report_subsection_options,
 )
@@ -102,7 +102,7 @@ class QuickHcReportService:
 
     def _build_full_report(self) -> dict[str, Any]:
         sections: dict[str, dict[str, Any]] = {}
-        for tile in QUICK_HC_TILES:
+        for tile in list_tiles():
             if tile.id == ENVIRONMENT_SELECTION_ID:
                 continue
             sections[tile.id] = self._build_tile_section(tile, sections)

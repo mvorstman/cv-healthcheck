@@ -1,9 +1,22 @@
 from __future__ import annotations
 
+import tempfile
+import uuid
 from pathlib import Path
 from hashlib import md5
 
 from flask import jsonify
+
+from cvhealthcheck.artifacts.store import ArtifactStore
+from cvhealthcheck.config import load_settings
+from cvhealthcheck.db import get_db
+from cvhealthcheck.db import staging as _staging_db
+from cvhealthcheck.db.subjects import delete_subject, get_subject
+from cvhealthcheck.extractors.dispatcher import extract_file
+from cvhealthcheck.extractors.rest import RESTExtractor
+from cvhealthcheck.extractors.result_to_artifact import result_to_artifact
+from cvhealthcheck.reportsplus.report_definitions import REPORT_DEFINITIONS
+from cvhealthcheck.reportsplus.session import CommvaultSession
 
 from .shared import (
     LICENSE_SUMMARY_UPLOAD_EXTENSIONS,
@@ -43,6 +56,18 @@ from cvhealthcheck.reportsplus.backup_job_summary import (
 )
 
 
+def _read_commcell_provenance() -> tuple[str | None, str | None]:
+    """Read CommCell identity from commserv.json for artifact provenance."""
+    try:
+        payload = read_json("commserv.json", catalog_dir=Path("data/catalog/rest"))
+        identity = payload.get("identity") if isinstance(payload, dict) else {}
+        if not isinstance(identity, dict):
+            identity = {}
+        return identity.get("csGUID") or None, identity.get("hostName") or None
+    except Exception:
+        return None, None
+
+
 def _quick_hc_asset_version() -> str:
     base = Path(__file__).resolve().parents[1] / "static"
     parts = []
@@ -58,11 +83,90 @@ def _quick_hc_asset_version() -> str:
 
 @bp.route("/quick-hc")
 def quick_hc():
+    db = get_db()
+    try:
+        initial_data = build_subject_initial_data(db)
+    finally:
+        db.close()
+    flashes = [
+        {"category": cat, "message": msg}
+        for cat, msg in get_flashed_messages(with_categories=True)
+    ]
     return render_template(
         "quick_hc.html",
-        initial_data=build_subject_initial_data(),
+        initial_data=initial_data,
+        flashes=flashes,
         asset_version=_quick_hc_asset_version(),
+        is_authenticated=is_authenticated(),
     )
+
+
+@bp.route("/quick-hc/<subject_id>/delete", methods=["POST"])
+def quick_hc_delete_subject(subject_id: str):
+    db = get_db()
+    try:
+        row = get_subject(db, subject_id)
+        title = row["title"] if row else subject_id
+        delete_subject(db, subject_id)
+    except ValueError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.quick_hc"))
+    finally:
+        db.close()
+    ArtifactStore().delete_artifact(subject_id)
+    flash(f"'{title}' removed from catalog.", "success")
+    return redirect(url_for("main.quick_hc"))
+
+
+@bp.route("/quick-hc/<subject_id>/collect", methods=["POST"])
+@login_required
+def quick_hc_generic_collect(subject_id: str):
+    settings = load_settings()
+    base_url = settings.base_url
+    if not base_url:
+        flash("Commvault base URL is not configured.", "error")
+        return redirect(url_for("main.quick_hc"))
+
+    token = _current_token()
+    report_definition = REPORT_DEFINITIONS.get(subject_id)
+
+    db = get_db()
+    try:
+        subject = get_subject(db, subject_id)
+        if subject is None:
+            flash(f"Subject '{subject_id}' not found.", "error")
+            return redirect(url_for("main.quick_hc"))
+        title = subject["title"]
+        version = subject["version"]
+        with CommvaultSession(base_url, token, verify_ssl=settings.verify_ssl) as cv_session:
+            extractor = RESTExtractor(db, cv_session)
+            result = extractor.extract(subject_id, version, report_definition=report_definition)
+    except Exception as exc:
+        flash(f"Collection failed: {exc}", "error")
+        return redirect(url_for("main.quick_hc"))
+    finally:
+        db.close()
+
+    if result.errors:
+        flash(f"Collection errors: {'; '.join(result.errors)}", "error")
+        return redirect(url_for("main.quick_hc"))
+
+    commcell_id, commcell_name = _read_commcell_provenance()
+    artifact = result_to_artifact(
+        result,
+        subject_id=subject_id,
+        subject_title=title,
+        commcell_id=commcell_id,
+        commcell_name=commcell_name,
+    )
+    ArtifactStore().save_artifact(artifact)
+
+    if result.warnings:
+        warn_str = "; ".join(result.warnings[:2])
+        flash(f"REST collection completed for '{title}'. Warnings: {warn_str}", "success")
+    else:
+        flash(f"REST collection completed for '{title}'.", "success")
+    return redirect(url_for("main.quick_hc"))
 
 
 @bp.route("/quick-hc/report", methods=["GET", "POST"])
@@ -253,10 +357,79 @@ def quick_hc_license_summary_collect():
     return redirect(url_for("main.quick_hc_license_summary"))
 
 
-@bp.route("/api/license-summary/canonical")
-def license_summary_canonical():
+@bp.route("/quick-hc/import", methods=["GET", "POST"])
+def quick_hc_generic_import():
+    inline = request.headers.get("X-Inline") == "1"
+
+    if request.method == "GET":
+        return render_template("quick_hc_import.html")
+
+    upload = request.files.get("file")
+    filename = (upload.filename if upload else "") or ""
+    if not filename:
+        if inline:
+            return jsonify({"success": False, "error": "No file selected."}), 400
+        flash("No file selected.", "error")
+        return redirect(url_for("main.quick_hc_generic_import"))
+
+    suffix = Path(filename).suffix or ".tmp"
+    tmp_path: Path | None = None
+    db = get_db()
     try:
-        canonical = LicenseSummaryService().get_canonical()
-    except FileNotFoundError:
-        return jsonify({"error": "No canonical artifact exists yet."}), 404
-    return jsonify(canonical.model_dump(mode="json"))
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            upload.save(tmp)
+            tmp_path = Path(tmp.name)
+
+        explicit_subject_id = request.args.get("subject_id") or None
+        dispatch = extract_file(tmp_path, db, subject_id=explicit_subject_id)
+
+        if not dispatch.recognized:
+            msg = "File not recognised — no matching report type found."
+            if inline:
+                return jsonify({"success": False, "error": msg}), 422
+            flash(msg, "warning")
+        elif not dispatch.extractable:
+            reason = dispatch.non_extractable_reason or "not extractable"
+            msg = f"File recognised but not extractable: {reason}."
+            if inline:
+                return jsonify({"success": False, "error": msg}), 422
+            flash(msg, "warning")
+        elif dispatch.extraction_errors:
+            msg = f"Extraction errors: {'; '.join(dispatch.extraction_errors)}"
+            if inline:
+                return jsonify({"success": False, "error": msg}), 422
+            flash(msg, "error")
+        else:
+            artifact = dispatch.artifact
+            title = dispatch.recognition_result.title  # type: ignore[union-attr]
+            stage_flag = request.args.get("stage") == "1"
+            if stage_flag:
+                stage_id = f"stage_{uuid.uuid4().hex[:12]}"
+                _staging_db.create_staged_artifact(
+                    db,
+                    stage_id,
+                    artifact.artifact_type,
+                    artifact.model_dump_json(),
+                    source_file=filename,
+                    source_type=dispatch.source_type,
+                )
+                msg = f"Imported {title} — review in staging before approving."
+                if inline:
+                    return jsonify({"success": True, "message": msg, "title": title})
+                flash(msg, "success")
+            else:
+                ArtifactStore().save_artifact(artifact)
+                msg = f"Imported {title} successfully."
+                if inline:
+                    return jsonify({"success": True, "message": msg, "title": title})
+                flash(msg, "success")
+    except Exception as exc:
+        if inline:
+            return jsonify({"success": False, "error": str(exc)}), 500
+        flash(f"Import failed: {exc}", "error")
+    finally:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+        db.close()
+
+    return redirect(url_for("main.quick_hc_generic_import"))

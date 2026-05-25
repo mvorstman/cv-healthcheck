@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Import — Quick HC</title>
+  <style>
+    body { font-family: sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.4rem; margin-bottom: 1.5rem; }
+    .flash { padding: .6rem 1rem; margin-bottom: 1rem; border-radius: 4px; }
+    .flash-success { background: #d4edda; color: #155724; }
+    .flash-warning { background: #fff3cd; color: #856404; }
+    .flash-error   { background: #f8d7da; color: #721c24; }
+    label { display: block; margin-bottom: .4rem; font-weight: 500; }
+    input[type="file"] { display: block; margin-bottom: 1rem; }
+    .stage-row { display: flex; align-items: center; gap: .5rem; margin-bottom: 1rem; }
+    button { padding: .5rem 1.2rem; cursor: pointer; }
+    a { color: #0066cc; }
+  </style>
+</head>
+<body>
+  <h1>Generic Import</h1>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <form id="import-form" method="post" action="{{ url_for('main.quick_hc_generic_import') }}"
+        enctype="multipart/form-data">
+    <label for="file-input">Select file (.html, .htm, .csv)</label>
+    <input id="file-input" type="file" name="file" accept=".html,.htm,.csv">
+
+    <div class="stage-row">
+      <input id="stage-cb" type="checkbox"
+             onchange="document.getElementById('import-form').action =
+               '{{ url_for('main.quick_hc_generic_import') }}' + (this.checked ? '?stage=1' : '')">
+      <label for="stage-cb" style="margin:0; font-weight:normal">Stage for review before approving</label>
+    </div>
+
+    <button type="submit">Import</button>
+  </form>
+
+  <p style="margin-top:1.5rem"><a href="{{ url_for('main.quick_hc') }}">← Back to Quick HC</a></p>
+</body>
+</html>

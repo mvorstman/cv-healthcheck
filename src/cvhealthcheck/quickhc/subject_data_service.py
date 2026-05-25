@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+from cvhealthcheck.artifacts.models import CanonicalArtifact
 from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.license_summary.service import LicenseSummaryService
 
@@ -25,8 +27,15 @@ from cvhealthcheck.quickhc.registry import (
     REST_REPORTS_PLUS_SOURCE_ID,
     SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME,
     SECURITY_ASSESSMENT_METADATA_SECTION_ID,
+    SOURCE_DESCRIPTIONS,
+    SOURCE_LABELS,
+    STANDARD_SOURCES,
+    get_tiles,
     list_tiles,
 )
+
+_SA_IMPORT_URL = "/quick-hc/security-assessment/import"
+_LS_IMPORT_URL = "/quick-hc/license-summary/import"
 
 logger = logging.getLogger(__name__)
 
@@ -45,18 +54,12 @@ _CATEGORY_ICONS = {
 }
 
 
-def build_subject_initial_data() -> dict[str, Any]:
+def build_subject_initial_data(db: sqlite3.Connection | None = None) -> dict[str, Any]:
     """Build the full initial data structure for the Quick HC frontend."""
-    subject_data_loaders = _subject_data_loaders()
-    subject_builders = _subject_builders()
-    tile_payloads: dict[str, Any] = {}
-    for tile in list_tiles():
-        loader = subject_data_loaders.get(tile.id)
-        if loader is None:
-            continue
-        tile_payloads[tile.id] = loader()
-
-    commcell_info = _build_commcell_header(tile_payloads.get("environment"))
+    if db is not None:
+        all_tiles = get_tiles(db)
+    else:
+        all_tiles = [_tile_def_to_dict(t) for t in list_tiles()]
 
     try:
         from flask import url_for
@@ -64,20 +67,43 @@ def build_subject_initial_data() -> dict[str, Any]:
     except Exception:
         report_url = "/quick-hc/report"
 
+    legacy_loaders = _legacy_loaders()
+    legacy_builders = _legacy_builders()
+
+    # Commcell header comes from the environment legacy loader (reads commserv.json).
+    commcell_loader = legacy_loaders.get("environment")
+    commcell_raw = commcell_loader() if commcell_loader else None
+    commcell_info = _build_commcell_header(commcell_raw)
+
     category_groups: dict[str, dict] = {}
-    for tile in list_tiles():
-        cat_id = tile.category
+    for tile in all_tiles:
+        cat_id = tile["category"]
+        subject_id = tile["id"]
         if cat_id not in category_groups:
             category_groups[cat_id] = {
                 "id": cat_id,
-                "name": tile.category_label,
+                "name": tile["category_label"],
                 "icon": _CATEGORY_ICONS.get(cat_id, ""),
                 "open": True,
                 "subjects": [],
             }
-        builder = subject_builders.get(tile.id)
-        if builder is not None:
-            category_groups[cat_id]["subjects"].append(builder(tile_payloads.get(tile.id)))
+
+        # Canonical store wins for all subjects when an artifact exists.
+        artifact = _load_from_canonical_store(subject_id)
+        if artifact is not None:
+            built = _build_generic_subject(tile, artifact)
+        else:
+            legacy_loader = legacy_loaders.get(subject_id)
+            legacy_builder = legacy_builders.get(subject_id)
+            if legacy_builder is not None:
+                built = legacy_builder(legacy_loader() if legacy_loader else None)
+            elif db is not None:
+                built = _build_generic_subject(tile, None)
+            else:
+                continue
+
+        built["created_by"] = tile.get("created_by", "system")
+        category_groups[cat_id]["subjects"].append(built)
 
     cats = list(category_groups.values())
 
@@ -88,9 +114,114 @@ def build_subject_initial_data() -> dict[str, Any]:
     }
 
 
-# ── DATA LOADERS ──
+def _tile_def_to_dict(tile: Any) -> dict[str, Any]:
+    """Convert a TileDefinition to the dict format used by get_tiles(db)."""
+    return {
+        "id": tile.id,
+        "title": tile.title,
+        "subtitle": tile.subtitle,
+        "description": tile.subtitle,
+        "category": tile.category,
+        "category_label": tile.category_label,
+        "source_type": tile.source_type,
+        "artifact_type": tile.artifact_type,
+        "preview_renderer": tile.preview_renderer,
+        "report_renderer": tile.report_renderer,
+        "detail_endpoint": tile.detail_endpoint,
+        "sections": [
+            {
+                "id": s.id,
+                "label": s.label,
+                "default_selected": s.default_selected,
+                "preview_renderer": s.preview_renderer,
+                "report_renderer": s.report_renderer,
+            }
+            for s in tile.sections
+        ],
+        "sources": [
+            {"id": s.id, "label": s.label, "description": s.description}
+            for s in tile.sources
+        ],
+    }
 
-def _load_commcell() -> dict | None:
+
+def _load_from_canonical_store(subject_id: str) -> CanonicalArtifact | None:
+    try:
+        return _canonical_store.load_latest_artifact(subject_id)
+    except FileNotFoundError:
+        return None
+    except Exception:
+        logger.exception("Error loading canonical artifact for %s", subject_id)
+        return None
+
+
+def _build_generic_sources(subject_id: str, tile_sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    import_url_base = f"/quick-hc/import?subject_id={subject_id}"
+    result = []
+    for src in tile_sources:
+        src_id = src["id"]
+        extractable = src.get("extractable", True)
+        is_html = src_id == HTML_IMPORT_SOURCE_ID
+        is_csv = src_id == CSV_IMPORT_SOURCE_ID
+        is_rest = src_id == REST_REPORTS_PLUS_SOURCE_ID
+        collect_url = src.get("collect_url")
+        is_import = is_html or is_csv
+        if is_import and extractable:
+            accept = ".html,.htm" if is_html else ".csv"
+            actions: list[dict[str, str]] = [
+                _upload_action(import_url=import_url_base, import_field="file", accept=accept)
+            ]
+            status = "a"
+        elif is_rest and collect_url:
+            actions = [{"kind": "collect", "label": "Collect", "collectUrl": collect_url}]
+            status = "a"
+        else:
+            actions = []
+            status = "ni"
+        result.append(_source_item(
+            src_id,
+            src.get("label", src_id),
+            src.get("description", ""),
+            status=status,
+            actions=actions,
+        ))
+    return result
+
+
+def _build_generic_subject(tile: dict[str, Any], artifact: CanonicalArtifact | None) -> dict:
+    subject_id = tile["id"]
+    description = tile.get("description") or tile.get("subtitle") or ""
+    sources = _build_generic_sources(subject_id, tile.get("sources", []))
+    created_by = tile.get("created_by", "ai")
+    status = tile.get("status", "active")
+    if artifact is None:
+        return {
+            "id": subject_id,
+            "name": tile["title"],
+            "description": description,
+            "state": "nodata",
+            "included": True,
+            "subtitle": "Not collected",
+            "fullUrl": None,
+            "activeSource": None,
+            "sources": sources,
+            "sections": [],
+            "created_by": created_by,
+            "status": status,
+        }
+    view = _canonical_view.artifact_to_view(artifact)
+    view["name"] = tile["title"]
+    view["description"] = description
+    view["sources"] = sources
+    view["created_by"] = created_by
+    view["status"] = status
+    return view
+
+
+# ── LEGACY DATA LOADERS ──
+# These are fallbacks used only when no canonical artifact exists in ArtifactStore.
+
+def _load_legacy_commcell() -> dict | None:
     try:
         payload = read_json("commserv.json", catalog_dir=Path("data/catalog/rest"))
         identity = payload.get("identity") if isinstance(payload, dict) else {}
@@ -104,7 +235,7 @@ def _load_commcell() -> dict | None:
         return None
 
 
-def _load_security_assessment() -> dict | None:
+def _load_legacy_security_assessment() -> dict | None:
     try:
         return security_assessment_quick_hc()
     except Exception:
@@ -112,7 +243,7 @@ def _load_security_assessment() -> dict | None:
         return None
 
 
-def _load_license_summary() -> dict | None:
+def _load_legacy_license_summary() -> dict | None:
     try:
         return LicenseSummaryService().get_current()
     except FileNotFoundError:
@@ -122,7 +253,7 @@ def _load_license_summary() -> dict | None:
         return None
 
 
-def _load_client_growth() -> dict | None:
+def _load_legacy_client_growth() -> dict | None:
     try:
         return get_client_growth_summary(live=False)
     except FileNotFoundError:
@@ -132,7 +263,7 @@ def _load_client_growth() -> dict | None:
         return None
 
 
-def _load_capacity_license() -> dict | None:
+def _load_legacy_capacity_license() -> dict | None:
     try:
         return get_capacity_license_usage(live=False)
     except FileNotFoundError:
@@ -142,7 +273,7 @@ def _load_capacity_license() -> dict | None:
         return None
 
 
-def _load_backup_job_summary() -> dict | None:
+def _load_legacy_backup_job_summary() -> dict | None:
     try:
         return load_backup_job_summary_artifact()
     except FileNotFoundError:
@@ -152,14 +283,14 @@ def _load_backup_job_summary() -> dict | None:
         return None
 
 
-def _subject_data_loaders() -> dict[str, Any]:
+def _legacy_loaders() -> dict[str, Any]:
     return {
-        "environment": _load_commcell,
-        "security_assessment": _load_security_assessment,
-        "license_summary": _load_license_summary,
-        "client_growth": _load_client_growth,
-        "capacity_license": _load_capacity_license,
-        "backup_job_summary": _load_backup_job_summary,
+        "environment": _load_legacy_commcell,
+        "security_assessment": _load_legacy_security_assessment,
+        "license_summary": _load_legacy_license_summary,
+        "client_growth": _load_legacy_client_growth,
+        "capacity_license": _load_legacy_capacity_license,
+        "backup_job_summary": _load_legacy_backup_job_summary,
     }
 
 
@@ -177,7 +308,7 @@ def _build_commcell_header(cc: dict | None) -> dict:
     }
 
 
-def _subject_builders() -> dict[str, Any]:
+def _legacy_builders() -> dict[str, Any]:
     return {
         "environment": _build_environment_subject,
         "security_assessment": _build_security_assessment_subject,
@@ -249,21 +380,20 @@ def _build_tile_sources(
     descriptions: dict[str, str] | None = None,
     actions: dict[str, list[dict[str, str]]] | None = None,
 ) -> list[dict[str, Any]]:
-    tile = QUICK_HC_TILE_BY_ID[tile_id]
     status_map = dict(statuses or {})
     meta_map = dict(meta or {})
     description_map = dict(descriptions or {})
     action_map = dict(actions or {})
     return [
         _source_item(
-            source.id,
-            source.label,
-            description_map.get(source.id, source.description),
-            status=status_map.get(source.id, "ni"),
-            meta=meta_map.get(source.id, []),
-            actions=action_map.get(source.id, []),
+            src_id,
+            SOURCE_LABELS.get(src_id, src_id),
+            description_map.get(src_id, SOURCE_DESCRIPTIONS.get(src_id, "")),
+            status=status_map.get(src_id, "ni"),
+            meta=meta_map.get(src_id, []),
+            actions=action_map.get(src_id, []),
         )
-        for source in tile.sources
+        for src_id in STANDARD_SOURCES
     ]
 
 
@@ -352,11 +482,9 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
         view = _canonical_view.security_assessment_to_view(artifact)
         view["fullUrl"] = _try_url("main.quick_hc")
         return view
-    except FileNotFoundError:
+    except Exception:
         pass
     full_url = _try_url("main.quick_hc")
-    _sa_tile = QUICK_HC_TILE_BY_ID.get("security_assessment")
-    _sa_import_url = _sa_tile.import_url if _sa_tile and _sa_tile.import_url else "/quick-hc/security-assessment/import"
     if not sa or not sa.get("exists"):
         subj = _nodata_subject("security_assessment", "Security Assessment", full_url)
         subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
@@ -381,13 +509,13 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
             actions={
                 CSV_IMPORT_SOURCE_ID: [
                     _upload_action(
-                        import_url=_sa_import_url,
+                        import_url=_SA_IMPORT_URL,
                         import_field="assessment_file",
                     )
                 ],
                 HTML_IMPORT_SOURCE_ID: [
                     _upload_action(
-                        import_url=_sa_import_url,
+                        import_url=_SA_IMPORT_URL,
                         import_field="assessment_file",
                     )
                 ],
@@ -547,13 +675,13 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
             actions={
                 CSV_IMPORT_SOURCE_ID: [
                     _upload_action(
-                        import_url=_sa_import_url,
+                        import_url=_SA_IMPORT_URL,
                         import_field="assessment_file",
                     )
                 ],
                 HTML_IMPORT_SOURCE_ID: [
                     _upload_action(
-                        import_url=_sa_import_url,
+                        import_url=_SA_IMPORT_URL,
                         import_field="assessment_file",
                     )
                 ],
@@ -609,11 +737,9 @@ def _build_license_summary_subject(ls: dict | None) -> dict:
         view = _canonical_view.license_summary_to_view(artifact)
         view["fullUrl"] = _try_url("main.quick_hc")
         return view
-    except FileNotFoundError:
+    except Exception:
         pass
     full_url = _try_url("main.quick_hc")
-    _ls_tile = QUICK_HC_TILE_BY_ID.get("license_summary")
-    _ls_import_url = _ls_tile.import_url if _ls_tile and _ls_tile.import_url else "/quick-hc/license-summary/import"
     if not ls:
         subj = _nodata_subject("license_summary", "License Summary", full_url)
         subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
@@ -638,13 +764,13 @@ def _build_license_summary_subject(ls: dict | None) -> dict:
             actions={
                 CSV_IMPORT_SOURCE_ID: [
                     _upload_action(
-                        import_url=_ls_import_url,
+                        import_url=_LS_IMPORT_URL,
                         import_field="license_summary_file",
                     )
                 ],
                 HTML_IMPORT_SOURCE_ID: [
                     _upload_action(
-                        import_url=_ls_import_url,
+                        import_url=_LS_IMPORT_URL,
                         import_field="license_summary_file",
                     )
                 ],
@@ -775,13 +901,13 @@ def _build_license_summary_subject(ls: dict | None) -> dict:
             actions={
                 CSV_IMPORT_SOURCE_ID: [
                     _upload_action(
-                        import_url=_ls_import_url,
+                        import_url=_LS_IMPORT_URL,
                         import_field="license_summary_file",
                     )
                 ],
                 HTML_IMPORT_SOURCE_ID: [
                     _upload_action(
-                        import_url=_ls_import_url,
+                        import_url=_LS_IMPORT_URL,
                         import_field="license_summary_file",
                     )
                 ],
@@ -839,7 +965,7 @@ def _safe_int_percent(value: object) -> int:
 
 
 def _build_client_growth_subject(cg: dict | None) -> dict:
-    full_url = _try_url("main.metrics_client_growth")
+    full_url = None
     if not cg:
         subj = _nodata_subject("client_growth", "Client Growth", full_url)
         subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
@@ -974,7 +1100,7 @@ def _build_client_growth_subject(cg: dict | None) -> dict:
 
 
 def _build_capacity_license_subject(cl: dict | None) -> dict:
-    full_url = _try_url("main.metrics_capacity_license")
+    full_url = None
     if not cl:
         subj = _nodata_subject("capacity_license", "Capacity Licenses", full_url)
         subj["activeSource"] = REST_REPORTS_PLUS_SOURCE_ID
