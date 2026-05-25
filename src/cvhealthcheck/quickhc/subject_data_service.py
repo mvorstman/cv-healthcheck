@@ -92,6 +92,13 @@ def build_subject_initial_data(db: sqlite3.Connection | None = None) -> dict[str
             }
 
         # Canonical store wins for all subjects when an artifact exists.
+        #
+        # Source-building fork: see docs/adr/0001-source-building-fork.md.
+        # The legacy_builder branch (six system subjects with custom
+        # view shapes: counters, findings_grid, workload, chart_growth)
+        # is intentional. It cannot be merged with _build_generic_subject
+        # without first migrating the canonical schema. Do not remove
+        # this fork without reading the ADR.
         artifact = _load_from_canonical_store(subject_id)
         if artifact is not None:
             built = _build_generic_subject(tile, artifact)
@@ -290,6 +297,11 @@ def _load_legacy_backup_job_summary() -> dict | None:
 
 
 def _legacy_loaders() -> dict[str, Any]:
+    # Source-building fork: see docs/adr/0001-source-building-fork.md.
+    # These loaders read legacy on-disk tile data for the six system
+    # subjects whose view shapes (counters, findings_grid, workload,
+    # chart_growth) the canonical schema cannot represent. The fork is
+    # intentional and not technical debt.
     return {
         "environment": _load_legacy_commcell,
         "security_assessment": _load_legacy_security_assessment,
@@ -315,6 +327,12 @@ def _build_commcell_header(cc: dict | None) -> dict:
 
 
 def _legacy_builders() -> dict[str, Any]:
+    # Source-building fork: see docs/adr/0001-source-building-fork.md.
+    # These builders produce the six system subjects' custom view
+    # shapes (counters, findings_grid, workload, chart_growth) that
+    # the canonical schema cannot represent. They run when the
+    # canonical store has no artifact for the subject. The fork is
+    # intentional. Do not "clean it up" without reading the ADR.
     return {
         "environment": _build_environment_subject,
         "security_assessment": _build_security_assessment_subject,
