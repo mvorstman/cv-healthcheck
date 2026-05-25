@@ -10,6 +10,29 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-30
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `20be561`, plus the wrap-up commit that publishes this entry.
+**Test status:** 469 passing (up from 468; +1 new test).
+
+### Added
+
+- **`GET /quick-hc/settings` route** in `src/cvhealthcheck/web/routes/quick_hc.py`. Anonymous-reachable (no `@login_required`) so signed-out users can still reset their preferences.
+- **`templates/quick_hc_settings.html`** — placeholder Settings page. Standalone (does not extend `base.html`); reuses `quick_hc.css` for design tokens. Inline JS inspects the two localStorage keys and the "Reset local preferences" button clears them and reloads.
+- **"Settings" sidebar nav link** in `templates/quick_hc.html` between Reports and Staging, using the existing `lnav-item` class.
+- `tests/test_settings_route.py` — one smoke test asserting 200 + presence of "Settings" heading + both localStorage key names in the response body.
+
+### Notes
+
+- **The Quick HC UX queue now has one item remaining**: remove the old `/quick-hc/import` generic upload route. That is the next session's single recommended next action.
+- **`lnav-item` is the correct nav class name**, not `left-nav-item` as the 2026-05-29 HANDOVER sketch suggested. Verified before writing. The earlier HANDOVER was approximate — the verify-before-write step in the workflow paid off again.
+- **The Settings page does not extend a base template** because `quick_hc.html` itself is standalone (it pre-dates the consolidation around `base.html` for the older Flask surfaces). For consistency with the dark UI, the settings page mirrors quick_hc.html's `<head>` (theme bootstrap + `quick_hc.css` import) and adds page-specific layout in an inline `<style>` block. If a future change introduces a Quick-HC-level base template, the settings page should adopt it.
+- **localStorage key inventory** is currently exactly two keys: `quickhc-theme-v1` (theme toggle, written by `base.html` and `quick_hc.html`) and `quickhc-state-v1` (report-composition state, written by `quick_hc.js`). No variants, no versioned siblings, no per-subject keys. If a future change adds a key, update `quick_hc_settings.html` so the Reset button clears it too — the inline comment in the template names every other file that touches these keys to make this easy.
+- **No server-side preferences storage was added.** The Settings page is a placeholder so a future session has somewhere obvious to land things like default report sections, display density, or persisted report profiles.
+
+---
+
 ## 2026-05-29
 
 **Branch:** `feature/basic-healthcheck-report-output`
