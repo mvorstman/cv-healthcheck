@@ -452,3 +452,212 @@ def quick_hc_generic_import():
         db.close()
 
     return redirect(url_for("main.quick_hc_generic_import"))
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Unified upload route — session 2 of the unified-upload refactor.
+# Lives alongside the existing per-subject and generic import routes.
+# Frontend still uses the old URLs; it flips to /quick-hc/<id>/import
+# in session 3. The old routes are deleted in session 4.
+# See docs/refactor_unified_upload_2026-05-31.md for the full plan.
+# ──────────────────────────────────────────────────────────────────────
+
+
+@bp.route("/quick-hc/<subject_id>/import", methods=["POST"])
+def quick_hc_subject_import(subject_id: str):
+    """Unified upload route — dispatches by subjects.created_by.
+
+    Behavior contract (verified by tests/test_unified_upload_route.py):
+      - Unknown subject_id → 404.
+      - 'system' subject_id == 'security_assessment' → identical to
+        the existing /quick-hc/security-assessment/import route.
+      - 'system' subject_id == 'license_summary' → identical to the
+        existing /quick-hc/license-summary/import route.
+      - 'system' subject_id == anything else → 404 (the other four
+        system subjects are REST/metrics-only, no upload path).
+      - 'ai' or 'user' subject_id → identical to the existing
+        /quick-hc/import?subject_id=... route, including X-Inline
+        JSON-response mode, ?stage=1 staging, and the three-way
+        error reporting (recognition / extractable / extraction).
+    """
+    db = get_db()
+    try:
+        subject = get_subject(db, subject_id)
+    finally:
+        db.close()
+
+    if subject is None:
+        return ("Unknown subject.", 404)
+
+    # FIXME(refactor-unified-upload-session-5): branch dispatch by
+    # subjects.created_by + sub-branch by subject_id is a deliberate
+    # migration shim. The two system subjects with upload paths are
+    # hard-coded here so session 2 can ship a small, obvious diff
+    # without committing to a data-model decision. Session 5/6 will
+    # replace this with data-driven dispatch — likely a new column on
+    # `subjects` describing import behavior (form-field name, allowed
+    # extensions, success-message format, persist function, etc.).
+    # Do not refactor this into a registry/plugin system in the
+    # meantime — the point of the FIXME is to defer that choice.
+    created_by = subject.get("created_by") or "ai"
+
+    if created_by == "system":
+        # FIXME(refactor-unified-upload-session-5): hard-coded subject IDs.
+        if subject_id == "security_assessment":
+            return _unified_security_assessment_upload()
+        # FIXME(refactor-unified-upload-session-5): hard-coded subject IDs.
+        if subject_id == "license_summary":
+            return _unified_license_summary_upload()
+        # The other four system subjects (environment, client_growth,
+        # capacity_license, backup_job_summary) are REST/metrics-only.
+        return ("Subject does not support uploads.", 404)
+
+    # 'ai', 'user', or any other created_by → dispatcher branch.
+    return _unified_dispatcher_upload(subject_id)
+
+
+def _unified_security_assessment_upload():
+    """Mirror of quick_hc_security_assessment_import.
+
+    Body duplicated deliberately — see the FIXME at the dispatch
+    site. Session 5/6 collapses the two routes; in the meantime,
+    edits to one route's body MUST be mirrored here (and vice versa).
+    """
+    upload = request.files.get("assessment_file")
+    filename = (upload.filename if upload else "") or ""
+    if not filename:
+        flash("No file selected.", "error")
+        return redirect(url_for("main.quick_hc_security_assessment"))
+
+    try:
+        artifact = import_security_assessment_upload(
+            upload.stream,
+            original_filename=filename,
+        )
+    except SecurityAssessmentImportError as exc:
+        flash(str(exc), "error")
+    except Exception as exc:
+        flash(f"Security Assessment import failed: {exc}", "error")
+    else:
+        source_type = str(artifact.get("source_type") or "unknown").upper()
+        finding_count = int(artifact.get("finding_count") or 0)
+        flash(
+            f"{source_type} import completed for {artifact.get('source_file')} with {finding_count} findings.",
+            "success",
+        )
+    return redirect(url_for("main.quick_hc_security_assessment"))
+
+
+def _unified_license_summary_upload():
+    """Mirror of quick_hc_license_summary_import.
+
+    Body duplicated deliberately — see the FIXME at the dispatch site.
+    """
+    upload = request.files.get("license_summary_file")
+    filename = (upload.filename if upload else "") or ""
+    if not filename:
+        flash("No file selected.", "error")
+        return redirect(url_for("main.quick_hc_license_summary"))
+
+    suffix = Path(filename).suffix.lower()
+    if suffix not in LICENSE_SUMMARY_UPLOAD_EXTENSIONS:
+        flash("Unsupported file type. Upload a License Summary CSV or HTML export.", "error")
+        return redirect(url_for("main.quick_hc_license_summary"))
+
+    try:
+        artifact = import_license_summary_upload(
+            upload.stream,
+            original_filename=filename,
+        )
+    except LicenseSummaryImportError as exc:
+        flash(str(exc), "error")
+    except Exception as exc:
+        flash(f"License Summary import failed: {exc}", "error")
+    else:
+        source_type = str(artifact.get("source_type") or "unknown").upper()
+        other_count = len(artifact.get("other_licenses") or [])
+        agent_count = len(artifact.get("agent_feature_licenses") or [])
+        flash(
+            f"{source_type} import completed for {artifact.get('source_file')} with {other_count} other licenses and {agent_count} agent/feature licenses.",
+            "success",
+        )
+    return redirect(url_for("main.quick_hc_license_summary"))
+
+
+def _unified_dispatcher_upload(subject_id: str):
+    """Mirror of quick_hc_generic_import POST body, with subject_id
+    sourced from the URL path instead of ?subject_id=… query.
+
+    Supports X-Inline: 1, ?stage=1, and three-way error reporting.
+    Body duplicated deliberately — see the FIXME at the dispatch site.
+    """
+    inline = request.headers.get("X-Inline") == "1"
+
+    upload = request.files.get("file")
+    filename = (upload.filename if upload else "") or ""
+    if not filename:
+        if inline:
+            return jsonify({"success": False, "error": "No file selected."}), 400
+        flash("No file selected.", "error")
+        return redirect(url_for("main.quick_hc_generic_import"))
+
+    suffix = Path(filename).suffix or ".tmp"
+    tmp_path: Path | None = None
+    db = get_db()
+    try:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            upload.save(tmp)
+            tmp_path = Path(tmp.name)
+
+        dispatch = extract_file(tmp_path, db, subject_id=subject_id)
+
+        if not dispatch.recognized:
+            msg = "File not recognised — no matching report type found."
+            if inline:
+                return jsonify({"success": False, "error": msg}), 422
+            flash(msg, "warning")
+        elif not dispatch.extractable:
+            reason = dispatch.non_extractable_reason or "not extractable"
+            msg = f"File recognised but not extractable: {reason}."
+            if inline:
+                return jsonify({"success": False, "error": msg}), 422
+            flash(msg, "warning")
+        elif dispatch.extraction_errors:
+            msg = f"Extraction errors: {'; '.join(dispatch.extraction_errors)}"
+            if inline:
+                return jsonify({"success": False, "error": msg}), 422
+            flash(msg, "error")
+        else:
+            artifact = dispatch.artifact
+            title = dispatch.recognition_result.title  # type: ignore[union-attr]
+            stage_flag = request.args.get("stage") == "1"
+            if stage_flag:
+                stage_id = f"stage_{uuid.uuid4().hex[:12]}"
+                _staging_db.create_staged_artifact(
+                    db,
+                    stage_id,
+                    artifact.artifact_type,
+                    artifact.model_dump_json(),
+                    source_file=filename,
+                    source_type=dispatch.source_type,
+                )
+                msg = f"Imported {title} — review in staging before approving."
+                if inline:
+                    return jsonify({"success": True, "message": msg, "title": title})
+                flash(msg, "success")
+            else:
+                ArtifactStore().save_artifact(artifact)
+                msg = f"Imported {title} successfully."
+                if inline:
+                    return jsonify({"success": True, "message": msg, "title": title})
+                flash(msg, "success")
+    except Exception as exc:
+        if inline:
+            return jsonify({"success": False, "error": str(exc)}), 500
+        flash(f"Import failed: {exc}", "error")
+    finally:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+        db.close()
+
+    return redirect(url_for("main.quick_hc_generic_import"))

@@ -61,24 +61,6 @@ _SOURCE_TYPE_LABEL: dict[str, str] = {
     SourceType.rest_commserve:   "REST",
 }
 
-_SOURCE_DEFAULT_STATUS: dict[str, str] = {
-    REST_COMMAND_CENTER_API_SOURCE_ID: "ni",
-    REST_REPORTS_PLUS_SOURCE_ID:       "a",
-    JSON_IMPORT_SOURCE_ID:             "ni",
-    CSV_IMPORT_SOURCE_ID:              "a",
-    HTML_IMPORT_SOURCE_ID:             "a",
-}
-
-_IMPORT_FIELDS: dict[str, str] = {
-    "security_assessment": "assessment_file",
-    "license_summary":     "license_summary_file",
-}
-
-_IMPORT_ACCEPT: dict[str, str] = {
-    "security_assessment": ".html,.htm",
-    "license_summary":     ".html,.htm,.csv,.xlsx",
-}
-
 # TableSection IDs that are not workload sections in license_summary.
 # Accept both short form (legacy) and fully-qualified form stored by the extractor.
 _LS_NON_WORKLOAD_IDS = {
@@ -289,7 +271,7 @@ def security_assessment_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
         "subtitle": subtitle,
         "fullUrl": None,
         "activeSource": active_src,
-        "sources": _build_sources("security_assessment", active_src),
+        "sources": [],
         "sections": sections,
     }
 
@@ -399,7 +381,7 @@ def license_summary_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
         "subtitle": subtitle,
         "fullUrl": None,
         "activeSource": active_src,
-        "sources": _build_sources("license_summary", active_src),
+        "sources": [],
         "sections": result_sections,
     }
 
@@ -438,33 +420,3 @@ def _tile_description(tile_id: str) -> str:
     return tile.subtitle if tile else ""
 
 
-def _build_sources(tile_id: str, active_src_id: str) -> list[dict[str, Any]]:
-    tile = QUICK_HC_TILE_BY_ID.get(tile_id)
-    if not tile:
-        return []
-    import_url   = tile.import_url or ""
-    import_field = _IMPORT_FIELDS.get(tile_id, "")
-    import_accept = _IMPORT_ACCEPT.get(tile_id, ".html,.htm,.csv")
-    result = []
-    for source in tile.sources:
-        is_active = source.id == active_src_id
-        status    = "v" if is_active else _SOURCE_DEFAULT_STATUS.get(source.id, "ni")
-        is_import = source.id in (CSV_IMPORT_SOURCE_ID, HTML_IMPORT_SOURCE_ID)
-        actions: list[dict] = []
-        if is_import and import_url:
-            actions = [{
-                "kind":        "upload",
-                "label":       "Import",
-                "importUrl":   import_url,
-                "importField": import_field,
-                "accept":      import_accept,
-            }]
-        result.append({
-            "id":      source.id,
-            "name":    source.label,
-            "desc":    source.description,
-            "status":  status,
-            "meta":    [],
-            "actions": actions,
-        })
-    return result
