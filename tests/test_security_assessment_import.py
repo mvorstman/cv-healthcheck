@@ -352,10 +352,12 @@ def test_flask_upload_imports_html_and_redirects(tmp_path, monkeypatch) -> None:
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "HTML import completed" in body
-    assert "Access Security" in body
-    assert "assessment-" in body
-    assert (tmp_path / "catalog" / "latest_html.json").exists()
-    assert (tmp_path / "catalog" / "latest.json").exists()
+    # Option A — legacy store is no longer written on new imports. The
+    # legacy /security-assessment development page reads only legacy, so it
+    # no longer renders fresh-import data; the Quick HC canonical surface
+    # is the authoritative read path.
+    assert not (tmp_path / "catalog" / "latest_html.json").exists()
+    assert not (tmp_path / "catalog" / "latest.json").exists()
     saved_files = list((tmp_path / "imports").glob("*.html"))
     assert len(saved_files) == 1
 
@@ -376,9 +378,9 @@ def test_flask_upload_imports_csv_and_redirects(tmp_path, monkeypatch) -> None:
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "CSV import completed" in body
-    assert "Audit retention" in body
-    assert (tmp_path / "catalog" / "latest_csv.json").exists()
-    assert (tmp_path / "catalog" / "latest.json").exists()
+    # Option A — legacy store is no longer written on new imports.
+    assert not (tmp_path / "catalog" / "latest_csv.json").exists()
+    assert not (tmp_path / "catalog" / "latest.json").exists()
     saved_files = list((tmp_path / "imports").glob("*.csv"))
     assert len(saved_files) == 1
 
@@ -549,18 +551,55 @@ def test_extract_security_assessment_does_not_persist_401_payload(monkeypatch) -
     def fail_persist(*args, **kwargs):
         raise AssertionError("401 responses must not be persisted")
 
-    def fail_load(*args, **kwargs):
-        raise AssertionError("401 responses must not load active artifacts")
-
     monkeypatch.setattr(module, "extract_report", fake_extract_report)
     monkeypatch.setattr(module, "persist_security_assessment_artifact", fail_persist)
-    monkeypatch.setattr(module, "load_active_security_assessment_artifact", fail_load)
 
     result = module.extract_security_assessment()
 
     assert result["artifact"] is None
     assert result["normalized"]["source"]["http_status"] == 401
     assert result["normalized"]["finding_count"] == 0
+
+
+def test_fresh_security_assessment_import_creates_no_legacy_artifact_files(
+    tmp_path, monkeypatch
+) -> None:
+    """Regression test for Option A (2026-05-26).
+
+    On a fresh Security Assessment HTML import, NO new legacy artifact JSON
+    files may be written into ``data/catalog/security_assessment/``. The
+    canonical store is the only writer. The legacy SQLite registry file
+    (``registry.sqlite3``) may still be created on first read because
+    ``ensure_schema()`` is invoked by the fallback lookup path — that is
+    metadata, not an artifact, and reads are intentionally preserved.
+
+    The contract this test pins:
+        - No ``data/catalog/security_assessment/*.json`` files are produced.
+        - The canonical store has the new artifact.
+    """
+    _patch_security_assessment_paths(tmp_path, monkeypatch)
+
+    app = create_app()
+    response = app.test_client().post(
+        "/security-assessment/import",
+        data={
+            "assessment_file": (io.BytesIO(HTML_SAMPLE.encode("utf-8")), "assessment.html")
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "HTML import completed" in response.get_data(as_text=True)
+
+    legacy_artifact_files = list((tmp_path / "catalog").rglob("*.json"))
+    assert legacy_artifact_files == [], (
+        f"Option A violated: fresh import wrote legacy artifact files "
+        f"{legacy_artifact_files}"
+    )
+
+    # Confirm the canonical store received the artifact instead.
+    canonical_files = list((tmp_path / "canonical_artifacts").rglob("*.json"))
+    assert canonical_files, "canonical store should have received the artifact"
 
 
 def test_flask_upload_rejects_missing_file(tmp_path, monkeypatch) -> None:

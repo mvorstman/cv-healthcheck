@@ -11,7 +11,6 @@ from cvhealthcheck.security_assessment.artifact import (
 )
 from cvhealthcheck.security_assessment.service import (
     SecurityAssessmentService,
-    load_active_security_assessment_artifact,
     persist_security_assessment_artifact,
 )
 
@@ -52,10 +51,11 @@ def extract_security_assessment(
             "artifact": None,
         }
     normalized = normalize_security_assessment(extraction)
-    artifact_paths = persist_security_assessment_artifact(normalized).get("artifact_paths", {})
-    normalized = load_active_security_assessment_artifact()
-    normalized["artifact"] = artifact_paths["latest"]
-    normalized["artifact_paths"] = artifact_paths
+    # Build the in-memory artifact payload without touching the legacy store.
+    # The canonical write happens in SecurityAssessmentService.collect_from_rest
+    # via adapt_reportsplus_rest + _artifact_store.save_artifact(canonical).
+    persisted = persist_security_assessment_artifact(normalized, write_legacy=False)
+    normalized = dict(persisted)
     write_json(
         "report_336_security_assessment_rest_snapshot.json",
         normalized,
@@ -64,7 +64,7 @@ def extract_security_assessment(
     return {
         "extraction": extraction,
         "normalized": normalized,
-        "artifact": artifact_paths["latest"],
+        "artifact": None,
     }
 
 

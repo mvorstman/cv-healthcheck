@@ -481,7 +481,7 @@ def test_license_summary_registry_write_and_registry_first_read(tmp_path) -> Non
     assert len(current["other_licenses"]) == 2
 
 
-def test_license_summary_service_collect_from_rest_persists_registry_artifact(
+def test_license_summary_service_collect_from_rest_writes_canonical_only(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -554,14 +554,17 @@ def test_license_summary_service_collect_from_rest_persists_registry_artifact(
         registry_path=tmp_path / "registry.sqlite3",
     )
     result = service.collect_from_rest()
-    current = service.get_current()
 
+    # Option A — REST collection writes canonical only, not the legacy store.
     assert result["normalized"]["source_type"] == "rest"
-    assert result["normalized"]["artifact_id"] == current["artifact_id"]
-    assert current["source"]["report_id"] == "206"
-    assert current["license_expiry"] is None
-    assert len(current["workload_summary_sections"]) == 1
-    assert len(current["other_licenses"]) == 1
+    assert result["normalized"]["source"]["report_id"] == "206"
+    assert result["normalized"]["license_expiry"] is None
+    assert len(result["normalized"]["workload_summary_sections"]) == 1
+    assert len(result["normalized"]["other_licenses"]) == 1
+    assert not (tmp_path / "catalog" / "latest.json").exists()
+    assert not (tmp_path / "catalog" / "registry.sqlite3").exists()
+    canonical = service.get_canonical()
+    assert canonical.artifact_type == "license_summary"
 
 
 def _build_xlsx(rows: list[list[str]]) -> bytes:
