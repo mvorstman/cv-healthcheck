@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-25
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** _(set by the wrap-up commit that publishes this file)_
+**Last commit:** `bb5815c` — Consolidate documentation logging to three-file model
 **Test status:** 461 passing
 
 ---
