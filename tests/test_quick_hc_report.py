@@ -890,10 +890,13 @@ def test_quick_hc_workspace_sources_use_standardized_shape_and_labels(
 
     assert subjects["security_assessment"]["activeSource"] == "rest_reports_plus"
     assert subjects["license_summary"]["activeSource"] == "csv_import"
-    assert subjects["security_assessment"]["sources"][3]["actions"][0]["importUrl"] == "/quick-hc/security-assessment/import"
-    assert subjects["security_assessment"]["sources"][4]["actions"][0]["importUrl"] == "/quick-hc/security-assessment/import"
-    assert subjects["license_summary"]["sources"][3]["actions"][0]["importUrl"] == "/quick-hc/license-summary/import"
-    assert subjects["license_summary"]["sources"][4]["actions"][0]["importUrl"] == "/quick-hc/license-summary/import"
+    # Session 3 of the unified-upload refactor switched the importUrl
+    # from the hyphenated per-subject form to the underscored unified
+    # form. Old hyphenated routes still work (session 4 deletes them).
+    assert subjects["security_assessment"]["sources"][3]["actions"][0]["importUrl"] == "/quick-hc/security_assessment/import"
+    assert subjects["security_assessment"]["sources"][4]["actions"][0]["importUrl"] == "/quick-hc/security_assessment/import"
+    assert subjects["license_summary"]["sources"][3]["actions"][0]["importUrl"] == "/quick-hc/license_summary/import"
+    assert subjects["license_summary"]["sources"][4]["actions"][0]["importUrl"] == "/quick-hc/license_summary/import"
 
 
 def test_quick_hc_overview_license_summary_previews_real_fields(

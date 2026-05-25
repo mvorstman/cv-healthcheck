@@ -216,5 +216,8 @@ def test_build_generic_subject_with_artifact(migrated_db_path: Path) -> None:
     csv_src = next((s for s in result["sources"] if s["id"] == CSV_IMPORT_SOURCE_ID), None)
     assert html_src is not None and html_src["status"] == "a"
     assert len(html_src["actions"]) == 1
-    assert "subject_id=custom_rpt" in html_src["actions"][0]["importUrl"]
+    # Session 3 of the unified-upload refactor: the importUrl is now
+    # /quick-hc/<subject_id>/import (path component) instead of
+    # /quick-hc/import?subject_id=<id> (query string).
+    assert html_src["actions"][0]["importUrl"] == "/quick-hc/custom_rpt/import"
     assert csv_src is not None and csv_src["status"] == "a"

@@ -97,7 +97,13 @@ def test_quick_hc_index_includes_license_summary_link(tmp_path, monkeypatch) -> 
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "/quick-hc/license-summary" in body
+    # Session 3 switched the import URL from the hyphenated form to
+    # the underscored unified form. Either form anywhere in the body
+    # indicates license_summary is being rendered.
+    assert (
+        "/quick-hc/license-summary" in body
+        or "/quick-hc/license_summary" in body
+    )
     assert "1 other licenses" in body
     assert '"title": "Agent / Feature Licenses table"' in body
     assert '"Virtual Server"' in body

@@ -470,7 +470,7 @@
                 {
                   "accept": ".html,.htm,.csv,.json",
                   "importField": "license_summary_file",
-                  "importUrl": "/quick-hc/license-summary/import",
+                  "importUrl": "/quick-hc/license_summary/import",
                   "kind": "upload",
                   "label": "Import"
                 }
@@ -486,7 +486,7 @@
                 {
                   "accept": ".html,.htm,.csv,.json",
                   "importField": "license_summary_file",
-                  "importUrl": "/quick-hc/license-summary/import",
+                  "importUrl": "/quick-hc/license_summary/import",
                   "kind": "upload",
                   "label": "Import"
                 }
@@ -1622,7 +1622,7 @@
                 {
                   "accept": ".html,.htm,.csv,.json",
                   "importField": "assessment_file",
-                  "importUrl": "/quick-hc/security-assessment/import",
+                  "importUrl": "/quick-hc/security_assessment/import",
                   "kind": "upload",
                   "label": "Import"
                 }
@@ -1638,7 +1638,7 @@
                 {
                   "accept": ".html,.htm,.csv,.json",
                   "importField": "assessment_file",
-                  "importUrl": "/quick-hc/security-assessment/import",
+                  "importUrl": "/quick-hc/security_assessment/import",
                   "kind": "upload",
                   "label": "Import"
                 }
