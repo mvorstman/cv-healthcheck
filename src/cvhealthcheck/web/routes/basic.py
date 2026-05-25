@@ -32,7 +32,7 @@ def login():
         except AuthError as exc:
             error = str(exc)
         else:
-            set_current_token(token)
+            set_current_token(token, username=username)
             return redirect(next_url or url_for("main.quick_hc"))
 
     return render_template(

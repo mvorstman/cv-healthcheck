@@ -7,6 +7,7 @@ from .shared import (
     LicenseSummaryService,
     SecurityAssessmentService,
     bp,
+    get_current_username,
     is_authenticated,
     load_settings,
     login_to_commvault,
@@ -33,20 +34,28 @@ def api_login():
         return jsonify({"success": False, "error": str(exc)}), 401
     except Exception as exc:
         return jsonify({"success": False, "error": f"Login failed: {exc}"}), 500
-    set_current_token(token)
+    set_current_token(token, username=username)
     return jsonify({"success": True})
 
 
 @bp.route("/api/auth/status")
 def api_auth_status():
-    """Return whether the current session has a valid Commvault token.
+    """Return whether the current session has a valid Commvault token,
+    and the username when known.
 
     Session read only — does not round-trip to Commvault. Used by the
     Quick HC connection badge to refresh its state without reloading
     the page (window.IS_AUTHENTICATED goes stale on long-lived sessions
-    after token expiry).
+    after token expiry) and by the connect modal's sign-out branch to
+    show "Signed in as <user>". ``username`` is None when the session
+    is anonymous, and may also be None for legacy authenticated sessions
+    created before SESSION_USERNAME_KEY was added.
     """
-    return jsonify({"authenticated": bool(is_authenticated())})
+    authenticated = bool(is_authenticated())
+    return jsonify({
+        "authenticated": authenticated,
+        "username": get_current_username() if authenticated else None,
+    })
 
 
 @bp.route("/api/quick-hc/status")

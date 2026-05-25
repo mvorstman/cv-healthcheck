@@ -24,6 +24,7 @@
     window.QUICK_HC_INITIAL_DATA = {{ initial_data | tojson }};
     window.QUICK_HC_FLASHES = {{ flashes | tojson }};
     window.IS_AUTHENTICATED = {{ is_authenticated | tojson }};
+    window.CURRENT_USERNAME = {{ current_username | tojson }};
   </script>
 </head>
 <body>
@@ -97,20 +98,29 @@
 <div class="modal-overlay" id="connect-modal" hidden aria-modal="true" role="dialog">
   <div class="modal-box">
     <div class="modal-hdr">
-      <span class="modal-title">Connect to Commvault</span>
+      <span class="modal-title" id="connect-modal-title">Connect to Commvault</span>
       <button class="modal-close" type="button" onclick="closeConnectModal()" aria-label="Close">×</button>
     </div>
     <div class="modal-body-inner">
-      <div class="modal-field">
-        <label class="modal-label" for="connect-username">Username</label>
-        <input class="modal-input" id="connect-username" type="text" autocomplete="username" placeholder="admin">
+      <div id="connect-modal-signin">
+        <div class="modal-field">
+          <label class="modal-label" for="connect-username">Username</label>
+          <input class="modal-input" id="connect-username" type="text" autocomplete="username" placeholder="admin">
+        </div>
+        <div class="modal-field">
+          <label class="modal-label" for="connect-password">Password</label>
+          <input class="modal-input" id="connect-password" type="password" autocomplete="current-password" placeholder="••••••••">
+        </div>
+        <div class="modal-error" id="connect-error" hidden></div>
+        <button class="btn-modal-submit" id="connect-submit" type="button" onclick="submitConnect()">Connect</button>
       </div>
-      <div class="modal-field">
-        <label class="modal-label" for="connect-password">Password</label>
-        <input class="modal-input" id="connect-password" type="password" autocomplete="current-password" placeholder="••••••••">
+      <div id="connect-modal-signout" hidden>
+        <p id="signout-summary" style="margin-bottom:16px;color:var(--text-2);font-size:13px">
+          Signed in as <strong id="signout-username">…</strong>. Sign out?
+        </p>
+        <div class="modal-error" id="signout-error" hidden></div>
+        <button class="btn-modal-submit" id="signout-submit" type="button" onclick="submitSignOut()">Sign out</button>
       </div>
-      <div class="modal-error" id="connect-error" hidden></div>
-      <button class="btn-modal-submit" id="connect-submit" type="button" onclick="submitConnect()">Connect</button>
     </div>
   </div>
 </div>

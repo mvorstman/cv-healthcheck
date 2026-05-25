@@ -86,6 +86,12 @@ function _updateConnBadge() {
     .then(data => {
       if (!data || typeof data.authenticated !== 'boolean') return;
       window.IS_AUTHENTICATED = data.authenticated;
+      // Track the username so the connect modal's sign-out branch can show
+      // "Signed in as <user>" without an extra round-trip. Null is a valid
+      // value (legacy sessions and anonymous sessions both produce null).
+      window.CURRENT_USERNAME = (typeof data.username === 'string' && data.username)
+        ? data.username
+        : null;
       _paintConnBadge(data.authenticated);
     })
     .catch(() => { /* leave badge in last known state */ });
@@ -576,11 +582,34 @@ async function _reloadSubject(subjId) {
 function openConnectModal() {
   const modal = document.getElementById('connect-modal');
   if (!modal) return;
-  const errEl = document.getElementById('connect-error');
-  if (errEl) errEl.hidden = true;
+  const signin = document.getElementById('connect-modal-signin');
+  const signout = document.getElementById('connect-modal-signout');
+  const title = document.getElementById('connect-modal-title');
+  const signinErr = document.getElementById('connect-error');
+  const signoutErr = document.getElementById('signout-error');
+  if (signinErr) signinErr.hidden = true;
+  if (signoutErr) signoutErr.hidden = true;
+
+  if (window.IS_AUTHENTICATED) {
+    // Sign-out branch — populate username from the cached value (kept in
+    // sync by _updateConnBadge's polling fetch). Falls back to a generic
+    // sentence if username is unknown (legacy session pre-username field).
+    if (signin) signin.hidden = true;
+    if (signout) signout.hidden = false;
+    if (title) title.textContent = 'Sign out of Commvault';
+    const nameEl = document.getElementById('signout-username');
+    if (nameEl) {
+      nameEl.textContent = window.CURRENT_USERNAME || 'this Commvault session';
+    }
+  } else {
+    if (signin) signin.hidden = false;
+    if (signout) signout.hidden = true;
+    if (title) title.textContent = 'Connect to Commvault';
+    const uInput = document.getElementById('connect-username');
+    if (uInput) uInput.focus();
+  }
+
   modal.hidden = false;
-  const uInput = document.getElementById('connect-username');
-  if (uInput) uInput.focus();
 }
 
 function closeConnectModal() {
@@ -606,6 +635,7 @@ async function submitConnect() {
     const data = await resp.json();
     if (data.success) {
       window.IS_AUTHENTICATED = true;
+      window.CURRENT_USERNAME = username.trim() || null;
       closeConnectModal();
       _updateConnBadge();
     } else {
@@ -615,6 +645,39 @@ async function submitConnect() {
     if (errEl) { errEl.textContent = 'Connection error: ' + err.message; errEl.hidden = false; }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Connect'; }
+  }
+}
+
+async function submitSignOut() {
+  const errEl = document.getElementById('signout-error');
+  const btn = document.getElementById('signout-submit');
+
+  if (errEl) errEl.hidden = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Signing out…'; }
+
+  try {
+    const resp = await fetch('/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' },
+      redirect: 'manual',
+    });
+    // /logout returns a 302 redirect to /login. Browser's `redirect: manual`
+    // surfaces that as resp.type === 'opaqueredirect' with status 0; either
+    // that or any 2xx/3xx means the session was cleared.
+    const ok = resp.ok || resp.status === 0 || (resp.status >= 200 && resp.status < 400);
+    if (ok) {
+      window.IS_AUTHENTICATED = false;
+      window.CURRENT_USERNAME = null;
+      closeConnectModal();
+      _updateConnBadge();
+    } else {
+      if (errEl) { errEl.textContent = 'Sign out failed (' + resp.status + ').'; errEl.hidden = false; }
+    }
+  } catch (err) {
+    if (errEl) { errEl.textContent = 'Connection error: ' + err.message; errEl.hidden = false; }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Sign out'; }
   }
 }
 

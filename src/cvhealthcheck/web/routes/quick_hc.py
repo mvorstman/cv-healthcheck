@@ -30,6 +30,7 @@ from .shared import (
     clear_current_token,
     flash,
     get_commcell_identity,
+    get_current_username,
     get_flashed_messages,
     import_license_summary_upload,
     import_security_assessment_upload,
@@ -98,6 +99,7 @@ def quick_hc():
         flashes=flashes,
         asset_version=_quick_hc_asset_version(),
         is_authenticated=is_authenticated(),
+        current_username=get_current_username() if is_authenticated() else None,
     )
 
 

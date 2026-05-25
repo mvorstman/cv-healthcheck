@@ -10,6 +10,7 @@ from urllib3.exceptions import InsecureRequestWarning
 from cvhealthcheck.config import load_settings, warn_if_ssl_verification_disabled
 
 SESSION_TOKEN_KEY = "commvault_token"
+SESSION_USERNAME_KEY = "commvault_username"
 
 
 class AuthError(RuntimeError):
@@ -52,10 +53,16 @@ def login_to_commvault(base_url: str, username: str, password: str) -> str:
     return token
 
 
-def set_current_token(token: str) -> None:
+def set_current_token(token: str, username: str | None = None) -> None:
     if not has_request_context():
         return
     session[SESSION_TOKEN_KEY] = token
+    if username is not None:
+        cleaned = username.strip()
+        if cleaned:
+            session[SESSION_USERNAME_KEY] = cleaned
+        else:
+            session.pop(SESSION_USERNAME_KEY, None)
 
 
 def get_current_token() -> str | None:
@@ -65,9 +72,23 @@ def get_current_token() -> str | None:
     return token if isinstance(token, str) and token.strip() else None
 
 
+def get_current_username() -> str | None:
+    """Return the username associated with the current session, if any.
+
+    Only meaningful when ``is_authenticated()`` is True. Returns None for
+    sessions that pre-date this field (legacy sessions had only the
+    token), and for sessions where login did not stash a username.
+    """
+    if not has_request_context():
+        return None
+    name = session.get(SESSION_USERNAME_KEY)
+    return name if isinstance(name, str) and name.strip() else None
+
+
 def clear_current_token() -> None:
     if has_request_context():
         session.pop(SESSION_TOKEN_KEY, None)
+        session.pop(SESSION_USERNAME_KEY, None)
 
 
 def is_authenticated() -> bool:

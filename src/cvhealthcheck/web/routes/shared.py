@@ -21,6 +21,7 @@ from cvhealthcheck.auth import (
     AuthError,
     clear_current_token,
     get_current_token,
+    get_current_username,
     is_authenticated,
     login_to_commvault,
     set_current_token,
