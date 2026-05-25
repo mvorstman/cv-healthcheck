@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-26
+**Last updated:** 2026-05-27
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `906ea55` — Wrap up: CHANGELOG entry for 2026-05-26, HANDOVER for next session
-**Test status:** 462 passing
+**Last commit:** _(set by the wrap-up commit that publishes this file)_
+**Test status:** 463 passing
 
 ---
 
@@ -17,18 +17,17 @@ If you are a new chat / new session, read these three files in order before doin
 2. `HANDOVER.md` (this file) — what to do next
 3. `ROADMAP.md` — where the project is heading
 
-`CHANGELOG.md` is the dated history if you need context for a specific area. The most recent entry tells you what just happened.
-
-If those four files are not enough to pick up productively, that is a handover defect — improve this file at the end of your session.
+`CHANGELOG.md` is the dated history if you need context for a specific area. The 2026-05-27 entry covers the most recent change (Option A — legacy artifact store deprecation).
 
 ---
 
 ## What was just completed
 
-Two small fixes, each in its own commit:
+**Option A landed** (`96c1281`): Security Assessment and License Summary imports no longer write to the legacy per-domain store (`data/catalog/<subject>/`). The canonical store (`data/catalog/artifacts/<subject>/`) is now the sole writer for new imports. Reads from the legacy store are intentionally preserved as fallback for any pre-existing on-disk artifacts.
 
-- **Section ID double-prefix in `canonical_view.py`** (`b7d2f67`) — both prefix sites now guard with `startswith(...)`, so fully-qualified IDs from the HTML extractor (e.g. `security_assessment.access_security`) no longer become doubled (`security_assessment.security_assessment.access_security`). Per-section include/exclude state in `localStorage` now round-trips correctly. Regression test added.
-- **Stale root-level files cleanup** — `0003_report_inventory.sql` and `migrations.py` at the project root were never tracked by git (verified via `git log --all`); deleting them was a working-tree-only operation, so no commit was produced. The repo on disk now matches what `git clone` would yield.
+Implementation: a `write_legacy: bool = True` parameter was added to `persist_security_assessment_artifact()` and `persist_license_summary_artifact()`. Production callers pass `write_legacy=False`; legacy-behavior tests keep the default. A dedicated regression test (`test_fresh_security_assessment_import_creates_no_legacy_artifact_files`) pins the contract end-to-end.
+
+Verified that all 8 active subjects still load via the canonical read path. The legacy `/security-assessment` development page is now effectively read-only history — it loads only from the legacy store, which fresh imports no longer populate.
 
 ---
 
@@ -40,67 +39,62 @@ Nothing. Working tree is clean.
 
 ## Single recommended next action
 
-**Decide on legacy `data/catalog/<subject>/latest.json` deprecation strategy, then execute it.**
+**Tackle the Quick HC UX queue** — the four small items the user has been collecting. Pick the auth/status endpoint first because it unblocks the connect-modal sign-out work below.
 
-### Context
+### 1. `/api/auth/status` endpoint
 
-The project has two artifact stores of truth:
+Today the frontend determines authentication state from `window.IS_AUTHENTICATED`, which is set server-side at page render time. That value goes stale on the client during long-lived sessions (e.g. after token expiry the page still says "Connected" until the user reloads). Add a small JSON endpoint the JS can hit periodically or before showing the connect modal:
 
-- **Legacy per-domain stores**: `data/catalog/security_assessment/latest.json`, `data/catalog/license_summary/latest.json`. Written by `import_security_assessment_upload()` and `LicenseSummaryService` via their own per-domain `SecurityAssessmentArtifactRegistry` SQLite registries.
-- **Canonical store**: `data/catalog/artifacts/<subject_id>/latest.json` + timestamped snapshots. Written by `ArtifactStore.save_artifact()`. **This is what the UI reads** via `subject_data_service.build_subject_initial_data()`.
+- New route in `src/cvhealthcheck/web/routes/quick_hc_api.py`:
 
-Today's imports write **both** paths. The legacy stores are also still read by `_load_legacy_security_assessment()` / `_load_legacy_license_summary()` as fallback in `subject_data_service.py`, but only when the canonical store has no artifact for that subject (the canonical store almost always does — fallback is dead code in the happy path).
+  ```python
+  @bp.route("/api/auth/status")
+  def api_auth_status():
+      """Return whether the current session has a valid Commvault token."""
+      return jsonify({"authenticated": bool(is_authenticated())})
+  ```
 
-Risk: the two stores can drift, and confusion about "which file is authoritative" was a real source of debugging time in the last session.
+- Wire `quick_hc.js`'s `_updateConnBadge()` to refresh this on a polling interval (60s) or on `focus` events. Keep it cheap — read session only, no Commvault round-trip.
 
-### The decision the next session needs to make
+### 2. Sign-out in connect modal
 
-Pick **A** or **B**:
+The connect modal currently only handles sign-in (`submitConnect()` POSTs to `/api/login`). When already authenticated, the badge title hints "click to sign out" but there is no sign-out flow in the modal.
 
-**Option A — Stop writing the legacy path, leave the legacy files alone.**
-- Pros: smallest blast radius. No data loss. The canonical store is already the read path.
-- Cons: legacy files become stale on disk forever; future maintainers wonder why they exist.
-- Concrete steps:
-  1. In `src/cvhealthcheck/security_assessment/service.py::persist_security_assessment_artifact()`, remove the legacy write to `data/catalog/security_assessment/` (the `artifact_paths` writes and the registry insertion). Keep only the canonical side-write at the end of the function.
-  2. Same in `src/cvhealthcheck/license_summary/service.py`.
-  3. Remove the legacy fallback paths `_load_legacy_security_assessment` and `_load_legacy_license_summary` from `subject_data_service.py` — they will never fire in practice once the canonical store is the only writer.
-  4. Add a `data/catalog/security_assessment/` and `data/catalog/license_summary/` cleanup CLI command for operators: `cv-healthcheck legacy-store cleanup`.
+- When the modal opens and the user is authenticated, switch the modal body from the username/password fields to a "Signed in as `<user>`. Sign out?" confirmation.
+- Add `signOut()` JS that POSTs to the existing `/logout` route (in `web/routes/basic.py`), refreshes the auth-status badge, and closes the modal.
+- Keep the existing sign-in form for the unauthenticated branch unchanged.
 
-**Option B — One-way migrate the legacy store into the canonical store on startup, then delete the legacy code.**
-- Pros: cleaner end state. No code referencing legacy paths.
-- Cons: more code to write, requires reading the legacy `SecurityAssessmentArtifactRegistry` and converting each registered artifact into a `CanonicalArtifact`, plus a migration-already-ran sentinel so the next startup doesn't re-do it.
-- Concrete steps:
-  1. New `src/cvhealthcheck/migrations/legacy_artifact_store.py` module with a `migrate_legacy_to_canonical()` function.
-  2. Call it from `create_app()` after `run_migrations()`.
-  3. Write a sentinel file (e.g. `data/catalog/.legacy_migrated`) after success.
-  4. Remove the legacy write code from the import services (same as Option A step 1+2).
-  5. Remove the legacy fallback paths.
+### 3. Settings nav item
 
-### Recommendation
+There is no settings/preferences surface yet. Several small preferences are scattered: theme toggle (localStorage `quickhc-theme-v1`), include-in-report state (localStorage `quickhc-state-v1`), and any future server-side report profile.
 
-**Start with Option A.** It is reversible (revert the commit and writes resume) and bounded. Option B can layer on top later if the legacy directories ever need to be cleaned up automatically.
+- Add a `Settings` link to the left sidebar nav in `templates/quick_hc.html`, between `Reports` and `Staging`.
+- Route: `GET /quick-hc/settings` — render a placeholder template `quick_hc_settings.html` that lists current preferences (theme, included-subjects count) and offers a "Reset local preferences" button that clears the localStorage keys.
+- Keep the scope tight: this is a placeholder so the nav target exists; future sessions can add real settings (display density, default report sections, etc.).
+
+### 4. Remove the old `/quick-hc/import` route
+
+The legacy generic upload endpoint at `/quick-hc/import` (in `web/routes/quick_hc.py::quick_hc_generic_import`) is superseded by the per-subject `import_url` actions that come back in the Quick HC subject initial data. The generic page (`templates/quick_hc_import.html`) was a transitional UX while the registry-driven import URLs were being wired up.
+
+- Confirm via `grep -r "/quick-hc/import" src/ templates/ tests/` that nothing in production code still references the route.
+- Delete the route handler `quick_hc_generic_import` and its `GET` template `quick_hc_import.html`.
+- Search-and-update any tests that hit the route; the per-subject upload tests already exist as the canonical pattern.
 
 ### Verification
 
-After making the change:
-
 ```bash
-# Import a security assessment and confirm only canonical is written
-ls -la data/catalog/security_assessment/  # mtime should NOT change
-ls -la data/catalog/artifacts/security_assessment/  # mtime SHOULD change
-
 python -m compileall -q src
-python -m pytest -q  # expect 462 passing or higher
+python -m pytest -q                                # expect 463 passing or higher
+# Manual smoke: start the dev server and exercise the badge / modal / settings nav
+./start.sh DEBUG
 ```
-
-The full test suite should pass without changes — the legacy fallback is dead code in the happy path, so removing it should be invisible to tests that use the standard fixtures. If anything fails, the test was relying on the legacy fallback path; treat that as a signal to update the test rather than reverting.
 
 ---
 
 ## After that, in priority order
 
-1. **Move `data/app.db` out of git.** Add to `.gitignore`. Migrations recreate the schema on first run. If seed data matters, commit a sanitized `data/seed/app.db` instead.
-2. **Refresh `README.md`** — test count says "298" (now 462). URL table at the bottom mixes customer-facing and dev URLs without flagging which is which.
+1. **Move `data/app.db` out of git.** Add to `.gitignore`. Migrations recreate the schema on first run. Consider committing a sanitized `data/seed/app.db` instead if seed data matters.
+2. **Refresh `README.md`** — test count still says "298" (now 463). Bottom URL table mixes customer-facing and dev URLs without flagging which is which.
 3. **2026-05-20 review backlog** — `shared.py` god-module split, hardcoded `detail_url` strings in `report_service.py`, `SecurityAssessmentArtifactRegistry` rename. All documented in `docs/review_2026-05-20.md`.
 4. **Workflow tooling decisions** still pending — pre-commit hooks (block writes to `data/catalog/**`, gate the commit on `pytest`, block root-level untracked Python/SQL clutter) and CI checks (README test-count drift). Ask before adding hooks.
 
@@ -108,9 +102,11 @@ The full test suite should pass without changes — the legacy fallback is dead 
 
 ## Context the next session needs that is not yet in README/ROADMAP/CHANGELOG
 
-- **Quick HC subject naming rule (load-bearing).** Sidebar display name must come from the registry tile title (`tile["title"]`), not from `artifact.subject.title`. The override lives at `src/cvhealthcheck/quickhc/subject_data_service.py:213`. Do not remove it.
-- **`execute_approval()` requires an injected `store` in tests.** Pattern in `tests/test_core_solidity.py::test_execute_approval_artifact`. Without it, the test writes to the real `data/catalog/artifacts/security_assessment/latest.json`.
-- **Section ID prefix invariant (just landed).** `canonical_view` now guards both prefix sites against re-prefixing. Regression test in `tests/test_quickhc_canonical_view.py::test_sa_section_id_no_double_prefix_when_already_qualified`. If a future change "normalises" the extractor to emit short section IDs again, that test will catch the round-trip.
+- **Quick HC subject naming rule (load-bearing).** Sidebar display name must come from the registry tile title (`tile["title"]`), not from `artifact.subject.title`. The override lives at `src/cvhealthcheck/quickhc/subject_data_service.py:213`.
+- **`execute_approval()` requires an injected `store` in tests.** Pattern in `tests/test_core_solidity.py::test_execute_approval_artifact`.
+- **Section ID prefix invariant** (landed 2026-05-26). `canonical_view` guards both prefix sites against re-prefixing. Regression test pins the contract.
+- **Option A invariant** (landed 2026-05-27). `write_legacy=True` is still the default on the two persist functions — production callers pass `write_legacy=False`. If you add a new production import path, pass `write_legacy=False` from it too. The dedicated regression test (`test_fresh_security_assessment_import_creates_no_legacy_artifact_files`) will catch a missed call site, but only for Security Assessment imports — License Summary has no equivalent regression test yet, worth adding alongside item 1 above if you touch the import flow.
+- **Legacy `/security-assessment` development page is read-only history now.** It will not render fresh-import data because Option A stopped writing to the legacy store. This is intentional; do not "fix" it by reintroducing legacy writes.
 
 ---
 
@@ -120,7 +116,7 @@ The full test suite should pass without changes — the legacy fallback is dead 
 cd /home/michiel/dev/cv-healthcheck
 source venv/bin/activate
 python -m compileall -q src
-python -m pytest -q                                # expect 462 passing
+python -m pytest -q                                # expect 463 passing
 git status --short                                 # expect clean
 sqlite3 data/app.db "SELECT subject_id,title,status,category FROM subjects;"
 ```
