@@ -113,7 +113,7 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
 
     sections: list[dict] = []
     for sec in artifact.sections:
-        sec_id = f"{subject_id}.{sec.id}"
+        sec_id = sec.id if sec.id.startswith(f"{subject_id}.") else f"{subject_id}.{sec.id}"
         if isinstance(sec, FindingsSection):
             count = len(sec.items)
             sections.append({
@@ -210,7 +210,7 @@ def security_assessment_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
 
     detail_sections = [
         {
-            "id": f"security_assessment.{sec.id}",
+            "id": sec.id if sec.id.startswith("security_assessment.") else f"security_assessment.{sec.id}",
             "title": sec.title,
             "meta": f"{len(sec.items)} finding{'s' if len(sec.items) != 1 else ''}",
             "included": True,

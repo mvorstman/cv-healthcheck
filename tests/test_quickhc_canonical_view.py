@@ -18,6 +18,7 @@ from cvhealthcheck.artifacts.models import (
     TableSection,
 )
 from cvhealthcheck.quickhc.canonical_view import (
+    artifact_to_view,
     license_summary_to_view,
     security_assessment_to_view,
 )
@@ -133,6 +134,32 @@ def test_sa_findings_list_section_id_dot_notation():
     fl_sections = [s for s in view["sections"] if s["type"] == "findings_list"]
     assert len(fl_sections) == 1
     assert fl_sections[0]["id"] == "security_assessment.access_security"
+
+
+def test_sa_section_id_no_double_prefix_when_already_qualified():
+    # The HTML extractor stores fully-qualified section IDs. Both view builders
+    # must accept them without re-prefixing — otherwise IDs leak into the JS
+    # state and the localStorage key as "security_assessment.security_assessment.access_security",
+    # silently breaking per-section include/exclude persistence.
+    artifact = _sa_artifact(sections=[
+        FindingsSection(
+            type="findings",
+            id="security_assessment.access_security",
+            title="Access Security",
+            items=[
+                Finding(id="t1", severity=FindingSeverity.good, status=FindingStatus.open,
+                        title="T", category="C", description="d"),
+            ],
+        ),
+    ])
+
+    generic_view = artifact_to_view(artifact)
+    generic_ids = [s["id"] for s in generic_view["sections"]]
+    assert generic_ids == ["security_assessment.access_security"]
+
+    sa_view = security_assessment_to_view(artifact)
+    sa_detail_ids = [s["id"] for s in sa_view["sections"] if s["type"] == "findings_list"]
+    assert sa_detail_ids == ["security_assessment.access_security"]
 
 
 def test_sa_empty_sections_state_nodata():
