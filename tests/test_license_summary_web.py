@@ -138,7 +138,8 @@ def test_quick_hc_license_summary_upload_imports_csv_and_redirects(tmp_path, mon
     client = app.test_client()
 
     response = client.post(
-        "/quick-hc/license-summary/import",
+        # Session 4: unified route URL (was /quick-hc/license-summary/import).
+        "/quick-hc/license_summary/import",
         data={
             "license_summary_file": (
                 io.BytesIO(CSV_SAMPLE.encode("utf-8")),
@@ -176,7 +177,8 @@ def test_quick_hc_license_summary_upload_rejects_unsupported_type(tmp_path, monk
     client = app.test_client()
 
     response = client.post(
-        "/quick-hc/license-summary/import",
+        # Session 4: unified route URL (was /quick-hc/license-summary/import).
+        "/quick-hc/license_summary/import",
         data={
             "license_summary_file": (
                 io.BytesIO(b"not used"),

@@ -403,8 +403,10 @@ def test_quick_hc_security_assessment_upload_imports_html_and_redirects(
     _patch_security_assessment_paths(tmp_path, monkeypatch)
 
     app = create_app()
+    # Session 4 deleted the legacy /quick-hc/security-assessment/import
+    # route; this URL-coupled test now uses the unified route.
     response = app.test_client().post(
-        "/quick-hc/security-assessment/import",
+        "/quick-hc/security_assessment/import",
         data={
             "assessment_file": (io.BytesIO(HTML_SAMPLE.encode("utf-8")), "assessment.html")
         },

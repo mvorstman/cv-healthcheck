@@ -1,25 +1,22 @@
 """Tests for the unified upload route POST /quick-hc/<subject_id>/import.
 
-Session 2 of the unified-upload refactor. The new route lives alongside
-the existing per-subject and generic import routes; the frontend has
-NOT been flipped over yet (that's session 3). These tests verify that
-the new route's behavior is equivalent to the old routes for every
-dispatch branch:
+Originally landed in session 2 of the unified-upload refactor as
+parity tests against the OLD per-subject + generic routes. Session 4
+deleted those old routes; the parity-comparison halves of tests 2-4
+were dropped, leaving direct outcome assertions on the unified route.
 
+Dispatch branches covered:
   - Unknown subject_id → 404.
-  - 'system' security_assessment → identical to the legacy
-    /quick-hc/security-assessment/import.
-  - 'system' license_summary → identical to the legacy
-    /quick-hc/license-summary/import.
+  - 'system' security_assessment → SA upload path (assessment_file
+    form field).
+  - 'system' license_summary → LS upload path (license_summary_file
+    form field; extension pre-check).
   - 'system' but no upload path (environment, etc.) → 404.
-  - 'ai' or 'user' → identical to /quick-hc/import?subject_id=…,
-    including X-Inline: 1 and ?stage=1 features.
+  - 'ai' or 'user' → dispatcher branch with X-Inline: 1 and ?stage=1
+    features.
 
-The "identical" tests assert observable parity (artifact saved /
-flash message present / response shape), not byte-for-byte
-equivalence of every internal call. The branch-dispatch FIXMEs in
-quick_hc.py point at the session-5/6 work that will fold the
-duplicated bodies back together.
+The branch-dispatch FIXMEs in quick_hc.py point at the session-5
+work that will fold the duplicated bodies back together.
 """
 from __future__ import annotations
 
@@ -181,11 +178,16 @@ def test_unified_route_returns_404_for_unknown_subject(ai_subject_client) -> Non
     assert response.status_code == 404
 
 
-def test_unified_route_ai_branch_produces_same_artifact_as_old_route(
+def test_unified_route_ai_branch_saves_artifact(
     ai_subject_client, monkeypatch
 ) -> None:
-    """Test 2 — AI branch parity: both new and old routes produce the
-    same artifact for the same input."""
+    """Test 2 — AI branch: POST to the unified route saves the
+    dispatcher's artifact to the canonical store with the correct
+    subject_id propagated end-to-end.
+
+    Session 4 dropped the old-route POST half of this test (the OLD
+    /quick-hc/import?subject_id=… route no longer exists).
+    """
     client, saved, _db = ai_subject_client
 
     monkeypatch.setattr(
@@ -194,14 +196,6 @@ def test_unified_route_ai_branch_produces_same_artifact_as_old_route(
         lambda *a, **kw: _fake_dispatch_success("my_ai_report"),
     )
 
-    # OLD route
-    client.post(
-        "/quick-hc/import?subject_id=my_ai_report",
-        data={"file": (io.BytesIO(b"<html/>"), "report.html")},
-        content_type="multipart/form-data",
-        follow_redirects=True,
-    )
-    # NEW route
     client.post(
         "/quick-hc/my_ai_report/import",
         data={"file": (io.BytesIO(b"<html/>"), "report.html")},
@@ -209,17 +203,18 @@ def test_unified_route_ai_branch_produces_same_artifact_as_old_route(
         follow_redirects=True,
     )
 
-    assert len(saved) == 2
-    # Same canonical artifact type, same subject id — i.e. the new route
-    # routed the upload to the same dispatcher path as the old one.
-    assert saved[0].artifact_type == saved[1].artifact_type == "my_ai_report"
-    assert saved[0].subject.id == saved[1].subject.id == "my_ai_report"
+    assert len(saved) == 1
+    assert saved[0].artifact_type == "my_ai_report"
+    assert saved[0].subject.id == "my_ai_report"
 
 
 def test_unified_route_ai_branch_supports_x_inline(
     ai_subject_client, monkeypatch
 ) -> None:
-    """Test 3 — X-Inline: 1 returns JSON, same as old route."""
+    """Test 3 — X-Inline: 1 returns JSON success body.
+
+    Session 4 dropped the old-route POST half of this test.
+    """
     client, saved, _db = ai_subject_client
 
     monkeypatch.setattr(
@@ -228,38 +223,28 @@ def test_unified_route_ai_branch_supports_x_inline(
         lambda *a, **kw: _fake_dispatch_success("my_ai_report"),
     )
 
-    # OLD route with X-Inline
-    old_resp = client.post(
-        "/quick-hc/import?subject_id=my_ai_report",
-        data={"file": (io.BytesIO(b"<html/>"), "report.html")},
-        content_type="multipart/form-data",
-        headers={"X-Inline": "1"},
-    )
-    # NEW route with X-Inline
-    new_resp = client.post(
+    resp = client.post(
         "/quick-hc/my_ai_report/import",
         data={"file": (io.BytesIO(b"<html/>"), "report.html")},
         content_type="multipart/form-data",
         headers={"X-Inline": "1"},
     )
 
-    assert old_resp.status_code == 200
-    assert new_resp.status_code == 200
-    assert old_resp.is_json
-    assert new_resp.is_json
-    # Both routes serialise the same fields with the same values.
-    old_body = old_resp.get_json()
-    new_body = new_resp.get_json()
-    assert old_body == new_body
-    assert new_body["success"] is True
-    assert new_body["title"] == "AI Subject my_ai_report"
+    assert resp.status_code == 200
+    assert resp.is_json
+    body = resp.get_json()
+    assert body["success"] is True
+    assert body["title"] == "AI Subject my_ai_report"
 
 
 def test_unified_route_ai_branch_supports_stage_query(
     ai_subject_client, monkeypatch
 ) -> None:
-    """Test 4 — ?stage=1 routes the upload through staged_artifacts,
-    same as the old route."""
+    """Test 4 — ?stage=1 routes the upload through staged_artifacts
+    instead of saving canonically.
+
+    Session 4 dropped the old-route POST half of this test.
+    """
     client, saved, db_path = ai_subject_client
 
     monkeypatch.setattr(
@@ -268,14 +253,6 @@ def test_unified_route_ai_branch_supports_stage_query(
         lambda *a, **kw: _fake_dispatch_success("my_ai_report"),
     )
 
-    # OLD route with ?stage=1
-    client.post(
-        "/quick-hc/import?subject_id=my_ai_report&stage=1",
-        data={"file": (io.BytesIO(b"<html/>"), "report.html")},
-        content_type="multipart/form-data",
-        follow_redirects=True,
-    )
-    # NEW route with ?stage=1
     client.post(
         "/quick-hc/my_ai_report/import?stage=1",
         data={"file": (io.BytesIO(b"<html/>"), "report.html")},
@@ -283,19 +260,17 @@ def test_unified_route_ai_branch_supports_stage_query(
         follow_redirects=True,
     )
 
-    # Neither route called ArtifactStore.save_artifact (because stage=1
-    # routes to the staging table instead).
+    # Canonical save NOT called (stage=1 routes to staging instead).
     assert saved == []
 
     conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
     rows = conn.execute(
         "SELECT subject_id, artifact_type, status FROM staged_artifacts"
-        " ORDER BY created_at ASC"
     ).fetchall()
     conn.close()
-    # Both routes produced one row each.
-    assert len(rows) == 2
-    assert rows[0] == rows[1]  # same subject_id / artifact_type / status
+    assert len(rows) == 1
+    assert rows[0]["status"] == "pending"
 
 
 def test_unified_route_security_assessment_no_legacy_artifact_files(

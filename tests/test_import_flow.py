@@ -100,45 +100,12 @@ def test_tile_has_no_import_actions_for_rest_only_source(migrated_db_path: Path)
         conn.close()
 
 
-# ── Fix 2: subject_id query param forwarded to extract_file ──────────────────
-
-def test_import_route_passes_subject_id(migrated_db_path: Path, tmp_path: Path) -> None:
-    """Verify that ?subject_id=X on the import route skips recognition."""
-    import cvhealthcheck.web.routes.quick_hc as qh_routes
-    from cvhealthcheck.web.app import create_app
-    from unittest.mock import patch, MagicMock
-
-    captured: dict = {}
-
-    def fake_extract_file(path, db, subject_id=None, version=None):
-        captured["subject_id"] = subject_id
-        mock = MagicMock()
-        mock.recognized = False
-        mock.extractable = False
-        return mock
-
-    def open_db() -> sqlite3.Connection:
-        conn = sqlite3.connect(str(migrated_db_path))
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
-
-    app = create_app()
-    app.config["TESTING"] = True
-    app.config["SECRET_KEY"] = "test"
-
-    with patch.object(qh_routes, "get_db", open_db), \
-         patch.object(qh_routes, "extract_file", fake_extract_file):
-        with app.test_client() as client:
-            data = {"file": (io.BytesIO(b"<html>test</html>"), "test.html")}
-            client.post(
-                "/quick-hc/import?subject_id=my_report",
-                data=data,
-                content_type="multipart/form-data",
-            )
-
-    assert captured.get("subject_id") == "my_report"
-
+# test_import_route_passes_subject_id was deleted in session 4 of the
+# unified-upload refactor. It exercised the deleted POST /quick-hc/import?
+# subject_id=X route; the unified POST /quick-hc/<subject_id>/import always
+# has subject_id in the URL path (no query-string variant to test). The
+# tests in test_unified_upload_route.py cover the equivalent contract
+# end-to-end via the new route.
 
 # ── Fix 3: artifact_to_view + _build_generic_subject ─────────────────────────
 
