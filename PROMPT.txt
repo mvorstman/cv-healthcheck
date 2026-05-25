@@ -310,25 +310,49 @@ VALIDATION REQUIREMENTS
 Before commits:
 
 * python -m compileall src must pass
+* python -m pytest must pass
 * bash -n scripts/*.sh start.sh must pass
-* relevant CLI commands must be tested
-* relevant Flask routes must return HTTP 200
 
 Update when appropriate:
 
+* README.md when behavior, stack, or how-to-run changes
+* ROADMAP.md when direction changes
+* API_MAPPING.md for validated source discoveries
+
+DOCUMENTATION MODEL
+
+The project uses a three-file logging model. Do not reintroduce DEVLOG.md or docs/handover/ — both were retired on 2026-05-25.
+
+* README.md          — what the project is, how to run it, the stack. Mostly static.
+* CHANGELOG.md       — backward-looking append-only running log. One entry per session under a date heading (## YYYY-MM-DD). Sections: Added / Changed / Fixed / Removed / Notes. Past entries are never deleted or rewritten — corrections come as new entries.
+* HANDOVER.md        — forward-looking "start here" file. Always overwritten, never accumulated. Contains: current branch, latest commit hash, test pass count, what was just completed, what is in-flight, the single recommended next action with file paths and exact step, and pointers to any recent CHANGELOG entries the next session should re-read.
+
+CHANGELOG entries should preserve important findings (root causes of tricky bugs, architectural decisions, gotchas) under the Notes section even when they do not fit Added/Changed/Fixed/Removed.
+
+START OF SESSION
+
+At the start of every new session, read these three files before doing anything else:
+
 * README.md
+* HANDOVER.md
 * ROADMAP.md
-* DEVLOG.md
-* API_MAPPING.md
+
+If those three files plus the most recent CHANGELOG entry are not enough to pick up productively, that is a handover defect — improve HANDOVER.md at the end of the session.
 
 SESSION WRAP-UP
 
-At the end of major sessions:
+At the end of every session:
 
-* update DEVLOG.md
+* validate code: python -m compileall src && python -m pytest
+* append a new dated entry to CHANGELOG.md (Added / Changed / Fixed / Removed / Notes)
+* overwrite HANDOVER.md with the new forward-looking state
 * update ROADMAP.md if direction changed
-* update API_MAPPING.md for validated discoveries
-* validate code
-* commit cleanly
+* update API_MAPPING.md for validated source discoveries
+* commit cleanly at every green checkpoint — do not let large amounts of in-flight work accumulate uncommitted
 * push to GitHub
 * summarize completed work clearly
+
+ENGINEERING WORKFLOW
+
+* Commit at every green checkpoint. If tests pass and the change is coherent, commit it. Do not batch unrelated changes.
+* Claude Code does the heavy lifting: reads, edits, runs the test suite, validates, drafts the commit message, and pushes. The user reviews and steers; Claude executes.
