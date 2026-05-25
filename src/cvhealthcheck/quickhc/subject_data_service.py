@@ -34,9 +34,9 @@ from cvhealthcheck.quickhc.registry import (
     list_tiles,
 )
 
-# Unified upload route — both old hyphenated and new underscored URLs
-# point at the same backend handlers in session 3. The hyphenated ones
-# are kept alive until session 4 deletes them.
+# Unified upload route — every subject POSTs to /quick-hc/<id>/import.
+# These constants feed the legacy builders' source-action wiring;
+# _build_generic_sources synthesises the same URL inline for AI subjects.
 _SA_IMPORT_URL = "/quick-hc/security_assessment/import"
 _LS_IMPORT_URL = "/quick-hc/license_summary/import"
 
@@ -167,8 +167,6 @@ def _load_from_canonical_store(subject_id: str) -> CanonicalArtifact | None:
 
 def _build_generic_sources(subject_id: str, tile_sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
     # Unified upload route — every subject (system or AI) POSTs here.
-    # The hyphenated per-subject URLs (/quick-hc/security-assessment/import
-    # etc.) still exist as legacy aliases until session 4 deletes them.
     import_url_base = f"/quick-hc/{subject_id}/import"
     result = []
     for src in tile_sources:
