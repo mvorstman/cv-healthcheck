@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-26 (session 5b)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** the wrap-up commit that publishes the session 5b CHANGELOG entry (see `git log -1`)
+**Last commit:** `18fc0db` — Session 5b wrap-up: CHANGELOG closes out the unified-upload refactor; HANDOVER shrinks
 **Test status:** 477 passing
 
 ---
