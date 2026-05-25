@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-05
+**Last updated:** 2026-05-26 (session 5a)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `e9e506a` — Session 4 wrap-up: CHANGELOG entry, HANDOVER points at session 5
+**Last commit:** _(set by the wrap-up commit that publishes this file)_
 **Test status:** 472 passing
 
 ---
@@ -17,27 +17,22 @@ If you are a new chat / new session, read these files in order before doing anyt
 2. `HANDOVER.md` (this file) — what to do next
 3. `ROADMAP.md` — where the project is heading
 4. **`docs/adr/0001-source-building-fork.md`** — load-bearing architecture decision. Required reading if your work touches source-building, the canonical schema, or the unified upload route.
-5. **`docs/refactor_unified_upload_2026-05-31.md`** — the original investigation report driving the refactor. Section 5's test-categorisation framework remains useful for session 5.
+5. **`docs/refactor_unified_upload_session_5a_design.md`** — design proposal driving session 5b. Required reading before implementing the dispatch refactor.
+6. **`docs/refactor_unified_upload_2026-05-31.md`** — the original investigation report driving the refactor. Section 5's test-categorisation framework remains useful.
 
-`CHANGELOG.md` is the dated history. The 2026-06-05 entry covers what session 4 just shipped.
+`CHANGELOG.md` is the dated history. The 2026-05-26 entry (session 5a) covers the most recent change.
 
 ---
 
 ## What was just completed
 
-**Session 4 of the unified-upload refactor — old upload routes deleted.**
+**Session 5a — design proposal for the dispatch refactor** (`062ebcf`).
 
-Commits: `c06309d`, `b873431` (step 2 split), `6e0b1ed` (step 3). The unified route `POST /quick-hc/<subject_id>/import` is now the sole upload path. Three old routes are gone:
+Investigation only — no code changes. Single design document at `docs/refactor_unified_upload_session_5a_design.md` with 7 sections analysing the dispatch contract (Section 1), narrowing the candidate data dimensions (Section 2), evaluating four data-model alternatives (Section 3), confirming independence from ADR 0001 (Section 4), evaluating the AI-proposal workflow integration (Section 5), and the migration story (Section 6). Section 7 recommends Option δ — a Python lookup table, no schema migration.
 
-- `POST /quick-hc/security-assessment/import`
-- `POST /quick-hc/license-summary/import`
-- `GET, POST /quick-hc/import`
+Test count unchanged at 472. 3 `FIXME(refactor-unified-upload-session-5)` tags still in place (removed by session 5b once the implementation lands).
 
-Plus `templates/quick_hc_import.html` (only consumer of the deleted generic GET branch). Plus 5 route-coupled tests deleted, 3 URL-coupled tests updated to new URLs, 3 parity tests in `test_unified_upload_route.py` simplified to single-route assertions.
-
-One forced behavior change: `_unified_dispatcher_upload` used to redirect to `main.quick_hc_generic_import` (the deleted endpoint); now redirects to `main.quick_hc`.
-
-477 → 472 tests passing (-5 route-coupled deletions). 3 `FIXME(refactor-unified-upload-session-5)` tags unchanged. Snapshot test still passes.
+The prior milestone (session 4 — old route deletion) remains the most recent code change. Sessions 1-4 are summarised in earlier CHANGELOG entries.
 
 ---
 
@@ -49,69 +44,54 @@ Nothing. Working tree is clean.
 
 ## Single recommended next action
 
-**Session 5 of the unified-upload refactor — replace the dispatch smell in `quick_hc_subject_import` with data-driven dispatch.**
+**Session 5b — implement the dispatch refactor per the design at `docs/refactor_unified_upload_session_5a_design.md`.**
 
-### Where the smell is
+Session 5a (`062ebcf`) produced the design proposal. The headline finding: the dispatch smell that the 3 FIXME tags mark is smaller than the FIXMEs implied. Only three subject-specific facts genuinely differ between the SA and LS branches (form field, import function, success-flash format). The other "candidates" (extensions, error class, redirect endpoint, X-Inline/stage support) are either derived from `created_by` or already encapsulated inside the importer functions.
 
-In `src/cvhealthcheck/web/routes/quick_hc.py`, the unified route handler `quick_hc_subject_import` branches by `subjects.created_by`, then hard-codes a sub-branch by `subject_id` for the two system subjects with upload paths:
+### The recommendation
 
-```python
-if created_by == "system":
-    if subject_id == "security_assessment":
-        return _unified_security_assessment_upload()
-    if subject_id == "license_summary":
-        return _unified_license_summary_upload()
-    return ("Subject does not support uploads.", 404)
-return _unified_dispatcher_upload(subject_id)
-```
+**Option δ — Python lookup table.** Define an `_UploadHandler` dataclass and a `_SYSTEM_UPLOAD_HANDLERS: dict[str, _UploadHandler]` in `src/cvhealthcheck/web/routes/quick_hc.py` (or sibling module) with two entries (SA, LS). The dispatch becomes a dict lookup followed by a single `_handle_system_upload(handler)` function call. The three FIXME tags go away. No schema migration, no `propose_new_subject` change, no MCP-tool contract change.
 
-Three `FIXME(refactor-unified-upload-session-5)` tags mark the dispatch lines. The two `_unified_<subject>_upload` helpers are deliberately near-duplicate functions — each is a thin wrapper around `import_<subject>_upload(...)` with subject-specific form field name, error-message text, and success-message format.
+See `docs/refactor_unified_upload_session_5a_design.md` Section 7 for the concrete shape (dataclass fields, dispatch handler outline, what to delete, what to keep).
 
-The smell: subject-specific knowledge in route-handler code is exactly what the refactor exists to eliminate. The session 2-4 plan was to ship the unified route first, defer the dispatch question to session 5.
+### Session 5b scope (one session)
 
-### The shape of the replacement
+1. Define `_UploadHandler` dataclass with 5 fields: `form_field`, `import_fn` (callable), `error_class`, `success_format` (callable taking the persisted dict → flash text), `redirect_endpoint`.
+2. Populate `_SYSTEM_UPLOAD_HANDLERS` with the SA and LS entries — see Section 1 of the design doc for the exact constant values.
+3. Define `_handle_system_upload(handler: _UploadHandler) -> Response`. Single function consuming a handler.
+4. Rewrite `quick_hc_subject_import` to: lookup → `_handle_system_upload` if hit; else if `created_by == "system"` → 404; else → `_unified_dispatcher_upload`.
+5. Delete `_unified_security_assessment_upload` and `_unified_license_summary_upload`.
+6. Remove the 3 `FIXME(refactor-unified-upload-session-5)` tags.
+7. Add one parametrised test exercising both handler entries.
+8. Update relevant docstrings.
 
-The dispatch becomes data-driven: each subject in the `subjects` table carries enough metadata to handle its own upload without route-side branching. Concretely, the dispatch reads from the subject row:
+### Estimated test count delta
 
-- **Form field name** (`assessment_file` for SA, `license_summary_file` for LS, `file` for AI).
-- **Allowed file extensions** (SA accepts `.html .htm .csv`; LS accepts `.csv .htm .html .xlsx`; AI subjects use what's declared in `subject_sources.recognition_hints`).
-- **Persist function reference** (which `persist_*_artifact` to call; AI subjects use `extract_file` + canonical save).
-- **Success-message format** (template string with placeholders for `source_type`, `source_file`, and any per-subject counters like `finding_count` for SA or `other_count` / `agent_count` for LS).
++1 added, ~0 modified, ~0 deleted. Final count: 473.
 
-The likely shape is a new column on `subjects` — JSON or a separate `subject_upload_behavior` table. The decision is whether to:
+### Constraints session 5b should respect
 
-- **5a — Inline JSON column.** Schema migration adds `subjects.upload_behavior JSON`. Each row stores its config. Smallest schema change. JSON is less queryable than first-class columns but the dispatch only ever reads it whole.
-- **5b — Separate columns.** Schema migration adds `subjects.upload_form_field`, `subjects.upload_extensions`, `subjects.upload_persist`, `subjects.upload_message_template`. More normalised, more verbose, more migration work.
-- **5c — Separate table.** `subject_upload_behaviors` joined by `subject_id`. Most flexible but heaviest schema change.
-
-I'd lean **5a** — keeps the migration small, the dispatch reads it once, and if the model evolves later it's easier to split the JSON than to merge separate tables.
-
-### Session 5 might be its own investigation pass first
-
-The data-driven dispatch needs to handle:
-- **Different persist function signatures.** `persist_security_assessment_artifact` and `persist_license_summary_artifact` take different keyword arguments. Either unify their signatures (out of scope without breaking other callers) or carry per-subject argument-passing logic in the dispatch.
-- **Different success-message data sources.** SA reads `finding_count` from the persisted artifact; LS reads `other_count` and `agent_count`. The dispatch needs to know which fields to extract for each subject's success message.
-- **AI subjects' upload path (`extract_file` + canonical save) doesn't use a `persist_*_artifact` function at all.** It uses the dispatcher. The data model needs to express "use the dispatcher" vs "use this specific persist function" as a first-class case.
-
-These shape questions may need an investigation pass before session 5 writes code. Either:
-- **5-light**: spend session 5 on an investigation, defer the implementation to session 6.
-- **5-direct**: do the investigation inline and ship the implementation in one session.
-
-My read: **5-direct is plausible** if the answer to the persist-signature question is "carry a small per-subject dispatcher function reference in the row's JSON, keep using the existing `persist_*_artifact` functions unchanged." That avoids the signature-unification rabbit hole. Pick that path and the rest is bookkeeping.
-
-### Constraints session 5 should respect
-
-- **Source-building fork stays.** Per ADR 0001. Don't touch `_legacy_builders`, `_legacy_loaders`, `_build_generic_subject`. Their fork serves source-BUILDING (view shapes); session 5's work is on dispatch for upload-HANDLING. These are different concerns.
-- **The unified route's HTTP contract stays.** URL `POST /quick-hc/<subject_id>/import`, form-field names per-subject, redirect targets per-subject, X-Inline / ?stage=1 for the AI branch. Session 5 makes the dispatch data-driven without changing what the routes do.
+- **Source-building fork stays.** Per ADR 0001. Don't touch `_legacy_builders`, `_legacy_loaders`, `_build_generic_subject`. Their fork serves source-BUILDING (view shapes); session 5b's work is dispatch for upload-HANDLING. Different concerns.
+- **The unified route's HTTP contract stays.** URL `POST /quick-hc/<subject_id>/import`, form-field names per-subject, redirect targets per-subject, X-Inline / ?stage=1 for the AI branch. Internal refactor only.
 - **Snapshot test pins behavior.** Run `tests/test_subject_initial_data_snapshot.py` whenever you touch the source-building path. Run `tests/test_unified_upload_route.py` whenever you touch the dispatch.
-- **No new tests beyond what's needed.** If the dispatch refactor is purely internal, existing tests cover it. If the data-driven dispatch introduces new failure modes (e.g. a subject without upload behavior data), add ONE test per new failure mode.
+- **Don't change the canonical schema.** Frozen. Option δ doesn't need it.
+- **Don't add MCP-tool parameters.** `propose_new_subject` keeps its current contract.
+
+### If the user picks a different option
+
+If the user reviewing the design proposal picks α (JSON column), β (typed columns), or γ (separate table) instead of δ, the session 5b shape changes:
+
+- **α/β** — add a schema migration (`0005_subject_upload_config.sql`), populate the SA + LS rows, update `propose_new_subject` to default the field to NULL for AI proposals. Larger session; the dispatch code itself looks similar but reads from a row instead of a dict.
+- **γ** — same as α/β plus a join in the dispatch. Largest session.
+
+The design doc Section 3 lays out the pros/cons of each. Session 5a's recommendation is δ.
 
 ### Verification
 
 ```bash
 python -m compileall -q src
-python -m pytest -q                                # expect 472 passing (or higher if session 5 adds tests)
-grep -rn "FIXME(refactor-unified-upload-session-5)" src/  # expect 0 after session 5; 3 today
+python -m pytest -q                                # expect 473 passing under δ
+grep -rn "FIXME(refactor-unified-upload-session-5)" src/  # expect 0 after session 5b; 3 today
 ```
 
 ---

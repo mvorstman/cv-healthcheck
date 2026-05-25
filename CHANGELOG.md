@@ -10,6 +10,31 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-26 (session 5a)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `062ebcf`, plus the wrap-up commit that publishes this entry.
+**Test status:** 472 passing (unchanged — investigation only).
+
+Session 5a — investigation session for the dispatch smell that the three `FIXME(refactor-unified-upload-session-5)` tags mark.
+
+### Added
+
+- **`docs/refactor_unified_upload_session_5a_design.md`** — 7-section design proposal. Section 1 inventories the dispatch sites and the contract table. Section 2 narrows the "data the dispatch needs" set from the FIXME's six speculative dimensions down to three actual ones. Sections 3-6 evaluate four data-model options (α JSON column / β typed columns / γ separate table / δ Python lookup) against the dispatch contract, the AI-proposal workflow, and migration mechanics. Section 7 makes the recommendation.
+
+### Notes
+
+- **Headline recommendation:** Option δ (Python lookup table). The smell is smaller than the FIXMEs implied — only three fields differ between the SA and LS branches, and a `dict[str, _UploadHandler]` resolves both the duplication and the dispatch branching in one move. No schema migration, no `propose_new_subject` change, no new column.
+- **The FIXME tag text said "likely a new column on `subjects`"** — that was suggestive when the tags were written in session 2, not prescriptive. The actual smell (subject-specific branching in route-handler code) is fully resolved by δ; database-stored alternatives are over-engineered for two subjects with three fields each. If a future AI subject needs custom upload behavior that can't be expressed in a code-side dict, δ → β is a one-session migration.
+- **No code changes this session.** Test count 472 unchanged. 3 FIXME tags still in place (they remain until session 5b implements the recommendation).
+- **ADR 0001 stays untouched.** The upload-special subjects (SA, LS) are a strict subset of the source-building-special subjects (the six in `_legacy_builders`), but unifying them would re-open the question ADR 0001 closed. Session 5b's data model is upload-only.
+
+### Carry-forward for session 5b
+
+Session 5b implements Option δ (or whichever option the user picks after review). Estimated work: define `_UploadHandler` dataclass, populate `_SYSTEM_UPLOAD_HANDLERS` dict with the 2 entries, write one `_handle_system_upload` function that consumes a handler, rewrite `quick_hc_subject_import` to use the lookup, delete `_unified_security_assessment_upload` / `_unified_license_summary_upload`, remove the 3 FIXME tags, add a parametrised test, update docstrings. One session, modest test-count delta (+1).
+
+---
+
 ## 2026-06-05
 
 **Branch:** `feature/basic-healthcheck-report-output`
