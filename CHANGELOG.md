@@ -10,6 +10,73 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-02
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `81ee0a8` (step 1 snapshot baseline), `389bc4d` (step 3 narrowed URL flip), plus the wrap-up commit that publishes this entry.
+**Test status:** 477 passing (up from 476; +1 new snapshot test in step 1, 0 net in step 3).
+
+Session 3 of the unified-upload refactor — **landed partially.** Steps 1 and 3 (narrowed) committed; steps 4, 5, and 6 deferred pending user decision on the architectural conflict surfaced in step 3.
+
+### Added
+
+- **`tests/test_subject_initial_data_snapshot.py`** + `tests/fixtures/subject_initial_data_snapshot.json` — pins `build_subject_initial_data()` output against the migrated test DB. Diffs print a readable unified-diff message and fail the test. Future sessions regenerate the fixture only when changes are confirmed intentional.
+
+### Changed
+
+- **Frontend now points at the unified `POST /quick-hc/<subject_id>/import` route.** Three places updated:
+  - `_build_generic_sources` in `subject_data_service.py` now produces `f"/quick-hc/{subject_id}/import"` (was: `f"/quick-hc/import?subject_id={subject_id}"`).
+  - `_SA_IMPORT_URL` in `subject_data_service.py` is now `/quick-hc/security_assessment/import` (was: `/quick-hc/security-assessment/import`).
+  - `_LS_IMPORT_URL` in `subject_data_service.py` is now `/quick-hc/license_summary/import` (was: `/quick-hc/license-summary/import`).
+- Three URL-coupled tests updated to match: `test_quick_hc_report.py:893-896` (assertions), `test_license_summary_web.py:100` (substring assertion broadened to accept either form), `test_import_flow.py:219` (assertion updated to path-component shape).
+
+### Notes (step 2 finding — load-bearing)
+
+**The investigation report's Section 3.3 prediction is confirmed by code reading.** Control flow in `build_subject_initial_data:91-103`:
+
+```
+artifact = _load_from_canonical_store(subject_id)
+if artifact is not None:                       ← canonical hit:  _build_generic_subject
+else:
+    if legacy_builder is not None:             ← canonical miss + system: legacy_builder
+    elif db is not None:                       ← canonical miss + AI:     _build_generic_subject(tile, None)
+```
+
+`_build_generic_subject` is the production path for two of three cases (canonical-hit and AI-subject-no-data). The legacy builders run ONLY for system subjects in the pre-first-import state. Once any successful import populates the canonical store for a subject, all subsequent page loads route through `_build_generic_subject`.
+
+### Notes — the step-3 architectural conflict (STOP-and-report)
+
+The brief's two constraints proved mutually exclusive:
+
+1. **Delete `_legacy_builders`, route everything through `_build_generic_subject`.**
+2. **Snapshot diff must be URL changes only — any other diff is a regression.**
+
+Constraint (1) would produce sparse "nodata" tiles for all 6 system subjects in the pre-canonical-bootstrap state. The legacy builders' job is precisely to bridge from the file-based legacy artifacts (`data/catalog/rest/commserv.json`, `data/imports/security_assessment/latest.json`, `data/catalog/metrics/*.json`, `data/catalog/quickhc/backup_job_summary_latest.json`) into the view model. The canonical-store path through `_build_generic_subject(tile, None)` has no access to those file paths and produces empty `sections=[]`, `state="nodata"`, `subtitle="Not collected"`.
+
+In production this matters less because after the first REST collect or upload, the canonical store has data. But:
+  - The test environment was capturing rich output because dev-machine state in `data/` was leaking into tests.
+  - More importantly, real deployments WITH stale legacy files (e.g. dev machines, anyone who upgraded from before the canonical store existed) would see the rich → sparse degradation immediately.
+
+Per the brief's explicit STOP-and-report rule when conflicts surface, **session 3 was narrowed**: URL changes landed; legacy builders kept alive. Steps 4 (retire `write_legacy`), 5 (verify FIXME tags), and 6 (full wrap-up) were not executed.
+
+### What still needs to happen (carried to next session)
+
+The path forward depends on a user decision. The three options:
+
+1. **Accept the pre-canonical-import regression.** Sunset the legacy file-based bootstrap. Update the snapshot to reflect the sparse output. Continue with full `_legacy_builders` deletion and steps 4-6 of the original session-3 brief.
+2. **Write a one-way migration on startup.** Read each legacy file-based artifact, synthesise an equivalent `CanonicalArtifact`, write it to the canonical store. After the migration runs once, the canonical path produces rich output and the legacy builders genuinely become dead code that can be deleted without behavioral change.
+3. **Keep a small bootstrap fallback inside `_load_from_canonical_store`.** For each system subject, if the canonical store is empty, fall back to the legacy file-based loader and synthesise an artifact in-memory. This preserves the rich pre-import view without changing on-disk state. Subject-specific knowledge stays in one place (the fallback function); future sessions can incrementally migrate each subject's bootstrap to a real canonical write.
+
+The next HANDOVER recommends option 3 as the lowest-blast-radius path, but the choice is the user's.
+
+### Carried forward unchanged
+
+- The unified `POST /quick-hc/<subject_id>/import` route (landed in session 2 / commit `dff43f1`) is still alive and tested. Its three `FIXME(refactor-unified-upload-session-5)` tags are still in place.
+- The old per-subject and generic upload routes are still alive. Session 4 deletes them — but only after step 3 / steps 4 are completed properly.
+- The `write_legacy=True` default on both persist functions remains in place. Option A's regression tests still pin the post-refactor contract.
+
+---
+
 ## 2026-06-01
 
 **Branch:** `feature/basic-healthcheck-report-output`
