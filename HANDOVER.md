@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-26 (post-5b regression fix)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** the workspace REST-source regression-fix commit (see `git log -1`)
+**Last commit:** `8dda62a` — Wire dedicated REST collect routes into the workspace tile source list
 **Test status:** 478 passing
 
 ---
