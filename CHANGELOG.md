@@ -10,6 +10,22 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-26 (ADR 0002: Customer and Project entities)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `0cff36c` (ADR), plus the wrap-up commit that publishes this entry.
+**Test status:** 483 passing (unchanged — ADR session, no code).
+
+ADR-only session. Records the design for first-class Customer and Project entities to support real consulting work — see `docs/adr/0002-customer-and-project-entities.md`. The architectural shape: customer is a first-class entity with rich configuration including CommCell details; project belongs to a customer; finalization is the data-retention unit (immutable per-project snapshots, kept forever); finalize is not a one-way trapdoor (a finalized project reloads its latest finalization for editing, and re-finalizing produces the next immutable snapshot); immutability is enforced at the application layer, not the file system. Multi-CommCell and multi-company-within-CommCell are explicitly out of scope for v1; existing dev artifacts are deleted by the migration rather than preserved.
+
+The ADR is orthogonal to ADR 0001's source-building fork — system subjects still flow through `_legacy_builders`, the customer/project work changes *where* artifacts are stored and *which* artifact a builder reads, not *how* tile data is shaped.
+
+### Carry-forward
+
+Implementation is the next session. ADR 0003 (REST extractor with credentials) follows that one and builds on ADR 0002's storage paths.
+
+---
+
 ## 2026-05-26 (housekeeping: gitignore app.db, README refresh)
 
 **Branch:** `feature/basic-healthcheck-report-output`
