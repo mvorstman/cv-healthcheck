@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-27 (init_db retirement interstitial)
+**Last updated:** 2026-05-27 (ADR 0002 phase 4 wrap-up)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `13c36ce` — init_db retirement wrap-up: CHANGELOG and HANDOVER updates
-**Test status:** 503 passing
+**Last commit:** the phase 4 wrap-up commit (see `git log -1`)
+**Test status:** 527 passing
 
 ---
 
@@ -17,16 +17,14 @@ If you are a new chat / new session, read these files in order before doing anyt
 2. `HANDOVER.md` (this file) — what to do next
 3. `ROADMAP.md` — where the project is heading
 4. **`docs/adr/0002-customer-and-project-entities.md`** — the design spec being implemented. Required reading.
-5. **`docs/adr/0001-source-building-fork.md`** — load-bearing architecture decision. Orthogonal to ADR 0002 but constrains what you can refactor.
-6. **`docs/data_flow_audit.md`** — read-only audit of where data lives. Pre-phase-2 storage layout, still describes the legacy globally-scoped reads accurately.
+5. **`docs/adr/0001-source-building-fork.md`** — load-bearing architecture decision. Orthogonal to ADR 0002.
+6. **`docs/data_flow_audit.md`** — read-only audit of where data lives. Still accurate for the legacy globally-scoped reads.
 
 ---
 
 ## What was just completed
 
-**Interstitial: retire `init_db()` and `schema.sql`.** One commit (`bd7b4a0`) plus this session's wrap-up. The `init_db()`/`schema.sql` bootstrap path was deleted in favour of `run_migrations()` as the sole entry. Phases 2 and 3 had both surfaced the same footgun (tests using `init_db` got a schema frozen at migration 0001 and broke when later migrations added tables/columns). This commit removes the foot — including the five `test_init_db_*` tests that exercised `init_db` itself (now redundant; covered by `tests/test_migrations.py`). Test count 508 → 503 (-5).
-
-Prior recent work — **ADR 0002 phase 3 (customer page UI)** — landed in commits `226c1ab` / `9858bcc` / `b8877f4` / `e22da6f` / `ae8bc27`. Customers are now manageable through the web UI: list at `/customers`, create at `/customers/new`, edit at `/customers/<id>/edit`, delete at `/customers/<id>/delete`. Manual entry only — CommCell-discovery is deferred.
+**ADR 0002 phase 4 — project page UI + active-project switcher.** Seven code commits plus this session's wrap-up. Project CRUD is in place (`/customers/<c>/projects/...`), the active-project selector is pinned to every workspace page, and the active-project JSON API (`/api/active-project`) lets the selector read and write the session. Test count 503 → 527 (+24).
 
 ---
 
@@ -38,40 +36,51 @@ Nothing. Working tree is clean.
 
 ## Single recommended next action
 
-**Phase 4 — project page UI + active project switcher.**
+**Phase 5 — finalize and reload flows.** Closes out ADR 0002.
 
-Spec: `docs/adr/0002-customer-and-project-entities.md` (Lifecycle and "UI shape" sections). The customer surface is in place; the missing piece is the project layer that sits underneath each customer.
+Spec: `docs/adr/0002-customer-and-project-entities.md` (Lifecycle and "Immutability" sections in particular). Phases 1-4 built the customer/project structure, the project-scoped storage, and the UI for managing both. Phase 5 lights up the audit-trail half — the finalize action that snapshots `working/` into `finalized/<N>/`, and the reload-latest-finalization action that brings a delivered project back into editable state for corrections.
 
-### What phase 4 needs to do
+### What phase 5 needs to do
 
-1. **List projects per customer.** Likely surfaced from the customer detail page or as a nested route (`/customers/<id>/projects` or `/projects?customer_id=<id>`). Shows project_number, ticket_reference, assigned_consultant, created_at, working_state_modified_at, and finalization count for each project.
-2. **Create a project under a customer.** Form fields per ADR 0002: project_number (required, unique within customer per the migration's UNIQUE constraint), ticket_reference (optional), assigned_consultant (optional). Inserts a row into `projects`.
-3. **Switch the active project.** A UI affordance for changing which (customer, project) pair the workspace operates against. Wires through to `set_active_project(customer_id, project_id)` from `src/cvhealthcheck/web/active_project.py` (already in place from phase 2).
-4. **Delete a project.** Strict guard mirroring the customer-delete pattern: a project with finalizations cannot be deleted from the UI — it would erase the audit trail. (Phase 5 introduces finalizations; until then, all projects are finalization-free and deletable.)
-5. **View finalization history (read-only placeholder).** Phase 5 lands the finalize action; phase 4 should leave a clear hook for displaying a project's finalizations list. An empty list with "No finalizations yet" suffices for v1.
+1. **Finalize action on the project detail page.** A button/form that, when submitted, runs the finalize handler:
+   - Determines the next `finalization_number` for the project (max + 1, starting from 1).
+   - Copies every file under `data/catalog/artifacts/<customer>/<project>/working/<subject>/` to `data/catalog/artifacts/<customer>/<project>/finalized/<N>/<subject>/`. Treat the copy as an atomic unit at the application layer — if a copy fails mid-way, the finalization row is not written. (Filesystem-level atomicity is not a hard requirement per ADR 0002; the integrity guarantee is "the application never overwrites a finalized path once made.")
+   - Optional inputs: `finalized_by` (free-form text), `ticket_reference` (string, often the same as the project's but can differ — the ticket that triggered THIS finalization), `notes` (free-form). Form fields on the finalize page.
+   - Writes the `finalizations` row.
+   - Redirects back to the project detail page with a flash confirming the finalization number.
+
+2. **Reload-latest-finalization action.** Surface on the project detail page (probably next to the finalize button). When pressed:
+   - Confirmation dialog warning that the current working state will be discarded.
+   - On confirm, copy every file from `.../finalized/<max(N)>/...` into `.../working/...`, overwriting anything currently there.
+   - Bump `projects.working_state_modified_at`.
+   - Redirect to the project detail page with a flash.
+   - The brief in ADR 0002 says "If working state has uncommitted changes from before, the UI warns and requires confirmation before discarding them." Phase 5 implements the warning + confirmation. Detecting "uncommitted changes" is tricky — easiest reliable signal is comparing `working_state_modified_at` to the latest finalization's `finalized_at`. If working is newer, working has unsaved changes.
+
+3. **Finalizations history on the project detail page.** Replace the "No finalizations yet" placeholder with the real list. Each row shows `finalization_number`, `finalized_at`, `finalized_by`, `ticket_reference`, `notes`. Already wired into the route handler from phase 4; just remove the placeholder and let the existing table render.
+
+4. **Application-layer immutability invariant.** The code path that writes to `finalized/<N>/<subject>/` exists exactly once (the finalize handler). Every other artifact write path goes to `working/<subject>/`. Phase 5 makes sure no other code is accidentally allowed to write to `finalized/<N>/`. The simplest enforcement: `ArtifactStore` exposes no method that writes to a finalized path; the finalize handler does its copy directly via `shutil.copytree` or equivalent without going through `ArtifactStore.save_artifact`.
 
 ### Constraints
 
-- **No finalize or reload UI.** That's phase 5. Phase 4 reads the empty `finalizations` table but doesn't write to it.
-- **The active-customer concept.** Phase 3 wired the customer surface; phase 2 wired the `(customer_id, project_id)` session key. Phase 4 chooses how the user picks an *active customer* in the nav (or whether the active customer is implicit from the active project). The simplest design: switch the active project, and the customer is read from the project's row. The brief doesn't dictate; phase 4 picks.
-- **Default-project protection.** Same as Default-customer: not specially protected, but can't be deleted while it has finalizations (when phase 5 lands).
-- **Source-building fork unchanged.** ADR 0001 `_legacy_builders` continue to serve their subjects globally.
+- **Don't touch the active-project selector** from phase 4 unless something demonstrably needs adjustment when an active project gets reloaded.
+- **Customer-routes are stable** from phase 3.
+- **ADR 0002 source-building fork is orthogonal** to phase 5.
+- **No new MCP tools.** Finalize is a UI-only action for v1.
 
 ### Suggested first slice
 
-"List projects per customer + create a project + switch active to a project" is the smallest demoable cut. Delete and finalization-list display can follow within phase 4.
+"Finalize action + finalizations history rendering" is the minimum demoable cut. The reload action is the natural second step.
 
 ### Priority-ordered backlog (everything else)
 
-1. **Phase 5 — finalize + reload.** Copy `working/` → `finalized/<N>/`, write a `finalizations` row, application-layer immutability invariant. Closes out ADR 0002.
-2. **ADR 0003 — REST extractor with credentials.** Follows ADR 0002 implementation. Will use the active project's storage path.
-3. **CommCell-discovery flow for customer creation.** Convenience feature. Authenticate against a CommCell with provided credentials, populate identity fields, user reviews and saves. Shares plumbing with ADR 0003's REST extractor.
-4. **Report-provenance verification.** When a user imports an HTML or CSV report, check that the report's embedded CommCell identity matches the active customer's stored CommCell identity. Catches "wrong customer's report uploaded by accident" mistakes.
-5. **Left-nav structural review.** The sidebar has accumulated items (Overview, Reports, Customers, Settings, Staging, plus SUBJECTS). At some point grouping or visual hierarchy will help. Not urgent.
-6. **AI import workstream — staging UI, compliance rules.**
-7. **Project-scope the legacy SA/LS stores** (`data/catalog/{security_assessment,license_summary}/`). Globally scoped today.
-8. **`data/catalog/reportsplus/` retention.** Audit Section 6 #3.
-9. **Legacy-store accumulation, orphaned SQLite registries, labreadiness consumer audit.** Audit Section 6 #2, #5, #6.
+1. **ADR 0003 — REST extractor with credentials.** Follows ADR 0002 implementation. Will use the active project's storage path.
+2. **CommCell-discovery flow for customer creation.** Convenience feature. Authenticate against a CommCell with provided credentials, populate identity fields. Shares plumbing with ADR 0003.
+3. **Report-provenance verification.** Check that an uploaded report's embedded CommCell identity matches the active customer's stored CommCell identity. Catches "wrong customer's report" mistakes.
+4. **Left-nav structural review.** The sidebar has accumulated items; visual hierarchy may help at some point.
+5. **AI import workstream — staging UI, compliance rules.**
+6. **Project-scope the legacy SA/LS stores** (`data/catalog/{security_assessment,license_summary}/`). Globally scoped today.
+7. **`data/catalog/reportsplus/` retention.** Audit Section 6 #3.
+8. **Legacy-store accumulation, orphaned SQLite registries, labreadiness consumer audit.** Audit Section 6 #2, #5, #6.
 
 Smaller cleanups:
 
@@ -84,15 +93,15 @@ Smaller cleanups:
 
 ## Context the next session needs that is not yet in README/ROADMAP/CHANGELOG
 
-- **Customer CRUD is in place.** The `customers` table is user-managed via the UI under `/customers`. Routes live in `src/cvhealthcheck/web/routes/customers.py`. Templates: `customers_list.html`, `customer_form.html` (shared create/edit), `customer_delete.html`.
-- **CommCell-discovery (auto-populating customer fields from a CommCell login) is deferred.** When implemented, it will be an addition to the existing customer form, not a replacement. The form has fields for `commcell_id`, `commcell_hostname`, `company_guid` — discovery would fill these.
-- **Customer ID slug convention.** Lowercase, alphanumeric joined by underscores, collision-disambiguated with `_2`/`_3`/... See `_slugify_customer_id` in `routes/customers.py`. The migration-seeded `default` matches this convention.
-- **Strict deletion guard.** A customer with projects can't be deleted. Same will apply to projects with finalizations in phase 5. Defense in depth: server-side re-check on POST returns 400 if the count is non-zero.
-- **Default customer/project are not specially protected.** They can be deleted like any other once their dependents are removed.
-- **Active project state.** Lives in the Flask session as `session['active_project'] = {'customer_id': ..., 'project_id': ...}`. Phase 4's project switcher writes here; ArtifactStore reads through it via `make_active_project_store()`.
-- **`init_db()` and `schema.sql` are gone.** `run_migrations()` is the sole database-bootstrap path. Tests use the `migrated_db_path` fixture (or call `run_migrations(db_path=...)` directly).
-- **Subject-specific redirects carry `#subject=<id>` fragments** via `_workspace_redirect(subject_id)`. The active-project mechanism is separate from the fragment.
-- **localStorage surface is still two keys** (`quickhc-theme-v1`, `quickhc-state-v1`). Phase 3 did not add a third — the active-customer/active-project state lives in the Flask session, not localStorage.
+- **Project CRUD is in place.** Routes live in `src/cvhealthcheck/web/routes/projects.py`. Templates: `customer_detail.html` (lists projects), `project_form.html` (shared create/edit), `project_detail.html`, `project_delete.html`.
+- **Active-project selector is in `templates/partials/active_project_selector.html`.** Included from `base.html` and from every self-contained workspace template. It reads/writes via `/api/active-project`.
+- **Project deletion is blocked once finalizations exist.** By design (audit trail safety). The strict-and-then-some pattern — UI disables the button, server-side returns 400 on a bypass attempt. Mirrors phase 3's customer-delete-with-projects guard.
+- **Auto-activation on project create.** Creating a project sets it as active in the session, so the workspace renders against the new project's working state without an extra click.
+- **Project ID is globally unique.** Slug from project_number, with `_2`/`_3` disambiguation across ALL projects (not just within the customer). The user-facing `UNIQUE(customer_id, project_number)` constraint is per-customer.
+- **Phase 5 will write to finalizations.** Phase 4 only reads it (for delete-guard and the project detail page's history section). The `finalizations` table is empty in normal usage today.
+- **No new localStorage keys.** Active project is session-only (Flask server session, not browser storage). The localStorage surface remains `quickhc-theme-v1` + `quickhc-state-v1`.
+- **`init_db()` and `schema.sql` are gone.** `run_migrations()` is the sole bootstrap path. Tests use the `migrated_db_path` fixture.
+- **ADR 0002 source-building fork is orthogonal.** `_legacy_builders` continue to serve their subjects globally; the customer/project work changes *where* canonical artifacts live, not *how* legacy tile data is shaped.
 
 ---
 
@@ -102,11 +111,10 @@ Smaller cleanups:
 cd /home/michiel/dev/cv-healthcheck
 source venv/bin/activate
 python -m compileall -q src
-python -m pytest -q                                # expect 503 passing
+python -m pytest -q                                # expect 527 passing
 git status --short                                 # expect clean
 sqlite3 data/app.db "SELECT customer_id,customer_name FROM customers;"
 sqlite3 data/app.db "SELECT project_id,customer_id,project_number FROM projects;"
-sqlite3 data/app.db "SELECT migration_id FROM schema_migrations ORDER BY 1;"     # expect 0001-0005
-curl -s http://127.0.0.1:5001/customers | head -10  # if dev server is up
+sqlite3 data/app.db "SELECT migration_id FROM schema_migrations ORDER BY 1;"
 ls docs/adr/                                       # expect 0001, 0002, README
 ```

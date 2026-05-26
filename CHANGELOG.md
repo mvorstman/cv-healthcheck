@@ -10,6 +10,39 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (ADR 0002 phase 4: project page UI + active-project switcher)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `34a0f61` (customer detail), `ee28eb4` (project create), `aad4015` (project detail), `b08794b` (project edit), `5cad2ed` (project delete), `29c3666` (selector + API), `d3bcc55` (tests), plus the wrap-up commit that publishes this entry.
+**Test status:** 527 passing (was 503 after the init_db retirement; +24 from `tests/test_projects_routes.py`).
+
+Phase 4 of ADR 0002. Projects are now manageable through the web UI under their parent customer; the active-project session can be switched from any workspace page via the selector pinned to the top-right.
+
+### Added
+
+- **Customer detail page** at `GET /customers/<customer_id>` (`templates/customer_detail.html`). Shows customer metadata, an edit link, and a projects table sorted by created_at desc. Each project row links to its detail page; the active project's row is highlighted with an "Active" badge in place of the "Set as active" button. Empty-state when no projects exist. The Customers list now links each customer name to its detail page.
+- **`src/cvhealthcheck/web/routes/projects.py`** — eight routes covering the full project CRUD lifecycle plus the active-project JSON API. Routes are nested under `/customers/<c>/projects/...` so they always carry the customer context in the URL.
+- **Project create form** (`templates/project_form.html` shared with edit). Required field: project_number (free-form, will eventually come from an external ticket system). Optional: ticket_reference, assigned_consultant. `UNIQUE(customer_id, project_number)` collisions surface as a friendly form error. project_id is server-side slugified from project_number with global-uniqueness collision disambiguation. On successful create, the new project is auto-set as active and the user lands on its detail page.
+- **Project detail page** at `GET /customers/<c>/projects/<p>` (`templates/project_detail.html`). Project metadata, Active badge or "Set as active" button, Edit/Delete actions, and a "Finalizations" section that's a placeholder for phase 5 ("No finalizations yet. The finalize action lands in a future phase."). Breadcrumb back to the customer.
+- **Project edit form** — shares the create template. project_number is editable; URL stays stable (project_id is fixed at create time).
+- **Project delete with strict-and-then-some guard** (`templates/project_delete.html`). The GET side renders a confirmation when finalizations is empty; when finalizations exist, the page renders in blocked mode ("Cannot delete: this project has N finalizations. Removal of finalized projects requires direct database access."). The POST side server-side re-checks finalization count and returns 400 on a bypass attempt. When the deleted project is the active one, the handler falls back to the migration-seeded Default project via `resolve_default_project()` + `set_active_project()`.
+- **Active-project JSON API** at `/api/active-project`. GET returns the current `(customer_id, project_id)` plus customer_name, project_number, and the full list of customers and their projects for the selector dropdown. POST takes customer_id + project_id (form-encoded), validates that the project belongs to the customer, and updates the session. Optional `redirect_to` form field switches the response from JSON to a 302 redirect — used by form-driven "Set as active" buttons.
+- **Active-project selector partial** (`templates/partials/active_project_selector.html`). Fixed to the top-right of every workspace page (`base.html` + the self-contained top-level templates). Renders as "Active <Customer> / <Project>" → click expands a panel grouped by customer with all projects. Clicking a project posts to `/api/active-project` with a redirect back to the current URL so the workspace reloads against the new active state. Click-outside closes the panel. No new localStorage keys — active project lives in the Flask session per phase 2.
+- **`tests/test_projects_routes.py`** — 24 tests covering customer detail (2), project create (5), detail (4), edit (3), delete (5), and the active-project API (5).
+
+### Notes
+
+- **Project ID slug uniqueness.** A test ("DUP" for two different customers) caught a bug in `_slugify_project_id`: the collision check was scoped to the same customer, but `project_id` is the global PK on `projects`. Two customers slugifying the same project_number to the same project_id would have hit an `IntegrityError`. Fixed by checking project_id collisions across all projects, not just within the customer. The user-facing `UNIQUE(customer_id, project_number)` constraint is unaffected — it's still per-customer.
+- **Auto-activate on create.** ADR 0002's "starting work for a customer, create a project, start working" workflow is the common case, so the new project becomes active without an extra click. The user can switch back via the selector if needed.
+- **Strict-and-then-some delete.** ADR 0002's audit-trail safety: finalized projects cannot be deleted via the UI. Removal requires direct DB access (deliberate, per the ADR's "removal of finalizations requires direct database access" decision).
+- **Selector visibility.** Added the partial to `base.html` (which `quick_hc_backup_job_summary`, `quick_hc_commcell`, `quick_hc_report`, `quick_hc_staging` all extend) and to the self-contained top-level templates (`quick_hc.html`, `quick_hc_settings.html`, customers/projects pages). End-to-end verified: create a new project, see workspace re-render against it via the selector, switch back to Default, workspace re-renders again.
+
+### Carry-forward for phase 5
+
+Phase 5 implements the finalize action and reload-latest-finalization. The Finalizations placeholder on the project detail page becomes a real history list once rows can be written. Closes out ADR 0002.
+
+---
+
 ## 2026-05-27 (interstitial: retire init_db and schema.sql)
 
 **Branch:** `feature/basic-healthcheck-report-output`
