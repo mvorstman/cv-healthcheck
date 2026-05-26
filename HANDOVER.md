@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-26 (housekeeping wrap-up)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** the housekeeping wrap-up commit (see `git log -1`)
+**Last commit:** `a2f7e1d` — Housekeeping wrap-up: CHANGELOG entry, HANDOVER pivots to AI import
 **Test status:** 483 passing
 
 ---
