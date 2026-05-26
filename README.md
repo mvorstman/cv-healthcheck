@@ -55,14 +55,12 @@ Current Quick HC subjects:
 - Capacity Licenses
 - Backup Job Summary
 
-Legacy detail-route behavior now distinguishes GET detail pages from POST actions:
+Uploads and collection now go through a unified routing layer:
 
-- `GET /quick-hc/security-assessment` redirects to `/quick-hc`
-- `GET /quick-hc/license-summary` redirects to `/quick-hc`
-- `POST /quick-hc/security-assessment/import` remains active
-- `POST /quick-hc/security-assessment/collect` remains active
-- `POST /quick-hc/license-summary/import` remains active
-- `POST /quick-hc/license-summary/collect` remains active
+- `POST /quick-hc/<subject_id>/import` is the sole upload route. Subject IDs are underscored (`security_assessment`, `license_summary`, etc.). System subjects with dedicated import functions are dispatched via `src/cvhealthcheck/web/routes/upload_dispatch.py`; AI subjects fall through to the generic dispatcher.
+- `POST /quick-hc/<subject_id>/collect` is the generic REST-collection route (runs `RESTExtractor` against `subject_section_sources` rows in the catalog DB).
+- `POST /quick-hc/security-assessment/collect` and `POST /quick-hc/license-summary/collect` remain as the dedicated REST-collection endpoints for SA and LS (hyphenated; their collection is hardcoded in Python services rather than catalog-described).
+- `GET /quick-hc/security-assessment` and `GET /quick-hc/license-summary` redirect to `/quick-hc#subject=<id>` so the JS workspace re-opens the right tile after the full-page reload.
 
 Each subject now supports:
 
@@ -235,7 +233,7 @@ Current local validation for the May 24, 2026 session:
 
 - `python -m compileall src`
 - `pytest`
-- `298` tests passing
+- `483` tests passing
 
 ## Reports Plus Security Assessment
 
@@ -806,9 +804,15 @@ source ~/.cv-healthcheck-env
 flask --app cvhealthcheck.web.app run --debug --port 5001
 ```
 
-Pages:
+Customer-facing pages:
 
-- `/`
+- `/` — redirects to `/quick-hc`
+- `/quick-hc` — Quick HC workspace (subject tiles, source selection, report composition)
+- `/quick-hc/commcell` — CommCell identity detail
+- `/quick-hc/report` — composed customer-facing report
+
+Internal / development pages (raw API + Reports Plus exploration, lab readiness):
+
 - `/api/test`
 - `/reportsplus/reports`
 - `/reportsplus/reports/<report_id_or_guid>`
