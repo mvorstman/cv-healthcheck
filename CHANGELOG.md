@@ -10,6 +10,39 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (ADR 0002 phase 3: customer page UI)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `226c1ab` (nav), `9858bcc` (list), `b8877f4` (create form), `e22da6f` (delete), `ae8bc27` (tests), plus the wrap-up commit that publishes this entry.
+**Test status:** 508 passing (was 493 after phase 2; +15 from `tests/test_customers_routes.py`).
+
+Phase 3 of ADR 0002. The customers table is now fully manageable through the web UI — list, create, edit, delete. Manual entry is the primary path; CommCell-discovery (auto-populating identity fields from a CommCell login) is deferred to a future phase and shares plumbing with ADR 0003's REST extractor.
+
+### Added
+
+- **`Customers` nav item** in the left sidebar of `templates/quick_hc.html`, between Reports and Settings. Points at `main.customers_list`.
+- **`src/cvhealthcheck/web/routes/customers.py`** — seven routes covering the full CRUD lifecycle (`GET /customers`, `GET|POST /customers/new`, `GET|POST /customers/<id>/edit`, `GET|POST /customers/<id>/delete`). The route file uses inline SQL through `get_db()` (matching the staging-route pattern) and owns its own slugify helper. Registered in `routes/main.py`.
+- **`templates/customers_list.html`** — heading, "New customer" CTA, table sorted by name with Name / CommCell ID / Projects / Edit-Delete columns, empty-state fallback.
+- **`templates/customer_form.html`** — shared between create (mode=new) and edit (mode=edit). Required field is customer_name; all others optional. Hints clarify when to set `company_guid` ("only if the CommCell hosts multiple companies") to discourage speculative filling.
+- **`templates/customer_delete.html`** — confirmation page with customer summary card + project count. Renders in `blocked=True` mode when the customer has projects: red block message, disabled delete button. The server-side POST handler re-checks project count and returns 400 on a race or stale-form bypass.
+- **`tests/test_customers_routes.py`** — 15 tests across list view, create form (including slugify collision disambiguation), edit form (including 404 on unknown), and delete (including the strict project-count guard on both GET render and POST defence-in-depth).
+- **`src/cvhealthcheck/db/customers.py`** extended with the new fields, a `slugify_customer_id` helper, `list_customers_with_project_counts`, and `count_customer_projects`. The route layer doesn't depend on these (it uses inline SQL), but the module remains the canonical CRUD API for non-Flask callers (CLI, tests).
+
+### Notes
+
+- **Customer ID slug convention.** Matches the migration-seeded `default` style: lowercase, alphanumeric runs joined with underscores, leading/trailing underscores stripped. On collision, append `_2`, `_3`, etc.
+- **No CommCell network calls anywhere in this phase.** Discovery is deferred — when implemented, it will be an addition to the existing customer form, not a replacement.
+- **No authentication required on customer routes.** Consistent with the existing settings and staging pages.
+- **Default customer is not specially protected.** It can be deleted like any other if it has no projects. Phase 1 + phase 2 step 1 seeded a Default project under it, so attempting to delete Default goes through the blocked path until that project is removed (phase 4 will handle project deletion).
+- **Migration-seeded data and test fixtures.** `test_db_customers_engagements.py` and `test_db_staging.py` previously used `init_db()` which applies the legacy `schema.sql` (no `projects`/`finalizations` tables, no new customer columns). Both were switched to `run_migrations()` and the seeded `default` rows are deleted in the fixture so existing empty-table assertions still hold. `test_create_customer_returns_all_fields` updated to expect the extended column set.
+- **Step 4 ('edit form')** had no new files — the route handler landed in step 2, the template is shared with the create form from step 3. Documented here for the audit trail; no commit was made.
+
+### Carry-forward for phase 4
+
+Phase 4 builds the project page UI: list projects per customer, create, switch the active project (the customer-level half landed here gives nav context; project-level needs the projects table). Phase 5 follows with finalize + reload.
+
+---
+
 ## 2026-05-27 (ADR 0002 phase 2: project-scoped storage + active project session)
 
 **Branch:** `feature/basic-healthcheck-report-output`
