@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from cvhealthcheck.db import init_db
+from cvhealthcheck.db.migrations import run_migrations
 from cvhealthcheck.db.customers import (
     create_customer,
     delete_customer,
@@ -25,7 +26,15 @@ from cvhealthcheck.db.engagements import (
 @pytest.fixture()
 def db(tmp_path: Path) -> Path:
     db_path = tmp_path / "test.db"
-    init_db(db_path=db_path)
+    run_migrations(db_path=db_path)
+    # Migration 0005 seeds the 'default' customer + project. Clear them
+    # so existing assertions (e.g. list_customers_empty) start from a
+    # clean slate.
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("DELETE FROM projects")
+    conn.execute("DELETE FROM customers")
+    conn.commit()
+    conn.close()
     return db_path
 
 
@@ -88,7 +97,17 @@ def test_create_customer_with_explicit_id(db: Path) -> None:
 
 def test_create_customer_returns_all_fields(db: Path) -> None:
     customer = create_customer("Acme Corp", db_path=db)
-    assert set(customer.keys()) == {"customer_id", "customer_name", "created_at", "updated_at"}
+    assert set(customer.keys()) == {
+        "customer_id",
+        "customer_name",
+        "commcell_id",
+        "commcell_hostname",
+        "company_guid",
+        "contact_info",
+        "notes",
+        "created_at",
+        "updated_at",
+    }
     assert customer["customer_name"] == "Acme Corp"
 
 

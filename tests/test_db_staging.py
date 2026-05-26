@@ -30,12 +30,19 @@ _MIGRATION_PATH = (
 
 @pytest.fixture()
 def db(tmp_path: Path) -> sqlite3.Connection:
+    from cvhealthcheck.db.migrations import run_migrations
     db_path = tmp_path / "test.db"
-    init_db(db_path=db_path)
+    run_migrations(db_path=db_path)
+    # Migration 0005 seeds a default customer + project; staging tests
+    # exercise empty-table behaviour, so clean the seeds.
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("DELETE FROM projects")
+    conn.execute("DELETE FROM customers")
+    conn.commit()
+    conn.close()
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.executescript(_MIGRATION_PATH.read_text(encoding="utf-8"))
     try:
         yield conn
     finally:
