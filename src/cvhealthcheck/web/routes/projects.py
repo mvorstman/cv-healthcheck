@@ -139,8 +139,7 @@ def projects_new(customer_id: str):
             existing = {
                 row["project_id"]
                 for row in db.execute(
-                    "SELECT project_id FROM projects WHERE customer_id = ?",
-                    (customer_id,),
+                    "SELECT project_id FROM projects"
                 ).fetchall()
             }
             project_id = _slugify_project_id(payload["project_number"], existing)
