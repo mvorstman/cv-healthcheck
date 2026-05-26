@@ -1,1 +1,190 @@
-{# Stub partial. Phase 4 step 6 replaces this with the real selector. #}
+{# Active-project selector — included on every workspace page.
+   Renders a clickable indicator showing the current (customer, project)
+   pinned to the top-right of the viewport. Click opens a dropdown of
+   customers; clicking a project posts to /api/active-project with a
+   redirect_to back to the current URL.
+#}
+<style>
+  .apsel-root {
+    position: fixed;
+    top: 12px;
+    right: 16px;
+    z-index: 1000;
+    font-family: var(--font);
+    color: var(--text-1);
+  }
+  .apsel-button {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-1);
+  }
+  .apsel-button:hover { border-color: var(--accent); }
+  .apsel-button-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .apsel-button-value {
+    font-weight: 500;
+  }
+  .apsel-caret { color: var(--text-3); font-size: 10px; }
+  .apsel-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    min-width: 280px;
+    max-height: 60vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  }
+  .apsel-panel[hidden] { display: none; }
+  .apsel-customer-group {
+    padding: 8px 0;
+  }
+  .apsel-customer-group + .apsel-customer-group {
+    border-top: 1px solid var(--border);
+  }
+  .apsel-customer-name {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    font-family: var(--mono);
+    padding: 6px 14px;
+  }
+  .apsel-project {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-1);
+    font-family: var(--font);
+  }
+  .apsel-project:hover { background: var(--bg); }
+  .apsel-project-active {
+    background: rgba(80, 150, 220, 0.08);
+    font-weight: 500;
+  }
+  .apsel-project-active::before {
+    content: "● ";
+    color: var(--accent);
+  }
+  .apsel-empty {
+    padding: 12px 14px;
+    font-size: 12px;
+    color: var(--text-3);
+    font-style: italic;
+  }
+</style>
+
+<div class="apsel-root" id="apsel-root">
+  <button type="button" class="apsel-button" id="apsel-toggle" onclick="apselToggle()">
+    <span class="apsel-button-label">Active</span>
+    <span class="apsel-button-value" id="apsel-value">…</span>
+    <span class="apsel-caret">▾</span>
+  </button>
+  <div class="apsel-panel" id="apsel-panel" hidden></div>
+</div>
+
+<script>
+  (function () {
+    var panelOpen = false;
+    var data = null;
+
+    function render() {
+      var btn = document.getElementById('apsel-value');
+      var panel = document.getElementById('apsel-panel');
+      if (!data || !btn || !panel) return;
+      var active = data.active || {};
+      var customerName = active.customer_name || active.customer_id || '?';
+      var projectNumber = active.project_number || active.project_id || '?';
+      btn.textContent = customerName + ' / ' + projectNumber;
+
+      var html = '';
+      if (!data.customers || data.customers.length === 0) {
+        html = '<div class="apsel-empty">No customers yet.</div>';
+      } else {
+        data.customers.forEach(function (c) {
+          html += '<div class="apsel-customer-group">';
+          html += '<div class="apsel-customer-name">' + escapeHtml(c.customer_name) + '</div>';
+          if (c.projects.length === 0) {
+            html += '<div class="apsel-empty">No projects.</div>';
+          } else {
+            c.projects.forEach(function (p) {
+              var isActive = (active.customer_id === c.customer_id && active.project_id === p.project_id);
+              html += '<button type="button" class="apsel-project' +
+                (isActive ? ' apsel-project-active' : '') +
+                '" onclick="apselSwitch(\'' + escapeAttr(c.customer_id) + '\', \'' + escapeAttr(p.project_id) + '\')">' +
+                escapeHtml(p.project_number) +
+                '</button>';
+            });
+          }
+          html += '</div>';
+        });
+      }
+      panel.innerHTML = html;
+    }
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function escapeAttr(s) { return escapeHtml(s); }
+
+    window.apselToggle = function () {
+      var panel = document.getElementById('apsel-panel');
+      if (!panel) return;
+      panelOpen = !panelOpen;
+      panel.hidden = !panelOpen;
+    };
+
+    window.apselSwitch = function (customerId, projectId) {
+      var form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/api/active-project';
+      var c = document.createElement('input');
+      c.type = 'hidden'; c.name = 'customer_id'; c.value = customerId;
+      var p = document.createElement('input');
+      p.type = 'hidden'; p.name = 'project_id'; p.value = projectId;
+      var r = document.createElement('input');
+      r.type = 'hidden'; r.name = 'redirect_to'; r.value = window.location.pathname + window.location.search;
+      form.appendChild(c); form.appendChild(p); form.appendChild(r);
+      document.body.appendChild(form);
+      form.submit();
+    };
+
+    // Close panel on outside click.
+    document.addEventListener('click', function (e) {
+      var root = document.getElementById('apsel-root');
+      if (!root || !panelOpen) return;
+      if (!root.contains(e.target)) {
+        panelOpen = false;
+        var panel = document.getElementById('apsel-panel');
+        if (panel) panel.hidden = true;
+      }
+    });
+
+    fetch('/api/active-project', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (json) { if (json) { data = json; render(); } })
+      .catch(function () { /* leave button showing "…" */ });
+  })();
+</script>

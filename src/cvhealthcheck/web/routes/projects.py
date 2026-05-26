@@ -375,4 +375,96 @@ def projects_delete(customer_id: str, project_id: str):
 
 @bp.route("/api/active-project", methods=["GET", "POST"])
 def api_active_project():
-    return ("Not implemented yet (phase 4 step 6).", 501)
+    """Active-project read/write.
+
+    GET: returns the current active (customer_id, project_id) plus
+    customer_name and project_number, as JSON. Used by the
+    active-project selector on every workspace page.
+
+    POST: takes customer_id and project_id (form-encoded), validates
+    that the project belongs to the customer, and updates the session.
+    For form callers, supply a redirect_to URL — the handler responds
+    with 302 to that location after switching. For AJAX callers,
+    omit redirect_to and the handler responds with JSON.
+    """
+    from cvhealthcheck.web.active_project import (
+        get_active_project,
+        set_active_project,
+    )
+    from flask import jsonify
+
+    if request.method == "GET":
+        active_customer_id, active_project_id = get_active_project()
+        db = get_db()
+        try:
+            customer = _fetch_customer(db, active_customer_id)
+            project = _fetch_project(db, active_customer_id, active_project_id)
+            customers = db.execute(
+                "SELECT customer_id, customer_name FROM customers"
+                " ORDER BY customer_name ASC, customer_id ASC"
+            ).fetchall()
+            all_projects = db.execute(
+                "SELECT project_id, customer_id, project_number"
+                " FROM projects ORDER BY created_at DESC, project_id ASC"
+            ).fetchall()
+        finally:
+            db.close()
+
+        return jsonify({
+            "active": {
+                "customer_id": active_customer_id,
+                "project_id": active_project_id,
+                "customer_name": (customer or {}).get("customer_name"),
+                "project_number": (project or {}).get("project_number"),
+            },
+            "customers": [
+                {
+                    "customer_id": c["customer_id"],
+                    "customer_name": c["customer_name"],
+                    "projects": [
+                        {
+                            "project_id": p["project_id"],
+                            "project_number": p["project_number"],
+                        }
+                        for p in all_projects
+                        if p["customer_id"] == c["customer_id"]
+                    ],
+                }
+                for c in customers
+            ],
+        })
+
+    # POST
+    customer_id = (request.form.get("customer_id") or "").strip()
+    project_id = (request.form.get("project_id") or "").strip()
+    redirect_to = (request.form.get("redirect_to") or "").strip()
+
+    if not customer_id or not project_id:
+        msg = "customer_id and project_id are required."
+        if redirect_to:
+            flash(msg, "error")
+            return redirect(redirect_to)
+        return jsonify({"error": msg}), 400
+
+    db = get_db()
+    try:
+        # Validate the pair: the project must exist under that customer.
+        row = db.execute(
+            "SELECT 1 FROM projects WHERE customer_id = ? AND project_id = ?",
+            (customer_id, project_id),
+        ).fetchone()
+    finally:
+        db.close()
+    if row is None:
+        msg = f"No project '{project_id}' under customer '{customer_id}'."
+        if redirect_to:
+            flash(msg, "error")
+            return redirect(redirect_to)
+        return jsonify({"error": msg}), 400
+
+    set_active_project(customer_id, project_id)
+    if redirect_to:
+        return redirect(redirect_to)
+    return jsonify({
+        "active": {"customer_id": customer_id, "project_id": project_id},
+    })
