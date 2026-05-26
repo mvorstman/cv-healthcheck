@@ -224,7 +224,78 @@ def projects_detail(customer_id: str, project_id: str):
 
 @bp.route("/customers/<customer_id>/projects/<project_id>/edit", methods=["GET", "POST"])
 def projects_edit(customer_id: str, project_id: str):
-    return ("Not implemented yet (phase 4 step 4).", 501)
+    db = get_db()
+    try:
+        customer = _fetch_customer(db, customer_id)
+        if customer is None:
+            return ("Customer not found.", 404)
+        existing = _fetch_project(db, customer_id, project_id)
+    finally:
+        db.close()
+    if existing is None:
+        return ("Project not found.", 404)
+
+    if request.method == "POST":
+        payload = _form_payload(request.form)
+        error = None
+        if not payload["project_number"]:
+            error = "Project number is required."
+        else:
+            db = get_db()
+            try:
+                if _project_number_exists(
+                    db,
+                    customer_id,
+                    payload["project_number"],
+                    excluding_project_id=project_id,
+                ):
+                    error = "A project with this number already exists for this customer."
+            finally:
+                db.close()
+        if error is not None:
+            return render_template(
+                "project_form.html",
+                customer=customer,
+                project={"project_id": project_id, **payload},
+                mode="edit",
+                error=error,
+            )
+
+        now = _now()
+        db = get_db()
+        try:
+            db.execute(
+                "UPDATE projects SET project_number = ?, ticket_reference = ?,"
+                " assigned_consultant = ?, working_state_modified_at = ?"
+                " WHERE customer_id = ? AND project_id = ?",
+                (
+                    payload["project_number"],
+                    payload["ticket_reference"],
+                    payload["assigned_consultant"],
+                    now,
+                    customer_id,
+                    project_id,
+                ),
+            )
+            db.commit()
+        finally:
+            db.close()
+        flash(f"Project '{payload['project_number']}' updated.", "success")
+        return redirect(
+            url_for(
+                "main.projects_detail",
+                customer_id=customer_id,
+                project_id=project_id,
+            )
+        )
+
+    return render_template(
+        "project_form.html",
+        customer=customer,
+        project=existing,
+        mode="edit",
+        error=None,
+    )
 
 
 @bp.route("/customers/<customer_id>/projects/<project_id>/delete", methods=["GET", "POST"])
