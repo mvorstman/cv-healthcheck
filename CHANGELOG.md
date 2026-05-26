@@ -10,6 +10,39 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-26 (ADR 0002 phase 1: schema and storage foundation)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `4c69034` (migration), `75ba4b9` (snapshot test deletion), plus the wrap-up commit that publishes this entry.
+**Test status:** 482 passing (was 483; -1 from the deleted snapshot test).
+
+Phase 1 of the 5-session ADR 0002 implementation. The database now knows about customers, projects, and finalizations; no application code uses any of it yet — phase 2 plumbs the active project through `ArtifactStore`.
+
+### Added
+
+- **Migration `0005_customer_project_finalization.sql`.** Three changes to the schema, all idempotent via `IF NOT EXISTS` / `INSERT OR IGNORE`:
+  - `customers` extended with `commcell_id`, `commcell_hostname`, `company_guid`, `contact_info` (JSON-as-TEXT), `notes`. Existing `customer_id` PK and `customer_name` preserved so the `staged_artifacts.customer_id` FK from migration 0002 stays valid.
+  - New `projects` table: `project_id` PK, `customer_id` FK CASCADE NOT NULL, `project_number` NOT NULL, `ticket_reference`/`assigned_consultant` nullable, timestamps. `UNIQUE(customer_id, project_number)`. No status column — history is the sequence of finalizations per the ADR.
+  - New `finalizations` table: `finalization_id` PK, `project_id` FK CASCADE NOT NULL, `finalization_number` (CHECK >= 1), `finalized_at`, `finalized_by` nullable, `ticket_reference` nullable (the ticket that triggered *this* finalization, distinct from the project's), `notes` nullable. `UNIQUE(project_id, finalization_number)`.
+  - Auto-seeds a `customer_id='default'` / `customer_name='Default'` row via `INSERT OR IGNORE`. ADR 0002's first-run experience: the empty-state is hidden behind a pre-created customer.
+
+### Removed
+
+- **`tests/test_subject_initial_data_snapshot.py`** and its fixture `tests/fixtures/subject_initial_data_snapshot.json` deleted. The snapshot pinned the behavior of `build_subject_initial_data()` against the single-customer architecture that ADR 0002 replaces. Phases 2-5 exercise the new customer/project-scoped paths through targeted tests as those paths come online.
+- **`data/catalog/artifacts/{license_summary,security_assessment,storage_utilization}/`** contents deleted on the dev machine. Throwaway dev data per ADR 0002's "existing data not preserved" decision. The directory itself stays in place; the gitignored content is regenerated on first artifact write.
+
+### Notes
+
+- **`engagements` table is left alone.** Predates ADR 0002, empty, no code path inserts into it via app.db. Future cleanup can retire it; phase 1 keeps the migration tightly scoped.
+- **Idempotency.** The migration runner already guarantees single-application via `schema_migrations` tracking. The ALTER statements (which SQLite doesn't support `IF NOT EXISTS` on) are protected by that mechanism rather than per-statement guards. Verified by simulating a fresh DB then running migrations twice.
+- **Application code is unchanged.** No reads against the new tables, no writes to the new storage paths. Phase 2 (`ArtifactStore` project-scoping) is the next session.
+
+### Carry-forward for phase 2
+
+Phase 2 adds a `project_context` parameter (or equivalent) to `ArtifactStore.save_artifact` and `load_latest_artifact`, threading the active project through the route → service → store path. The new on-disk layout is `data/catalog/artifacts/<customer_id>/<project_id>/working/<subject_id>/...` for mutable state and `.../finalized/<N>/<subject_id>/...` for immutable snapshots. The canonical schema and source-building paths do not move.
+
+---
+
 ## 2026-05-26 (ADR 0002: Customer and Project entities)
 
 **Branch:** `feature/basic-healthcheck-report-output`

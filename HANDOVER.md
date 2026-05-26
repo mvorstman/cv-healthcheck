@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-26 (ADR 0002 wrap-up)
+**Last updated:** 2026-05-26 (ADR 0002 phase 1 wrap-up)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `40f0ef1` — ADR 0002 wrap-up: HANDOVER points at implementation
-**Test status:** 483 passing
+**Last commit:** the phase 1 wrap-up commit (see `git log -1`)
+**Test status:** 482 passing
 
 ---
 
@@ -16,23 +16,17 @@ If you are a new chat / new session, read these files in order before doing anyt
 1. `README.md` — what the project is, how to run it, the stack
 2. `HANDOVER.md` (this file) — what to do next
 3. `ROADMAP.md` — where the project is heading
-4. **`docs/adr/0001-source-building-fork.md`** — load-bearing architecture decision. Required reading if your work touches source-building, the canonical schema, or the unified upload route.
-5. **`docs/adr/0002-customer-and-project-entities.md`** — the design spec for the next session. Required reading before implementation.
-6. **`docs/data_flow_audit.md`** — read-only audit of where data lives on disk and which code paths read/write each location. The current state ADR 0002 replaces.
+4. **`docs/adr/0002-customer-and-project-entities.md`** — the design spec being implemented. Required reading.
+5. **`docs/adr/0001-source-building-fork.md`** — load-bearing architecture decision. Orthogonal to ADR 0002 but constrains what you can refactor.
+6. **`docs/data_flow_audit.md`** — read-only audit of where data lives. Phase 1 changed the schema; the audit still describes the storage paths as of pre-phase-2 reality.
 
 ---
 
 ## What was just completed
 
-**ADR 0002 — Customer and Project as first-class entities.** Design spec for the consulting-workflow features that take cv-healthcheck from "one dev machine, one CommCell" to "multiple customers, multiple projects, audit-traceable finalizations." The ADR settles twelve sub-decisions (identity, lifecycle, immutability model, customer-creation paths, auto-created Default customer, reload semantics, active-project session concept, data model in prose, storage paths, out-of-scope clarifications). No code, no SQL DDL.
+**ADR 0002 phase 1 — schema and storage foundation.** Two code commits — `4c69034` (migration `0005_customer_project_finalization.sql`) and `75ba4b9` (snapshot test deletion) — plus this session's wrap-up commit. The database now has `customers` (extended), `projects`, and `finalizations` tables, plus an auto-seeded "Default" customer. **No application code uses any of this yet** — phase 2 plumbs the active project through `ArtifactStore`. Existing canonical artifacts at `data/catalog/artifacts/{license_summary,security_assessment,storage_utilization}/` were deleted (throwaway dev data per ADR 0002).
 
-Prior recent work (full thread in `CHANGELOG.md`):
-
-- Housekeeping (this 2026-05-26): `data/app.db` gitignored; README test count and URL table refreshed.
-- Data flow audit at `docs/data_flow_audit.md`.
-- Workspace position preservation across full-page reloads (client-side fragment + server-side fragment-carrying redirects).
-- Source-provenance dispatch wiring SA/LS provenance builders back into the workspace tile path.
-- Unified-upload refactor (sessions 1 → 5b): one `POST /quick-hc/<subject_id>/import` route, subject-specific behavior in `upload_dispatch.py`.
+Test count 483 → 482 (-1 from the deleted `test_subject_initial_data_snapshot.py`). The snapshot test pinned the single-customer architecture being replaced; deleted intentionally per the phase 1 brief.
 
 ---
 
@@ -44,64 +38,63 @@ Nothing. Working tree is clean.
 
 ## Single recommended next action
 
-**Implement ADR 0002 — Customer and Project entities.**
+**Phase 2 — `ArtifactStore` project-scoping.**
 
-Spec: `docs/adr/0002-customer-and-project-entities.md`. The ADR is the contract; read it before opening any code.
+Spec: `docs/adr/0002-customer-and-project-entities.md` (Storage paths and Data model sections in particular). The schema is in place; phase 2's job is to make the write/read paths actually use it.
 
-### Suggested implementation slicing (the user picks the actual slicing)
+### What phase 2 needs to do
 
-The ADR groups its decisions in a way that maps naturally to sequential implementation slices. A possible ordering:
+1. **Thread an "active project" through the request lifecycle.** The route → service → store path currently has no notion of which customer/project the user is working on. Phase 2 picks a mechanism (server-side session, cookie, URL-scoped — analogous to but separate from the `#subject=<id>` fragment) and wires it through. The ADR's "active project lives in the user's session" decision is the constraint; the implementation chooses the carrier.
+2. **Extend `ArtifactStore`** (`src/cvhealthcheck/artifacts/store.py`) with a `project_context` parameter (or equivalent) on `save_artifact` and `load_latest_artifact`. New on-disk paths:
+   - Working state: `data/catalog/artifacts/<customer_id>/<project_id>/working/<subject_id>/<timestamp>.json` + `.../latest.json`
+   - Finalized snapshots: `data/catalog/artifacts/<customer_id>/<project_id>/finalized/<N>/<subject_id>/...` (phase 5 writes here; phase 2 just defines the layout)
+3. **Update every `ArtifactStore` caller** to pass the active project. From the audit, that's the SA/LS service persist paths, the SA REST collect path, `_unified_dispatcher_upload`, and `execute_approval` in MCP staging. Each call site needs the project context routed in.
+4. **Provide a default project for the Default customer.** Phase 2 needs *some* project to write artifacts under. Two options:
+   - Auto-create a "Default" project under the Default customer the first time an artifact is saved with no project context, and use it as the implicit working project.
+   - Require an explicit project before any artifact write succeeds; surface this as an error in the UI (degrades the empty-state experience).
+   The first option is friendlier to the dev-machine flow; the second is cleaner architecturally. Pick based on whether the UI for project creation is landing in phase 2 or phase 4.
 
-1. **Schema migration.** Add `customers`, `projects`, `finalizations` tables via a new migration file under `src/cvhealthcheck/db/migrations/`. Migrate or replace the existing `customers` and `engagements` tables — the implementer decides whether to coexist, rename, or delete-and-recreate based on what's in them today. Auto-create the "Default" customer in the same migration. The migration also deletes existing dev artifacts under `data/catalog/artifacts/` (per the ADR's "existing data not preserved" decision).
-2. **ArtifactStore project-scoping.** Add a `project_context` parameter (or equivalent) to `ArtifactStore.save_artifact` and `load_latest_artifact`. The new paths are `data/catalog/artifacts/<customer_id>/<project_id>/working/<subject_id>/...` and `data/catalog/artifacts/<customer_id>/<project_id>/finalized/<N>/<subject_id>/...`. The change is local to the store layer; the canonical schema and source-building paths don't move.
-3. **Active-project session state.** Pick a mechanism (cookie, server-side session, URL fragment — analogous to but separate from the `#subject=<id>` fragment) and wire it through the routes that today assume a single global artifact.
-4. **Customer page** — list, create (manual + CommCell-discovery), edit. Auto-create-Default on first run is already covered by the migration; this slice is the UI for managing customers afterward.
-5. **Project page** — list per customer, create, switch active project, view finalization history.
-6. **Finalize action** — copies `working/` to `finalized/<N>/` and writes a `finalizations` row. Application-layer immutability: the code path that writes to `finalized/<N>/` exists once (the finalize handler) and is never invoked from a write-mutation path.
-7. **Reload-finalized-for-editing** — copies `finalized/<latest>/` back into `working/`, with the UI confirmation when working state isn't already clean.
+### Constraints
 
-The ADR doesn't require this ordering. A vertical slice (one customer, one project, one subject all the way through finalize/reload) might be a better first cut to land something demoable end-to-end before broadening.
-
-### Constraints from the ADR
-
-- **No code, no SQL DDL belongs in the ADR.** If something feels ADR-shaped and isn't in the doc, surface it for a follow-up ADR rather than smuggling it into implementation.
-- **Don't pre-empt ADR 0003.** REST extractor with credentials is the *next* next session. It builds on ADR 0002's storage paths. Don't design the credentials flow as part of this implementation.
-- **Existing dev artifacts are deleted by the migration.** Verify with the user before running it on any machine that holds non-throwaway data.
-- **Application-layer immutability.** The code path that writes to a finalized snapshot directory exists exactly once. Every other write path goes to working state.
+- **Read paths matter too.** The audit (Section 3) maps every read path; each one needs to know which project's artifact to load. Don't only patch writes.
+- **Source-building fork is orthogonal.** ADR 0001's `_legacy_builders` continue to serve system subjects. Phase 2 changes *where* the artifact comes from, not *how* the tile data is shaped.
+- **`_legacy_loaders` reads `data/catalog/rest/commserv.json`, the legacy SA/LS stores, and `data/catalog/metrics/*.json`.** Those paths are unscoped today. Phase 2 needs a story for them: either project-scope them too, or accept that they remain global "commcell-level" reads while the canonical artifacts go project-scoped. The ADR doesn't dictate; phase 2 picks.
+- **Option A invariant.** `load_active_security_assessment_artifact` / `load_active_license_summary_artifact` (the legacy fallback reads) still need to function. They can be project-scoped or left global; phase 2 picks.
+- **Don't pre-empt phases 3-5.** Phase 3 = customer page, phase 4 = project page, phase 5 = finalize/reload. Phase 2 stays at the store layer.
 
 ### Priority-ordered backlog (everything else)
 
-1. **ADR 0003 — REST extractor with credentials.** The session after the ADR 0002 implementation. Will build on ADR 0002's storage paths.
-2. **AI import workstream — staging UI for proposal review, compliance rules.** Larger scope; the ADR 0002 implementation may surface architectural choices that simplify this work.
-3. **2026-05-20 review backlog.** Older items parked when the unified-upload refactor took over. Review what's still relevant.
-4. **Workflow tooling decisions** parked earlier — exact list lives in the older HANDOVER chain.
-5. **`data/catalog/reportsplus/` retention.** Audit Section 6 #3: 203 raw extraction files today, no retention policy.
-6. **`data/catalog/{security_assessment,license_summary}/` legacy-store accumulation.** Audit Section 6 #2.
-7. **Two orphaned SQLite registries** at `data/imports/{security_assessment,license_summary}/artifact_registry.sqlite3`. Audit Section 6 #6.
-8. **`data/labreadiness/latest.json` consumer audit.** Audit Section 6 #5.
+1. **Phase 3 — customer page** (after phase 2). List, create (manual + CommCell-discovery), edit.
+2. **Phase 4 — project page**. List per customer, create, switch active, view finalization history.
+3. **Phase 5 — finalize + reload**. Copy `working/` → `finalized/<N>/`, write a finalizations row, application-layer immutability invariant.
+4. **ADR 0003 — REST extractor with credentials.** Follows ADR 0002 implementation. Will use the active project's storage path.
+5. **AI import workstream — staging UI, compliance rules.**
+6. **`data/catalog/reportsplus/` retention.** Audit Section 6 #3.
+7. **Legacy-store accumulation, orphaned SQLite registries, labreadiness consumer audit.** Audit Section 6 #2, #5, #6.
 
-Smaller opportunistic cleanups still on the list:
+Smaller cleanups still on the list:
 
 - Delete `TileDefinition.import_url=` dead data at `registry.py:131, 205`.
-- Possibly delete the legacy `/security-assessment` development page in `web/routes/development.py` if nobody uses it.
-- Consider moving the no-canonical-artifact path for SA/LS onto `source_provenance_dispatch` so workspace-tile source statuses are consistent across both data-present and data-absent paths.
-- Deeper README staleness: the SA section's "Latest persisted multi-source artifacts" paths at L260-268 no longer match the canonical-store layout.
+- Possibly retire the legacy `/security-assessment` development page.
+- Move SA/LS no-canonical-artifact path onto `source_provenance_dispatch` for consistency.
+- Deeper README staleness in the SA section.
 
 ---
 
 ## Context the next session needs that is not yet in README/ROADMAP/CHANGELOG
 
-- **ADR 0002 is the spec for the next session.** Read it before opening code.
-- **ADR 0002 is orthogonal to ADR 0001.** The source-building fork stays; customer/project work changes *where* artifacts are stored, not *how* tile data is shaped.
-- **`data/app.db` is gitignored.** On a fresh clone, app startup runs migrations and seeds the six system subjects from `0003_report_inventory.sql`. The ADR 0002 migration will add the customer/project/finalization tables and auto-create the Default customer.
-- **Unified upload route is the sole upload path.** `POST /quick-hc/<subject_id>/import` handles everything. Subject-specific behavior lives in `src/cvhealthcheck/web/routes/upload_dispatch.py`. The ADR 0002 implementation will need to plumb the active project through this path.
-- **Subject-specific source-provenance lives in `src/cvhealthcheck/quickhc/source_provenance_dispatch.py`** (sibling pattern). Will also need to read project-scoped artifacts.
-- **Subject-specific redirects carry `#subject=<id>` fragments** via `_workspace_redirect(subject_id)` in `quick_hc.py`. The active-project mechanism ADR 0002 introduces is separate; don't confuse the two.
-- **Snapshot test (`tests/test_subject_initial_data_snapshot.py`)** is the behavior-preservation pin. Run it whenever you touch source-building or view-producing code. Expect it to diff substantially during ADR 0002 implementation as artifact paths change; regenerate intentionally with a CHANGELOG note.
-- **Legacy artifact READS preserved.** Option A invariant; reads through `load_active_security_assessment_artifact` / `load_active_license_summary_artifact` still alive. ADR 0002 doesn't change this; the project-scoping happens above the legacy-store fallback.
+- **The new schema exists but is unused by application code as of end of phase 1.** Reads against `customers`, `projects`, `finalizations` will return either the Default customer (one row) or empty. Writes through the existing route → service → store path still land at unscoped `data/catalog/artifacts/<subject_id>/latest.json`. Phase 2's job is to change that.
+- **The "Default" customer is auto-created via migration.** `customer_id='default'`, `customer_name='Default'`. Future code can assume at least one customer always exists.
+- **The snapshot test from session 3 is gone.** Don't try to update it or recreate it. Phase 2 onward exercises new paths through targeted tests as those paths come online.
+- **`engagements` is empty, untouched.** Migration 0001 created the table; nothing inserts into it. Phase 2 doesn't need to touch it. Future cleanup can retire it.
+- **`data/catalog/artifacts/` has been wiped on the dev machine.** The directory exists; subdirectories under it are gone. New artifacts will appear under the customer/project-scoped paths once phase 2 lands.
+- **ADR 0002 is orthogonal to ADR 0001.** Don't touch `_legacy_builders` while implementing phase 2.
+- **`data/app.db` is gitignored.** On a fresh clone, app startup runs migrations (now five files) and seeds the six system subjects + the Default customer.
+- **Unified upload route is the sole upload path.** `POST /quick-hc/<subject_id>/import` handles everything. Subject-specific behavior lives in `upload_dispatch.py`. Phase 2 will need to plumb the active project through this path.
+- **Subject-specific redirects carry `#subject=<id>` fragments** via `_workspace_redirect(subject_id)` in `quick_hc.py`. The active-project mechanism phase 2 introduces is separate; the two can coexist.
 - **`/logout` is POST-only**. No CSRF middleware.
-- **localStorage surface is exactly two keys**: `quickhc-theme-v1`, `quickhc-state-v1`. URL fragment (`#subject=<id>`) is separate. The active-project mechanism may add a third surface depending on implementation choice — flag any addition in the CHANGELOG.
-- **`execute_approval()` requires an injected `store` in tests.** Pattern in `tests/test_core_solidity.py::test_execute_approval_artifact`.
+- **localStorage surface is currently two keys**: `quickhc-theme-v1`, `quickhc-state-v1`. Phase 2's active-project mechanism may add a third (or use a different carrier); flag the choice in the CHANGELOG.
+- **`execute_approval()` requires an injected `store` in tests.** Pattern in `tests/test_core_solidity.py::test_execute_approval_artifact`. Phase 2 will need to extend the injection pattern to include a project context.
 
 ---
 
@@ -111,9 +104,12 @@ Smaller opportunistic cleanups still on the list:
 cd /home/michiel/dev/cv-healthcheck
 source venv/bin/activate
 python -m compileall -q src
-python -m pytest -q                                # expect 483 passing
+python -m pytest -q                                # expect 482 passing
 git status --short                                 # expect clean
-sqlite3 data/app.db "SELECT subject_id,created_by,status FROM subjects;"
+sqlite3 data/app.db "SELECT customer_id,customer_name FROM customers;"      # expect: default | Default
+sqlite3 data/app.db "SELECT COUNT(*) FROM projects;"                        # expect: 0
+sqlite3 data/app.db "SELECT COUNT(*) FROM finalizations;"                   # expect: 0
+sqlite3 data/app.db "SELECT migration_id FROM schema_migrations ORDER BY 1;" # expect 0001-0005
+ls data/catalog/artifacts/                         # expect empty
 ls docs/adr/                                       # expect 0001, 0002, README
-ls docs/data_flow_audit.md                         # expect present
 ```
