@@ -265,9 +265,18 @@ Even though production callers pass `write_legacy=False`, the canonical-store wr
 
 Most are `report_<id>_raw_<dataset_guid>.json` files — raw extraction outputs kept per-dataset-execution. Written by `reportsplus/extract_report.py:546-558` and `reportsplus/metric_inventory.py:62`. Consumers I found: `data/catalog/datasets.json` builder, `labreadiness/collector.py:28`. No retention policy visible — the directory grows with every dataset extraction. Worth flagging because it can dominate disk usage on a long-running install. Not unread, but probably under-managed.
 
-### 4. `data/catalog/metrics/client_growth_summary.json` is referenced but not in the working tree today
+### 4. (Retracted)
 
-`_load_legacy_client_growth` calls `get_client_growth_summary(live=False)` which expects `data/catalog/metrics/client_growth_summary.json`. The file isn't present in `data/catalog/metrics/` (only the other three metric files are). Result: `client_growth` legacy loader returns `None` and the subject renders as "no data". Not a bug — `live=False` is supposed to tolerate the missing file — but anyone debugging "why does client_growth show empty" should know the file gates this.
+This entry originally claimed `data/catalog/metrics/client_growth_summary.json` was absent from the working tree. That was an audit error — the `ls | head -3` invocation truncated the directory listing and hid the 4th entry. The file is present (2128 bytes, dated 2026-05-13) and the `client_growth` tile renders correctly: `state=ok`, subtitle "5 clients", 3 sections (summary, chart, monthly_table). All four metric files are present:
+
+| File | Size | Reader |
+|---|---|---|
+| `capacity_license_usage.json` | 2647 B | `get_capacity_license_usage(live=False)` (`metrics/capacity.py:26`) |
+| `client_count_history.json` | 2125 B | `get_client_count_history(live=False)` (`metrics/growth.py:40`) |
+| `client_growth_details.json` | 900 B | `get_client_growth_details(live=False)` (`metrics/growth.py:73`) |
+| `client_growth_summary.json` | 2128 B | `get_client_growth_summary(live=False)` (`metrics/growth.py:52`) |
+
+Lesson for future audits: use `ls -1` or `find` for completeness checks, never `ls | head -N`.
 
 ### 5. `data/labreadiness/latest.json` is written but has no production reader visible
 
