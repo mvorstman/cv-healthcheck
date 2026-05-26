@@ -220,6 +220,9 @@
         </form>
       {% endif %}
       <a class="cust-btn" href="{{ url_for('main.projects_finalize', customer_id=customer.customer_id, project_id=project.project_id) }}">Finalize</a>
+      {% if finalizations %}
+        <a class="cust-btn cust-btn-link" href="{{ url_for('main.projects_reload', customer_id=customer.customer_id, project_id=project.project_id) }}">Reload latest</a>
+      {% endif %}
       <a class="cust-btn cust-btn-link" href="{{ url_for('main.projects_edit', customer_id=customer.customer_id, project_id=project.project_id) }}">Edit</a>
       <a class="cust-btn cust-btn-danger" href="{{ url_for('main.projects_delete', customer_id=customer.customer_id, project_id=project.project_id) }}">Delete</a>
     </div>

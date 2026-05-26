@@ -375,6 +375,84 @@ def projects_finalize(customer_id: str, project_id: str):
     )
 
 
+@bp.route("/customers/<customer_id>/projects/<project_id>/reload", methods=["GET", "POST"])
+def projects_reload(customer_id: str, project_id: str):
+    from cvhealthcheck.db.finalizations import (
+        FinalizationError,
+        diff_working_vs_latest,
+        reload_latest_finalization,
+    )
+
+    db = get_db()
+    try:
+        customer = _fetch_customer(db, customer_id)
+        if customer is None:
+            return ("Customer not found.", 404)
+        project = _fetch_project(db, customer_id, project_id)
+        if project is None:
+            return ("Project not found.", 404)
+        latest_row = db.execute(
+            "SELECT MAX(finalization_number) FROM finalizations WHERE project_id = ?",
+            (project_id,),
+        ).fetchone()
+        latest_number = (
+            int(latest_row[0]) if latest_row and latest_row[0] is not None else 0
+        )
+        differing_subjects = (
+            diff_working_vs_latest(db, customer_id, project_id)
+            if latest_number > 0
+            else []
+        )
+    finally:
+        db.close()
+
+    blocked = latest_number == 0
+
+    if request.method == "POST":
+        if blocked:
+            return render_template(
+                "project_reload.html",
+                customer=customer,
+                project=project,
+                latest_number=latest_number,
+                differing_subjects=differing_subjects,
+                blocked=True,
+            ), 400
+        db = get_db()
+        try:
+            try:
+                n = reload_latest_finalization(db, customer_id, project_id)
+            except FinalizationError as exc:
+                return render_template(
+                    "project_reload.html",
+                    customer=customer,
+                    project=project,
+                    latest_number=latest_number,
+                    differing_subjects=differing_subjects,
+                    blocked=True,
+                    error=str(exc),
+                ), 400
+        finally:
+            db.close()
+        flash(f"Reloaded finalization #{n}.", "success")
+        return redirect(
+            url_for(
+                "main.projects_detail",
+                customer_id=customer_id,
+                project_id=project_id,
+            )
+        )
+
+    return render_template(
+        "project_reload.html",
+        customer=customer,
+        project=project,
+        latest_number=latest_number,
+        differing_subjects=differing_subjects,
+        blocked=blocked,
+    )
+
+
 @bp.route("/customers/<customer_id>/projects/<project_id>/delete", methods=["GET", "POST"])
 def projects_delete(customer_id: str, project_id: str):
     from cvhealthcheck.web.active_project import (
