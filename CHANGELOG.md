@@ -10,6 +10,40 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (ADR 0002 phase 5: finalize + reload — ADR 0002 IMPLEMENTATION COMPLETE)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `e4c582d` (core logic + unit tests), `8dfb0a3` (finalize UI), `e86ce90` (reload UI), `33c96fb` (finalizations placeholder refresh), `158841c` (route tests), plus the wrap-up commit that publishes this entry.
+**Test status:** 554 passing (was 527 after phase 4; +15 from `tests/test_finalizations.py` + +12 from `tests/test_finalize_reload_routes.py`).
+
+**ADR 0002 implementation is complete.** Five phases over 2026-05-26→27 took cv-healthcheck from "one customer, one project" to a full customer/project lifecycle with an audit-trail-safe finalize/reload workflow. The architecture's promise is now delivered.
+
+### Added
+
+- **`src/cvhealthcheck/db/finalizations.py`** — three operations plus one exception:
+  - `finalize_project(db, customer, project) -> int` copies every subject directory under `working/` into `finalized/<n+1>/<subject>/`, inserts a `finalizations` row (capturing the project's current `ticket_reference` and `assigned_consultant` at finalize time so they're stable in the audit trail), and returns `n+1`. Raises `FinalizationError` if working has no subjects or the project is unknown.
+  - `reload_latest_finalization(db, customer, project) -> int` clears `working/`, copies every subject from `finalized/<max>/` back in, bumps `working_state_modified_at`. Raises `FinalizationError` if no finalizations exist.
+  - `diff_working_vs_latest(db, customer, project) -> list[str]` — content-based diff on `latest.json` per subject. Returns subject_ids that differ; uses symmetric-difference for subjects present in one side but not the other.
+- **Finalize UI** at `GET|POST /customers/<c>/projects/<p>/finalize` (`templates/project_finalize.html`). GET shows the next finalization_number, the subjects in working state, the project's current ticket_reference/assigned_consultant (which will be captured), and a Confirm button. When working is empty the page renders in blocked mode. POST runs the finalize, flashes "Finalized as #N", redirects to project detail.
+- **Reload UI** at `GET|POST /customers/<c>/projects/<p>/reload` (`templates/project_reload.html`). Three branches: blocked (no finalizations), soft info ("working matches latest"), firm warning ("discard N modifications") with the list of differing subjects. POST runs the reload, flashes "Reloaded finalization #N", redirects to project detail.
+- **Finalize and "Reload latest" actions on the project detail page.** The Reload button only renders when at least one finalization exists.
+- **27 new tests.** 15 in `test_finalizations.py` for the core logic (finalize success, twice produces 1 then 2, empty raises, finalized_by NULL vs set, ticket_reference captured at finalize-time, reload restores, reload removes added subjects, diff returns empty/symmetric-difference cases). 12 in `test_finalize_reload_routes.py` for the UI surfaces (GET/POST happy paths, blocked paths, finalizations list ordering, regression check on phase 4's delete-blocked-after-finalization invariant).
+
+### Notes
+
+- **Application-layer immutability.** No filesystem chmod, no read-only flags. The contract is that `finalize_project` is the only code path that writes under `finalized/<n>/`. ArtifactStore — the production write path used by every other artifact-saving code path — writes only to `working/`.
+- **`shutil.copytree` for the snapshot copy.** `dirs_exist_ok=False` since `next_number` is always new. The copy isn't a transaction with the DB INSERT, but if the copy raises, no DB row is written — the next finalize attempt will get the same `next_number` and a clean slate. The window between "copy succeeded" and "DB row written" is very small; if a crash happened there, the orphan directory would be visible on disk but not in the DB, and the next finalize would write to a new `<n>` slot.
+- **`ticket_reference` and `assigned_consultant` captured at finalize-time.** Editing the project's `ticket_reference` later doesn't bleed into earlier finalization rows. Verified by `test_finalize_captures_ticket_reference_at_finalize_time`.
+- **Diff is content-based on `latest.json`.** Timestamped snapshot files (the append-only history) are ignored by the diff; only `latest.json` per subject is compared byte-for-byte. A touched-but-identical save doesn't trigger a false "modified" signal because `latest.json` is byte-identical after a no-op save.
+- **Read-only per-finalization view (`GET /customers/<c>/projects/<p>/finalizations/<n>`) is deferred.** Listed in the HANDOVER backlog. Rendering a finalization's contents would need ArtifactStore (or equivalent) to read from a `finalized/<n>/` path, which is an architectural change beyond phase 5's scope.
+- **End-to-end smoke test verified manually.** Create project → drop artifact → finalize #1 → see #1 on detail page → modify working → reload → verify restored → finalize #2 → see #2 above #1 on detail page (DESC order). All assertions passed.
+
+### Carry-forward
+
+ADR 0002 is now production-complete. The next focus shifts to ADR 0003 (REST extractor with credentials), which will use the active project's storage path for the artifacts it collects. The customer/project foundation is in place.
+
+---
+
 ## 2026-05-27 (ADR 0002 phase 4: project page UI + active-project switcher)
 
 **Branch:** `feature/basic-healthcheck-report-output`
