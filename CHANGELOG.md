@@ -10,6 +10,33 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (interstitial: retire init_db and schema.sql)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `bd7b4a0`, plus the wrap-up commit that publishes this entry.
+**Test status:** 503 passing (was 508 after phase 3; -5 from the deleted `test_init_db_*` tests).
+
+Small interstitial cleanup between phase 3 and phase 4. Phase 2 and phase 3 both flagged the same recurring footgun: tests using `init_db()` got a schema frozen at migration 0001 (the state `schema.sql` covered), and broke in surprising ways whenever a later migration added columns or tables. Phase 3's response was to switch two test fixtures to `run_migrations()`. This entry finishes the job — `init_db()` and `schema.sql` are gone, `run_migrations()` is the sole database-bootstrap path.
+
+### Removed
+
+- **`src/cvhealthcheck/db/schema.sql`** — only ever covered migration 0001's tables (`customers`, `engagements`, `staged_artifacts`). Stale; deleted.
+- **`init_db()`** in `src/cvhealthcheck/db/database.py` + the `_SCHEMA_PATH` constant. No production callers.
+- **`init_db` export** from `src/cvhealthcheck/db/__init__.py`.
+- **Five `test_init_db_*` tests** in `tests/test_db_customers_engagements.py` that exercised `init_db` itself. Superseded by `tests/test_migrations.py` which covers `run_migrations`.
+
+### Changed
+
+- **`tests/test_staging_routes.py`** — `db_path` fixture switched from `init_db` to `run_migrations` + delete the migration-seeded default rows so the empty-table behaviour assumed by the tests still holds.
+- **`tests/test_db_staging.py`** and **`tests/test_db_customers_engagements.py`** — drop the stale `init_db` import. Their fixtures were already on `run_migrations` from phase 3.
+- **`src/cvhealthcheck/db/migrations/__init__.py`** — docstring updated to drop the historical "Replaces init_db()" framing now that init_db no longer exists.
+
+### Notes
+
+- The footgun the HANDOVER's priority-ordered backlog called out ("bring schema.sql in sync with migrations, or retire it") is resolved by the "retire" path. The next time a migration adds tables, no test fixture will silently miss them.
+
+---
+
 ## 2026-05-27 (ADR 0002 phase 3: customer page UI)
 
 **Branch:** `feature/basic-healthcheck-report-output`

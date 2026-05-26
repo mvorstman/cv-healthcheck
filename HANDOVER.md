@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-27 (ADR 0002 phase 3 wrap-up)
+**Last updated:** 2026-05-27 (init_db retirement interstitial)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `9682b08` — Phase 3 wrap-up: CHANGELOG and HANDOVER updates
-**Test status:** 508 passing
+**Last commit:** the init_db retirement wrap-up commit (see `git log -1`)
+**Test status:** 503 passing
 
 ---
 
@@ -24,7 +24,9 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## What was just completed
 
-**ADR 0002 phase 3 — customer page UI.** Five code commits (`226c1ab` nav, `9858bcc` list, `b8877f4` create form, `e22da6f` delete, `ae8bc27` tests) plus this session's wrap-up. Customers are now manageable through the web UI: list at `/customers`, create at `/customers/new`, edit at `/customers/<id>/edit`, delete at `/customers/<id>/delete`. Manual entry only — CommCell-discovery is deferred. Test count 493 → 508 (+15).
+**Interstitial: retire `init_db()` and `schema.sql`.** One commit (`bd7b4a0`) plus this session's wrap-up. The `init_db()`/`schema.sql` bootstrap path was deleted in favour of `run_migrations()` as the sole entry. Phases 2 and 3 had both surfaced the same footgun (tests using `init_db` got a schema frozen at migration 0001 and broke when later migrations added tables/columns). This commit removes the foot — including the five `test_init_db_*` tests that exercised `init_db` itself (now redundant; covered by `tests/test_migrations.py`). Test count 508 → 503 (-5).
+
+Prior recent work — **ADR 0002 phase 3 (customer page UI)** — landed in commits `226c1ab` / `9858bcc` / `b8877f4` / `e22da6f` / `ae8bc27`. Customers are now manageable through the web UI: list at `/customers`, create at `/customers/new`, edit at `/customers/<id>/edit`, delete at `/customers/<id>/delete`. Manual entry only — CommCell-discovery is deferred.
 
 ---
 
@@ -77,7 +79,6 @@ Smaller cleanups:
 - Possibly retire the legacy `/security-assessment` development page.
 - Move SA/LS no-canonical-artifact path onto `source_provenance_dispatch`.
 - Deeper README staleness in the SA section.
-- Bring `db/schema.sql` in sync with the migration sequence, or retire it in favor of migration-everywhere — currently `schema.sql` only covers migration 0001's tables, which leads to test-fixture footguns (see phase 3's fixture switch from `init_db` to `run_migrations`).
 
 ---
 
@@ -89,7 +90,7 @@ Smaller cleanups:
 - **Strict deletion guard.** A customer with projects can't be deleted. Same will apply to projects with finalizations in phase 5. Defense in depth: server-side re-check on POST returns 400 if the count is non-zero.
 - **Default customer/project are not specially protected.** They can be deleted like any other once their dependents are removed.
 - **Active project state.** Lives in the Flask session as `session['active_project'] = {'customer_id': ..., 'project_id': ...}`. Phase 4's project switcher writes here; ArtifactStore reads through it via `make_active_project_store()`.
-- **Test fixture footgun resolved (mostly).** Tests previously using `init_db()` apply the legacy `schema.sql` which only has migration-0001 tables. Phase 3 switched `test_db_customers_engagements.py` and `test_db_staging.py` to `run_migrations()`. Other tests that still use `init_db()` will hit the same footgun when phase 4+ schema changes land — flagged in the backlog above.
+- **`init_db()` and `schema.sql` are gone.** `run_migrations()` is the sole database-bootstrap path. Tests use the `migrated_db_path` fixture (or call `run_migrations(db_path=...)` directly).
 - **Subject-specific redirects carry `#subject=<id>` fragments** via `_workspace_redirect(subject_id)`. The active-project mechanism is separate from the fragment.
 - **localStorage surface is still two keys** (`quickhc-theme-v1`, `quickhc-state-v1`). Phase 3 did not add a third — the active-customer/active-project state lives in the Flask session, not localStorage.
 
@@ -101,7 +102,7 @@ Smaller cleanups:
 cd /home/michiel/dev/cv-healthcheck
 source venv/bin/activate
 python -m compileall -q src
-python -m pytest -q                                # expect 508 passing
+python -m pytest -q                                # expect 503 passing
 git status --short                                 # expect clean
 sqlite3 data/app.db "SELECT customer_id,customer_name FROM customers;"
 sqlite3 data/app.db "SELECT project_id,customer_id,project_number FROM projects;"
