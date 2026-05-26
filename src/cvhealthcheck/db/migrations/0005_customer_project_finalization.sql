@@ -156,3 +156,25 @@ VALUES
      || 'from the customer page.',
      strftime('%Y-%m-%dT%H:%M:%SZ','now'),
      strftime('%Y-%m-%dT%H:%M:%SZ','now'));
+
+
+-- -----------------------------------------------------------------------------
+-- 5. Seed: create the "Default" project under the Default customer.
+--
+-- Phase 2 of ADR 0002 needs at least one project to write artifacts under,
+-- so the workspace's fallback path (when no active project is set in the
+-- session) always resolves to something. project_id = 'default',
+-- project_number = 'DEFAULT'.
+--
+-- INSERT OR IGNORE so re-running is safe and won't overwrite a user-edited
+-- Default project. The (customer_id, project_number) UNIQUE constraint also
+-- prevents accidental duplicates.
+-- -----------------------------------------------------------------------------
+
+INSERT OR IGNORE INTO projects
+    (project_id, customer_id, project_number, ticket_reference,
+     assigned_consultant, created_at, working_state_modified_at)
+VALUES
+    ('default', 'default', 'DEFAULT', NULL, NULL,
+     strftime('%Y-%m-%dT%H:%M:%SZ','now'),
+     strftime('%Y-%m-%dT%H:%M:%SZ','now'));
