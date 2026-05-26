@@ -6,6 +6,7 @@ from .shared import bp, extract_security_assessment, is_authenticated
 from . import basic  # noqa: F401
 from . import customers  # noqa: F401
 from . import development  # noqa: F401
+from . import projects  # noqa: F401
 from . import quick_hc  # noqa: F401
 from . import quick_hc_api  # noqa: F401
 from . import staging  # noqa: F401

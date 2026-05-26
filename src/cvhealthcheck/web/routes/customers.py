@@ -108,6 +108,40 @@ def customers_list():
     return render_template("customers_list.html", customers=customers)
 
 
+@bp.route("/customers/<customer_id>")
+def customers_detail(customer_id: str):
+    from cvhealthcheck.web.active_project import get_active_project
+
+    db = get_db()
+    try:
+        customer = _fetch_customer(db, customer_id)
+        if customer is None:
+            return ("Customer not found.", 404)
+        projects = db.execute(
+            "SELECT p.project_id, p.project_number, p.ticket_reference,"
+            "       p.assigned_consultant, p.created_at,"
+            "       p.working_state_modified_at,"
+            "       (SELECT COUNT(*) FROM finalizations f"
+            "        WHERE f.project_id = p.project_id) AS finalization_count"
+            " FROM projects p"
+            " WHERE p.customer_id = ?"
+            " ORDER BY p.created_at DESC, p.project_id ASC",
+            (customer_id,),
+        ).fetchall()
+        projects = [dict(row) for row in projects]
+    finally:
+        db.close()
+
+    active_customer_id, active_project_id = get_active_project()
+    return render_template(
+        "customer_detail.html",
+        customer=customer,
+        projects=projects,
+        active_customer_id=active_customer_id,
+        active_project_id=active_project_id,
+    )
+
+
 @bp.route("/customers/new", methods=["GET", "POST"])
 def customers_new():
     if request.method == "POST":
