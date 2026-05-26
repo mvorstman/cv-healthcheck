@@ -10,6 +10,31 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-26 (post-5b regression fix)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** the regression-fix commit that publishes this entry.
+**Test status:** 478 passing (was 477; +1 targeted test).
+
+Fix for a workspace-tile regression introduced by session-era refactors (db87676 retired the legacy detail pages, sessions 1-5b unified the upload path). The License Summary and Security Assessment tiles in the Quick HC workspace were rendering REST / Reports Plus as "○ Not implemented" instead of "● Available" — REST collection was correctly implemented and the dedicated collect routes still worked, but the source-building gate didn't surface them to the frontend.
+
+### Fixed
+
+- **`src/cvhealthcheck/quickhc/registry.py:_build_db_source_entries`** — added `_SYSTEM_REST_COLLECT_URLS`, a 2-entry dispatch from subject_id to dedicated collect URL. Consulted as a fallback when `has_section_instructions` is false. Maps `security_assessment` → `/quick-hc/security-assessment/collect` and `license_summary` → `/quick-hc/license-summary/collect`. These are the two system subjects whose REST collection runs through `SecurityAssessmentService.collect_from_rest` / `LicenseSummaryService.collect_from_rest` at hyphenated routes — they have no `subject_section_sources` rows (their importers are hard-coded, not section-instruction-driven), so the existing gate left their REST `collect_url` `None` and `_build_generic_sources` fell through to status "ni" ("Not implemented") in the workspace tile.
+
+### Added
+
+- **`tests/test_core_solidity.py::test_security_assessment_and_license_summary_rest_use_dedicated_collect_routes`** — pins the fix. Asserts both subjects' REST source resolves to the expected hyphenated collect URL.
+
+### Notes
+
+- **Root cause was the retirement of dedicated detail pages.** Before commit `db87676`, the `quick_hc_security_assessment` and `quick_hc_license_summary` GET handlers rendered their own templates and called `build_security_assessment_provenance()` / `build_license_summary_provenance()` to produce the source list with status="validated" for REST. Those handlers became redirects to `/quick-hc`, but the source-building path the workspace tile takes (`_build_generic_subject` → `_build_generic_sources`) decides REST status purely from `has_section_instructions`, which is false for these two subjects.
+- **`build_security_assessment_provenance()` and `build_license_summary_provenance()` are dead code today.** No production caller. Grep confirms — only test references. Their tests still pass and they remain in `src/cvhealthcheck/quickhc/source_provenance.py` for now; cleanup is a separate concern from this wiring fix.
+- **No architectural change.** This is a wiring fix at the same point where `has_section_instructions` is consulted — does not redesign the source-building fork, the unified upload dispatch, or the provenance system. Snapshot test (`tests/test_subject_initial_data_snapshot.py`) passes unchanged (the snapshot's test fixture has no canonical artifact for these subjects, so its render path goes through the legacy builders, which were already correct — the bug only manifests when a canonical artifact exists, which is the production state).
+- **Behavior:** the workspace tile now shows the REST source as "● Available" (status "a") with a "Collect" action button that posts to the dedicated REST collect route. The legacy builders' "Validated" path (status "v") is reserved for the freshly-imported-artifact case and is unchanged.
+
+---
+
 ## 2026-05-26 (session 5b)
 
 **Branch:** `feature/basic-healthcheck-report-output`

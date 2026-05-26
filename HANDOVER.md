@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-26 (session 5b)
+**Last updated:** 2026-05-26 (post-5b regression fix)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `18fc0db` — Session 5b wrap-up: CHANGELOG closes out the unified-upload refactor; HANDOVER shrinks
-**Test status:** 477 passing
+**Last commit:** the workspace REST-source regression-fix commit (see `git log -1`)
+**Test status:** 478 passing
 
 ---
 
@@ -43,7 +43,8 @@ This is small (one session, very few moving parts) and unblocks future sessions 
 ### Smaller follow-ups also still on the list
 
 - Delete `TileDefinition.import_url=` dead data at `registry.py:131, 205`. Unread since session 2.
-- Refresh `README.md` test count ("298" → 477).
+- Delete `build_security_assessment_provenance` and `build_license_summary_provenance` from `src/cvhealthcheck/quickhc/source_provenance.py` (plus their tests). Confirmed dead code post-regression-fix — no production callers since commit `db87676`. The workspace tile source statuses are now wired through `_SYSTEM_REST_COLLECT_URLS` in `registry.py` instead.
+- Refresh `README.md` test count ("298" → 478).
 - Possibly delete the legacy `/security-assessment` development page in `web/routes/development.py` if nobody uses it.
 - Review the 2026-05-20 review backlog and the workflow-tooling decisions parked earlier.
 

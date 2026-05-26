@@ -370,6 +370,19 @@ _SOURCE_TYPE_TO_LABEL: dict[str, str] = {
     "json": "JSON import",
 }
 
+# System subjects whose REST collection is implemented by dedicated
+# services (SecurityAssessmentService.collect_from_rest, LicenseSummary
+# Service.collect_from_rest) reached via hyphenated routes, not via the
+# generic /quick-hc/<subject_id>/collect path that runs RESTExtractor
+# against subject_section_sources rows. These two have no
+# subject_section_sources entries (their importers are hard-coded), so
+# the has_section_instructions gate would otherwise hide their REST
+# action from the workspace tile.
+_SYSTEM_REST_COLLECT_URLS: dict[str, str] = {
+    "security_assessment": "/quick-hc/security-assessment/collect",
+    "license_summary": "/quick-hc/license-summary/collect",
+}
+
 
 def _build_db_source_entries(
     source_rows: list[dict[str, Any]],
@@ -387,11 +400,13 @@ def _build_db_source_entries(
         if src_id is None:
             continue
         has_instructions = bool(src.get("has_section_instructions", 0))
-        collect_url = (
-            f"/quick-hc/{subject_id}/collect"
-            if source_type == "rest" and has_instructions and subject_id
-            else None
-        )
+        if source_type == "rest" and subject_id:
+            if has_instructions:
+                collect_url = f"/quick-hc/{subject_id}/collect"
+            else:
+                collect_url = _SYSTEM_REST_COLLECT_URLS.get(subject_id)
+        else:
+            collect_url = None
         entries.append({
             "id": src_id,
             "label": _SOURCE_TYPE_TO_LABEL.get(source_type, source_type.upper()),
