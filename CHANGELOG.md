@@ -10,6 +10,47 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (ADR 0002 phase 2: project-scoped storage + active project session)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `d78e47c` (Default project), `119e360` (active-project helper), `f5c5946` (ArtifactStore project-scoping), `a16942c` (acceptance tests), plus the wrap-up commit that publishes this entry.
+**Test status:** 493 passing (was 482 after phase 1; +11 = +6 active-project + +5 project-scoping acceptance).
+
+Phase 2 of ADR 0002. The workspace now reads and writes artifacts from customer/project-scoped paths instead of the global path. The active project lives in the Flask session (namespaced `session['active_project']`); the migration-seeded Default customer + Default project is the fallback when no active project is set. **Existing dev artifacts at `data/catalog/artifacts/*` were already deleted in phase 1; phase 2 doesn't touch any new data on disk** — the new on-disk layout will populate organically as collections/imports run.
+
+### Added
+
+- **`src/cvhealthcheck/web/active_project.py`** — `get_active_project`, `set_active_project`, `clear_active_project`, `resolve_default_project`, plus the constructor helpers `make_active_project_store` (request-context callers) and `make_default_project_store` (non-request callers like MCP staging and CLI). Session key is namespaced; `clear_*` restores the Default fallback.
+- **Migration 0005 extended** with an `INSERT OR IGNORE` for the Default project under the Default customer (`project_id='default'`, `project_number='DEFAULT'`). Idempotent; the dev DB was brought into sync by re-applying the INSERT directly since 0005 was already marked applied from phase 1.
+- **`tests/test_active_project.py`** — 6 tests covering the helper.
+- **`tests/test_project_scoped_artifacts.py`** — 5 acceptance tests pinning project isolation, active-project switching, the path structure, and defensive constructor checks.
+
+### Changed
+
+- **`ArtifactStore.__init__`** now requires positional `customer_id` and `project_id`. Path becomes `<base_dir>/<customer_id>/<project_id>/working/<artifact_type>/{latest.json, <timestamp>.json}`. The `finalized/<N>/` sibling directory is reserved for phase 5; the store exposes no write path for it (application-layer immutability per ADR 0002).
+- **Module-level singletons retired** in four places. Each module now constructs the store on demand via `make_active_project_store()` so each call resolves the current session's active project:
+  - `security_assessment/service.py` (`_artifact_store` → `_active_project_store()`)
+  - `license_summary/service.py` (`_artifact_store` → `_active_project_store()`)
+  - `quickhc/subject_data_service.py` (`_canonical_store` → `_canonical_store()`)
+  - `registry/execution.py` (`_store` → `_active_project_store()`)
+- **Route handlers** in `web/routes/quick_hc.py` migrated from bare `ArtifactStore()` to `make_active_project_store()` at three sites (delete_subject, generic collect, unified dispatcher upload).
+- **`execute_approval` in `db/staging.py`** falls back to `make_default_project_store(db)` when no `store` is injected — non-request contexts (MCP) hit the Default project.
+- **`mcp/server.py` delete tool** constructs its store via `make_default_project_store(db)` while the db connection is open.
+- **Test infrastructure** updated to match. The autouse `_isolate_canonical_stores` fixture now monkeypatches `_DEFAULT_BASE_DIR` (matching the production `data/catalog/artifacts` directory name so path-structure assertions still pass), instead of monkeypatching the now-defunct module-level singletons. Tests that previously monkeypatched `ArtifactStore` as a module attribute now monkeypatch `make_active_project_store` / `make_default_project_store` returning fakes. One test (`test_dispatched_subjects_rest_source_shows_validated_with_collect_action`) that monkeypatched `sds._canonical_store` as an instance now monkeypatches it as a callable.
+
+### Notes
+
+- **Source-building fork unaffected.** ADR 0001's `_legacy_builders` / `_legacy_loaders` continue to read globally-scoped legacy on-disk files (`commserv.json`, `metrics/*.json`, `backup_job_summary_latest.json`, the legacy SA/LS stores). These remain customer-agnostic for v1 — the step-4 read-site audit explicitly preserved them. Project-scoped reads are only the canonical-store reads.
+- **The legacy SA/LS Option A read-fallback paths** (`data/catalog/{security_assessment,license_summary}/latest.json`) also stay globally scoped. Their consumers will need a project-scoping story eventually; not phase 2.
+- **Provenance builders' file-path strings** (`source_provenance.py:87, 125, 224, 274`) are informational display values, not actual reads. Left as-is for now; future iterations can teach them the project-scoped layout when the UI surfaces customer/project context.
+- **Workspace verified rendering** in a request context: Default project, empty canonical artifacts directory. The six system subjects render through the legacy-builder fallback (reading legacy on-disk files); the two AI subjects show "Not collected" because their project-scoped paths are empty. This matches the expected post-phase-2 state.
+
+### Carry-forward for phase 3
+
+Phase 3 builds the customer page UI: list customers, create (manual + CommCell-discovery), edit. The schema and storage are ready; the missing piece is the surface for managing customers (and choosing which CommCell to connect to). Phase 4 follows with the project page (list per customer, create, switch active, view finalization history). Phase 5 implements finalize + reload.
+
+---
+
 ## 2026-05-26 (ADR 0002 phase 1: schema and storage foundation)
 
 **Branch:** `feature/basic-healthcheck-report-output`
