@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-27 (init_db retirement interstitial)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** the init_db retirement wrap-up commit (see `git log -1`)
+**Last commit:** `13c36ce` — init_db retirement wrap-up: CHANGELOG and HANDOVER updates
 **Test status:** 503 passing
 
 ---
