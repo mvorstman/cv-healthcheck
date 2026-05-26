@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-26 (ADR 0002 wrap-up)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** the ADR 0002 wrap-up commit (see `git log -1`)
+**Last commit:** `40f0ef1` — ADR 0002 wrap-up: HANDOVER points at implementation
 **Test status:** 483 passing
 
 ---
