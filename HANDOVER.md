@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-26 (post-5b regression fix)
+**Last updated:** 2026-05-26 (post-5b regression fix — source-provenance dispatch)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `8dda62a` — Wire dedicated REST collect routes into the workspace tile source list
-**Test status:** 478 passing
+**Last commit:** the source-provenance dispatch commit (see `git log -1`)
+**Test status:** 482 passing
 
 ---
 
@@ -43,9 +43,9 @@ This is small (one session, very few moving parts) and unblocks future sessions 
 ### Smaller follow-ups also still on the list
 
 - Delete `TileDefinition.import_url=` dead data at `registry.py:131, 205`. Unread since session 2.
-- Delete `build_security_assessment_provenance` and `build_license_summary_provenance` from `src/cvhealthcheck/quickhc/source_provenance.py` (plus their tests). Confirmed dead code post-regression-fix — no production callers since commit `db87676`. The workspace tile source statuses are now wired through `_SYSTEM_REST_COLLECT_URLS` in `registry.py` instead.
-- Refresh `README.md` test count ("298" → 478).
+- Refresh `README.md` test count ("298" → 482).
 - Possibly delete the legacy `/security-assessment` development page in `web/routes/development.py` if nobody uses it.
+- Consider moving the no-canonical-artifact path for SA/LS (the legacy `_build_security_assessment_subject` / `_build_license_summary_subject` source-list logic) onto `source_provenance_dispatch` too, so the workspace-tile source statuses are consistent across both data-present and data-absent paths. Not urgent — production has canonical artifacts; the snapshot test fixture is the only consumer of the legacy paths today.
 - Review the 2026-05-20 review backlog and the workflow-tooling decisions parked earlier.
 
 None of these block anything. Pick whichever fits the next session's appetite once the `data/app.db` move is done.
@@ -57,6 +57,7 @@ None of these block anything. Pick whichever fits the next session's appetite on
 - **Source-building fork is intentional.** See `docs/adr/0001-source-building-fork.md`. The fork serves subject-specific view shapes (counters, findings_grid, workload, chart_growth) that the canonical schema can't represent. Do not "clean up" this fork without reading the ADR.
 - **Unified upload route is the sole upload path** since session 4. `POST /quick-hc/<subject_id>/import` handles everything. Old URLs return 404 by design.
 - **Subject-specific upload behavior lives in `src/cvhealthcheck/web/routes/upload_dispatch.py`.** The `UPLOAD_HANDLERS` dict has two entries today (`security_assessment`, `license_summary`). Adding a new system subject with custom upload behavior is one entry in the dict — no schema migration, no `propose_new_subject` change. If the set of upload-special subjects grows enough that the dict becomes painful, the δ → β migration (move into typed columns on `subjects`) is documented in `docs/refactor_unified_upload_session_5a_design.md` Section 6.
+- **Subject-specific source-provenance lives in `src/cvhealthcheck/quickhc/source_provenance_dispatch.py`** (sibling pattern to upload_dispatch). `PROVENANCE_DISPATCH` has the same two entries — subjects whose REST collection is hardcoded in Python services and therefore can't have their source status derived from `subject_section_sources` catalog data. Same δ → β migration path; same "code is the honest place for code-like data" rationale.
 - **Snapshot test (`tests/test_subject_initial_data_snapshot.py`)** is the behavior-preservation pin. Run it whenever you touch source-building or view-producing code.
 - **Legacy artifact READS preserved.** The Option A invariant (write_legacy retired; reads through `load_active_security_assessment_artifact` / `load_active_license_summary_artifact` still alive) holds.
 - **`/logout` is POST-only**. No CSRF middleware in the app.

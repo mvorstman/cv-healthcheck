@@ -33,6 +33,7 @@ from cvhealthcheck.quickhc.registry import (
     get_tiles,
     list_tiles,
 )
+from cvhealthcheck.quickhc.source_provenance_dispatch import get_provenance_builder
 
 # Unified upload route — every subject POSTs to /quick-hc/<id>/import.
 # These constants feed the legacy builders' source-action wiring;
@@ -165,7 +166,79 @@ def _load_from_canonical_store(subject_id: str) -> CanonicalArtifact | None:
         return None
 
 
-def _build_generic_sources(subject_id: str, tile_sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+# Subjects with a registered provenance builder also have their REST
+# collection at a hyphenated route (dedicated service, not the generic
+# /quick-hc/<subject_id>/collect). See source_provenance_dispatch.py.
+_DISPATCH_REST_COLLECT_URLS: dict[str, str] = {
+    "security_assessment": "/quick-hc/security-assessment/collect",
+    "license_summary": "/quick-hc/license-summary/collect",
+}
+
+# Provenance status strings → tile-source short codes consumed by
+# quick_hc.js. See quick_hc.js:329 for the front-end mapping.
+_PROVENANCE_STATUS_TO_TILE_STATUS: dict[str, str] = {
+    "validated": "v",
+    "available": "a",
+    "not_available": "n",
+    "not_implemented": "ni",
+    "not_tested": "n",
+    "not_applicable": "ni",
+}
+
+_PROVENANCE_TYPE_TO_SOURCE_ID: dict[str, str] = {
+    "rest_reports_plus": REST_REPORTS_PLUS_SOURCE_ID,
+    "csv": CSV_IMPORT_SOURCE_ID,
+    "html": HTML_IMPORT_SOURCE_ID,
+}
+
+
+def _provenance_to_tile_sources(
+    subject_id: str,
+    provenance_items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    import_url_base = f"/quick-hc/{subject_id}/import"
+    rest_collect_url = _DISPATCH_REST_COLLECT_URLS.get(subject_id)
+    result = []
+    for item in provenance_items:
+        src_id = _PROVENANCE_TYPE_TO_SOURCE_ID.get(item.get("source_type", ""))
+        if src_id is None:
+            continue
+        status = _PROVENANCE_STATUS_TO_TILE_STATUS.get(item.get("status", ""), "ni")
+        is_html = src_id == HTML_IMPORT_SOURCE_ID
+        is_csv = src_id == CSV_IMPORT_SOURCE_ID
+        is_rest = src_id == REST_REPORTS_PLUS_SOURCE_ID
+        if is_html or is_csv:
+            accept = ".html,.htm" if is_html else ".csv"
+            actions: list[dict[str, str]] = [
+                _upload_action(import_url=import_url_base, import_field="file", accept=accept)
+            ]
+        elif is_rest and rest_collect_url:
+            actions = [{"kind": "collect", "label": "Collect", "collectUrl": rest_collect_url}]
+        else:
+            actions = []
+        result.append(_source_item(
+            src_id,
+            item.get("label", SOURCE_LABELS.get(src_id, src_id)),
+            item.get("description", ""),
+            status=status,
+            actions=actions,
+        ))
+    return result
+
+
+def _build_generic_sources(
+    subject_id: str,
+    tile_sources: list[dict[str, Any]],
+    artifact_payload: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    # Subjects whose REST collection is hardcoded in Python services
+    # (not described in subject_section_sources rows) defer source
+    # status decisions to a dedicated provenance builder. Two such
+    # subjects today: security_assessment, license_summary.
+    builder = get_provenance_builder(subject_id)
+    if builder is not None:
+        return _provenance_to_tile_sources(subject_id, builder(artifact_payload))
+
     # Unified upload route — every subject (system or AI) POSTs here.
     import_url_base = f"/quick-hc/{subject_id}/import"
     result = []
@@ -179,7 +252,7 @@ def _build_generic_sources(subject_id: str, tile_sources: list[dict[str, Any]]) 
         is_import = is_html or is_csv
         if is_import and extractable:
             accept = ".html,.htm" if is_html else ".csv"
-            actions: list[dict[str, str]] = [
+            actions = [
                 _upload_action(import_url=import_url_base, import_field="file", accept=accept)
             ]
             status = "a"
@@ -202,7 +275,8 @@ def _build_generic_sources(subject_id: str, tile_sources: list[dict[str, Any]]) 
 def _build_generic_subject(tile: dict[str, Any], artifact: CanonicalArtifact | None) -> dict:
     subject_id = tile["id"]
     description = tile.get("description") or tile.get("subtitle") or ""
-    sources = _build_generic_sources(subject_id, tile.get("sources", []))
+    artifact_payload = artifact.model_dump(mode="json") if artifact is not None else None
+    sources = _build_generic_sources(subject_id, tile.get("sources", []), artifact_payload=artifact_payload)
     created_by = tile.get("created_by", "ai")
     status = tile.get("status", "active")
     if artifact is None:

@@ -105,31 +105,47 @@ def test_system_subject_has_collect_button_when_instructions_exist(
     assert rest_src.get("collect_url"), "REST source should have a collect_url"
 
 
-def test_security_assessment_and_license_summary_rest_use_dedicated_collect_routes(
-    migrated_db: sqlite3.Connection,
+def test_dispatched_subjects_rest_source_shows_validated_with_collect_action(
+    migrated_db: sqlite3.Connection, tmp_path: Path,
 ) -> None:
-    # SA and LS have no subject_section_sources entries — their REST
-    # collection is implemented by dedicated services at hyphenated
-    # routes (SecurityAssessmentService.collect_from_rest,
-    # LicenseSummaryService.collect_from_rest). Without this wiring,
-    # _build_db_source_entries leaves their collect_url None and the
-    # workspace tile shows "Not implemented".
-    from cvhealthcheck.quickhc.registry import REST_REPORTS_PLUS_SOURCE_ID
-    expected = {
+    # SA and LS have a provenance builder registered in
+    # source_provenance_dispatch — when _build_generic_subject runs
+    # (canonical artifact present), the dispatch fires and the
+    # workspace tile shows REST as "Validated" with a Collect action
+    # pointing at the dedicated hyphenated route.
+    from cvhealthcheck.quickhc import subject_data_service as sds
+
+    expected_collect = {
         "security_assessment": "/quick-hc/security-assessment/collect",
         "license_summary": "/quick-hc/license-summary/collect",
     }
-    tiles = {t["id"]: t for t in get_tiles(migrated_db)}
-    for subject_id, want_url in expected.items():
-        tile = tiles.get(subject_id)
-        assert tile is not None, f"{subject_id} tile not found"
-        rest_src = next(
-            (s for s in tile["sources"] if s["id"] == REST_REPORTS_PLUS_SOURCE_ID), None
-        )
-        assert rest_src is not None, f"no REST source on {subject_id}"
-        assert rest_src.get("collect_url") == want_url, (
-            f"{subject_id} REST collect_url mismatch: {rest_src.get('collect_url')!r}"
-        )
+    store = ArtifactStore(base_dir=tmp_path / "artifacts")
+    for subject_id, _ in expected_collect.items():
+        store.save_artifact(_make_artifact(subject_id))
+    original_store = sds._canonical_store
+    sds._canonical_store = store
+    try:
+        data = sds.build_subject_initial_data(migrated_db)
+    finally:
+        sds._canonical_store = original_store
+
+    seen = {}
+    for cat in data["cats"]:
+        for sub in cat["subjects"]:
+            if sub["id"] in expected_collect:
+                rest = next(
+                    (s for s in sub.get("sources", []) if s.get("id") == "rest_reports_plus"),
+                    None,
+                )
+                seen[sub["id"]] = rest
+    for subject_id, want_url in expected_collect.items():
+        rest = seen.get(subject_id)
+        assert rest is not None, f"no REST source for {subject_id}"
+        assert rest.get("status") == "v", f"{subject_id} REST status was {rest.get('status')!r}"
+        actions = rest.get("actions") or []
+        collect_actions = [a for a in actions if a.get("kind") == "collect"]
+        assert len(collect_actions) == 1, f"{subject_id} REST missing collect action"
+        assert collect_actions[0].get("collectUrl") == want_url
 
 
 # ---------------------------------------------------------------------------

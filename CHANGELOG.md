@@ -10,28 +10,34 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
-## 2026-05-26 (post-5b regression fix)
+## 2026-05-26 (post-5b regression fix — source-provenance dispatch)
 
 **Branch:** `feature/basic-healthcheck-report-output`
-**Commit:** the regression-fix commit that publishes this entry.
-**Test status:** 478 passing (was 477; +1 targeted test).
+**Commit:** the regression-fix commit that publishes this entry. (An earlier attempt at the same fix landed in `8dda62a` as a registry-level URL map; reverted in favor of this dispatch approach.)
+**Test status:** 482 passing (was 477; +5 new tests across `test_source_provenance_dispatch.py` and `test_core_solidity.py`).
 
-Fix for a workspace-tile regression introduced by session-era refactors (db87676 retired the legacy detail pages, sessions 1-5b unified the upload path). The License Summary and Security Assessment tiles in the Quick HC workspace were rendering REST / Reports Plus as "○ Not implemented" instead of "● Available" — REST collection was correctly implemented and the dedicated collect routes still worked, but the source-building gate didn't surface them to the frontend.
+Fix for a workspace-tile regression introduced by `db87676` ("Retire legacy Quick HC detail pages"). The License Summary and Security Assessment tiles were rendering REST / Reports Plus as "○ Not implemented" — REST collection was correctly implemented, but the source-building path that runs when a canonical artifact exists had no signal about it.
 
-### Fixed
-
-- **`src/cvhealthcheck/quickhc/registry.py:_build_db_source_entries`** — added `_SYSTEM_REST_COLLECT_URLS`, a 2-entry dispatch from subject_id to dedicated collect URL. Consulted as a fallback when `has_section_instructions` is false. Maps `security_assessment` → `/quick-hc/security-assessment/collect` and `license_summary` → `/quick-hc/license-summary/collect`. These are the two system subjects whose REST collection runs through `SecurityAssessmentService.collect_from_rest` / `LicenseSummaryService.collect_from_rest` at hyphenated routes — they have no `subject_section_sources` rows (their importers are hard-coded, not section-instruction-driven), so the existing gate left their REST `collect_url` `None` and `_build_generic_sources` fell through to status "ni" ("Not implemented") in the workspace tile.
+**This is the second seam between data-driven and hardcoded paths in this codebase — same architectural shape as session 5b's `upload_dispatch`.** Both subjects have behavior that doesn't fit the catalog-table model (upload has subject-specific import functions; collection has subject-specific REST services). Both seams are now resolved by a small `dict[str, callable]` keyed by `subject_id` in a dedicated dispatch module. If a third seam shows up, it should use the same pattern.
 
 ### Added
 
-- **`tests/test_core_solidity.py::test_security_assessment_and_license_summary_rest_use_dedicated_collect_routes`** — pins the fix. Asserts both subjects' REST source resolves to the expected hyphenated collect URL.
+- **`src/cvhealthcheck/quickhc/source_provenance_dispatch.py`** — sibling to `upload_dispatch.py`. Contains `PROVENANCE_DISPATCH: dict[str, ProvenanceBuilder]` with two entries (`security_assessment`, `license_summary`) pointing at the existing `build_security_assessment_provenance` / `build_license_summary_provenance` functions in `source_provenance.py`. The `get_provenance_builder(subject_id)` helper is the consumption interface for `_build_generic_sources`.
+- **`tests/test_source_provenance_dispatch.py`** — 4 tests: SA wiring, LS wiring, unknown-subject returns None, keys-pin asserting exactly 2 entries.
+- **`tests/test_core_solidity.py::test_dispatched_subjects_rest_source_shows_validated_with_collect_action`** — integration pin. Saves canonical artifacts for SA and LS to a tmp store, runs `build_subject_initial_data`, asserts both subjects' REST source has status="v" and a Collect action pointing at the expected hyphenated route.
+
+### Changed
+
+- **`src/cvhealthcheck/quickhc/subject_data_service.py::_build_generic_sources`** — consults the dispatch before falling through to the catalog-table logic. If a builder is registered, it's called with the subject's canonical-artifact dict (passed via the new `artifact_payload` parameter), and the resulting provenance items are adapted to the tile-source schema by `_provenance_to_tile_sources`. The adapter maps provenance source types (`rest_reports_plus`/`csv`/`html`) to tile source IDs, maps long-form status strings (`validated`/`available`/...) to the short codes the frontend consumes (`v`/`a`/...), and builds the action list (upload for CSV/HTML, collect for REST with the dedicated hyphenated route URL from `_DISPATCH_REST_COLLECT_URLS`).
+- **`_build_generic_subject`** — calls `artifact.model_dump(mode="json")` on the canonical artifact (when present) and threads it through to `_build_generic_sources` as `artifact_payload`. Provenance builders tolerate the canonical-shape dict (they use `.get()` with defaults; their status strings are hardcoded), so no shape adapter is needed at this boundary.
 
 ### Notes
 
-- **Root cause was the retirement of dedicated detail pages.** Before commit `db87676`, the `quick_hc_security_assessment` and `quick_hc_license_summary` GET handlers rendered their own templates and called `build_security_assessment_provenance()` / `build_license_summary_provenance()` to produce the source list with status="validated" for REST. Those handlers became redirects to `/quick-hc`, but the source-building path the workspace tile takes (`_build_generic_subject` → `_build_generic_sources`) decides REST status purely from `has_section_instructions`, which is false for these two subjects.
-- **`build_security_assessment_provenance()` and `build_license_summary_provenance()` are dead code today.** No production caller. Grep confirms — only test references. Their tests still pass and they remain in `src/cvhealthcheck/quickhc/source_provenance.py` for now; cleanup is a separate concern from this wiring fix.
-- **No architectural change.** This is a wiring fix at the same point where `has_section_instructions` is consulted — does not redesign the source-building fork, the unified upload dispatch, or the provenance system. Snapshot test (`tests/test_subject_initial_data_snapshot.py`) passes unchanged (the snapshot's test fixture has no canonical artifact for these subjects, so its render path goes through the legacy builders, which were already correct — the bug only manifests when a canonical artifact exists, which is the production state).
-- **Behavior:** the workspace tile now shows the REST source as "● Available" (status "a") with a "Collect" action button that posts to the dedicated REST collect route. The legacy builders' "Validated" path (status "v") is reserved for the freshly-imported-artifact case and is unchanged.
+- **Root cause was the retirement of dedicated detail pages.** Before commit `db87676`, the `quick_hc_security_assessment` and `quick_hc_license_summary` GET handlers called `build_security_assessment_provenance()` / `build_license_summary_provenance()` directly to produce their source lists. Those handlers became redirects to `/quick-hc`; the provenance builders went dead, and the workspace tile path took over with no equivalent wiring. This fix restores the connection through a dispatch module rather than a re-coupled call site.
+- **Collect URL hyphenation.** The dedicated SA/LS routes use hyphenated paths (`/quick-hc/security-assessment/collect`, `/quick-hc/license-summary/collect`) — these are the canonical names; tests, route decorators, and the new `_DISPATCH_REST_COLLECT_URLS` constant all agree. The frontend (`quick_hc.js:371`) consumes whatever `collectUrl` the server emits, so there's no URL mismatch in the UI.
+- **Snapshot test passes unchanged.** The `_isolate_canonical_stores` fixture in `conftest.py` redirects the canonical store to a tmp dir, so the snapshot's render path never reaches `_build_generic_subject` for SA/LS — it goes through the legacy builders (`_build_security_assessment_subject` / `_build_license_summary_subject`), which set their own source statuses and aren't touched by this fix. The bug only manifests when a canonical artifact exists (the production state).
+- **Legacy builder paths unchanged.** `_build_security_assessment_subject` / `_build_license_summary_subject` still own the no-canonical-artifact paths and continue producing their own source lists. Bringing them onto the dispatch would be a refactor, not a wiring fix; out of scope here.
+- **δ → β migration path stays clean.** Same rationale as `upload_dispatch.py`: if the set of dispatched subjects grows enough that the in-Python dict becomes painful, the migration unit is the builder function, not the dispatch shape. See `docs/refactor_unified_upload_session_5a_design.md` Section 6.
 
 ---
 
