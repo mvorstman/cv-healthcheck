@@ -10,7 +10,16 @@ from cvhealthcheck.artifacts.models import CanonicalArtifact
 from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.license_summary.service import LicenseSummaryService
 
-_canonical_store = ArtifactStore()
+
+def _canonical_store() -> ArtifactStore:
+    """Construct an ArtifactStore for the active project on demand.
+
+    Replaces the module-level singleton from before ADR 0002 phase 2.
+    Each call resolves the current request's active project (falling back
+    to the Default project outside a request context).
+    """
+    from cvhealthcheck.web.active_project import make_active_project_store
+    return make_active_project_store()
 from cvhealthcheck.metrics import get_capacity_license_usage, get_client_growth_summary
 from cvhealthcheck.quickhc import canonical_view as _canonical_view
 from cvhealthcheck.quickhc.description_service import resolve_tile_description
@@ -158,7 +167,7 @@ def _tile_def_to_dict(tile: Any) -> dict[str, Any]:
 
 def _load_from_canonical_store(subject_id: str) -> CanonicalArtifact | None:
     try:
-        return _canonical_store.load_latest_artifact(subject_id)
+        return _canonical_store().load_latest_artifact(subject_id)
     except FileNotFoundError:
         return None
     except Exception:
@@ -574,7 +583,7 @@ def _build_environment_subject(cc: dict | None) -> dict:
 
 def _build_security_assessment_subject(sa: dict | None) -> dict:
     try:
-        artifact = _canonical_store.load_latest_artifact("security_assessment")
+        artifact = _canonical_store().load_latest_artifact("security_assessment")
         view = _canonical_view.security_assessment_to_view(artifact)
         view["fullUrl"] = _try_url("main.quick_hc")
         return view
@@ -829,7 +838,7 @@ def _build_security_assessment_subject(sa: dict | None) -> dict:
 
 def _build_license_summary_subject(ls: dict | None) -> dict:
     try:
-        artifact = _canonical_store.load_latest_artifact("license_summary")
+        artifact = _canonical_store().load_latest_artifact("license_summary")
         view = _canonical_view.license_summary_to_view(artifact)
         view["fullUrl"] = _try_url("main.quick_hc")
         return view

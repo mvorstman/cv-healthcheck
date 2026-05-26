@@ -600,7 +600,7 @@ def test_fresh_security_assessment_import_creates_no_legacy_artifact_files(
     )
 
     # Confirm the canonical store received the artifact instead.
-    canonical_files = list((tmp_path / "canonical_artifacts").rglob("*.json"))
+    canonical_files = list((tmp_path / "data" / "catalog" / "artifacts").rglob("*.json"))
     assert canonical_files, "canonical store should have received the artifact"
 
 

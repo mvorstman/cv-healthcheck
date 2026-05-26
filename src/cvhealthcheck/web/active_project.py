@@ -21,6 +21,7 @@ from typing import Any
 
 from flask import has_request_context, session
 
+from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.db import get_db
 
 _SESSION_KEY = "active_project"
@@ -116,3 +117,25 @@ def _value_at(row: Any, key: str, fallback_index: int) -> str:
         return row[key]
     except (KeyError, TypeError):
         return row[fallback_index]
+
+
+def make_active_project_store(db: sqlite3.Connection | None = None) -> ArtifactStore:
+    """Construct an ArtifactStore scoped to the active project.
+
+    Resolves the active (customer_id, project_id) via get_active_project
+    and returns a fresh ArtifactStore. Web routes call this when they
+    need to read or write artifacts.
+    """
+    customer_id, project_id = get_active_project(db)
+    return ArtifactStore(customer_id, project_id)
+
+
+def make_default_project_store(db: sqlite3.Connection | None = None) -> ArtifactStore:
+    """Construct an ArtifactStore for the migration-seeded Default project.
+
+    Used by non-request contexts (MCP staging, CLI) that don't have a
+    Flask session to read from. Equivalent to make_active_project_store
+    in a context where the session is always empty.
+    """
+    customer_id, project_id = resolve_default_project(db)
+    return ArtifactStore(customer_id, project_id)

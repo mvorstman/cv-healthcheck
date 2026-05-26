@@ -10,6 +10,7 @@ from flask import jsonify
 from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.config import load_settings
 from cvhealthcheck.db import get_db
+from cvhealthcheck.web.active_project import make_active_project_store
 from cvhealthcheck.db import staging as _staging_db
 from cvhealthcheck.db.subjects import delete_subject, get_subject
 from cvhealthcheck.extractors.dispatcher import extract_file
@@ -148,7 +149,7 @@ def quick_hc_delete_subject(subject_id: str):
         return redirect(url_for("main.quick_hc"))
     finally:
         db.close()
-    ArtifactStore().delete_artifact(subject_id)
+    make_active_project_store().delete_artifact(subject_id)
     flash(f"'{title}' removed from catalog.", "success")
     return redirect(url_for("main.quick_hc"))
 
@@ -196,7 +197,7 @@ def quick_hc_generic_collect(subject_id: str):
         commcell_id=commcell_id,
         commcell_name=commcell_name,
     )
-    ArtifactStore().save_artifact(artifact)
+    make_active_project_store().save_artifact(artifact)
 
     if result.warnings:
         warn_str = "; ".join(result.warnings[:2])
@@ -478,7 +479,7 @@ def _unified_dispatcher_upload(subject_id: str):
                     return jsonify({"success": True, "message": msg, "title": title})
                 flash(msg, "success")
             else:
-                ArtifactStore().save_artifact(artifact)
+                make_active_project_store().save_artifact(artifact)
                 msg = f"Imported {title} successfully."
                 if inline:
                     return jsonify({"success": True, "message": msg, "title": title})

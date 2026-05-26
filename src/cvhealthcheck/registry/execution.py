@@ -8,7 +8,14 @@ from cvhealthcheck.artifacts.models import CanonicalArtifact
 from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.registry.catalog import get_tile
 
-_store = ArtifactStore()
+
+def _active_project_store() -> ArtifactStore:
+    """Construct an ArtifactStore scoped to the active project on demand.
+
+    Replaces the module-level singleton from before ADR 0002 phase 2.
+    """
+    from cvhealthcheck.web.active_project import make_active_project_store
+    return make_active_project_store()
 
 
 def build_and_save_artifact(
@@ -29,5 +36,5 @@ def build_and_save_artifact(
             f"No adapter for subject_id={subject_id!r}, source_type=SourceType.{source_type.name}"
         )
     artifact = adapter(data)
-    (store or _store).save_artifact(artifact)
+    (store or _active_project_store()).save_artifact(artifact)
     return artifact

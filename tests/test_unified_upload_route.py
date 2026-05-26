@@ -121,7 +121,9 @@ def ai_subject_client(monkeypatch: pytest.MonkeyPatch, migrated_db_path: Path):
         def delete_artifact(self, artifact_type: str) -> bool:
             return False
 
-    monkeypatch.setattr(quick_hc_routes, "ArtifactStore", _FakeArtifactStore)
+    monkeypatch.setattr(
+        quick_hc_routes, "make_active_project_store", lambda: _FakeArtifactStore()
+    )
 
     app = create_app()
     app.config["TESTING"] = True
@@ -302,7 +304,7 @@ def test_unified_route_security_assessment_no_legacy_artifact_files(
         f"Option A violated via unified route: wrote legacy artifact files "
         f"{legacy_artifact_files}"
     )
-    canonical_files = list((tmp_path / "canonical_artifacts").rglob("*.json"))
+    canonical_files = list((tmp_path / "data" / "catalog" / "artifacts").rglob("*.json"))
     assert canonical_files, "canonical store should have received the artifact"
 
 
@@ -336,7 +338,7 @@ def test_unified_route_license_summary_no_legacy_artifact_files(
         f"Option A violated via unified route (license_summary): wrote legacy "
         f"artifact files {legacy_artifact_files}"
     )
-    canonical_files = list((tmp_path / "canonical_artifacts").rglob("*.json"))
+    canonical_files = list((tmp_path / "data" / "catalog" / "artifacts").rglob("*.json"))
     assert canonical_files, "canonical store should have received the artifact"
 
 

@@ -429,12 +429,14 @@ def delete_subject(subject_id: str) -> dict:
     subject_id : str
         The subject to delete, e.g. "storage_utilization"
     """
+    from cvhealthcheck.web.active_project import make_default_project_store
     db = get_db()
     try:
         result = db_delete_subject(db, subject_id)
+        store = make_default_project_store(db)
     finally:
         db.close()
-    ArtifactStore().delete_artifact(subject_id)
+    store.delete_artifact(subject_id)
     return result
 
 

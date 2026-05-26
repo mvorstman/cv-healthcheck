@@ -45,7 +45,12 @@ def client(monkeypatch: pytest.MonkeyPatch, db_path: Path):
         def save_artifact(self, artifact: Any) -> Path:
             return Path("/tmp/fake.json")
 
-    monkeypatch.setattr(staging_db_mod, "ArtifactStore", _FakeArtifactStore)
+    from cvhealthcheck.web import active_project as _active_project_mod
+    monkeypatch.setattr(
+        _active_project_mod,
+        "make_default_project_store",
+        lambda db=None: _FakeArtifactStore(),
+    )
 
     app = create_app()
     app.config["TESTING"] = True
@@ -146,7 +151,12 @@ def migrated_client(monkeypatch: pytest.MonkeyPatch, migrated_db_path: Path):
         def save_artifact(self, artifact: Any) -> Path:
             return Path("/tmp/fake.json")
 
-    monkeypatch.setattr(staging_db_mod, "ArtifactStore", _FakeArtifactStore)
+    from cvhealthcheck.web import active_project as _active_project_mod
+    monkeypatch.setattr(
+        _active_project_mod,
+        "make_default_project_store",
+        lambda db=None: _FakeArtifactStore(),
+    )
 
     app = create_app()
     app.config["TESTING"] = True

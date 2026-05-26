@@ -84,7 +84,7 @@ def _patch_security_assessment_paths(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(
         subject_data_service_module,
         "_canonical_store",
-        ArtifactStore(base_dir=tmp_path / "canonical_artifacts"),
+        ArtifactStore("default", "default", base_dir=tmp_path / "canonical_artifacts"),
     )
 
 
@@ -112,7 +112,7 @@ def _patch_license_summary_paths(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(
         subject_data_service_module,
         "_canonical_store",
-        ArtifactStore(base_dir=tmp_path / "canonical_artifacts"),
+        ArtifactStore("default", "default", base_dir=tmp_path / "canonical_artifacts"),
     )
 
 

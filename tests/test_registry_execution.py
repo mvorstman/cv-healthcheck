@@ -95,7 +95,7 @@ class TestUnimplementedSource:
 class TestBuildAndSave:
     def _tmp_store(self) -> ArtifactStore:
         self._tmpdir = tempfile.TemporaryDirectory()
-        return ArtifactStore(base_dir=Path(self._tmpdir.name))
+        return ArtifactStore("default", "default", base_dir=Path(self._tmpdir.name))
 
     def teardown_method(self):
         if hasattr(self, "_tmpdir"):

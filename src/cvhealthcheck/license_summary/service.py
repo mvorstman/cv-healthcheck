@@ -50,7 +50,15 @@ DEFAULT_COMMCELL_CONTEXT = CommCellContext(
     customer_id=DEFAULT_CUSTOMER_CONTEXT.customer_id,
 )
 logger = logging.getLogger(__name__)
-_artifact_store = ArtifactStore()
+
+
+def _active_project_store() -> ArtifactStore:
+    """Construct an ArtifactStore scoped to the active project on demand.
+
+    Replaces the module-level singleton from before ADR 0002 phase 2.
+    """
+    from cvhealthcheck.web.active_project import make_active_project_store
+    return make_active_project_store()
 
 
 class LicenseSummaryImportError(ValueError):
@@ -88,7 +96,7 @@ class LicenseSummaryService:
         )
 
     def get_canonical(self) -> CanonicalArtifact:
-        return _artifact_store.load_latest_artifact("license_summary")
+        return _active_project_store().load_latest_artifact("license_summary")
 
     def collect_from_rest(
         self,
@@ -129,7 +137,7 @@ class LicenseSummaryService:
             import_method="rest",
             write_legacy=False,
         )
-        _artifact_store.save_artifact(_adapt_license_summary(persisted))
+        _active_project_store().save_artifact(_adapt_license_summary(persisted))
         return {
             "extraction": collected["extraction"],
             "normalized": persisted,
@@ -189,7 +197,7 @@ def import_license_summary_upload(
         imported_by=imported_by,
         write_legacy=False,
     )
-    _artifact_store.save_artifact(_adapt_license_summary(persisted))
+    _active_project_store().save_artifact(_adapt_license_summary(persisted))
     return persisted
 
 

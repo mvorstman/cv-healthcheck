@@ -57,7 +57,18 @@ DEFAULT_COMMCELL_CONTEXT = CommCellContext(
     customer_id=DEFAULT_CUSTOMER_CONTEXT.customer_id,
 )
 logger = logging.getLogger(__name__)
-_artifact_store = ArtifactStore()
+
+
+def _active_project_store() -> ArtifactStore:
+    """Construct an ArtifactStore scoped to the active project on demand.
+
+    Replaces the module-level singleton from before ADR 0002 phase 2.
+    Constructed per-call so each call sees the current session's active
+    project (or falls back to the Default project outside a request
+    context — e.g. tests, CLI, MCP staging).
+    """
+    from cvhealthcheck.web.active_project import make_active_project_store
+    return make_active_project_store()
 
 
 class SecurityAssessmentImportError(ValueError):
@@ -177,11 +188,11 @@ class SecurityAssessmentService:
                 "REST collection produced no Security Assessment findings."
             )
         canonical = adapt_reportsplus_rest(result.get("extraction") or {})
-        _artifact_store.save_artifact(canonical)
+        _active_project_store().save_artifact(canonical)
         return result
 
     def get_canonical(self) -> CanonicalArtifact:
-        return _artifact_store.load_latest_artifact("security_assessment")
+        return _active_project_store().load_latest_artifact("security_assessment")
 
 
 def import_security_assessment_upload(
@@ -375,7 +386,7 @@ def persist_security_assessment_artifact(
     if str(persisted_payload.get("source_type") or "").lower() in _import_source_types:
         try:
             canonical = _build_canonical_from_import(persisted_payload)
-            (canonical_store or _artifact_store).save_artifact(canonical)
+            (canonical_store or _active_project_store()).save_artifact(canonical)
         except Exception:
             logger.exception("Failed to write canonical artifact for security assessment import")
     return persisted_payload

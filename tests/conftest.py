@@ -7,25 +7,23 @@ from pathlib import Path
 
 import pytest
 
-from cvhealthcheck.artifacts.store import ArtifactStore
-
 
 @pytest.fixture(autouse=True)
 def _isolate_canonical_stores(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """
-    Prevent tests from touching the real canonical artifact store.
-    Each test gets its own isolated ArtifactStore backed by a temp directory.
-    Covers both the write-side stores in service modules and the read-side
-    store in subject_data_service.
-    """
-    import cvhealthcheck.security_assessment.service as sa_service
-    import cvhealthcheck.license_summary.service as ls_service
-    import cvhealthcheck.quickhc.subject_data_service as sds
+    Prevent tests from touching the real canonical artifact store on disk.
 
-    isolated = ArtifactStore(base_dir=tmp_path / "canonical_artifacts")
-    monkeypatch.setattr(sa_service, "_artifact_store", isolated)
-    monkeypatch.setattr(ls_service, "_artifact_store", isolated)
-    monkeypatch.setattr(sds, "_canonical_store", isolated)
+    Monkeypatches the ArtifactStore module's _DEFAULT_BASE_DIR so any
+    ArtifactStore(customer_id, project_id) constructed without an explicit
+    base_dir writes under tmp_path. Tests that explicitly pass base_dir
+    are unaffected.
+    """
+    import cvhealthcheck.artifacts.store as store_module
+    # Mirror the production directory name ('artifacts' under 'catalog' under
+    # 'data') so tests that assert on the path structure still pass.
+    monkeypatch.setattr(
+        store_module, "_DEFAULT_BASE_DIR", tmp_path / "data" / "catalog" / "artifacts"
+    )
 
 
 @pytest.fixture()

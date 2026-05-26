@@ -140,11 +140,11 @@ def test_dispatched_subjects_rest_source_shows_validated_with_collect_action(
         "security_assessment": "/quick-hc/security-assessment/collect",
         "license_summary": "/quick-hc/license-summary/collect",
     }
-    store = ArtifactStore(base_dir=tmp_path / "artifacts")
+    store = ArtifactStore("default", "default", base_dir=tmp_path / "artifacts")
     for subject_id, _ in expected_collect.items():
         store.save_artifact(_make_artifact(subject_id))
     original_store = sds._canonical_store
-    sds._canonical_store = store
+    sds._canonical_store = lambda: store
     try:
         data = sds.build_subject_initial_data(migrated_db)
     finally:
@@ -177,7 +177,7 @@ def test_dispatched_subjects_rest_source_shows_validated_with_collect_action(
 def test_canonical_store_wins_over_legacy(tmp_path: Path, migrated_db: sqlite3.Connection) -> None:
     from cvhealthcheck.quickhc import subject_data_service as sds
 
-    store = ArtifactStore(base_dir=tmp_path / "artifacts")
+    store = ArtifactStore("default", "default", base_dir=tmp_path / "artifacts")
     artifact = _make_artifact("security_assessment")
     store.save_artifact(artifact)
 
@@ -206,7 +206,7 @@ def test_canonical_store_wins_over_legacy(tmp_path: Path, migrated_db: sqlite3.C
 
 
 def test_artifact_store_anchored_path() -> None:
-    store = ArtifactStore()
+    store = ArtifactStore("default", "default")
     assert store.base_dir.is_absolute(), "ArtifactStore.base_dir should be absolute"
     assert store.base_dir.parts[-1] == "artifacts"
     assert store.base_dir.parts[-2] == "catalog"
@@ -258,7 +258,7 @@ def test_artifact_source_commcell_fields() -> None:
 def test_execute_approval_artifact(tmp_path: Path, migrated_db: sqlite3.Connection) -> None:
     from cvhealthcheck.quickhc import subject_data_service as sds
 
-    store = ArtifactStore(base_dir=tmp_path / "artifacts")
+    store = ArtifactStore("default", "default", base_dir=tmp_path / "artifacts")
     artifact = _make_artifact("security_assessment")
     artifact_json = artifact.model_dump_json()
 

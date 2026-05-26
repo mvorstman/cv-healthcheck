@@ -169,7 +169,10 @@ def execute_approval(
         }
 
     artifact = CanonicalArtifact.model_validate_json(existing["artifact_json"])
-    (store or ArtifactStore()).save_artifact(artifact)
+    if store is None:
+        from cvhealthcheck.web.active_project import make_default_project_store
+        store = make_default_project_store(db)
+    store.save_artifact(artifact)
     approved = approve_staged_artifact(db, stage_id, reviewed_by=reviewed_by)
     return {
         "type": "artifact",

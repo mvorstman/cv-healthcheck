@@ -94,8 +94,10 @@ def client(monkeypatch: pytest.MonkeyPatch, migrated_db_path: Path, tmp_path: Pa
     monkeypatch.setattr(quick_hc_routes, "get_db", open_db)
 
     artifact_dir = tmp_path / "artifacts"
-    isolated_store = ArtifactStore(base_dir=artifact_dir)
-    monkeypatch.setattr(quick_hc_routes, "ArtifactStore", lambda: isolated_store)
+    isolated_store = ArtifactStore("default", "default", base_dir=artifact_dir)
+    monkeypatch.setattr(
+        quick_hc_routes, "make_active_project_store", lambda: isolated_store
+    )
 
     app = create_app()
     app.config["TESTING"] = True
@@ -107,7 +109,7 @@ def client(monkeypatch: pytest.MonkeyPatch, migrated_db_path: Path, tmp_path: Pa
 # ── 1. ArtifactStore.delete_artifact ─────────────────────────────────────────
 
 def test_delete_artifact_data(tmp_path: Path) -> None:
-    store = ArtifactStore(base_dir=tmp_path / "artifacts")
+    store = ArtifactStore("default", "default", base_dir=tmp_path / "artifacts")
     artifact = _minimal_artifact("storage_utilization")
     store.save_artifact(artifact)
 
@@ -116,7 +118,7 @@ def test_delete_artifact_data(tmp_path: Path) -> None:
 
 
 def test_delete_artifact_not_found(tmp_path: Path) -> None:
-    store = ArtifactStore(base_dir=tmp_path / "artifacts")
+    store = ArtifactStore("default", "default", base_dir=tmp_path / "artifacts")
     assert store.delete_artifact("nonexistent") is False
 
 
@@ -216,7 +218,7 @@ def test_delete_mcp_tool(monkeypatch: pytest.MonkeyPatch, migrated_db_path: Path
     from cvhealthcheck.mcp import server as mcp_server
 
     artifact_dir = tmp_path / "artifacts"
-    isolated_store = ArtifactStore(base_dir=artifact_dir)
+    isolated_store = ArtifactStore("default", "default", base_dir=artifact_dir)
 
     def open_db() -> sqlite3.Connection:
         conn = sqlite3.connect(str(migrated_db_path))

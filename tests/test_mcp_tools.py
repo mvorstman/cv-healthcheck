@@ -178,7 +178,7 @@ def test_approve_staged_artifact_promotes_to_artifact_store(
             saved_artifacts.append(artifact)
             return Path("/tmp/fake.json")
 
-    monkeypatch.setattr(staging_db_mod, "ArtifactStore", FakeArtifactStore)
+    from cvhealthcheck.web import active_project as _active_project_mod; monkeypatch.setattr(_active_project_mod, "make_default_project_store", lambda db=None: FakeArtifactStore())
     staged = server.save_staged_artifact("security_assessment", json.dumps(_artifact_payload()))
 
     approved = server.approve_staged_artifact(staged["stage_id"], reviewed_by="alice")
@@ -197,7 +197,7 @@ def test_approve_staged_artifact_double_approval_raises(
         def save_artifact(self, artifact):  # type: ignore[no-untyped-def]
             return Path("/tmp/fake.json")
 
-    monkeypatch.setattr(staging_db_mod, "ArtifactStore", FakeArtifactStore)
+    from cvhealthcheck.web import active_project as _active_project_mod; monkeypatch.setattr(_active_project_mod, "make_default_project_store", lambda db=None: FakeArtifactStore())
     staged = server.save_staged_artifact("security_assessment", json.dumps(_artifact_payload()))
     server.approve_staged_artifact(staged["stage_id"], reviewed_by="alice")
 
@@ -332,7 +332,7 @@ def test_approve_subject_proposal_does_not_call_artifact_store(
         def save_artifact(self, artifact):  # type: ignore[no-untyped-def]
             store_calls.append(artifact)
 
-    monkeypatch.setattr(staging_db_mod, "ArtifactStore", TrackingArtifactStore)
+    from cvhealthcheck.web import active_project as _active_project_mod; monkeypatch.setattr(_active_project_mod, "make_default_project_store", lambda db=None: TrackingArtifactStore())
     result = server.propose_new_subject(**_proposal_kwargs())
     server.approve_staged_artifact(result["stage_id"])
 
@@ -358,7 +358,7 @@ def test_approve_regular_artifact_still_calls_artifact_store_regression(
             saved.append(artifact)
             return Path("/tmp/fake.json")
 
-    monkeypatch.setattr(staging_db_mod, "ArtifactStore", FakeArtifactStore)
+    from cvhealthcheck.web import active_project as _active_project_mod; monkeypatch.setattr(_active_project_mod, "make_default_project_store", lambda db=None: FakeArtifactStore())
     staged = server.save_staged_artifact("security_assessment", json.dumps(_artifact_payload()))
     approved = server.approve_staged_artifact(staged["stage_id"])
 
