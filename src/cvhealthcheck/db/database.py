@@ -5,7 +5,6 @@ from pathlib import Path
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DB_PATH = _PROJECT_ROOT / "data" / "app.db"
-_SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
 
 def _connect(db_path: Path) -> sqlite3.Connection:
@@ -19,14 +18,3 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 
 def get_db(db_path: Path | None = None) -> sqlite3.Connection:
     return _connect(db_path or DB_PATH)
-
-
-def init_db(db_path: Path | None = None) -> None:
-    path = db_path or DB_PATH
-    path.parent.mkdir(parents=True, exist_ok=True)
-    schema = _SCHEMA_PATH.read_text(encoding="utf-8")
-    conn = _connect(path)
-    try:
-        conn.executescript(schema)
-    finally:
-        conn.close()

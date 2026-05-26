@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from cvhealthcheck.db import init_db
 from cvhealthcheck.db.customers import create_customer
 from cvhealthcheck.db.engagements import create_engagement
 from cvhealthcheck.db.staging import (

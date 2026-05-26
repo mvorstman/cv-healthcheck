@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from cvhealthcheck.db import init_db
 from cvhealthcheck.db.migrations import run_migrations
 from cvhealthcheck.db.customers import (
     create_customer,
@@ -36,48 +35,6 @@ def db(tmp_path: Path) -> Path:
     conn.commit()
     conn.close()
     return db_path
-
-
-# ---------------------------------------------------------------------------
-# DB initialisation
-# ---------------------------------------------------------------------------
-
-
-def test_init_db_creates_db_file(tmp_path: Path) -> None:
-    db_path = tmp_path / "app.db"
-    init_db(db_path=db_path)
-    assert db_path.exists()
-
-
-def test_init_db_creates_customers_table(tmp_path: Path) -> None:
-    db_path = tmp_path / "app.db"
-    init_db(db_path=db_path)
-    with sqlite3.connect(str(db_path)) as conn:
-        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert "customers" in tables
-
-
-def test_init_db_creates_engagements_table(tmp_path: Path) -> None:
-    db_path = tmp_path / "app.db"
-    init_db(db_path=db_path)
-    with sqlite3.connect(str(db_path)) as conn:
-        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert "engagements" in tables
-
-
-def test_init_db_is_idempotent(tmp_path: Path) -> None:
-    db_path = tmp_path / "app.db"
-    init_db(db_path=db_path)
-    init_db(db_path=db_path)
-    with sqlite3.connect(str(db_path)) as conn:
-        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert "customers" in tables
-
-
-def test_init_db_creates_parent_dirs(tmp_path: Path) -> None:
-    db_path = tmp_path / "nested" / "dirs" / "app.db"
-    init_db(db_path=db_path)
-    assert db_path.exists()
 
 
 # ---------------------------------------------------------------------------

@@ -7,7 +7,8 @@ from typing import Any
 
 import pytest
 
-from cvhealthcheck.db import get_db, init_db
+from cvhealthcheck.db import get_db
+from cvhealthcheck.db.migrations import run_migrations
 import cvhealthcheck.db.staging as staging_db_mod
 import cvhealthcheck.web.routes.staging as staging_routes
 from cvhealthcheck.web.app import create_app
@@ -27,7 +28,14 @@ _ARTIFACT_JSON = json.dumps({
 @pytest.fixture()
 def db_path(tmp_path: Path) -> Path:
     path = tmp_path / "test.db"
-    init_db(db_path=path)
+    run_migrations(db_path=path)
+    # Migration 0005 seeds a default customer + project; these tests
+    # exercise empty-table behaviour, so clean the seeds.
+    conn = sqlite3.connect(str(path))
+    conn.execute("DELETE FROM projects")
+    conn.execute("DELETE FROM customers")
+    conn.commit()
+    conn.close()
     return path
 
 

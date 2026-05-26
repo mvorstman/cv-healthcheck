@@ -1,13 +1,14 @@
 """
 cvhealthcheck.db.migrations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Lightweight SQL migration runner.
+Lightweight SQL migration runner — the sole database-bootstrap path.
 
-Replaces the single-shot `init_db()` + `schema.sql` approach with a
-versioned migration sequence.  Each migration file is applied exactly
-once; the `schema_migrations` table tracks what has been applied.
+Each migration file is applied exactly once; the `schema_migrations`
+table tracks what has been applied. Called once at app startup
+(`create_app` and the MCP server) and again per-test via the
+`migrated_db_path` fixture.
 
-Usage (drop-in replacement for init_db() call in create_app and MCP server):
+Usage:
 
     from cvhealthcheck.db.migrations import run_migrations
     run_migrations()
@@ -18,8 +19,8 @@ Migration files live in src/cvhealthcheck/db/migrations/ and are named:
     0003_report_inventory.sql
     ...
 
-They are applied in lexicographic order.  A migration is skipped if its
-name already appears in schema_migrations.
+They are applied in lexicographic order. A migration is skipped if its
+name already appears in `schema_migrations`.
 """
 
 from __future__ import annotations
