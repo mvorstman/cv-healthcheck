@@ -274,9 +274,29 @@ function secTile(subjId, sec, showCheckbox) {
   </div>`;
 }
 
+// ── ACTIVE-SUBJECT URL FRAGMENT ──
+// Preserved across full-page reloads (e.g. after a Collect POST that
+// redirects back to /quick-hc) so the user doesn't lose their place.
+const _SUBJECT_HASH_RE = /^#subject=(.+)$/;
+
+function _readSubjectFromHash() {
+  const m = (window.location.hash || '').match(_SUBJECT_HASH_RE);
+  if (!m) return null;
+  try { return decodeURIComponent(m[1]); } catch { return null; }
+}
+
+function _writeSubjectToHash(id) {
+  const next = id ? `#subject=${encodeURIComponent(id)}` : '';
+  if ((window.location.hash || '') === next) return;
+  // replaceState avoids polluting browser history; pathname+search are
+  // preserved so flash-message query strings (if any) survive.
+  history.replaceState(null, '', window.location.pathname + window.location.search + next);
+}
+
 // ── OVERVIEW ──
 function showOverview() {
   activeId = null; mode = 'overview';
+  _writeSubjectToHash(null);
   _setNavActive('nav-overview');
   renderLeft();
   document.getElementById('right-footer').style.display = 'none';
@@ -307,6 +327,7 @@ function showOverview() {
 // ── CONFIG VIEW ──
 function openConfig(id) {
   activeId = id; mode = 'config';
+  _writeSubjectToHash(id);
   descriptionSaveState = { status: 'idle', message: '' };
   _setNavActive(null);
   renderLeft();
@@ -706,6 +727,11 @@ document.getElementById('btn-gen').addEventListener('click', () => {
 _restoreState();
 renderLeft();
 _startConnBadgePolling();
-const _firstSubj = allSubjs().find(s => s.id === 'environment') || allSubjs()[0];
+// Restore the subject the user was on before a full-page reload (e.g.
+// after a Collect POST) via the URL fragment, falling back to the
+// CommCell Details default.
+const _hashSubjectId = _readSubjectFromHash();
+const _hashSubj = _hashSubjectId ? allSubjs().find(s => s.id === _hashSubjectId) : null;
+const _firstSubj = _hashSubj || allSubjs().find(s => s.id === 'environment') || allSubjs()[0];
 if (_firstSubj) openConfig(_firstSubj.id);
 else showOverview();
