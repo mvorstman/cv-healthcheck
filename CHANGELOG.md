@@ -10,6 +10,30 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-26 (housekeeping: gitignore app.db, README refresh)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `e58adca` (gitignore), `6d2daed` (README refresh).
+**Test status:** 483 passing (unchanged).
+
+Two priority-ordered backlog items cleared in one session — both as small as expected.
+
+### Changed
+
+- **`data/app.db` is now gitignored.** `git rm --cached data/app.db` untracks the file; the local copy stays on disk. Added entries for the WAL/SHM/journal sidecars too. On a fresh clone, `run_migrations()` (`src/cvhealthcheck/db/migrations/__init__.py:69`) runs at app startup (`web/app.py:13`, `mcp/server.py:59`) and produces the working schema from the four migration files. Migration `0003_report_inventory.sql` seeds the six system subjects plus their sources and section-instruction rows via `INSERT OR IGNORE`, so the Quick HC workspace renders correctly out of the box — no separate bootstrap mechanism needed. Verified by simulating a fresh DB; the `subjects` table comes back populated with `environment`, `license_summary`, `backup_job_summary`, `capacity_license`, `client_growth`, `security_assessment`.
+- **README refresh.** Three edits, no new sections:
+  - Test count line `298` → `483` (the "Session Validation" line had been stale across many sessions).
+  - "Legacy detail-route behavior" block replaced — it still described the hyphenated `POST /quick-hc/<subject>/import` routes that session 4 deleted. Now correctly describes the unified `POST /quick-hc/<subject_id>/import` dispatch (with `upload_dispatch.py` wiring), the two surviving hyphenated `/collect` endpoints for SA/LS, and the GET redirects carrying `#subject=<id>` fragments.
+  - Bottom "Pages:" list split into "Customer-facing" (`/`, `/quick-hc`, `/quick-hc/commcell`, `/quick-hc/report`) and "Internal / development" (everything else). The previous list mixed the two — `/` is customer-facing (redirects to `/quick-hc`), everything else is dev.
+
+### Notes
+
+- **AI-subject state is dev-machine.** The two `ai`-created subjects in current `data/app.db` (`cloud_storage_egress_ingress`, `storage_utilization`) are user-created via MCP `propose_new_subject` or AI import flows; they're not load-bearing for a fresh clone. Losing them on a wipe is acceptable behavior.
+- **Tests are unaffected.** `tests/conftest.py:32` `migrated_db_path` fixture creates tmp-path DBs for every test; the real `data/app.db` is never touched by the test suite.
+- **Deeper README staleness flagged but not fixed.** The Security Assessment section (around L270-278) lists "Latest persisted multi-source artifacts" paths under `data/imports/security_assessment/latest*.json` that no longer match the canonical-store layout. Out of scope for this refresh — separate session.
+
+---
+
 ## 2026-05-26 (post-5b — server-side half of the Collect-position fix)
 
 **Branch:** `feature/basic-healthcheck-report-output`
