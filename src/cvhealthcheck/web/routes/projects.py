@@ -188,7 +188,38 @@ def projects_new(customer_id: str):
 
 @bp.route("/customers/<customer_id>/projects/<project_id>")
 def projects_detail(customer_id: str, project_id: str):
-    return ("Not implemented yet (phase 4 step 3).", 501)
+    from cvhealthcheck.web.active_project import get_active_project
+
+    db = get_db()
+    try:
+        customer = _fetch_customer(db, customer_id)
+        if customer is None:
+            return ("Customer not found.", 404)
+        project = _fetch_project(db, customer_id, project_id)
+        if project is None:
+            return ("Project not found.", 404)
+        finalizations = db.execute(
+            "SELECT finalization_id, finalization_number, finalized_at,"
+            "       finalized_by, ticket_reference, notes"
+            " FROM finalizations WHERE project_id = ?"
+            " ORDER BY finalization_number DESC",
+            (project_id,),
+        ).fetchall()
+        finalizations = [dict(row) for row in finalizations]
+    finally:
+        db.close()
+
+    active_customer_id, active_project_id = get_active_project()
+    is_active = (
+        active_customer_id == customer_id and active_project_id == project_id
+    )
+    return render_template(
+        "project_detail.html",
+        customer=customer,
+        project=project,
+        finalizations=finalizations,
+        is_active=is_active,
+    )
 
 
 @bp.route("/customers/<customer_id>/projects/<project_id>/edit", methods=["GET", "POST"])

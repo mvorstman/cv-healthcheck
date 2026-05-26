@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ project.project_number }} — {{ customer.customer_name }} — Quick HC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='quick_hc.css') }}">
+  <script>
+    (function () {
+      var theme = localStorage.getItem('quickhc-theme-v1');
+      if (theme === 'dark' || theme === 'light') {
+        document.documentElement.dataset.theme = theme;
+      } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.dataset.theme = 'dark';
+      } else {
+        document.documentElement.dataset.theme = 'light';
+      }
+    })();
+  </script>
+  <style>
+    html, body { overflow: auto; }
+    .cust-page {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 48px 24px 64px;
+      font-family: var(--font);
+      color: var(--text-1);
+    }
+    .cust-back {
+      display: inline-block;
+      font-size: 12px;
+      color: var(--text-2);
+      text-decoration: none;
+      margin-bottom: 24px;
+    }
+    .cust-back:hover { color: var(--accent); }
+    .cust-breadcrumb {
+      font-size: 12px;
+      color: var(--text-2);
+      margin-bottom: 6px;
+    }
+    .cust-breadcrumb a {
+      color: var(--text-2);
+      text-decoration: none;
+    }
+    .cust-breadcrumb a:hover { color: var(--accent); }
+    .cust-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      gap: 12px;
+    }
+    .cust-title {
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .cust-title-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .cust-card {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px 20px;
+      background: var(--bg-panel);
+      margin-bottom: 12px;
+    }
+    .cust-meta-grid {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 6px 18px;
+      font-size: 13px;
+      margin: 0;
+    }
+    .cust-meta-grid dt {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      font-family: var(--mono);
+    }
+    .cust-meta-grid dd { margin: 0; }
+    .cust-section-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 32px 0 12px;
+    }
+    .cust-btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      padding: 8px 14px;
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .cust-btn:hover { filter: brightness(1.1); }
+    .cust-btn-link {
+      background: var(--bg-panel);
+      color: var(--text-1);
+      border: 1px solid var(--border);
+    }
+    .cust-btn-link:hover { border-color: var(--accent); color: var(--accent); }
+    .cust-btn-danger {
+      color: #d04040;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+    }
+    .cust-btn-danger:hover { border-color: #d04040; }
+    .cust-active-badge {
+      display: inline-block;
+      background: var(--accent);
+      color: white;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 3px;
+    }
+    .cust-empty {
+      padding: 24px;
+      text-align: center;
+      color: var(--text-2);
+      font-size: 13px;
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+    }
+    .cust-flash {
+      padding: 10px 14px;
+      border-radius: 5px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+    .cust-flash-success {
+      background: rgba(80, 180, 100, 0.12);
+      color: #2c8040;
+      border: 1px solid rgba(80, 180, 100, 0.3);
+    }
+    .cust-flash-error {
+      background: rgba(208, 64, 64, 0.12);
+      color: #d04040;
+      border: 1px solid rgba(208, 64, 64, 0.3);
+    }
+    .cust-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      border: 1px solid var(--border);
+      background: var(--bg-panel);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .cust-table th, .cust-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    .cust-table th {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      font-family: var(--mono);
+      background: var(--bg);
+    }
+    .cust-table tr:last-child td { border-bottom: none; }
+    .cust-table td.mono {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-2);
+    }
+  </style>
+</head>
+<body>
+
+{% include "partials/active_project_selector.html" %}
+
+<div class="cust-page">
+  <a class="cust-back" href="{{ url_for('main.customers_detail', customer_id=customer.customer_id) }}">← Back to {{ customer.customer_name }}</a>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="cust-flash cust-flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="cust-breadcrumb">
+    <a href="{{ url_for('main.customers_list') }}">Customers</a>
+    →
+    <a href="{{ url_for('main.customers_detail', customer_id=customer.customer_id) }}">{{ customer.customer_name }}</a>
+  </div>
+
+  <div class="cust-header">
+    <div class="cust-title-meta">
+      <div class="cust-title">{{ project.project_number }}</div>
+      {% if is_active %}
+        <span class="cust-active-badge">Active</span>
+      {% endif %}
+    </div>
+    <div style="display: flex; gap: 8px;">
+      {% if not is_active %}
+        <form method="post" action="{{ url_for('main.api_active_project') }}" style="display: inline;">
+          <input type="hidden" name="customer_id" value="{{ customer.customer_id }}">
+          <input type="hidden" name="project_id" value="{{ project.project_id }}">
+          <input type="hidden" name="redirect_to" value="{{ url_for('main.projects_detail', customer_id=customer.customer_id, project_id=project.project_id) }}">
+          <button type="submit" class="cust-btn">Set as active</button>
+        </form>
+      {% endif %}
+      <a class="cust-btn cust-btn-link" href="{{ url_for('main.projects_edit', customer_id=customer.customer_id, project_id=project.project_id) }}">Edit</a>
+      <a class="cust-btn cust-btn-danger" href="{{ url_for('main.projects_delete', customer_id=customer.customer_id, project_id=project.project_id) }}">Delete</a>
+    </div>
+  </div>
+
+  <div class="cust-card">
+    <dl class="cust-meta-grid">
+      <dt>Project number</dt>
+      <dd>{{ project.project_number }}</dd>
+      <dt>Project ID</dt>
+      <dd style="font-family: var(--mono); font-size: 12px; color: var(--text-2);">{{ project.project_id }}</dd>
+      {% if project.ticket_reference %}
+        <dt>Ticket reference</dt>
+        <dd style="font-family: var(--mono); font-size: 12px;">{{ project.ticket_reference }}</dd>
+      {% endif %}
+      {% if project.assigned_consultant %}
+        <dt>Assigned consultant</dt>
+        <dd>{{ project.assigned_consultant }}</dd>
+      {% endif %}
+      <dt>Created</dt>
+      <dd style="font-family: var(--mono); font-size: 12px; color: var(--text-2);">{{ project.created_at }}</dd>
+      <dt>Working state modified</dt>
+      <dd style="font-family: var(--mono); font-size: 12px; color: var(--text-2);">{{ project.working_state_modified_at }}</dd>
+    </dl>
+  </div>
+
+  <div class="cust-section-title">Finalizations</div>
+
+  {% if finalizations %}
+    <table class="cust-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Finalized at</th>
+          <th>Finalized by</th>
+          <th>Ticket</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in finalizations %}
+          <tr>
+            <td class="mono">{{ f.finalization_number }}</td>
+            <td class="mono">{{ f.finalized_at }}</td>
+            <td>{{ f.finalized_by or '—' }}</td>
+            <td class="mono">{{ f.ticket_reference or '—' }}</td>
+            <td>{{ f.notes or '—' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="cust-empty">
+      No finalizations yet. The finalize action lands in a future phase.
+    </div>
+  {% endif %}
+</div>
+
+</body>
+</html>
