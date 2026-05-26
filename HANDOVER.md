@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-26 (post-5b — server-side half of Collect-position fix)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** the redirect-fragment commit (see `git log -1`)
+**Last commit:** `47c58b0` — Make subject-specific redirects carry #subject=<id> for the JS to restore
 **Test status:** 483 passing
 
 ---
