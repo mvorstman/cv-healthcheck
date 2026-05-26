@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-26 (ADR 0002 phase 1 wrap-up)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** the phase 1 wrap-up commit (see `git log -1`)
+**Last commit:** `8d78a02` — ADR 0002 phase 1 wrap-up: CHANGELOG entry, HANDOVER points at phase 2
 **Test status:** 482 passing
 
 ---
