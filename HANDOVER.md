@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-26 (post-5b regression fix — source-provenance dispatch)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** the source-provenance dispatch commit (see `git log -1`)
+**Last commit:** `c7c79f9` — Wire source provenance into _build_generic_sources via a dispatch module
 **Test status:** 482 passing
 
 ---
