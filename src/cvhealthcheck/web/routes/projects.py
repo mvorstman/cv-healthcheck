@@ -300,7 +300,77 @@ def projects_edit(customer_id: str, project_id: str):
 
 @bp.route("/customers/<customer_id>/projects/<project_id>/delete", methods=["GET", "POST"])
 def projects_delete(customer_id: str, project_id: str):
-    return ("Not implemented yet (phase 4 step 5).", 501)
+    from cvhealthcheck.web.active_project import (
+        get_active_project,
+        resolve_default_project,
+        set_active_project,
+    )
+
+    db = get_db()
+    try:
+        customer = _fetch_customer(db, customer_id)
+        if customer is None:
+            return ("Customer not found.", 404)
+        existing = _fetch_project(db, customer_id, project_id)
+        if existing is None:
+            return ("Project not found.", 404)
+        row = db.execute(
+            "SELECT COUNT(*) FROM finalizations WHERE project_id = ?",
+            (project_id,),
+        ).fetchone()
+        finalization_count = int(row[0]) if row else 0
+    finally:
+        db.close()
+
+    if request.method == "POST":
+        if finalization_count > 0:
+            # Defense in depth — the GET-side renders without a confirm
+            # button, but a direct POST could still land. Finalized
+            # projects cannot be deleted via the UI per ADR 0002.
+            return render_template(
+                "project_delete.html",
+                customer=customer,
+                project=existing,
+                finalization_count=finalization_count,
+                blocked=True,
+            ), 400
+
+        # If we're deleting the active project, fall back to the
+        # migration-seeded Default project (which is guaranteed to
+        # exist) so the workspace doesn't render against a dangling
+        # project_id.
+        active_customer_id, active_project_id = get_active_project()
+        was_active = (
+            active_customer_id == customer_id and active_project_id == project_id
+        )
+
+        db = get_db()
+        try:
+            db.execute(
+                "DELETE FROM projects WHERE customer_id = ? AND project_id = ?",
+                (customer_id, project_id),
+            )
+            db.commit()
+            if was_active:
+                fallback_customer, fallback_project = resolve_default_project(db)
+        finally:
+            db.close()
+
+        if was_active:
+            set_active_project(fallback_customer, fallback_project)
+
+        flash(f"Project '{existing['project_number']}' deleted.", "success")
+        return redirect(
+            url_for("main.customers_detail", customer_id=customer_id)
+        )
+
+    return render_template(
+        "project_delete.html",
+        customer=customer,
+        project=existing,
+        finalization_count=finalization_count,
+        blocked=finalization_count > 0,
+    )
 
 
 @bp.route("/api/active-project", methods=["GET", "POST"])
