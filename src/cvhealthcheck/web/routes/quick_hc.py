@@ -58,6 +58,21 @@ from cvhealthcheck.web.routes.upload_dispatch import (
 )
 
 
+def _workspace_redirect(subject_id: str | None = None):
+    """Redirect to the Quick HC workspace.
+
+    When subject_id is provided, append #subject=<subject_id> so the JS
+    init can re-open that subject after the full-page reload. Pairs
+    with _readSubjectFromHash in quick_hc.js. The subject_id is the
+    underscored form used in the database and in the workspace's
+    subject keys (not the hyphenated route form).
+    """
+    url = url_for("main.quick_hc")
+    if subject_id:
+        url = f"{url}#subject={subject_id}"
+    return redirect(url)
+
+
 def _read_commcell_provenance() -> tuple[str | None, str | None]:
     """Read CommCell identity from commserv.json for artifact provenance."""
     try:
@@ -145,7 +160,7 @@ def quick_hc_generic_collect(subject_id: str):
     base_url = settings.base_url
     if not base_url:
         flash("Commvault base URL is not configured.", "error")
-        return redirect(url_for("main.quick_hc"))
+        return _workspace_redirect(subject_id)
 
     token = _current_token()
     report_definition = REPORT_DEFINITIONS.get(subject_id)
@@ -155,7 +170,9 @@ def quick_hc_generic_collect(subject_id: str):
         subject = get_subject(db, subject_id)
         if subject is None:
             flash(f"Subject '{subject_id}' not found.", "error")
-            return redirect(url_for("main.quick_hc"))
+            # Subject doesn't exist — don't preserve the fragment, the
+            # JS would fall back to the default anyway.
+            return _workspace_redirect()
         title = subject["title"]
         version = subject["version"]
         with CommvaultSession(base_url, token, verify_ssl=settings.verify_ssl) as cv_session:
@@ -163,13 +180,13 @@ def quick_hc_generic_collect(subject_id: str):
             result = extractor.extract(subject_id, version, report_definition=report_definition)
     except Exception as exc:
         flash(f"Collection failed: {exc}", "error")
-        return redirect(url_for("main.quick_hc"))
+        return _workspace_redirect(subject_id)
     finally:
         db.close()
 
     if result.errors:
         flash(f"Collection errors: {'; '.join(result.errors)}", "error")
-        return redirect(url_for("main.quick_hc"))
+        return _workspace_redirect(subject_id)
 
     commcell_id, commcell_name = _read_commcell_provenance()
     artifact = result_to_artifact(
@@ -186,7 +203,7 @@ def quick_hc_generic_collect(subject_id: str):
         flash(f"REST collection completed for '{title}'. Warnings: {warn_str}", "success")
     else:
         flash(f"REST collection completed for '{title}'.", "success")
-    return redirect(url_for("main.quick_hc"))
+    return _workspace_redirect(subject_id)
 
 
 @bp.route("/quick-hc/report", methods=["GET", "POST"])
@@ -231,7 +248,7 @@ def quick_hc_commcell():
 
 @bp.route("/quick-hc/security-assessment")
 def quick_hc_security_assessment():
-    return redirect(url_for("main.quick_hc"))
+    return _workspace_redirect("security_assessment")
 
 
 @bp.route("/quick-hc/security-assessment/collect", methods=["POST"])
@@ -268,7 +285,7 @@ def quick_hc_security_assessment_collect():
 
 @bp.route("/quick-hc/license-summary")
 def quick_hc_license_summary():
-    return redirect(url_for("main.quick_hc"))
+    return _workspace_redirect("license_summary")
 
 
 @bp.route("/quick-hc/backup-job-summary")
@@ -414,7 +431,7 @@ def _unified_dispatcher_upload(subject_id: str):
         if inline:
             return jsonify({"success": False, "error": "No file selected."}), 400
         flash("No file selected.", "error")
-        return redirect(url_for("main.quick_hc"))
+        return _workspace_redirect(subject_id)
 
     suffix = Path(filename).suffix or ".tmp"
     tmp_path: Path | None = None
@@ -475,4 +492,4 @@ def _unified_dispatcher_upload(subject_id: str):
             tmp_path.unlink(missing_ok=True)
         db.close()
 
-    return redirect(url_for("main.quick_hc"))
+    return _workspace_redirect(subject_id)

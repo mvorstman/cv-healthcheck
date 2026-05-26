@@ -10,6 +10,34 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-26 (post-5b — server-side half of the Collect-position fix)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** the redirect-fragment commit that publishes this entry.
+**Test status:** 483 passing (was 482; +1 new pin).
+
+Server-side complement to `fecf68c` ("Preserve active subject across Collect's full-page reload via URL fragment"). The earlier client-side fix wrote `#subject=<id>` to the URL on every `openConfig()` — but Collect's full-page reload comes from a server-issued `Location: /quick-hc` redirect that doesn't carry the fragment, so on reload `_readSubjectFromHash` found nothing and the JS init defaulted to `environment` (CommCell Details). Confirmed by user after force-reload.
+
+### Fixed
+
+- **`src/cvhealthcheck/web/routes/quick_hc.py`** — added `_workspace_redirect(subject_id=None)` helper that returns `redirect(url_for("main.quick_hc") + "#subject=<subject_id>")` when `subject_id` is supplied, plain `redirect(url_for("main.quick_hc"))` otherwise. Wired into every subject-specific redirect site:
+  - `quick_hc_security_assessment` (legacy GET) and `quick_hc_license_summary` (legacy GET) — the indirection through which the SA/LS collect handlers chain to the workspace. One line each.
+  - `quick_hc_generic_collect` — all four redirect sites (no base URL, exception, errors, success) now carry the subject fragment. The "subject not found" site stays bare (the subject doesn't exist; preserving its id would be nonsensical).
+  - `_unified_dispatcher_upload` — both redirect sites (no file selected, completion) carry the subject fragment so AI-subject uploads also land on the right tile.
+  - The `_handle_system_upload` path (SA/LS uploads via the unified import route) inherits the fragment through the legacy GET chain — no direct change needed.
+- **`quick_hc_delete_subject`** intentionally left unchanged. After delete, the subject doesn't exist; preserving the fragment for a non-existent subject would be incorrect — the JS would fall back to the default anyway.
+
+### Added
+
+- **`tests/test_core_solidity.py::test_subject_specific_redirects_carry_subject_fragment`** — pins the legacy GETs (which all subject-specific upload/collect chains route through). Asserts both legacy GETs redirect to `/quick-hc#subject=<id>`.
+
+### Notes
+
+- **Existing test assertions safe.** All test redirect-location checks use `"/quick-hc" in response.headers["Location"]` (substring match) — the fragment doesn't break them. The one `endswith("/quick-hc")` check is on the `quick_hc_delete_subject` redirect, which intentionally stays bare. No test updates needed.
+- **Subject ID form.** Fragments use the underscored DB form (`security_assessment`, `license_summary`), matching the subject IDs `build_subject_initial_data` produces and the JS regex `/^#subject=(.+)$/` compares against. Not the hyphenated route form.
+
+---
+
 ## 2026-05-26 (post-5b regression fix — source-provenance dispatch)
 
 **Branch:** `feature/basic-healthcheck-report-output`

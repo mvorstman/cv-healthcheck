@@ -105,6 +105,27 @@ def test_system_subject_has_collect_button_when_instructions_exist(
     assert rest_src.get("collect_url"), "REST source should have a collect_url"
 
 
+def test_subject_specific_redirects_carry_subject_fragment() -> None:
+    # The Collect form posts to a server route that flashes and
+    # redirects back to /quick-hc. Without the #subject=<id> fragment
+    # the JS init falls back to the default (environment) and the user
+    # loses their place. The fix is server-side: subject-specific
+    # redirects must include the fragment so quick_hc.js can re-open
+    # the subject after the full-page reload.
+    from cvhealthcheck.web.app import create_app
+    app = create_app()
+    client = app.test_client()
+
+    # Legacy GETs that the SA/LS collect handlers chain through.
+    r = client.get("/quick-hc/security-assessment")
+    assert r.status_code == 302
+    assert r.headers["Location"].endswith("/quick-hc#subject=security_assessment")
+
+    r = client.get("/quick-hc/license-summary")
+    assert r.status_code == 302
+    assert r.headers["Location"].endswith("/quick-hc#subject=license_summary")
+
+
 def test_dispatched_subjects_rest_source_shows_validated_with_collect_action(
     migrated_db: sqlite3.Connection, tmp_path: Path,
 ) -> None:

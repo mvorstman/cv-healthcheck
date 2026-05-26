@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-26 (post-5b regression fix — source-provenance dispatch)
+**Last updated:** 2026-05-26 (post-5b — server-side half of Collect-position fix)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `c7c79f9` — Wire source provenance into _build_generic_sources via a dispatch module
-**Test status:** 482 passing
+**Last commit:** the redirect-fragment commit (see `git log -1`)
+**Test status:** 483 passing
 
 ---
 
