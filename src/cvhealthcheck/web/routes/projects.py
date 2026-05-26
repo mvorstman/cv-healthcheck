@@ -297,6 +297,84 @@ def projects_edit(customer_id: str, project_id: str):
     )
 
 
+@bp.route("/customers/<customer_id>/projects/<project_id>/finalize", methods=["GET", "POST"])
+def projects_finalize(customer_id: str, project_id: str):
+    from cvhealthcheck.db.finalizations import FinalizationError, finalize_project
+    import cvhealthcheck.artifacts.store as _store_module
+
+    db = get_db()
+    try:
+        customer = _fetch_customer(db, customer_id)
+        if customer is None:
+            return ("Customer not found.", 404)
+        project = _fetch_project(db, customer_id, project_id)
+        if project is None:
+            return ("Project not found.", 404)
+        next_row = db.execute(
+            "SELECT MAX(finalization_number) FROM finalizations WHERE project_id = ?",
+            (project_id,),
+        ).fetchone()
+        next_number = (int(next_row[0]) if next_row and next_row[0] is not None else 0) + 1
+    finally:
+        db.close()
+
+    # Count subjects in working — same signal finalize_project uses to
+    # decide whether to proceed.
+    working_root = (
+        _store_module._DEFAULT_BASE_DIR / customer_id / project_id / "working"
+    )
+    working_subjects = (
+        sorted(p.name for p in working_root.iterdir() if p.is_dir())
+        if working_root.is_dir()
+        else []
+    )
+
+    if request.method == "POST":
+        if not working_subjects:
+            return render_template(
+                "project_finalize.html",
+                customer=customer,
+                project=project,
+                next_number=next_number,
+                working_subjects=[],
+                blocked=True,
+            ), 400
+        db = get_db()
+        try:
+            try:
+                new_number = finalize_project(db, customer_id, project_id)
+            except FinalizationError as exc:
+                # Race: subjects vanished between our check and the call.
+                return render_template(
+                    "project_finalize.html",
+                    customer=customer,
+                    project=project,
+                    next_number=next_number,
+                    working_subjects=working_subjects,
+                    blocked=True,
+                    error=str(exc),
+                ), 400
+        finally:
+            db.close()
+        flash(f"Finalized as #{new_number}.", "success")
+        return redirect(
+            url_for(
+                "main.projects_detail",
+                customer_id=customer_id,
+                project_id=project_id,
+            )
+        )
+
+    return render_template(
+        "project_finalize.html",
+        customer=customer,
+        project=project,
+        next_number=next_number,
+        working_subjects=working_subjects,
+        blocked=not working_subjects,
+    )
+
+
 @bp.route("/customers/<customer_id>/projects/<project_id>/delete", methods=["GET", "POST"])
 def projects_delete(customer_id: str, project_id: str):
     from cvhealthcheck.web.active_project import (
