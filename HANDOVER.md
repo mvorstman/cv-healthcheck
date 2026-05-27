@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-27 (ADR 0003 amendment: protocol pivots to GET-only)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *the amendment CHANGELOG+HANDOVER commit; pointer-update commit follows.*
+**Last commit:** `689a3e8` — CHANGELOG + HANDOVER: ADR 0003 protocol amendment
 **Test status:** 581 passing (docs only — no code change this session)
 
 ---
