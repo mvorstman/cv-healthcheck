@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-27 (tool-selection guidance)
+**Last updated:** 2026-05-27 (data flow audit refresh)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `3bc1741` — docs: add Claude Code vs Claude.ai tool-selection guidance
+**Last commit:** `c520086` — docs: refresh data flow audit for post-ADR-0002 architecture
 **Test status:** 554 passing
 
 ---
@@ -24,9 +24,7 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## What was just completed
 
-**ADR 0002 phase 5 — finalize and reload flows. ADR 0002 implementation is complete.** Five code commits (`e4c582d` core logic + 15 unit tests, `8dfb0a3` finalize UI, `e86ce90` reload UI, `33c96fb` finalizations placeholder refresh, `158841c` 12 route tests) plus this session's wrap-up. The audit-trail promise of ADR 0002 is now operational: consultants can finalize a project's working state, see the immutable history on the project detail page, reload the latest finalization back into working for corrections, and re-finalize.
-
-Test count 527 → 554 (+27 across phase 5). The full five-phase arc landed across 2026-05-26 → 2026-05-27.
+**`docs/data_flow_audit.md` refresh.** Targeted update so the audit reflects the post-ADR-0002 architecture before the ADR 0003 design conversation. Section 1 (directory tree) now shows the project-scoped `<customer>/<project>/{working,finalized}/` subtree alongside the still-globally-scoped legacy stores; a new "Three on-disk regions" summary calls out the structural split. Section 3 (read paths) has a new "Request → active project → ArtifactStore" subsection at the top describing the resolver flow through `make_active_project_store()` and friends. Section 4 (write paths) updates `ArtifactStore.save_artifact` to reflect project-scoping and adds two new write-path entries: `finalize_project` as the only writer to `finalized/<n>/`, and `reload_latest_finalization` as the working/ restorer. Section 5 (forks) gains a "Working/finalized split (ADR 0002 phase 5)" entry. Section 6 surprises #1 and #2 are refreshed to current state. No code touched; test count unchanged at 554.
 
 ---
 
@@ -44,6 +42,8 @@ The REST extractor is the "live collection" half of the consulting workflow. Cus
 
 The session that lands next should write ADR 0003 as a design proposal — no implementation. The shape of the conversation: what authentication patterns work for the consulting-engagement model? Are credentials stored, prompted per session, or supplied per-collection? How does the extractor route collected data into the active project's storage? What's the relationship with the existing `RESTExtractor` (`src/cvhealthcheck/extractors/rest.py`) used by the generic collect route today, and the dedicated `SecurityAssessmentService.collect_from_rest` / `LicenseSummaryService.collect_from_rest` paths?
 
+`docs/data_flow_audit.md` was refreshed against current architecture in the previous session — read it before writing ADR 0003 for the project-scoped storage layout, the active-project resolver flow, and the forks in place today.
+
 ### Existing tooling worth surveying for ADR 0003
 
 - `src/cvhealthcheck/auth/commvault_auth.py` — Flask session-backed CommCell token management.
@@ -56,23 +56,22 @@ ADR 0003 sits at the intersection of all of these. Its job is to design the unif
 
 ### Priority-ordered backlog
 
-1. **ADR 0003 — REST extractor with credentials.** Design first, no implementation. Single recommended next action above repeats this; listed here as #1 for completeness.
-2. **Refresh `docs/data_flow_audit.md`.** Currently stale after ADR 0002 implementation — the storage layout description still reflects pre-phase-2 reality. Do this BEFORE ADR 0003 so the design conversation has fresh visual ground (where data lives, how reads and writes flow).
-3. **AI import workstream — staging UI for proposal review, REST extractor with credentials, compliance rules.** Larger scope; ADR 0002's implementation likely surfaced architectural choices that simplify some of this. Auth/extractor design will overlap with ADR 0003.
-4. **CommCell-discovery flow for customer creation.** Falls out of ADR 0003's auth design — same plumbing, different destination (customer record's identity fields vs project's working state).
-5. **Report-provenance verification.** When an HTML/CSV report is imported, check the embedded CommCell identity matches the active customer's stored CommCell identity. Catches "wrong customer's report uploaded by accident" mistakes.
-6. **Read-only per-finalization view.** Deferred from phase 5 step 5. `GET /customers/<c>/projects/<p>/finalizations/<n>` would let consultants see a delivered report's contents alongside the current working state. Needs either an ArtifactStore read-mode that points at `finalized/<n>/` paths, or a sibling helper. Architectural decision left to that session.
-7. **Customer panel on the right side of `quick_hc.html`.** Raised this session, not acted on. A right-side panel surfacing the active customer's context (customer name, CommCell hostname/ID, active project metadata) alongside the existing subject workspace. Pairs with the active-project selector at the top.
-8. **`shared.py` split.** `src/cvhealthcheck/web/routes/shared.py` is a 413-line god-module with 60+ imports spanning auth, ReportsPlus, metrics, license_summary, security_assessment. Flagged in the 2026-05-20 review; still open. Split by concern.
-9. **`SecurityAssessmentArtifactRegistry` rename.** Class at `src/cvhealthcheck/security_assessment/registry.py` is SA-specific in name but the registry pattern is also used by License Summary. Decide: rename to a generic `ArtifactRegistry` and unify, or clarify the per-domain naming as intentional. Flagged in the 2026-05-20 review.
-10. **Hardcoded URLs in `report_service.py`.** Partial work landed (CHANGELOG 2026-05-20 says detail URLs were replaced with `TileDefinition.detail_endpoint` resolution through `url_for()`). Audit whether any hardcoded URLs remain.
-11. **Left-nav structural review.** The sidebar has accumulated items (Overview, Reports, Customers, Settings, Staging, plus SUBJECTS). Grouping or visual hierarchy will help at some point.
-12. **Two-CRUD-APIs investigation.** Customer routes use both inline SQL through `get_db()` AND `db/customers.py`'s module-level helpers — phase 3 surprise. Pick one, retire the other. Same review applies to projects.
-13. **Template inheritance cleanup.** Some workspace templates extend `base.html`, others are self-contained — phase 4 surprise. Active-project selector is included in both ways, which is awkward. Consolidate.
-14. **`engagements` table cleanup.** Empty since migration 0001; predates ADR 0002. No production writes. Retire if no future use surfaces (ADR 0002 explicitly replaced this concept with `projects`).
-15. **Project-scope the legacy SA/LS stores** (`data/catalog/{security_assessment,license_summary}/`). Globally scoped today (Option A read fallback). Needs a project-scoping story eventually.
-16. **`data/catalog/reportsplus/` retention.** Audit Section 6 #3 — 200+ raw extraction files accumulating with no retention policy.
-17. **Audit Section 6 #2, #5, #6** — legacy-store accumulation, orphaned SQLite registries, labreadiness unread.
+1. **ADR 0003 — REST extractor with credentials.** Design first, no implementation. Single recommended next action above repeats this; listed here as #1 for completeness. The data flow audit (`docs/data_flow_audit.md`) was refreshed this session as a prerequisite — the ADR 0003 design conversation now has a fresh post-ADR-0002 baseline to read against.
+2. **AI import workstream — staging UI for proposal review, REST extractor with credentials, compliance rules.** Larger scope; ADR 0002's implementation likely surfaced architectural choices that simplify some of this. Auth/extractor design will overlap with ADR 0003.
+3. **CommCell-discovery flow for customer creation.** Falls out of ADR 0003's auth design — same plumbing, different destination (customer record's identity fields vs project's working state).
+4. **Report-provenance verification.** When an HTML/CSV report is imported, check the embedded CommCell identity matches the active customer's stored CommCell identity. Catches "wrong customer's report uploaded by accident" mistakes.
+5. **Read-only per-finalization view.** Deferred from phase 5 step 5. `GET /customers/<c>/projects/<p>/finalizations/<n>` would let consultants see a delivered report's contents alongside the current working state. Needs either an ArtifactStore read-mode that points at `finalized/<n>/` paths, or a sibling helper. Architectural decision left to that session.
+6. **Customer panel on the right side of `quick_hc.html`.** Raised previously, not acted on. A right-side panel surfacing the active customer's context (customer name, CommCell hostname/ID, active project metadata) alongside the existing subject workspace. Pairs with the active-project selector at the top.
+7. **`shared.py` split.** `src/cvhealthcheck/web/routes/shared.py` is a 413-line god-module with 60+ imports spanning auth, ReportsPlus, metrics, license_summary, security_assessment. Flagged in the 2026-05-20 review; still open. Split by concern.
+8. **`SecurityAssessmentArtifactRegistry` rename.** Class at `src/cvhealthcheck/security_assessment/registry.py` is SA-specific in name but the registry pattern is also used by License Summary. Decide: rename to a generic `ArtifactRegistry` and unify, or clarify the per-domain naming as intentional. Flagged in the 2026-05-20 review.
+9. **Hardcoded URLs in `report_service.py`.** Partial work landed (CHANGELOG 2026-05-20 says detail URLs were replaced with `TileDefinition.detail_endpoint` resolution through `url_for()`). Audit whether any hardcoded URLs remain.
+10. **Left-nav structural review.** The sidebar has accumulated items (Overview, Reports, Customers, Settings, Staging, plus SUBJECTS). Grouping or visual hierarchy will help at some point.
+11. **Two-CRUD-APIs investigation.** Customer routes use both inline SQL through `get_db()` AND `db/customers.py`'s module-level helpers — phase 3 surprise. Pick one, retire the other. Same review applies to projects.
+12. **Template inheritance cleanup.** Some workspace templates extend `base.html`, others are self-contained — phase 4 surprise. Active-project selector is included in both ways, which is awkward. Consolidate.
+13. **`engagements` table cleanup.** Empty since migration 0001; predates ADR 0002. No production writes. Retire if no future use surfaces (ADR 0002 explicitly replaced this concept with `projects`).
+14. **Project-scope the legacy SA/LS stores** (`data/catalog/{security_assessment,license_summary}/`). Globally scoped today (Option A read fallback). Needs a project-scoping story eventually.
+15. **`data/catalog/reportsplus/` retention.** Audit Section 6 #3 — 200+ raw extraction files accumulating with no retention policy.
+16. **Audit Section 6 #2, #5, #6** — legacy-store accumulation, orphaned SQLite registries, labreadiness unread.
 
 Smaller cleanups:
 
