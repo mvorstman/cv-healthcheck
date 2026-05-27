@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-27 (ADR 0003 interstitial fix: extractor switched to GET-only protocol)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *the interstitial-fix CHANGELOG+HANDOVER commit; pointer-update commit follows.*
+**Last commit:** `12db239` — CHANGELOG + HANDOVER: ADR 0003 interstitial fix
 **Test status:** 582 passing
 
 ---
