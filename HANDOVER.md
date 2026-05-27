@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-27 (housekeeping pass)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** the housekeeping wrap-up commit (see `git log -1`)
+**Last commit:** `ab66019` — Housekeeping wrap-up: CHANGELOG entry, HANDOVER last-commit pointer
 **Test status:** 554 passing
 
 ---
