@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-27 (workflow discipline: push to GitHub)
+**Last updated:** 2026-05-27 (tool-selection guidance)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `fefff25` — Push-discipline wrap-up: CHANGELOG entry, HANDOVER header
+**Last commit:** `3bc1741` — docs: add Claude Code vs Claude.ai tool-selection guidance
 **Test status:** 554 passing
 
 ---
