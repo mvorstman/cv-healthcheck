@@ -380,25 +380,40 @@ def quick_hc_subject_import(subject_id: str):
 
 
 def _handle_system_upload(handler: UploadHandler):
-    """Run an upload through the handler's import function and flash
+    """Run an upload through the handler's import function and report
     the result. Behavior parameters (form field name, import function,
     error class, success-message format, redirect endpoint) all come
     from the handler — no subject-specific code in this function.
+
+    Supports X-Inline: 1 (JSON response in place of flash+redirect),
+    mirroring the generic dispatcher branch. Without X-Inline,
+    flash+redirect is preserved.
     """
+    inline = request.headers.get("X-Inline") == "1"
+
     upload = request.files.get(handler.form_field)
     filename = (upload.filename if upload else "") or ""
     if not filename:
+        if inline:
+            return jsonify({"success": False, "error": "No file selected."}), 400
         flash("No file selected.", "error")
         return redirect(url_for(handler.redirect_endpoint))
 
     try:
         artifact = handler.import_fn(upload.stream, original_filename=filename)
     except handler.error_class as exc:
+        if inline:
+            return jsonify({"success": False, "error": str(exc)}), 422
         flash(str(exc), "error")
     except Exception as exc:
+        if inline:
+            return jsonify({"success": False, "error": f"Import failed: {exc}"}), 500
         flash(f"Import failed: {exc}", "error")
     else:
-        flash(handler.success_format(artifact), "success")
+        msg = handler.success_format(artifact)
+        if inline:
+            return jsonify({"success": True, "message": msg})
+        flash(msg, "success")
     return redirect(url_for(handler.redirect_endpoint))
 
 

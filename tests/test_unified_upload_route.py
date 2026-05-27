@@ -359,3 +359,127 @@ def test_unified_route_returns_404_for_system_subject_without_upload(
         content_type="multipart/form-data",
     )
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Inline-mode (X-Inline: 1) tests for the system-subject upload branch
+# (security_assessment + license_summary).
+#
+# Latent bug fixed 2026-05-27: _handle_system_upload used to flash+redirect
+# unconditionally, even when X-Inline:1 was set, causing the JS to receive
+# an HTML 302 response and fail JSON-parsing it. The fix mirrored the
+# inline branch from _unified_dispatcher_upload (the AI-branch tests
+# above already cover the inline-mode behavior of THAT branch).
+# ---------------------------------------------------------------------------
+
+def test_system_upload_inline_returns_json_on_success(tmp_path, monkeypatch) -> None:
+    """Test 8 — X-Inline:1 + valid file → 200 JSON {"success": True, ...}.
+    Covers LS; SA's identical because the handler shape is shared.
+    """
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/license_summary/import",
+        data={
+            "license_summary_file": (
+                io.BytesIO(CSV_SAMPLE.encode("utf-8")),
+                "license-summary.csv",
+            )
+        },
+        content_type="multipart/form-data",
+        headers={"X-Inline": "1"},
+    )
+    assert response.status_code == 200
+    assert response.is_json
+    body = response.get_json()
+    assert body["success"] is True
+    assert "license" in body["message"].lower()
+
+
+def test_system_upload_inline_returns_400_when_no_file(tmp_path, monkeypatch) -> None:
+    """Test 9 — X-Inline:1 + no file → 400 JSON {"success": False, "error": "No file selected."}."""
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/license_summary/import",
+        data={},  # no file
+        content_type="multipart/form-data",
+        headers={"X-Inline": "1"},
+    )
+    assert response.status_code == 400
+    assert response.is_json
+    body = response.get_json()
+    assert body == {"success": False, "error": "No file selected."}
+
+
+def test_system_upload_inline_returns_422_on_handler_error_class(
+    tmp_path, monkeypatch
+) -> None:
+    """Test 10 — X-Inline:1 + import that raises handler.error_class
+    (LicenseSummaryImportError) → 422 JSON with the exception message.
+
+    Triggered by uploading a file with an unsupported extension, which
+    import_license_summary_upload rejects with LicenseSummaryImportError.
+    """
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/license_summary/import",
+        data={
+            "license_summary_file": (io.BytesIO(b"junk"), "report.txt"),  # .txt rejected
+        },
+        content_type="multipart/form-data",
+        headers={"X-Inline": "1"},
+    )
+    assert response.status_code == 422
+    assert response.is_json
+    body = response.get_json()
+    assert body["success"] is False
+    assert "Unsupported file type" in body["error"]
+
+
+def test_system_upload_inline_returns_500_on_generic_exception(
+    tmp_path, monkeypatch
+) -> None:
+    """Test 11 — X-Inline:1 + import_fn raising a non-handler.error_class
+    Exception → 500 JSON with "Import failed: <msg>".
+    """
+    _patch_license_summary_paths(tmp_path, monkeypatch)
+
+    # Patch the upload handler's import_fn to raise a generic Exception.
+    import cvhealthcheck.web.routes.upload_dispatch as dispatch_module
+
+    def _boom(stream, *, original_filename):
+        raise RuntimeError("upstream crashed")
+
+    original = dispatch_module.UPLOAD_HANDLERS["license_summary"]
+    patched = dispatch_module.UploadHandler(
+        form_field=original.form_field,
+        import_fn=_boom,
+        error_class=original.error_class,
+        success_format=original.success_format,
+        redirect_endpoint=original.redirect_endpoint,
+    )
+    monkeypatch.setitem(dispatch_module.UPLOAD_HANDLERS, "license_summary", patched)
+
+    app = create_app()
+    response = app.test_client().post(
+        "/quick-hc/license_summary/import",
+        data={
+            "license_summary_file": (
+                io.BytesIO(CSV_SAMPLE.encode("utf-8")),
+                "license-summary.csv",
+            )
+        },
+        content_type="multipart/form-data",
+        headers={"X-Inline": "1"},
+    )
+    assert response.status_code == 500
+    assert response.is_json
+    body = response.get_json()
+    assert body["success"] is False
+    assert "upstream crashed" in body["error"]
+    assert body["error"].startswith("Import failed:")
