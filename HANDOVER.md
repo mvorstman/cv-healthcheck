@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-27 (ADR 0003 phase 1 — schema extended)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** the phase 1 wrap-up commit (see `git log -1`)
+**Last commit:** `4d7b722` — Phase 1 wrap-up: CHANGELOG entry, HANDOVER for ADR 0003 implementation arc
 **Test status:** 554 passing
 
 ---
