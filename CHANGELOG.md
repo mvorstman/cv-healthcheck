@@ -10,6 +10,40 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (bugfix: inline JSON response for system-subject uploads)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `130e28b` (fix + 4 new tests), plus the wrap-up commit publishing this entry.
+**Test status:** 562 passing (was 558; +4 new inline-mode tests).
+
+Latent bug since 2026-05-25 — the workspace UI's inline import button for SA and LS displayed "Import failed: <SyntaxError>" (the WebKit phrasing reads "The string did not match the expected pattern"), but the upload was actually succeeding server-side. Users likely retried, producing duplicate artifacts. The fix is a 12-line addition to `_handle_system_upload` mirroring the X-Inline branch the generic dispatcher already had.
+
+### Fixed
+
+- **`_handle_system_upload` in `src/cvhealthcheck/web/routes/quick_hc.py`** now checks `request.headers.get("X-Inline") == "1"` and returns JSON (200/400/422/500 depending on outcome) when set; the prior flash+redirect path is preserved for non-inline callers. The four inline branches match the JS's expectations: 200 + `{"success": true, "message": ...}`, 400 + `{"success": false, "error": "No file selected."}`, 422 + `{"success": false, "error": <handler.error_class.message>}`, 500 + `{"success": false, "error": "Import failed: <msg>"}`.
+
+### Added
+
+- **Four tests** at `tests/test_unified_upload_route.py` covering the four inline-mode branches of `_handle_system_upload`. Use LS as the exemplar; SA's identical because the handler shape is shared via `UPLOAD_HANDLERS`.
+
+### Notes
+
+- **Root cause**: The system-subject upload helper (`_handle_system_upload`) ignored the `X-Inline: 1` header that the JS `submitImport` function sends. Without the inline branch, the server responded with a 302 redirect; the JS followed it, got HTML, and failed `resp.json()` parsing. WebKit's `JSON.parse` SyntaxError message is "The string did not match the expected pattern" — which made the failure look like a URL or form validation issue rather than a JSON parse failure. The generic dispatcher branch (`_unified_dispatcher_upload`) had the correct inline check; the system-subject branch (the consolidated `_handle_system_upload` from session 5b's commit `ae58c21`) was missing it.
+- **Bug history**: The JS introduced the `X-Inline: 1` header at `9073f06` ("Land Report Inventory foundation, Quick HC standalone UI" — 2026-05-25). The corresponding server-side handlers at the time (`_unified_security_assessment_upload`, `_unified_license_summary_upload`) didn't honor it either. Session 5b's `ae58c21` consolidated them into the data-driven `_handle_system_upload` and preserved the X-Inline-ignoring behavior. ADR 0003 didn't touch the upload path at all — the bug surfaced during phase 5's LS investigation only because the user happened to try a CSV/HTML upload of LS data.
+- **Duplicate artifact evidence**: Inspecting `data/catalog/license_summary/artifact_*.json` surfaced **7 content-duplicate groups** (hashing only the user-relevant fields, not `artifact_id`/`imported_at` metadata): 2 artifacts 16 seconds apart, 5 artifacts within 10 minutes (May 18 18:45-18:55), 4 artifacts within 17 minutes (May 18 18:13-18:30), 3 artifacts within 46 minutes, plus three longer-span groups (8/9/10 dupes across hours-to-days). The tight clusters are classic retry pattern — the user clicked Import, got the WebKit error, clicked Import again. SA's legacy store (`data/catalog/security_assessment/artifact_*.json`) has **29 artifacts, all unique** — SA appears not to have been retry-tested under this bug. Per the steering chat's instruction, no duplicates were deleted; cleanup is a separate decision.
+
+### Manual verification
+
+`POST /quick-hc/license_summary/import` via Flask test_client against the real app (no patches):
+
+| Request | Status | Body |
+|---|---|---|
+| X-Inline:1 + valid LS HTML | 200 | `{"success": true, "message": "HTML import completed for ... with 1 other licenses and 0 agent/feature licenses."}` |
+| X-Inline:1 + no file | 400 | `{"success": false, "error": "No file selected."}` |
+| No X-Inline | 302 | redirect to `/quick-hc/license-summary` (existing flash+redirect path, unchanged) |
+
+---
+
 ## 2026-05-27 (ADR 0003 phase 5: cleanup pass — ADR implemented with LS caveat)
 
 **Branch:** `feature/basic-healthcheck-report-output`

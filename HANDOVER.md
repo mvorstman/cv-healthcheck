@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-27 (ADR 0003 phase 5: cleanup pass — ADR implemented with LS caveat)
+**Last updated:** 2026-05-27 (bugfix: inline JSON response for system-subject uploads)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `14f5310` — CHANGELOG + HANDOVER: ADR 0003 phase 5 (cleanup + LS caveat)
-**Test status:** 558 passing
+**Last commit:** *the bugfix CHANGELOG+HANDOVER commit; pointer-update commit follows.*
+**Test status:** 562 passing
 
 ---
 
@@ -24,7 +24,11 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## What was just completed
 
-**ADR 0003 phase 5 — cleanup pass; ADR 0003 implemented with LS caveat.** Step 1 investigation surfaced that LS's report 206 structurally doesn't fit the catalog model defined in ADR 0003 (47+ pages with name-ambiguous datasets, runtime parameter-substitution-from-prior-results, per-row value-formula transforms). Steering chat approved Path A: leave LS bespoke, do the safe cleanup half of phase 5, mark ADR 0003 implemented with the caveat documented. Deleted: `CommvaultSession.init_report` (dormant since the interstitial fix), `REPORT_DEFINITIONS` dict + its file (orphan since phase 2), `_read_commcell_provenance` (zero callers since phase 3). ADR 0003's Migration / Consequences / Out-of-scope sections amended to reflect the actual outcome. The ADR status is now "Implemented (with LS caveat)."
+**Bugfix: inline JSON response for system-subject uploads.** Image evidence showed CSV and HTML offline imports for `license_summary` failing in the UI with "Import failed: The string did not match the expected pattern." Investigation surfaced a latent server-side bug since 2026-05-25: `_handle_system_upload` ignored the JS's `X-Inline: 1` header and always replied with flash+redirect (302 → HTML body); the JS then failed `resp.json()` parsing and surfaced WebKit's SyntaxError. The underlying import was actually succeeding — the LS legacy store has 7 content-duplicate groups (2-10 artifacts each, tight time windows) from user retries. SA's legacy store has 29 unique artifacts (no retry pattern). The fix is a 12-line addition to `_handle_system_upload` mirroring the inline branch from `_unified_dispatcher_upload`. 4 new tests, 562 total passing. ADR 0003 is unaffected by this bug — it predates the ADR and the upload path is unrelated. The duplicate artifacts in the LS legacy store were not cleaned up — backlog #14 (legacy SA/LS store retirement) is the right place for that.
+
+### Prior session: ADR 0003 phase 5 cleanup
+
+**Phase 5 cleanup pass; ADR 0003 implemented with LS caveat.** Step 1 investigation surfaced that LS's report 206 structurally doesn't fit the catalog model defined in ADR 0003 (47+ pages with name-ambiguous datasets, runtime parameter-substitution-from-prior-results, per-row value-formula transforms). Steering chat approved Path A: leave LS bespoke, do the safe cleanup half of phase 5, mark ADR 0003 implemented with the caveat documented. Deleted: `CommvaultSession.init_report` (dormant since the interstitial fix), `REPORT_DEFINITIONS` dict + its file (orphan since phase 2), `_read_commcell_provenance` (zero callers since phase 3). ADR 0003's Migration / Consequences / Out-of-scope sections amended to reflect the actual outcome. The ADR status is now "Implemented (with LS caveat)."
 
 ---
 
@@ -68,7 +72,7 @@ Whatever surfaces. The current backlog is healthy (no urgent next code action); 
 11. **Two-CRUD-APIs investigation.** Customer routes use both inline SQL and `db/customers.py` helpers — pick one.
 12. **Template inheritance cleanup.** Uneven `base.html` extends.
 13. **`engagements` table cleanup.** Empty since migration 0001; pre-ADR-0002.
-14. **Project-scope the legacy SA/LS stores** under `data/catalog/{security_assessment,license_summary}/`. SA store still has its pre-ADR-0002 latest_*.json files; LS store similarly. Phases 4/5 didn't touch them — separate cleanup. (LS store remains in active use through the bespoke path.)
+14. **Project-scope the legacy SA/LS stores** under `data/catalog/{security_assessment,license_summary}/`. SA store still has its pre-ADR-0002 `latest_*.json` files (29 unique artifacts, no duplicates); LS store similarly with 42 `artifact_*.json` files — of which 41 belong to 7 content-duplicate groups from the 2026-05-25 → 2026-05-27 X-Inline bug's retry pattern (now fixed at commit 130e28b). Phases 4/5 didn't touch them — separate cleanup. The LS store remains in active use through the bespoke path. When this cleanup eventually lands, the duplicate-collapse is the natural first pass: keep the latest artifact per content-hash, delete the older retries.
 15. **`data/catalog/reportsplus/` retention.** Audit Section 6 #3.
 16. **Audit Section 6 #2/#5/#6** — legacy-store accumulation, orphaned SQLite registries, labreadiness unread.
 17. **Methodology marker: wipe-and-recreate rule.** Default rule for proof-of-concept phase: any change touching dev-only data preserved across schema edits is over-engineered. Wipe and re-collect unless real customer data is at stake. ADR 0002 set the precedent; ADR 0003 phases 1 and 4 followed it. Phase 5 didn't need it (LS not migrated). Up for retrospective decision: tool-wide default or ADR-by-ADR judgment.
@@ -280,7 +284,7 @@ than attempting the work.
 cd /home/michiel/dev/cv-healthcheck
 source venv/bin/activate
 python -m compileall -q src
-python -m pytest -q                                # expect 558 passing
+python -m pytest -q                                # expect 562 passing
 git status --short                                 # expect clean
 sqlite3 data/app.db "SELECT customer_id,customer_name FROM customers;"
 sqlite3 data/app.db "SELECT project_id,customer_id,project_number FROM projects;"
