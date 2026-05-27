@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-27 (workflow discipline: push to GitHub)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** the push-discipline wrap-up commit (see `git log -1`)
+**Last commit:** `fefff25` — Push-discipline wrap-up: CHANGELOG entry, HANDOVER header
 **Test status:** 554 passing
 
 ---
