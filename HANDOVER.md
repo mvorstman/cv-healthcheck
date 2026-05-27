@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-27 (housekeeping pass)
+**Last updated:** 2026-05-27 (workflow discipline: push to GitHub)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `ab66019` — Housekeeping wrap-up: CHANGELOG entry, HANDOVER last-commit pointer
+**Last commit:** the push-discipline wrap-up commit (see `git log -1`)
 **Test status:** 554 passing
 
 ---

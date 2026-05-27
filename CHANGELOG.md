@@ -10,6 +10,27 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (workflow discipline: push to GitHub regularly)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `c872b62`, plus this wrap-up.
+**Test status:** 554 passing (docs only).
+
+Motivating incident: a session discovered 59 local commits had accumulated without ever being pushed to GitHub. The work was only on the dev machine, couldn't be pulled to a second machine, and would have been lost if the machine had failed. Adding the push discipline as an explicit project workflow rule so future sessions can't drift the same way.
+
+### Added
+
+- **HANDOVER.md "Session workflow disciplines" section.** Sits between "Context" and "Quick verification commands". First subsection is "Push to GitHub regularly" — push after each major task, push at the end of every session, the session-end push is the final step of the single-recommended-next-action pointer. Cross-references the existing verify-before-write and STOP-and-report disciplines.
+- **`docs/PATTERNS.md` third pattern: "Push to GitHub regularly".** Same shape as the existing two — brief description, why it matters (the 59-commit incident), when it applies (every session, not just ADR implementations).
+
+### Notes
+
+- Applies to every session going forward, including docs-only sessions and single-commit fixes.
+- No force-push, no rebasing pushed branches — append-only.
+- If a push fails, stop and report the failure rather than working around it.
+
+---
+
 ## 2026-05-27 (housekeeping pass)
 
 **Branch:** `feature/basic-healthcheck-report-output`
