@@ -1,8 +1,10 @@
 # Data Flow Audit
 
-**Date:** 2026-05-26
+**Date:** 2026-05-27 (post-ADR-0002 refresh)
 **Scope:** Where this project's data lives on disk, and which code paths read from / write to each location.
-**Test status (unchanged):** 483 passing.
+**Test status (unchanged):** 554 passing.
+
+This audit reflects the **post-ADR-0002 architecture**: customer/project entities, project-scoped canonical artifacts under `working/<subject>/`, and immutable finalization snapshots under `finalized/<n>/<subject>/`. The legacy stores (SA, LS, ReportsPlus, metrics, CommCell cache, lab-readiness) remain globally scoped — that's an intentional carry-over, not drift. Project-scoping the SA/LS legacy stores is queued as HANDOVER backlog item #15.
 
 This is a read-only audit. No code or data was modified.
 
@@ -13,26 +15,37 @@ This is a read-only audit. No code or data was modified.
 ```
 data/
 ├── app.db                                       # Main project SQLite DB
+│                                                  Post-ADR-0002 tables: customers, projects, finalizations
+│                                                  Legacy tables retained: subjects, subject_*, staged_artifacts, engagements
 ├── catalog/
-│   ├── datasets.json                             # Reports Plus dataset inventory (CLI extract output)
-│   ├── datasets_summary.json                     # Compact summary derived from datasets.json
-│   ├── artifacts/                                # Canonical ArtifactStore (single source of truth)
-│   │   ├── license_summary/{timestamp}.json + latest.json
-│   │   ├── security_assessment/{timestamp}.json + latest.json
-│   │   └── storage_utilization/{timestamp}.json + latest.json
-│   ├── license_summary/                          # Legacy per-domain store (artifact_<uuid>.json)
-│   ├── security_assessment/                      # Legacy per-domain store (artifact_<uuid>.json)
-│   ├── metrics/                                  # Metric collector outputs
+│   ├── datasets.json                             # Reports Plus dataset inventory (CLI extract output, global)
+│   ├── datasets_summary.json                     # Compact summary derived from datasets.json (global)
+│   ├── artifacts/                                # Project-scoped canonical artifacts (ADR 0002)
+│   │   └── <customer_id>/
+│   │       └── <project_id>/
+│   │           ├── working/                      # Mutable. ArtifactStore writes here.
+│   │           │   └── <subject_id>/
+│   │           │       ├── latest.json           # Authoritative current state
+│   │           │       └── <timestamp>.json...   # Append-only history per save
+│   │           └── finalized/                    # Immutable snapshots. ONLY finalize_project writes here.
+│   │               └── <n>/
+│   │                   └── <subject_id>/
+│   │                       ├── latest.json       # Frozen copy from working at finalize-time
+│   │                       └── <timestamp>.json... # History as it stood at finalize-time
+│   ├── license_summary/                          # Legacy global store (artifact_<uuid>.json + latest.json)
+│   │                                              Still written by write_legacy=True paths; backlog #15
+│   ├── security_assessment/                      # Legacy global store — same as above
+│   ├── metrics/                                  # Per-CommCell metric snapshots (global)
 │   │   ├── capacity_license_usage.json
 │   │   ├── client_count_history.json
 │   │   ├── client_growth_details.json
-│   │   └── client_growth_summary.json (referenced; see Section 6)
+│   │   └── client_growth_summary.json
 │   ├── quickhc/
-│   │   ├── backup_job_summary_latest.json
+│   │   ├── backup_job_summary_latest.json        # Per-CommCell (global)
 │   │   └── descriptions/                         # {tile_id}.json overrides for tile descriptions
-│   ├── reportsplus/                              # Raw Reports Plus extraction artefacts (203 files today)
+│   ├── reportsplus/                              # Raw Reports Plus extraction artefacts (global; backlog #16)
 │   └── rest/
-│       └── commserv.json                         # CommCell identity cache
+│       └── commserv.json                         # CommCell identity cache (per-deployment, global)
 ├── imports/                                      # Original uploaded files + per-subject SQLite registry
 │   ├── license_summary/
 │   │   ├── artifact_registry.sqlite3
@@ -41,14 +54,21 @@ data/
 │       ├── artifact_registry.sqlite3
 │       └── {original-filename}-{import-id}.{html,csv,...}
 └── labreadiness/
-    └── latest.json                               # Lab-readiness assessment output
+    └── latest.json                               # Lab-readiness assessment output (CLI-only, global)
 ```
+
+**Three on-disk regions:**
+
+1. **Project-scoped canonical artifacts** under `data/catalog/artifacts/<customer>/<project>/{working,finalized}/`. New as of ADR 0002 phase 2; the `finalized/` subtree as of phase 5.
+2. **Globally-scoped legacy stores** for SA/LS (`data/catalog/security_assessment/`, `.../license_summary/`), Reports Plus extraction artefacts (`data/catalog/reportsplus/`), CommCell cache (`data/catalog/rest/commserv.json`), historical metrics (`data/catalog/metrics/`), and lab-readiness (`data/labreadiness/`). These pre-date customer/project scoping and remain global.
+3. **SQLite catalog** at `data/app.db`. ADR-0002 added `customers`, `projects`, `finalizations` (migration 0005); the legacy `engagements` table from migration 0001 remains untouched (backlog item #14 covers its retirement).
 
 ### Filename patterns
 
 | Directory | Pattern | Source |
 |---|---|---|
-| `data/catalog/artifacts/<subject>/` | `<ISO-timestamp>.json` per snapshot, plus `latest.json` mirror | `ArtifactStore.save_artifact` writes both (`store.py:20-32`) |
+| `data/catalog/artifacts/<customer>/<project>/working/<subject>/` | `<ISO-timestamp>.json` per save, plus `latest.json` mirror | `ArtifactStore.save_artifact` writes both (`store.py:58-71`) |
+| `data/catalog/artifacts/<customer>/<project>/finalized/<n>/<subject>/` | Frozen copy of working at finalize-time (full subtree) | `db/finalizations.py:finalize_project` via `shutil.copytree` — application-layer-immutable thereafter; no other code path writes here |
 | `data/catalog/{security_assessment,license_summary}/` | `artifact_<uuid>.json` per import, plus `latest.json` mirror | Legacy per-domain writers (see Section 4) |
 | `data/catalog/reportsplus/` | `report_<id>_<role>.json` for typed snapshots; `report_<id>_raw_<dataset_guid>.json` for raw dataset dumps | `REPORTSPLUS_CATALOG_DIR` writers in `reportsplus/extract_report.py:14`, `reportsplus/metric_inventory.py:9` |
 | `data/imports/<subject>/` | Uploaded filenames with `-<ULID-ish>-<hash>` suffix (preserved verbatim) | Per-subject import handlers via `_save_upload` |
@@ -63,7 +83,9 @@ Subjects enumerated from `data/app.db`:
 SELECT subject_id, created_by, status, category, version FROM subjects ORDER BY category, subject_id;
 ```
 
-| subject_id | created_by | canonical store (`data/catalog/artifacts/<id>/latest.json`) | legacy on-disk path(s) | REST collect handler | Upload handler |
+All canonical store paths are now project-scoped — the canonical store column below shows whether an artifact exists under the **active project** at the time of writing, at `data/catalog/artifacts/<customer>/<project>/working/<subject>/latest.json`. Legacy on-disk paths remain globally scoped per the carry-over noted in the header.
+
+| subject_id | created_by | canonical store (project-scoped `working/<subject>/latest.json`) | legacy on-disk path(s) | REST collect handler | Upload handler |
 |---|---|---|---|---|---|
 | `environment` | system | ❌ (no canonical artifact) | `data/catalog/rest/commserv.json` (read via `_load_legacy_commcell`, `subject_data_service.py:309-320`) | Generic `/quick-hc/<subject_id>/collect` (`quick_hc.py:141`) — runs `RESTExtractor`; `has_section_instructions=0`, so no Collect button in UI today | None (system, no `UPLOAD_HANDLERS` entry) — returns 404 |
 | `security_assessment` | system | ✅ (`latest.json` present today) | `data/catalog/security_assessment/{latest.json, artifact_<uuid>.json}` plus `data/imports/security_assessment/artifact_registry.sqlite3` + raw upload files | Dedicated `/quick-hc/security-assessment/collect` (`quick_hc.py:237`) → `SecurityAssessmentService.collect_from_rest` | Dispatched via `UPLOAD_HANDLERS["security_assessment"]` (`upload_dispatch.py:93`) → `import_security_assessment_upload` |
@@ -80,21 +102,33 @@ Subject IDs are underscored throughout (DB, code, fragment URLs). The hyphenated
 
 ## Section 3 — Read paths
 
+### Request → active project → ArtifactStore (resolver layer)
+`src/cvhealthcheck/web/active_project.py`
+
+Every read of a project-scoped artifact passes through this resolver. The flow:
+
+1. **Session lookup.** `get_active_project()` reads `session['active_project']` (a `{'customer_id': ..., 'project_id': ...}` dict written by `set_active_project()` and the project-creation handler). Returns the pair if present.
+2. **Default fallback.** If no session entry exists, `resolve_default_project(db)` queries `projects WHERE customer_id = 'default' ORDER BY created_at ASC LIMIT 1` and returns its `(customer_id, project_id)`. Migration 0005 guarantees this Default customer + project exist; the fallback raises `ActiveProjectMissingError` if either was deleted, but that path is not expected under normal operation.
+3. **Store construction.** `make_active_project_store(db)` (and its sibling `make_default_project_store(db)` for non-request callers like MCP staging) calls the resolver and returns an `ArtifactStore(customer_id, project_id)`. The store is bound to that project for the lifetime of the call.
+4. **Reads.** All canonical-store reads in the codebase now go through these helpers, never through a bare `ArtifactStore()` constructor (which would now raise — customer/project are required positional args).
+
+`_canonical_store()` in `subject_data_service.py:14` is the wrapper that legacy callers use: it imports `make_active_project_store` lazily and returns a fresh store on every call (no module-level singleton, so per-request scoping is automatic).
+
 ### `build_subject_initial_data(db)` — workspace tile builder
-`src/cvhealthcheck/quickhc/subject_data_service.py:60-124`
+`src/cvhealthcheck/quickhc/subject_data_service.py:70-134`
 
 For each tile from `get_tiles(db)`:
 
-1. **`_load_from_canonical_store(subject_id)`** → reads `data/catalog/artifacts/<subject_id>/latest.json` via `ArtifactStore.load_latest_artifact` (`subject_data_service.py:158-165` → `artifacts/store.py:34-39`). Returns `CanonicalArtifact` or `None`.
+1. **`_load_from_canonical_store(subject_id)`** → reads `data/catalog/artifacts/<customer>/<project>/working/<subject_id>/latest.json` via `make_active_project_store().load_latest_artifact()` (`subject_data_service.py:168-175`). The active project is resolved through the layer above; the read is project-scoped. Returns `CanonicalArtifact` or `None`.
 2. If artifact exists → `_build_generic_subject(tile, artifact)`.
 3. Else if a `_legacy_builders` entry exists for `subject_id` → run the legacy loader for that subject, then the legacy builder.
 4. Else (AI subjects with no canonical artifact, when `db is not None`) → `_build_generic_subject(tile, None)`.
-5. The commcell header always comes from `_load_legacy_commcell()` (reads `data/catalog/rest/commserv.json`, `subject_data_service.py:309-320`), independent of the per-subject branch.
+5. The commcell header always comes from `_load_legacy_commcell()` (reads `data/catalog/rest/commserv.json`, `subject_data_service.py:311-320`), independent of the per-subject branch and customer-agnostic.
 
 ### `_load_from_canonical_store(subject_id)`
-`src/cvhealthcheck/quickhc/subject_data_service.py:158-165`
+`src/cvhealthcheck/quickhc/subject_data_service.py:168-175`
 
-Reads `data/catalog/artifacts/<subject_id>/latest.json` only. Catches `FileNotFoundError` → returns `None`. No legacy fallback inside this function — fallback is at the caller (see above).
+Constructs an active-project store on each call and reads its `latest.json` for the given subject. Catches `FileNotFoundError` → returns `None`. No legacy fallback inside this function — fallback is at the caller (see above).
 
 ### `_build_generic_subject` + `_build_generic_sources`
 `src/cvhealthcheck/quickhc/subject_data_service.py:264-296` and `subject_data_service.py:194-262`
@@ -142,26 +176,47 @@ These functions are pure transforms — they do not touch disk directly. Their i
 | `GET /api/quick-hc/status` | `build_subject_initial_data()` (same read paths as above) |
 | `GET /api/quick-hc/subject/<id>` | `build_subject_initial_data()` then filter |
 | `POST /api/quick-hc/subject/<id>/description` | Writes `data/catalog/quickhc/descriptions/<id>.json` via `save_description_override` (`description_service.py:46-67`) |
-| `GET /api/security-assessment/canonical` | `SecurityAssessmentService().get_canonical()` → `ArtifactStore.load_latest_artifact("security_assessment")` |
-| `GET /api/license-summary/canonical` | `LicenseSummaryService().get_canonical()` → `ArtifactStore.load_latest_artifact("license_summary")` |
+| `GET /api/security-assessment/canonical` | `SecurityAssessmentService().get_canonical()` → `make_active_project_store().load_latest_artifact("security_assessment")` (project-scoped) |
+| `GET /api/license-summary/canonical` | `LicenseSummaryService().get_canonical()` → `make_active_project_store().load_latest_artifact("license_summary")` (project-scoped) |
 
 ---
 
 ## Section 4 — Write paths
 
 ### `ArtifactStore.save_artifact`
-`src/cvhealthcheck/artifacts/store.py:20-32`
+`src/cvhealthcheck/artifacts/store.py:58-71`
 
-The single canonical store writer. For artifact type `<T>`, writes:
-- `data/catalog/artifacts/<T>/<timestamp>.json` (snapshot)
-- `data/catalog/artifacts/<T>/latest.json` (mirror — atomically overwritten)
+The single canonical-store writer. **Writes only to `working/`** under the bound `(customer_id, project_id)`:
+- `data/catalog/artifacts/<customer>/<project>/working/<T>/<timestamp>.json` (append-only snapshot)
+- `data/catalog/artifacts/<customer>/<project>/working/<T>/latest.json` (mirror — atomically overwritten)
 
-Callers:
+ArtifactStore deliberately exposes no write method for `finalized/<n>/`; that's a class-level invariant backing ADR 0002's application-layer immutability.
+
+Callers (all go through `make_active_project_store()` or `make_default_project_store()` rather than constructing `ArtifactStore` directly — bare `ArtifactStore()` raises since customer/project are required):
 - `persist_security_assessment_artifact` (when source_type is import-shaped; `security_assessment/service.py:378`)
 - `persist_license_summary_artifact` (always — also `service.py:132, 192`)
 - `SecurityAssessmentService.collect_from_rest` (`security_assessment/service.py:180`) — REST collection saves canonical directly via `adapt_reportsplus_rest`
-- `_unified_dispatcher_upload` (`web/routes/quick_hc.py:475` for non-staged) — AI/user uploads
-- `execute_approval` in MCP staging (`db/staging.py:172`) — promotes a staged artifact
+- `_unified_dispatcher_upload` (`web/routes/quick_hc.py`) — AI/user uploads
+- `execute_approval` in MCP staging (`db/staging.py:172`) — promotes a staged artifact; uses `make_default_project_store()` since MCP is not request-scoped
+
+### `finalize_project` (writes `finalized/<n>/`)
+`src/cvhealthcheck/db/finalizations.py:91-147`
+
+**The only code path in the project that writes under `finalized/<n>/`.** Application-layer immutability is enforced by this being the sole writer; no `ArtifactStore` method nor any other module touches the finalized subtree.
+
+For a `(customer_id, project_id)`:
+1. Computes next `finalization_number` = `MAX(finalization_number) + 1` over existing rows for the project, starting at 1.
+2. Copies every `working/<subject>/` subdirectory to `finalized/<n>/<subject>/` via `shutil.copytree`. Full subtree (timestamps + `latest.json`).
+3. Inserts a `finalizations` row capturing the project's `assigned_consultant` (as `finalized_by`) and `ticket_reference` at finalize-time, so the audit row is stable even if the project row is later edited.
+
+Raises `FinalizationError` if the project has no subjects in `working/` or doesn't exist in the DB.
+
+### `reload_latest_finalization` (writes `working/`)
+`src/cvhealthcheck/db/finalizations.py:149-201`
+
+Restores the latest finalization back into `working/`. Clears `working/` (every subject directory), then copies every subject from `finalized/<max(n)>/` back. Bumps `projects.working_state_modified_at`. Returns the finalization number that was reloaded.
+
+Raises `FinalizationError` if the project has no finalizations.
 
 ### `persist_security_assessment_artifact`
 `src/cvhealthcheck/security_assessment/service.py:250-381`
@@ -247,19 +302,23 @@ Writes `data/catalog/quickhc/backup_job_summary_latest.json` via `write_json(...
 **Where:** `src/cvhealthcheck/web/routes/upload_dispatch.py`; consumed at `quick_hc.py:357`.
 **Why it exists:** SA and LS have subject-specific upload behavior (form field name, import function, success-message format) that doesn't fit into row-shaped catalog data without a schema migration. Source: `docs/refactor_unified_upload_session_5a_design.md` Section 7 (Option δ); `CHANGELOG.md` entries "2026-05-26 (session 5b)" and Section 6 of the design doc.
 
+### Working/finalized split (ADR 0002 phase 5)
+**Where:** `src/cvhealthcheck/artifacts/store.py` (write-only to `working/`); `src/cvhealthcheck/db/finalizations.py:finalize_project` (write-only to `finalized/<n>/`); `reload_latest_finalization` copies finalized → working.
+**Why it exists:** delivered reports need to be auditable as immutable artifacts. The working subtree is mutable (the consultant edits freely); the finalized subtrees are frozen snapshots written exactly once at finalize-time. Immutability is application-layer (no filesystem chmod): the constraint is "ArtifactStore exposes no method that writes to `finalized/`" and "`finalize_project` is the only function in the codebase that writes there." This is an instance of the project-wide *writes converge to canonical / reads stay diverse* pattern documented in `docs/PATTERNS.md`. Source: `docs/adr/0002-customer-and-project-entities.md` (Immutability section); CHANGELOG entry "2026-05-27 (ADR 0002 phase 5)".
+
 ---
 
 ## Section 6 — Surprises and inconsistencies
 
 These are observations from the audit. Nothing was changed.
 
-### 1. `data/catalog/artifacts/storage_utilization/` exists with `latest.json`, but no `_legacy_builders` entry for `storage_utilization` and no AI dispatcher metadata for it specifically
+### 1. AI-subject canonical artifacts live under the active project, same as system subjects
 
-`storage_utilization` is an `ai`-created subject (DB row). Its canonical artifact is loaded by `_load_from_canonical_store` → `_build_generic_subject(tile, artifact)`, which is the normal AI path. So the path is consistent — but it's the only AI subject with a real canonical artifact today, and the only one in `data/catalog/artifacts/` that isn't `security_assessment` or `license_summary`. Worth knowing if you're debugging why AI subjects render differently from the generic-empty case.
+Pre-ADR-0002 there was exactly one canonical path per subject globally (`data/catalog/artifacts/<subject>/`). Post-phase-2 every subject's canonical artifact lives under `data/catalog/artifacts/<customer>/<project>/working/<subject>/`. The previous edition of this audit flagged `storage_utilization` (an AI subject) as the only one with a non-SA/LS canonical artifact at the old global path; that observation is moot now — the layout is uniform across created_by values. The interesting follow-on: an AI subject collected under one project is invisible from another project's workspace. Tests pin this contract in `tests/test_project_scoped_artifacts.py`.
 
-### 2. The legacy SA/LS stores are still actively populated by the canonical store as a side effect
+### 2. The legacy SA/LS stores are still actively populated by `write_legacy=True` callers
 
-Even though production callers pass `write_legacy=False`, the canonical-store writes in `persist_*_artifact` happen unconditionally for import-shaped sources (`security_assessment/service.py:374-379`, `license_summary/service.py:132, 192`). That's correct — canonical-only is the goal. But `data/catalog/security_assessment/` and `data/catalog/license_summary/` keep accumulating `artifact_<uuid>.json` files (33 and 47 today) because the test suite and legacy callers still hit the legacy path with `write_legacy=True`. Those files are never cleaned up; the directories grow monotonically across sessions.
+Production callers (the unified upload route's import handlers, REST collection) pass `write_legacy=False` and skip the legacy-store writes — they only write the canonical store via `ArtifactStore.save_artifact` (now project-scoped). But the `persist_*_artifact` functions still accept `write_legacy=True` for tests and legacy callers, which means `data/catalog/security_assessment/` and `data/catalog/license_summary/` continue to accumulate `artifact_<uuid>.json` files across test runs and any legacy code path. The files are globally scoped (no customer/project segment) and never cleaned up. Backlog item #15 covers project-scoping these stores; backlog Section 6 #2 carry-over covers the accumulation.
 
 ### 3. `data/catalog/reportsplus/` has 203 entries today
 
