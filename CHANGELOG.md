@@ -10,6 +10,46 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (ADR 0003 interstitial fix: extractor switched to GET-only protocol)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `fb8f47b` (extractor + session + tests), plus the wrap-up commit publishing this entry.
+**Test status:** 582 passing (was 581; +2 new `fetch_dataset` tests for direct-GET and `totalRecordCount` pagination; -1 test for the no-longer-reachable `init_report` failure path).
+
+The code-side of the prior session's ADR 0003 amendment. Phase 2's extractor POSTed `reportBuilder.do` to acquire a cacheId before fetching dataset data; phase 3's smoke showed the lab CommCell returns HTTP 419 on that POST. ADR 0003 was amended (prior session) to use the GET-only protocol SA and LS were already using. This fix lands the code change and verifies it end-to-end against the lab.
+
+### Changed
+
+- **`RESTExtractor.extract()`** at `src/cvhealthcheck/extractors/rest.py` — drops the `session.init_report({"reportId": int(report_id)})` call. The flow is now: `get_report` → `parse_content_field` → `_build_name_to_guid_map` → per section: `name_to_guid.get(dataset_name)` → `session.fetch_dataset(guid, ...)` → post-process. Module docstring rewritten to describe the GET-only protocol. `_resolve_single_report_id`'s docstring updated to reference the report-definition GET rather than the cacheId-bound POST.
+- **`CommvaultSession.fetch_dataset`** at `src/cvhealthcheck/reportsplus/session.py` — no longer raises when `cache_id` is missing. Without a cacheId, performs a direct GET to `/datasets/<guid>/data`; the lab auto-generates a cacheId in the response body which we ignore. With a cacheId (passed explicitly or stored from a prior `init_report` call), the prior cacheId-bound behavior is preserved unchanged.
+- **Pagination loop** in `fetch_dataset` now reads `totalRecordCount` in addition to `total` (the lab returns the former).
+- **`CommvaultSession` class docstring** rewritten to describe two modes: direct GET as the default; cacheId-bound for UI-style use. Replaces the prior framing that presented the cacheId pattern as canonical.
+- **Tests at `tests/test_rest_extractor.py`** — `_mock_session` no longer pre-wires `init_report.return_value`. `test_extract_calls_get_report_init_report_and_fetch` renamed and the init_report assertion replaced. `test_extract_multi_section_shares_cache_id` renamed to `..._reuses_name_to_guid_map`. `test_fetch_dataset_requires_cache_id` replaced with two new tests covering the with-and-without-cacheId param presence. `test_fetch_dataset_terminates_on_totalRecordCount` added. `test_extract_init_report_failure_returns_error` removed (the failure mode is unreachable now).
+
+### Notes
+
+- **Lab investigation surfaced two extra restrictions on the no-cacheId path.** The lab's CacheDB rejects requests that include either `fields` or `orderby` query params unless a cacheId is also present ("Bad Request. Please check the parameters."). Both params are now only sent when a cacheId is set. The catalog still declares `fields` and `orderby` per section for self-documentation, but the server doesn't see them in the GET-only path. The dataset returns all columns and natural-order rows; downstream code (extractor post-processing, `result_to_artifact`) doesn't care about column subsets or sort order.
+- **`init_report` and the rest of the cacheId machinery stay in `CommvaultSession`.** Anything that calls `init_report` explicitly still works; only the extractor stopped calling it. Whether to delete `init_report` is a YAGNI judgment for the next phase.
+- **Pagination loop's `totalRecordCount` support.** The existing fallback (`len(records) < page_size` break) would have worked for our small lab datasets, but adding explicit `totalRecordCount` checking is more robust for larger collections.
+
+### End-to-end verification against the real lab CommCell
+
+| Subject | HTTP status | Rows | Sample row |
+|---|---|---|---|
+| `client_growth` | 200 on `get_report` + 200 on dataset GET | 13 | `{"Added": 0, "Data Source": "cs01", "MonthStart": "2025-05-01T00:00:00+00:00", "Removed": 0, "Total": 0, "sys_rowid": 1}` |
+| `capacity_license` | 200 on `get_report` + 200 on dataset GET | 13 | `{"Data Source": "cs01", "Entity Name": "CS01 - 337F", "Month": "May 1, 2025", "Purchased Capacity": -1, "Used Capacity": -1, "sys_rowid": 1}` |
+| `backup_job_summary` | 200 on `get_report` + 200 on dataset GET | 0 | (empty — lab's "Job details" dataset on report 194 is empty; verified by direct GET returning `totalRecordCount: 0, failures: {}`) |
+
+For `backup_job_summary`, name→guid resolution succeeded against the live report 194 definition: `'Job details' → 'a30bd278-c7d9-470f-9ae9-8b4922743330'` — matches phase 1's corrected catalog GUID. The protocol works; the lab simply has no rows in that dataset right now. No 419 errors anywhere.
+
+Artifact provenance for all three came from the customer row (`commcell_id = SMOKE-TEST-CS`, `commcell_name = Default`), confirming phase 3's wiring stays correct under the new protocol.
+
+### Carry-forward for phase 4
+
+The protocol now works end-to-end against the lab for the three existing REST subjects. Phase 4 — SA migration — can proceed: seed `subject_section_sources` for Security Assessment (report 336), delete `SecurityAssessmentService.collect_from_rest`, delete `reportsplus/security_assessment.py`, retire the SA-specific normalizer/persister/adapter, wipe `data/catalog/artifacts/<customer>/<project>/working/security_assessment/`. The cacheId-machinery in `session.py` stays dormant unless something explicitly opts in.
+
+---
+
 ## 2026-05-27 (ADR 0003 amendment: protocol pivots to GET-only)
 
 **Branch:** `feature/basic-healthcheck-report-output`
