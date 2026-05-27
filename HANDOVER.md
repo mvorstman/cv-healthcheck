@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-27 (ADR 0003 phase 3: customer-bound CommCell auth)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *the phase 3 CHANGELOG+HANDOVER commit; pointer-update commit follows.*
+**Last commit:** `c7d25ae` — CHANGELOG + HANDOVER: ADR 0003 phase 3
 **Test status:** 581 passing
 
 ---
