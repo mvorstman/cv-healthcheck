@@ -10,6 +10,73 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (ADR 0003 phase 4: SA migrated to catalog-driven REST collection)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `5fa4b2d` (extractor extension + migration), `984864a` (bespoke deletion + UI URL + tests), plus the wrap-up commit publishing this entry.
+**Test status:** 560 passing (was 582; net −22 from SA-bespoke test removals, +5 from new extractor tests for column_map/status_to_severity/HTML stripping, +1 from the migration-count assertion bump).
+
+Phase 4 of ADR 0003. Security Assessment is now collected by the generic catalog-driven RESTExtractor — same path as `client_growth`/`capacity_license`/`backup_job_summary`. The bespoke `SecurityAssessmentService.collect_from_rest` and its supporting modules are deleted. Six new catalog rows describe SA's findings tables under report 336. The new extractor honors `column_map` + `status_to_severity` + HTML stripping (the catalog pattern previously only supported by the HTML extractor), letting raw Reports Plus rows become canonical Finding items without any SA-specific Python.
+
+### Step 1 design fork: Approach A (column_map in REST catalog rows)
+
+Step 1 surfaced that the SA UI renders **findings**, but the raw Reports Plus rows arrive with capitalized keys (`Parameter`/`Status`/`Remarks`/`Action`), Commvault's prefixed status codes (`2_Info`), and embedded HTML (e.g. `<a href="...">How to enable 2FA</a>`). The new extractor's `output_as: "findings"` path in `result_to_artifact._build_finding` expects already-normalized lowercase keys with canonical severity strings and plain text. Bridging the gap needed an extractor change.
+
+The steering chat picked **Approach A**: extend the REST extractor with the same `column_map` + `status_to_severity` catalog-driven pattern that the HTML extractor already uses, instead of inventing SA-specific code. This generalizes — phase 5's LS migration will use the same machinery for its `output_as: "card"` sections.
+
+### Added
+
+- **Migration `0007_security_assessment_rest_section_sources.sql`** — seeds six `subject_section_sources` rows under the existing `security_assessment` REST source. Each section declares `report_id="336"`, `dataset_name`, `dataset_guid`, `column_map` (Parameter/Status/Remarks/Action → canonical lowercase), `status_to_severity` (mapping the four prefixed codes `1_Good`/`2_Info`/`3_Warning`/`4_Critical` to canonical severities), and `output_as: "findings"`. No parameters declared — probes confirmed the lab returns identical record counts with or without `parameter.sys_commCellId=10000` (lab has one CommCell).
+- **`RESTExtractor` post-processing** — `_fetch_section` now applies `column_map` (rename source keys → canonical, drop non-mapped keys), `status_to_severity` (when `output_as=="findings"`, sets `row["severity"]` from the mapped status), and HTML stripping (when `output_as=="findings"` and a row's string value contains `<`, strips markup via `html.parser` to plain text). Mirrors the HTML extractor's existing pattern.
+- **5 new tests** in `tests/test_rest_extractor.py` covering: column_map row projection, status_to_severity mapping (including unknown-value→info default), HTML stripping for findings rows, no-HTML-strip under `output_as: "table"`, and no-column_map raw-key preservation.
+
+### Removed
+
+- **`src/cvhealthcheck/adapters/security_assessment.py`** — the bespoke `adapt_reportsplus_rest` adapter.
+- **`SecurityAssessmentService.collect_from_rest`** — the bespoke REST collection method. The service class keeps `get_current`/`get_artifact`/`get_history`/`get_canonical` and the HTML/CSV import path (`persist_security_assessment_artifact`, `import_security_assessment_upload`).
+- **From `src/cvhealthcheck/reportsplus/security_assessment.py`**: `extract_security_assessment`, `normalize_security_assessment`, `_build_failed_rest_artifact`, `_is_failed_report_status`, `SECURITY_ASSESSMENT_REPORT_ID`, plus the supporting private helpers (`_normalize_row`, `_normalize_key`, `_stringify_action`). The file retains the read-side helpers (`load_security_assessment_artifact`, `security_assessment_status`, `security_assessment_quick_hc`, `SECTION_ORDER`) still used by the legacy dev page and the workspace report renderer.
+- **CLI subcommand** `reportsplus security-assessment` (no production callers — was a dev tool).
+- **`/security-assessment?refresh=1`** REST-refresh branch in the legacy dev page. The page still renders the most-recently imported HTML/CSV artifact; live REST collection now goes through the Quick HC workspace.
+- **`quick_hc_security_assessment_collect`** route at `/quick-hc/security-assessment/collect`. The wrapping redirect at `/quick-hc/security-assessment` stays (it just bounces to `/quick-hc#subject=security_assessment`).
+- **SA entries in `cvhealthcheck.registry.REGISTRY`** (the hardcoded in-process registry — no production callers, only tests). The orphan registry retains `environment` and `license_summary`.
+- **22 SA-bespoke tests** across `test_security_assessment_import.py`, `test_registry.py`, `test_registry_helpers.py`, `test_registry_execution.py`. Generic-extractor tests at `test_rest_extractor.py` now cover SA's runtime path.
+
+### Changed
+
+- **`quickhc/registry.py`** — drop the hardcoded `collect_url="/quick-hc/security-assessment/collect"` from the SA TileDefinition. The dynamic `/quick-hc/<subject_id>/collect` URL builder (registry.py:391) now takes over for SA, same as the other three REST subjects.
+- **`quickhc/subject_data_service.py::_DISPATCH_REST_COLLECT_URLS`** — SA's URL updated from the hyphenated bespoke `/quick-hc/security-assessment/collect` to the underscored generic `/quick-hc/security_assessment/collect`. LS still points at the hyphenated bespoke URL until phase 5.
+- **`tests/test_core_solidity.py`** — expected SA collect URL updated to match.
+
+### Notes
+
+- **Artifact wipe**: the canonical SA artifact directory `data/catalog/artifacts/default/default/working/security_assessment/` was empty before this phase started, so no on-disk wipe was needed. ADR 0002 precedent + HANDOVER methodology marker #18 are still satisfied — the new path will overwrite `latest.json` on the next collect.
+- **Legacy SA store** at `data/catalog/security_assessment/` (`latest_html.json`, `latest_csv.json`, `latest_rest.json`, plus several `artifact_*.json`) is **not touched** in this phase. It's pre-ADR-0002 storage used by the HTML/CSV upload path's `persist_security_assessment_artifact(write_legacy=True)`. HANDOVER backlog #15 tracks project-scoping it.
+- **`checklist.py` (`normalize_check`, `normalize_status`, `STATUS_LABELS`, `checklist_summary`)** is now dead code — its callers all lived in the deleted modules. Left in place this phase as YAGNI cleanup for after phase 5.
+- **`extract_report.py`** is still in use by LS — phase 5 deletes it alongside the LS bespoke service.
+- **`REPORT_DEFINITIONS`** is still orphaned but in-place — phase 5 deletes it.
+- **`build_security_assessment_provenance`** still exists in `quickhc/source_provenance.py` and is invoked via `source_provenance_dispatch` for SA's badge display. It's not in the collect path — only the source-status badges on the workspace tile depend on it. Kept as-is.
+
+### End-to-end verification against the real lab CommCell
+
+| Subject | sections | rows | overall status | sample finding (SA) / row (others) |
+|---|---|---|---|---|
+| `security_assessment` | **6** | 32 (7+6+3+3+10+3) | **critical** (2 critical, 0 warning, 12 good, 18 info) | `{title: "Two-factor authentication", severity: "info", description: "Disabled Commvault recommends you enable this feature", recommendation: "How to enable two factor authentication"}` |
+| `client_growth` | 1 | 13 | — | `{Added: 0, MonthStart: "2025-05-01T00:00:00+00:00", Total: 0, ...}` |
+| `capacity_license` | 1 | 13 | — | `{Month: "May 1, 2025", "Entity Name": "CS01 - 337F", "Used Capacity": -1, ...}` |
+| `backup_job_summary` | 1 | 0 | — | (lab dataset still empty; protocol works, no errors) |
+
+HTML stripping verified: SA's "Threat Indicator alert" (critical) and "Disaster Recovery Backup" (critical) findings have clean plain-text descriptions and recommendations. Original raw response contained `<a href="...">How to configure DR backup</a>` and `<br>`-containing remarks — both stripped to plain text.
+
+Provenance for all four artifacts comes from the customer row (`commcell_id=SMOKE-TEST-CS`, `commcell_name=Default`) — phase 3 wiring intact, no regression.
+
+### Carry-forward for phase 5
+
+Phase 5 — LS migration — is structurally identical to phase 4 but larger: LS renders 7+ tables from report 206 and introduces the first `output_as: "card"` catalog rows (the header-info datasets). Phase 5 also retires `extract_report.py`, `REPORT_DEFINITIONS`, `_read_commcell_provenance`, the bespoke `LicenseSummaryService.collect_from_rest`, and the corresponding adapter/normalizer/persister modules. After phase 5, the catalog-driven extractor is the only REST collection path in the codebase.
+
+The same `column_map` + `status_to_severity` machinery added in this phase covers any LS finding-style sections. For card-style sections, phase 5 needs to validate the existing phase-2 trimming (`rows[:1]`) reaches the workspace renderer correctly — the current `result_to_artifact` doesn't have a dedicated card branch (falls through to table). Could be a small extension or could be a workspace template change.
+
+---
+
 ## 2026-05-27 (ADR 0003 interstitial fix: extractor switched to GET-only protocol)
 
 **Branch:** `feature/basic-healthcheck-report-output`
