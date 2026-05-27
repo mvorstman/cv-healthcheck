@@ -132,12 +132,14 @@ def test_dispatched_subjects_rest_source_shows_validated_with_collect_action(
     # SA and LS have a provenance builder registered in
     # source_provenance_dispatch — when _build_generic_subject runs
     # (canonical artifact present), the dispatch fires and the
-    # workspace tile shows REST as "Validated" with a Collect action
-    # pointing at the dedicated hyphenated route.
+    # workspace tile shows REST as "Validated" with a Collect action.
+    # Post ADR 0003 phase 4, SA's Collect URL is the underscored
+    # generic-handler URL (catalog-driven); LS still uses the
+    # hyphenated bespoke URL until phase 5.
     from cvhealthcheck.quickhc import subject_data_service as sds
 
     expected_collect = {
-        "security_assessment": "/quick-hc/security-assessment/collect",
+        "security_assessment": "/quick-hc/security_assessment/collect",
         "license_summary": "/quick-hc/license-summary/collect",
     }
     store = ArtifactStore("default", "default", base_dir=tmp_path / "artifacts")

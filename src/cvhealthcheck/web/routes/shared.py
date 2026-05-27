@@ -56,7 +56,6 @@ from cvhealthcheck.reportsplus.inventory import (
 from cvhealthcheck.reportsplus.metric_inventory import build_report_metric_inventory
 from cvhealthcheck.reportsplus.metadata import summarize_dataset_metadata
 from cvhealthcheck.reportsplus.security_assessment import (
-    extract_security_assessment,
     load_security_assessment_artifact,
     security_assessment_status,
 )

@@ -283,36 +283,10 @@ def quick_hc_security_assessment():
     return _workspace_redirect("security_assessment")
 
 
-@bp.route("/quick-hc/security-assessment/collect", methods=["POST"])
-@login_required
-def quick_hc_security_assessment_collect():
-    service = SecurityAssessmentService()
-    try:
-        result = service.collect_from_rest(client=_reportsplus_client())
-    except SecurityAssessmentImportError as exc:
-        flash(str(exc), "error")
-        return redirect(url_for("main.quick_hc_security_assessment"))
-    except Exception as exc:
-        flash(f"Security Assessment REST collection failed: {exc}", "error")
-        return redirect(url_for("main.quick_hc_security_assessment"))
-
-    source = result["normalized"].get("source", {})
-    if source.get("http_status") == 401:
-        clear_current_token()
-        return redirect(
-            url_for(
-                "main.login",
-                next=url_for("main.quick_hc_security_assessment"),
-                expired="1",
-            )
-        )
-
-    finding_count = int(result["normalized"].get("finding_count") or 0)
-    flash(
-        f"REST collection completed with {finding_count} findings.",
-        "success",
-    )
-    return redirect(url_for("main.quick_hc_security_assessment"))
+# Security Assessment REST collection now routes through the generic
+# /quick-hc/<subject_id>/collect handler (ADR 0003 phase 4). The previous
+# bespoke route at /quick-hc/security-assessment/collect was retired
+# along with SecurityAssessmentService.collect_from_rest.
 
 
 @bp.route("/quick-hc/license-summary")

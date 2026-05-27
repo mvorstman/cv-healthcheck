@@ -57,28 +57,18 @@ class TestUnknownSubject:
 # ---------------------------------------------------------------------------
 
 class TestUnimplementedSource:
-    def test_sa_csv_raises_adapter_not_found_error(self):
-        with pytest.raises(AdapterNotFoundError):
+    # ADR 0003 phase 4 removed security_assessment from the registry, so all
+    # build_and_save_artifact calls for that subject now raise via the
+    # unknown-subject path rather than the unimplemented-source path. The
+    # environment tile retains its unimplemented-source matrix.
+
+    def test_sa_returns_unknown_subject_after_phase_4(self):
+        with pytest.raises(AdapterNotFoundError, match="No tile registered"):
             build_and_save_artifact("security_assessment", SourceType.csv_import, {})
-
-    def test_sa_html_raises_adapter_not_found_error(self):
-        with pytest.raises(AdapterNotFoundError):
-            build_and_save_artifact("security_assessment", SourceType.html_import, {})
-
-    def test_sa_json_raises_adapter_not_found_error(self):
-        with pytest.raises(AdapterNotFoundError):
-            build_and_save_artifact("security_assessment", SourceType.json_import, {})
 
     def test_env_csv_raises_adapter_not_found_error(self):
         with pytest.raises(AdapterNotFoundError):
             build_and_save_artifact("environment", SourceType.csv_import, {})
-
-    def test_error_message_contains_subject_and_source(self):
-        with pytest.raises(
-            AdapterNotFoundError,
-            match=r"No adapter for subject_id='security_assessment', source_type=SourceType\.csv_import",
-        ):
-            build_and_save_artifact("security_assessment", SourceType.csv_import, {})
 
     def test_error_message_env_unimplemented(self):
         with pytest.raises(
@@ -101,14 +91,6 @@ class TestBuildAndSave:
         if hasattr(self, "_tmpdir"):
             self._tmpdir.cleanup()
 
-    def test_returns_canonical_artifact_sa(self):
-        store = self._tmp_store()
-        artifact = build_and_save_artifact(
-            "security_assessment", SourceType.reportsplus_rest, {}, store=store
-        )
-        assert isinstance(artifact, CanonicalArtifact)
-        assert artifact.artifact_type == "security_assessment"
-
     def test_returns_canonical_artifact_environment(self):
         store = self._tmp_store()
         artifact = build_and_save_artifact(
@@ -116,14 +98,6 @@ class TestBuildAndSave:
         )
         assert isinstance(artifact, CanonicalArtifact)
         assert artifact.artifact_type == "environment"
-
-    def test_artifact_is_persisted(self):
-        store = self._tmp_store()
-        build_and_save_artifact(
-            "security_assessment", SourceType.reportsplus_rest, {}, store=store
-        )
-        loaded = store.load_latest_artifact("security_assessment")
-        assert isinstance(loaded, CanonicalArtifact)
 
     def test_loaded_artifact_matches_returned(self):
         store = self._tmp_store()

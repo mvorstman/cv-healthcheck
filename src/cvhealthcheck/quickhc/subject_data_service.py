@@ -179,7 +179,11 @@ def _load_from_canonical_store(subject_id: str) -> CanonicalArtifact | None:
 # collection at a hyphenated route (dedicated service, not the generic
 # /quick-hc/<subject_id>/collect). See source_provenance_dispatch.py.
 _DISPATCH_REST_COLLECT_URLS: dict[str, str] = {
-    "security_assessment": "/quick-hc/security-assessment/collect",
+    # security_assessment migrated to the generic catalog-driven extractor
+    # in ADR 0003 phase 4 — the dispatch provenance builder still produces
+    # source-status badges, but the Collect button uses the generic URL
+    # constructed by /quick-hc/<subject_id>/collect.
+    "security_assessment": "/quick-hc/security_assessment/collect",
     "license_summary": "/quick-hc/license-summary/collect",
 }
 

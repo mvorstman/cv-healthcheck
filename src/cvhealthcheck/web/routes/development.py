@@ -32,7 +32,6 @@ from .shared import (
     export_security_assessment_registry,
     extract_records,
     extract_report,
-    extract_security_assessment,
     filter_reports,
     find_report_content_clues,
     flash,
@@ -196,21 +195,12 @@ def metrics_capacity_license():
 @bp.route("/security-assessment")
 def reportsplus_security_assessment():
     message = None
-
-    if is_authenticated() and request.args.get("refresh") == "1":
-        result = extract_security_assessment(
-            client=_reportsplus_client(),
-            execute=request.args.get("execute", "1") != "0",
-        )
-        report_status = result["normalized"].get("source", {}).get("http_status")
-        if report_status == 401:
-            clear_current_token()
-            return redirect(url_for("main.login", next=request.path, expired="1"))
-        flash(
-            f"REST refresh completed with {result['normalized'].get('finding_count', 0)} findings.",
-            "success",
-        )
-        return redirect(url_for("main.reportsplus_security_assessment"))
+    # The ?refresh=1 REST collection path was retired in ADR 0003 phase 4
+    # along with the bespoke extract_security_assessment helper. This dev
+    # page now only renders the most-recently imported artifact (HTML or
+    # CSV upload via /security-assessment/import). For live REST collection,
+    # use the Quick HC workspace's Collect button on the Security Assessment
+    # tile, which routes through the generic catalog-driven extractor.
 
     try:
         normalized = load_security_assessment_artifact()

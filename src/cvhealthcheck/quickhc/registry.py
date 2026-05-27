@@ -129,7 +129,9 @@ _SYSTEM_TILES: tuple[TileDefinition, ...] = (
         collect_capable=True,
         import_capable=True,
         import_url="/quick-hc/security-assessment/import",
-        collect_url="/quick-hc/security-assessment/collect",
+        # collect_url omitted — the dynamic /quick-hc/<subject_id>/collect
+        # URL is built at runtime from the catalog's rest source row
+        # (ADR 0003 phase 4 migrated SA to the catalog-driven extractor).
         sections=(
             SectionDefinition(
                 id=SECURITY_ASSESSMENT_METADATA_SECTION_ID,
