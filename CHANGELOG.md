@@ -10,6 +10,39 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (ADR 0003 phase 2: generic REST extractor with cacheId-aware session)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** the phase 2 implementation commit immediately preceding this entry, plus the wrap-up commit that publishes this entry.
+**Test status:** 563 passing (+9 from 554; new tests cover dataset_name resolution, hint fallback, same-report_id assertion, fail-whole, multi-section cacheId reuse, output_as="card", and the new `CommvaultSession.get_report`).
+
+Phase 2 of ADR 0003. The runtime half of the rewrite: a single catalog-driven REST extractor that consumes the `report_id` + `dataset_name` fields phase 1 added, resolves dataset GUIDs at runtime from the live report definition, and posts `reportBuilder.do` once per collection to acquire a cacheId reused across all sections. End-to-end verified against the real CommCell: `client_growth` and `capacity_license` continue to collect cleanly (regression test) and `backup_job_summary` now collects successfully for the first time (smoke test of phase 1's corrected dataset_guid + phase 2's runtime resolution path).
+
+### Added
+
+- **`CommvaultSession.get_report(report_id)`** at `src/cvhealthcheck/reportsplus/session.py:92`. Sibling to `init_report` and `fetch_dataset`; GETs `/reportsplusengine/reports/<id>` using the same base_url/token/timeout. Returns the parsed JSON dict (caller pipes it through `parse_content_field` to unwrap the string-encoded `content` field). New method, no signature change to existing ones. Keeps the cacheId protocol — GET + POST + paginated fetch — fully contained within one collaborator that the extractor depends on.
+
+### Changed
+
+- **`RESTExtractor` rewritten** at `src/cvhealthcheck/extractors/rest.py`. New constructor `(db_conn, session, customer_id, project_id)` — explicit args, no Flask request context. New `extract(subject_id, version=1)` flow: load REST instructions → assert all sections share `report_id` (runtime check; reports offending section_ids on mismatch) → `session.get_report(report_id)` → `parse_content_field` → `discover_widgets` + `discover_dataset_references` build a `{dataset_name: dataset_guid}` map → `session.init_report({"reportId": int(report_id)})` to acquire the cacheId → per section, resolve `dataset_name` → guid from the map (fall back to the stored `dataset_guid` hint with a warning if name not in live definition; error if neither yields a guid) → `session.fetch_dataset` → post-process timestamps + null values. Supports `output_as="card"` by trimming `result.sections[section_id]` to `rows[0:1]` (rendering as a key-value block lands in phase 4/5 when the first card-shaped rows get seeded). Fail-whole: any section error aborts the run and returns errors without partial state.
+- **`/quick-hc/<subject_id>/collect` route** at `src/cvhealthcheck/web/routes/quick_hc.py:179` constructs the new extractor with explicit `(customer_id, project_id)` resolved via `get_active_project(db)`. The `REPORT_DEFINITIONS.get(subject_id)` lookup and the `report_definition=` argument to `extract()` are gone. Auth flow (CV_BASE_URL, Flask session token) is unchanged — that's phase 3 territory.
+- **`tests/test_rest_extractor.py` migrated**. Old-signature tests retired; new tests cover the new shape. Coverage: dataset_name → guid resolution wins over the stored hint, hint fallback with warning when name not in live definition, error when neither name nor hint resolves a guid, same-report_id-per-subject runtime check (with mismatched section_ids in the error message), missing-report_id error path, get_report and init_report failure paths, fail-whole behavior (second section never attempted after first section's fetch errors), `output_as="card"` trimming to first row, multi-section cacheId reuse (one init_report call, two fetch_dataset calls), timestamp conversion. Plus two new CommvaultSession tests covering get_report success and the non-dict-response error path.
+
+### Notes
+
+- **Same-report_id-per-subject runtime check** lives at `RESTExtractor._resolve_single_report_id`. Picked the runtime-check option (rather than a DB constraint or trigger) as ADR 0003 explicitly left open. Mismatch error reports the offending section_ids grouped by report_id so catalog seeding bugs are localizable.
+- **Hint fallback policy.** If the live report definition lacks a `dataset_name`, the extractor falls back to the stored `dataset_guid` (the cache hint) with a warning rather than failing. Rationale: a stale hint that still resolves is better than a hard failure, but the warning ensures the next session sees the divergence and can investigate. If neither name nor hint produces a guid, that's a fail-whole error.
+- **One cacheId per collection.** The cacheId from `init_report` is stored on the `CommvaultSession` and reused across every section's `fetch_dataset` call within the same `extract()` call. No per-section refresh; if the cacheId expires mid-run, the section fetch fails and the whole collection fails (the brief's "no per-section refresh" rule). Whether this is robust enough under real load is the open question ADR 0003 flagged; the end-to-end runs across three subjects in this session didn't trip it.
+- **`customer_id` and `project_id` constructor args** are stored on the extractor but not yet consumed inside `extract()`. They're load-bearing for phase 3 (customer-bound token, customer-row-driven CommCell URL) and phase 4/5 (SA/LS migration). Passing them through now keeps the constructor signature stable across the remaining phases.
+- **`REPORT_DEFINITIONS` dict at `src/cvhealthcheck/reportsplus/report_definitions.py` is now orphaned** — no callers remain in tree. ADR 0003's migration section lists this file for phase 5 deletion alongside the SA/LS-specific modules; leaving it in place rather than deleting early to keep phase 2's blast radius tight.
+- **`init_report` signature unchanged.** The brief flagged a signature change as a STOP trigger. Path A (add `get_report` as a new method on `CommvaultSession`) was chosen and approved during the step 1 investigation; the cacheId protocol now reads as GET-then-POST-then-paginated-GET, all three methods living on the same session.
+
+### Carry-forward for phase 3
+
+Phase 3 wires the new extractor into the customer-bound token model per ADR 0003's "Authentication and customer scoping" section: the Flask session holds one CommCell token at a time bound to the customer it was issued for; switching active customer invalidates the token and forces re-auth; CV_BASE_URL stops being authoritative and the active customer's `commcell_hostname` becomes the source of truth. The extractor's constructor already accepts `customer_id` and `project_id`; phase 3 routes the auth flow to match. SA/LS modules still use the old REST paths; phases 4/5 migrate them and delete the dedicated code.
+
+---
+
 ## 2026-05-27 (ADR 0003 amendment: wipe-and-re-collect, no forward-migration script)
 
 **Branch:** `feature/basic-healthcheck-report-output`
