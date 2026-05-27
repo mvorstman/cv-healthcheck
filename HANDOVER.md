@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-27 (ADR 0003 phase 1 — schema extended)
+**Last updated:** 2026-05-27 (ADR 0003 amendment: wipe-and-re-collect)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `4d7b722` — Phase 1 wrap-up: CHANGELOG entry, HANDOVER for ADR 0003 implementation arc
+**Last commit:** `760ead2` — CHANGELOG: ADR 0003 amendment entry
 **Test status:** 554 passing
 
 ---
