@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-27 (ADR 0002 implementation complete)
+**Last updated:** 2026-05-27 (housekeeping pass)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `472021f` — Phase 5 wrap-up: ADR 0002 implementation complete
+**Last commit:** the housekeeping wrap-up commit (see `git log -1`)
 **Test status:** 554 passing
 
 ---

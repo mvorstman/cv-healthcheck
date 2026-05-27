@@ -10,6 +10,27 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (housekeeping pass)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `7baa4a9` (HANDOVER backlog sweep), `cd23be3` (docs/PATTERNS.md + README links), plus this wrap-up commit.
+**Test status:** 554 passing (unchanged — docs-only).
+
+Small post-ADR-0002 housekeeping. No functional changes.
+
+### Changed
+
+- **HANDOVER backlog sweep.** Promoted ADR 0003 to explicit #1 (was only in the "single recommended next action" header). Added six items that had been raised across recent phases but not surfaced in the backlog list: refresh data flow audit, customer panel on quick_hc.html right side, shared.py split, SecurityAssessmentArtifactRegistry rename, hardcoded URLs in report_service.py audit, engagements table cleanup. Promoted two-CRUD-APIs investigation and template-inheritance cleanup from the smaller-cleanups list into the main backlog. Reordered: AI import workstream moved to #3 ("near top"), CommCell-discovery dropped from #1 to #4 (downstream of ADR 0003).
+
+### Added
+
+- **`docs/PATTERNS.md`** — two project-wide patterns documented as a single short doc:
+  1. *Writes converge to canonical; reads stay diverse.* Cites Option A, ADR 0001, ADR 0002, and phase 5 finalize as four instances of the same shape.
+  2. *Verify before write.* HANDOVER/CHANGELOG are starting points, not contracts. Cites two real cases where verification caught a mistake before code changed (the audit's `client_growth_summary.json` false-positive, and the init_db/schema.sql footgun).
+- **README's "Architecture Documents" section** now links `docs/PATTERNS.md`, `docs/data_flow_audit.md`, and `docs/adr/`. The audit and the ADR directory were in the repo but not findable from the README's documents index.
+
+---
+
 ## 2026-05-27 (ADR 0002 phase 5: finalize + reload — ADR 0002 IMPLEMENTATION COMPLETE)
 
 **Branch:** `feature/basic-healthcheck-report-output`
