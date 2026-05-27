@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-27 (ADR 0003 survey committed)
+**Last updated:** 2026-05-27 (ADR 0003 phase 1 — schema extended)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `b5505c6` — docs: add ADR 0003 survey report
+**Last commit:** the phase 1 wrap-up commit (see `git log -1`)
 **Test status:** 554 passing
 
 ---
@@ -24,25 +24,67 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## What was just completed
 
-**ADR 0003 survey committed** at `docs/adr/0003-survey.md` (commit `b5505c6`). Survey grounds the ADR 0003 design conversation: existing auth surface, the two REST-collection patterns coexisting today (generic `RESTExtractor` with `cacheId` vs SA/LS's `extract_report` with direct dataset GETs), the catalog `extraction_instructions` schema, the write path from REST call to project-scoped storage. Eight design forks surfaced (F1–F8) for the design chat to settle.
-
-Two prior steps in this short arc were already on the branch: `c520086` / `6778b46` (data flow audit refresh against post-ADR-0002 architecture) and `e86c18a` / `5cf1425` (ADR design workflow added to the tool-selection section). CHANGELOG has the longer history.
+**ADR 0003 phase 1 — extraction_instructions extended for catalog-driven REST.** Two code commits: `40e8f3f` (ADR 0003 doc itself, status Proposed) and `71a9c8f` (migration 0006 + test count update), plus this session's wrap-up. The three existing REST catalog rows now carry `report_id` + `dataset_name` (the new canonical reference under ADR 0003); `dataset_guid` persists in the JSON as an optional cache hint. backup_job_summary's stored `dataset_guid` was wrong (it was the report-level GUID for report 194, stored under the wrong key in migration 0004) and has been corrected in the same migration to the real "Job details" dataset GUID. No application code reads the new fields yet — phase 2 builds the new extractor.
 
 ---
 
 ## What is in-flight
 
-**ADR 0003 design conversation.** The survey is committed; the design chat happens next in a fresh Claude.ai session (filesystem-free). The chat's output is the ADR 0003 draft itself, which will land in a subsequent Claude Code session. Working tree is clean.
+**ADR 0003 implementation, phase 2.** Phase 1 (schema extended) committed; phase 2 (new generic REST extractor with cacheId-aware session + runtime dataset_name resolution) is the next implementation step. Working tree is clean.
 
 ---
 
 ## Single recommended next action
 
-**ADR 0003 design conversation — fresh Claude.ai chat.** The survey is at `docs/adr/0003-survey.md` (commit `b5505c6`). Paste its contents into a new Claude.ai chat as grounding context, then drive the design conversation from the forks the survey surfaces (F1–F8). See the "ADR design sessions: the survey-then-steer pattern" subsection of "Where work happens" for the four-step workflow this session is in step 3 of (Claude Code produced the survey; user pastes it into Claude.ai; Claude.ai drafts the ADR; a follow-up Claude Code session verifies/lands the ADR file).
+**ADR 0003 phase 2 — build the new generic REST extractor.**
 
-The conversation's deliverable is ADR 0003 itself — a design proposal, no implementation. The survey's "Surprises and observations" section calls out things worth knowing before the chat starts: the existing code has three REST patterns (not two), the customer's `commcell_id` field is already on the schema but display-only, the three-layer identity model is not yet how the code is structured, and the LS persist path has half-built customer/commcell/engagement context plumbing that ADR 0003 might want to repurpose or retire.
+Spec: `docs/adr/0003-rest-extractor-with-credentials.md`, particularly the "Extractor shape" section. Phase 1 (this session) landed the catalog half: every REST row in `subject_section_sources.extraction_instructions` now has `report_id` and `dataset_name`. Phase 2 builds the runtime half — the new extractor that consumes those fields.
 
-`docs/data_flow_audit.md` was refreshed against the current architecture in a prior session — read it alongside the survey if the design chat needs the storage-layout picture.
+### What phase 2 needs to do
+
+1. **New extractor class** that takes `(customer_id, project_id, subject_id, token, base_url)` as explicit constructor arguments. No Flask request context dependency. Replaces (and will eventually delete) `RESTExtractor` at `src/cvhealthcheck/extractors/rest.py`.
+2. **Opens a `CommvaultSession(base_url, token)`** — the cacheId-aware session at `src/cvhealthcheck/reportsplus/session.py` is the protocol building block; reuse it. POSTs `reportBuilder.do` once per subject collection with the subject's `report_id` (resolved from the catalog: all sections in a subject share one report_id; assert this at load time).
+3. **Walks the returned report definition** to build a `dataset_name → dataset_guid` map. Resolution is runtime-only; the catalog's stored `dataset_guid` is treated as untrusted (phase 1 surfaced one case where it was wrong — backup_job_summary's GUID was a report-level GUID, not a dataset GUID).
+4. **For each section**: resolves `dataset_name` to a runtime `dataset_guid`, calls `session.fetch_dataset(guid, fields, orderby, limit, parameters)`, applies the existing post-processing (timestamp parsing, null normalization). Same `output_as: "table" | "findings"` handling as the current `RESTExtractor`; `"card"` is documented but no row uses it yet.
+5. **Returns an `ExtractionResult`** that `result_to_artifact(...)` converts to a `CanonicalArtifact`, written via `project_store.save_artifact(artifact)`.
+6. **Error handling is fail-whole** per ADR 0003. If any section's fetch fails, the run aborts; partial artifacts are not written. The cacheId is acquired once per run; expiry is not auto-recovered.
+7. **Route handler integration**: `/quick-hc/<subject_id>/collect` is the v1 entry point. The route resolves the active customer (for `commcell_hostname` and `commcell_id`/`commcell_name` provenance) and the active project (for the artifact store), checks/prompts for a token bound to that customer, constructs the new extractor, runs it, saves the artifact. The current handler at `src/cvhealthcheck/web/routes/quick_hc.py:157-207` is the starting point.
+
+### Constraints
+
+- **Don't delete SA/LS REST paths yet.** Phase 2 lands the new extractor and routes the generic-collect path through it. Phase 4 (SA seed) and phase 5 (LS seed) delete the SA/LS-specific REST modules. This keeps phase 2's blast radius small.
+- **Don't touch the catalog rows.** Phase 1 set them; phase 2 reads them.
+- **Customer-bound token semantics.** Per ADR 0003: the Flask session holds one CommCell token at a time, bound to a customer; switching active customer invalidates the token and forces re-auth. Implement that binding in phase 2 even though only `Default` customer exists in most dev sessions today.
+
+### Priority-ordered backlog (everything else)
+
+1. **ADR 0003 phase 2 — generic REST extractor** (the single recommended next action above).
+2. **ADR 0003 phase 3 — route handler + auth wiring** for the new customer-bound token model.
+3. **ADR 0003 phase 4 — SA migration**: seed `subject_section_sources` for Security Assessment (report 336, the 6+ tables it renders), delete `SecurityAssessmentService.collect_from_rest`, delete `reportsplus/security_assessment.py`, retire the SA-specific normalizer / persister / adapter, one-time forward migration of existing SA artifacts to the new canonical shape.
+4. **ADR 0003 phase 5 — LS migration**: same shape as phase 4 for License Summary (report 206, 7 tables, this is where `output_as: "card"` first gets seeded for the header datasets).
+5. **AI import workstream — staging UI for proposal review, compliance rules.**
+6. **CommCell-discovery flow for customer creation.** Auth plumbing overlaps with ADR 0003 phases 2/3.
+7. **Report-provenance verification.** Check imported reports' embedded CommCell IDs against the active customer's stored CommCell ID. Catches "wrong customer's report" mistakes.
+8. **Read-only per-finalization view.** Deferred from ADR 0002 phase 5 step 5.
+9. **Customer panel on the right side of `quick_hc.html`.** Raised earlier, not acted on.
+10. **`shared.py` split.** 413-line god-module; flagged in the 2026-05-20 review.
+11. **`SecurityAssessmentArtifactRegistry` rename / generalize.** May be partially obsolete once phase 4 lands.
+12. **Hardcoded URLs in `report_service.py`.** Audit whether any remain after the 2026-05-20 partial cleanup.
+13. **Left-nav structural review.**
+14. **Two-CRUD-APIs investigation.** Customer routes use both inline SQL and `db/customers.py` helpers — pick one.
+15. **Template inheritance cleanup.** Uneven `base.html` extends.
+16. **`engagements` table cleanup.** Empty since migration 0001; pre-ADR-0002.
+17. **Project-scope the legacy SA/LS stores** under `data/catalog/{security_assessment,license_summary}/`. Mostly obsolete once ADR 0003 phases 4/5 land — but the historical artifacts in those directories may still need a one-time cleanup pass.
+18. **`data/catalog/reportsplus/` retention.** Audit Section 6 #3.
+19. **Audit Section 6 #2/#5/#6** — legacy-store accumulation, orphaned SQLite registries, labreadiness unread.
+20. **Review ADR workflow efficiency after ADR 0003 lands.** Are the survey-then-steer-then-draft-then-phased-implementation cycles worth the overhead, or are we over-engineering process? Deliberate retrospective marker — don't act on this until ADR 0003 phases 2–5 are complete.
+
+Smaller cleanups:
+
+- Delete `TileDefinition.import_url=` dead data at `registry.py:131, 205`.
+- Possibly retire the legacy `/security-assessment` development page.
+- Move SA/LS no-canonical-artifact path onto `source_provenance_dispatch`.
+- Deeper README staleness in the SA section.
 
 ### Existing tooling worth surveying for ADR 0003
 
@@ -93,6 +135,10 @@ Smaller cleanups:
 - **`init_db()` and `schema.sql` are gone.** `run_migrations()` is the sole bootstrap path.
 - **ADR 0001 source-building fork is orthogonal.** `_legacy_builders` continue to serve their subjects globally; ADR 0002 changed *where* canonical artifacts live, not *how* legacy tile data is shaped.
 - **Active-project session.** Lives in the Flask session as `session['active_project'] = {'customer_id': ..., 'project_id': ...}`. The active-project selector partial at `templates/partials/active_project_selector.html` is included on every workspace page (via `base.html` and the self-contained top-level templates).
+- **ADR 0003 phase 1 landed.** `subject_section_sources.extraction_instructions` now carries `report_id` and `dataset_name` on all three REST rows (the new canonical reference under ADR 0003). `dataset_guid` persists in the JSON as an **optional cache hint**, not canonical.
+- **`dataset_guid` in the JSON is untrusted.** Phase 1 surfaced one case where the stored value was wrong (backup_job_summary had the report-level GUID, not a dataset GUID — corrected in migration 0006). Phase 2's extractor MUST always resolve `dataset_name` against the live `reportBuilder.do` response and not rely on the catalog's stored `dataset_guid` value.
+- **`output_as: "card"`** is documented in ADR 0003 but not yet consumed. Phase 4/5 (SA/LS seeding) introduce the first card-shaped rows; phase 2 needs to anticipate the third output mode but doesn't need to implement card rendering yet.
+- **Same-report_id-per-subject rule is a runtime check, not a DB constraint.** Phase 2's extractor asserts at load time that all REST sections for a given subject share the same `report_id`. ADR 0003 explicitly left this as an open question with no preference; phase 1 chose runtime check (SQLite multi-row CHECK isn't expressible; a TRIGGER would be harder to debug than a Python assertion).
 
 ---
 

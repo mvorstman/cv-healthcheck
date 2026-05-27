@@ -10,6 +10,39 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (ADR 0003 phase 1: extraction_instructions extended for catalog-driven REST)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `40e8f3f` (ADR 0003 doc), `71a9c8f` (migration 0006 + test count update), plus the wrap-up commit publishing this entry.
+**Test status:** 554 passing (unchanged — phase 1 is additive schema; the test-count assertion in `test_migration_status_reports_all_applied` updated 5→6 to match).
+
+Phase 1 of the ADR 0003 implementation. The catalog now carries the new canonical reference for REST collection (report_id + dataset_name), and a wrong cache-hint value from migration 0004 is corrected.
+
+### Added
+
+- **ADR 0003 itself** at `docs/adr/0003-rest-extractor-with-credentials.md`. Status: Proposed. Designs a single catalog-driven, customer-scoped REST extractor that replaces the three current REST paths; introduces the `report_id` + `dataset_name` canonical reference with `dataset_guid` demoted to optional cache hint; adopts the cacheId-aware `CommvaultSession` pattern (production Commvault uses this) and migrates SA/LS away from their direct-GET path. Survey at `docs/adr/0003-survey.md` (committed earlier in the day) was the grounding doc.
+- **Migration `0006_rest_extraction_instructions_report_id_and_dataset_name.sql`** — backfills the three existing REST rows under the new canonical reference.
+
+### Changed
+
+- **`client_growth.monthly_table`** extraction_instructions gains `report_id="318"`, `dataset_name="Client Count"`.
+- **`capacity_license.table`** gains `report_id="318"`, `dataset_name="Capacity License Usage"`.
+- **`backup_job_summary.recent_jobs`** gains `report_id="194"`, `dataset_name="Job details"`, AND has its `dataset_guid` corrected from `2638c3d3-...` (the report-level GUID for report 194, stored under the wrong key in migration 0004) to `a30bd278-c7d9-470f-9ae9-8b4922743330` (the real dataset GUID, captured manually from a `reportBuilder.do` trace). Justification for the inline correction: the migration was already rewriting this row; leaving a known-wrong cache hint in place could mask bugs in phase 2's runtime resolution.
+
+### Notes
+
+- **Migration style.** Pure SQL with `json_set` + WHERE guards. Each UPDATE filters on the field the first run sets (e.g. `report_id IS NULL` for the additive rows) or changes (the wrong dataset_guid value for backup_job_summary), so a second run matches zero rows. Idempotency verified by deleting the migration row from `schema_migrations`, re-running, and confirming JSON + `updated_at` are unchanged.
+- **Runtime check chosen for "same report_id per subject" rule** rather than a DB constraint. Reasoning: SQLite can't express a multi-row CHECK; a TRIGGER would JOIN across siblings and be harder to debug than a one-line Python assertion in phase 2's extractor load path. ADR 0003 explicitly left this as an open question with no preference.
+- **`output_as: "card"`** is documented in ADR 0003 but not consumed yet. Phase 4/5 (SA/LS seeding) introduce the first card-shaped rows.
+- **No application code reads the new fields yet.** Phase 2 builds the new extractor. The backfill is invisible to current code paths; the only test churn was a count-pin in `test_migration_status_reports_all_applied`.
+- **Surprise from step 1, confirmed.** The `2638c3d3-...` value migration 0004 stored as a "dataset_guid" for `backup_job_summary.recent_jobs` is actually the report-level GUID for report 194 — not a dataset GUID. No data-flow had been broken because the existing `RESTExtractor` never went through dataset discovery; it submitted the GUID directly. Under ADR 0003 the runtime resolver will look up datasets by name from the live report definition, so the corrected GUID is just a cache hint that may or may not be honored (phase 2 design decision).
+
+### Carry-forward for phase 2
+
+Phase 2 builds the new generic REST extractor: a `CommvaultSession`-based collector that takes `(customer_id, project_id, subject_id, token, base_url)` as explicit constructor args, POSTs `reportBuilder.do` once per subject collection, resolves each section's `dataset_name` to a runtime `dataset_guid` from the report definition, then paginates `fetch_dataset` with the obtained `cacheId`. Stored `dataset_guid` in the JSON is treated as untrusted (it may have been wrong, as backup_job_summary's case demonstrated).
+
+---
+
 ## 2026-05-27 (tool-selection guidance)
 
 **Branch:** `feature/basic-healthcheck-report-output`
