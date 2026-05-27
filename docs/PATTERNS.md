@@ -73,3 +73,32 @@ Two real instances this came up:
 
 When in doubt, grep first. HANDOVER is a starting point, not a
 contract.
+
+---
+
+## 3. Push to GitHub regularly
+
+Local-only commits are one disk failure away from gone. This project
+treats pushing to `origin` as a workflow discipline, not a suggestion:
+
+- **After each major task completes** (a phase of an ADR
+  implementation, an interstitial cleanup, an ADR write-up, a
+  multi-commit refactor): push.
+- **At the end of every session**, regardless of whether a major task
+  completed: push. This is the *last* action before stopping —
+  immediately after updating HANDOVER's last-commit pointer.
+
+This applies to **every session**, not just ADR implementations or
+larger pieces of work. Docs-only sessions push too. Single-commit
+fixes push too.
+
+The motivating incident: a session discovered that 59 local commits
+had accumulated without ever being pushed to GitHub. The work was
+only on the dev machine, couldn't be pulled to a second machine, and
+would have been gone if that machine had failed. Pushing every
+session means at most one session's worth of work is exposed to
+that risk.
+
+Pushes should be append-only — no `--force`, no rebasing pushed
+branches. If a push fails (auth, network, conflict), stop and report
+the failure rather than working around it.

@@ -97,6 +97,50 @@ Smaller cleanups:
 
 ---
 
+## Session workflow disciplines
+
+These apply to **every session**, not just ADR implementations or
+multi-step refactors. Treat them as project workflow rules, not
+suggestions.
+
+### Push to GitHub regularly
+
+- **Push to `origin` after each major task completes.** A "major task"
+  is: a phase of an ADR implementation, an interstitial cleanup, an
+  ADR write-up, a multi-commit refactor, a documentation pass that
+  produces multiple commits.
+- **Push at the end of every session**, regardless of whether a major
+  task just completed. The session-end push is the *last* action
+  before stopping — after updating HANDOVER's last-commit pointer, the
+  very next thing to do is `git push origin <branch>`.
+- This is the final step of the "single recommended next action"
+  pointer. Don't treat it as optional.
+
+**Why:** local-only commits are one disk failure away from gone. This
+discipline was added after a session discovered 59 local commits had
+accumulated unpushed — the work was only on the dev machine and
+couldn't be pulled to a second machine. Pushing regularly puts the
+commits behind GitHub's durability guarantees and makes the branch
+available to any other machine.
+
+If a push fails (auth issue, network), report it and stop — don't
+push-force or work around it. Pushes should be append-only and
+no-rebase under normal conditions.
+
+### Verify before write
+
+See `docs/PATTERNS.md` — HANDOVER claims are starting points, not
+contracts. Grep first, then act.
+
+### STOP-and-report
+
+Many session briefs say "if X happens, STOP and report." Take that
+literally — when a step surfaces a design question not covered by
+the brief, ask the user rather than fabricating an answer. Better to
+leave a gap than to document the wrong thing.
+
+---
+
 ## Quick verification commands
 
 ```bash
