@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-27 (ADR 0003 phase 5: cleanup pass — ADR implemented with LS caveat)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *the phase 5 CHANGELOG+HANDOVER commit; pointer-update commit follows.*
+**Last commit:** `14f5310` — CHANGELOG + HANDOVER: ADR 0003 phase 5 (cleanup + LS caveat)
 **Test status:** 558 passing
 
 ---
