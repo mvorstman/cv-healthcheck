@@ -499,3 +499,146 @@ def test_convert_timestamp_unknown_format_passthrough():
 
 def test_convert_timestamp_none():
     assert _convert_timestamp(None, "unix_seconds") is None
+
+
+# ── column_map + status_to_severity + HTML stripping (findings shape) ────────
+
+def test_extract_applies_column_map_to_findings_rows(db):
+    _seed_subject(
+        db,
+        "alpha",
+        sections=[(
+            "section1",
+            "Findings",
+            {
+                "report_id": "318",
+                "dataset_name": "DS1",
+                "column_map": [
+                    {"source": "Parameter", "canonical": "parameter", "type": "string"},
+                    {"source": "Status", "canonical": "status", "type": "string"},
+                    {"source": "Remarks", "canonical": "remarks", "type": "string"},
+                ],
+                "output_as": "findings",
+            },
+        )],
+    )
+    session = _mock_session(fetch_rows=[
+        {"Parameter": "Two-factor auth", "Status": "1_Good",
+         "Remarks": "Enabled.", "sys_rowid": 1, "Data Source": "cs01"},
+    ])
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("alpha", version=1)
+    assert not result.errors
+    rows = result.sections["alpha.section1"]
+    assert rows == [{
+        "parameter": "Two-factor auth",
+        "status": "1_Good",
+        "remarks": "Enabled.",
+    }]
+    # Non-mapped keys (sys_rowid, Data Source) are dropped.
+
+
+def test_extract_applies_status_to_severity_for_findings(db):
+    _seed_subject(
+        db,
+        "beta",
+        sections=[(
+            "section1",
+            "Findings",
+            {
+                "report_id": "318",
+                "dataset_name": "DS1",
+                "column_map": [
+                    {"source": "Parameter", "canonical": "parameter", "type": "string"},
+                    {"source": "Status", "canonical": "status", "type": "string"},
+                ],
+                "status_to_severity": {
+                    "1_Good": "good",
+                    "2_Info": "info",
+                    "3_Warning": "warning",
+                    "4_Critical": "critical",
+                },
+                "output_as": "findings",
+            },
+        )],
+    )
+    session = _mock_session(fetch_rows=[
+        {"Parameter": "A", "Status": "1_Good"},
+        {"Parameter": "B", "Status": "4_Critical"},
+        {"Parameter": "C", "Status": "unknown_value"},
+    ])
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("beta", version=1)
+    assert not result.errors
+    rows = result.sections["beta.section1"]
+    assert [r["severity"] for r in rows] == ["good", "critical", "info"]
+
+
+def test_extract_strips_html_from_findings_rows(db):
+    _seed_subject(
+        db,
+        "gamma",
+        sections=[(
+            "section1",
+            "Findings",
+            {
+                "report_id": "318",
+                "dataset_name": "DS1",
+                "column_map": [
+                    {"source": "Parameter", "canonical": "parameter", "type": "string"},
+                    {"source": "Remarks", "canonical": "remarks", "type": "string"},
+                    {"source": "Action", "canonical": "action", "type": "string"},
+                ],
+                "output_as": "findings",
+            },
+        )],
+    )
+    session = _mock_session(fetch_rows=[{
+        "Parameter": "Two-factor auth",
+        "Remarks": "Disabled<br>Commvault recommends you enable this feature",
+        "Action": '<a href="https://example.com/2fa" target="_blank">How to enable 2FA</a>',
+    }])
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("gamma", version=1)
+    assert not result.errors
+    row = result.sections["gamma.section1"][0]
+    # parameter has no HTML — unchanged
+    assert row["parameter"] == "Two-factor auth"
+    # Remarks: <br> becomes a space
+    assert row["remarks"] == "Disabled Commvault recommends you enable this feature"
+    # Action: link text extracted, href dropped (the workspace renders text only)
+    assert row["action"] == "How to enable 2FA"
+
+
+def test_extract_does_not_strip_html_for_table_output(db):
+    """HTML stripping is gated on output_as == 'findings'. Table output keeps raw."""
+    _seed_subject(
+        db,
+        "delta",
+        sections=[(
+            "section1",
+            "Raw table",
+            {
+                "report_id": "318",
+                "dataset_name": "DS1",
+                "output_as": "table",
+            },
+        )],
+    )
+    session = _mock_session(fetch_rows=[{"col": "<b>bold</b> text"}])
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("delta", version=1)
+    assert not result.errors
+    assert result.sections["delta.section1"] == [{"col": "<b>bold</b> text"}]
+
+
+def test_extract_no_column_map_preserves_raw_keys(db):
+    """Without column_map, rows pass through with original keys (existing behavior)."""
+    _seed_subject(db, "epsilon")  # default instructions, no column_map
+    session = _mock_session(fetch_rows=[{"Parameter": "X", "Status": "1_Good"}])
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("epsilon", version=1)
+    assert not result.errors
+    # Default seeded instructions: output_as defaults to "table", no column_map.
+    # Raw keys preserved.
+    assert result.sections["epsilon.section1"] == [{"Parameter": "X", "Status": "1_Good"}]

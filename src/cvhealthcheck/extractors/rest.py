@@ -11,27 +11,35 @@ reportBuilder.do) is a browser/UI concern and is not used here — the
 dataset GET endpoint accepts requests without one.
 
 Instruction keys (canonical form after migration 0006):
-  report_id         : str   Commvault report id (e.g. "318") — required
-  dataset_name      : str   display name of the dataset within the report —
-                            required; the canonical reference
-  dataset_guid      : str   optional cache hint; used as fallback only if the
-                            live report definition doesn't yield a guid for
-                            dataset_name
-  fields            : list  Field names to request
-  orderby           : str   e.g. "MonthStart Asc"
-  limit             : int   Max rows to fetch
-  parameters        : dict  Extra query-string params
-  timestamp_fields  : list  Fields to convert to ISO strings
-  timestamp_format  : str   "unix_seconds" | "unix_ms"
-  null_values       : list  Values to coerce to None
-  output_as         : str   "table" | "findings" | "card"
+  report_id           : str   Commvault report id (e.g. "318") — required
+  dataset_name        : str   display name of the dataset within the report —
+                              required; the canonical reference
+  dataset_guid        : str   optional cache hint; used as fallback only if the
+                              live report definition doesn't yield a guid for
+                              dataset_name
+  fields              : list  Field names to request
+  orderby             : str   e.g. "MonthStart Asc"
+  limit               : int   Max rows to fetch
+  parameters          : dict  Extra query-string params
+  timestamp_fields    : list  Fields to convert to ISO strings
+  timestamp_format    : str   "unix_seconds" | "unix_ms"
+  null_values         : list  Values to coerce to None
+  column_map          : list  [{"source": ..., "canonical": ..., "type": ...}, ...]
+                              Renames raw response columns to canonical keys.
+                              Mirrors the HTML extractor's pattern.
+  status_to_severity  : dict  Maps the canonical "status" value to a severity
+                              string ("critical"/"warning"/"good"/"info").
+                              Applied when output_as == "findings".
+  output_as           : str   "table" | "findings" | "card"
 """
 from __future__ import annotations
 
+import html as _html_module
 import json
 import logging
 import sqlite3
 from datetime import UTC, datetime
+from html.parser import HTMLParser
 from typing import Any
 
 from cvhealthcheck.extractors.html import ExtractionResult
@@ -233,6 +241,9 @@ class RESTExtractor:
         timestamp_fields: list[str] = instructions.get("timestamp_fields") or []
         timestamp_format: str = instructions.get("timestamp_format", "")
         null_values: list[Any] = instructions.get("null_values") or []
+        column_map: list[dict[str, Any]] = instructions.get("column_map") or []
+        status_to_severity: dict[str, str] = instructions.get("status_to_severity") or {}
+        output_as: str = instructions.get("output_as", "table")
 
         try:
             raw_rows = self._session.fetch_dataset(
@@ -255,9 +266,76 @@ class RESTExtractor:
             for key, val in list(row.items()):
                 if val in null_values:
                     row[key] = None
+            if column_map:
+                row = _apply_column_map(row, column_map)
+            if output_as == "findings":
+                # Strip HTML from string values so the renderer doesn't show
+                # raw <a href>/<br> markup. Mirrors what the HTML extractor
+                # produces via BeautifulSoup-extracted cell text.
+                for key, val in list(row.items()):
+                    if isinstance(val, str) and "<" in val:
+                        row[key] = _strip_html(val)
+                if status_to_severity:
+                    status_val = str(row.get("status") or "")
+                    row["severity"] = status_to_severity.get(status_val, "info")
             rows.append(row)
 
         return rows, warnings, errors
+
+
+class _HTMLTextExtractor(HTMLParser):
+    """HTMLParser that collects text content, joining inline-break tags with spaces."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self._parts.append(data)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() in {"br", "p", "li"}:
+            self._parts.append(" ")
+
+    @property
+    def text(self) -> str:
+        return " ".join(part for part in self._parts if part)
+
+
+def _strip_html(value: str) -> str:
+    """Return a plain-text rendering of an HTML-containing string.
+
+    Used for findings rows where Status/Remarks/Action arrive from
+    Reports Plus with markup the bespoke flow stripped via BeautifulSoup.
+    """
+    parser = _HTMLTextExtractor()
+    parser.feed(value)
+    parser.close()
+    return " ".join(_html_module.unescape(parser.text).split())
+
+
+def _apply_column_map(
+    row: dict[str, Any], column_map: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Project a raw row through a column_map.
+
+    Each entry of the map declares ``source`` (the raw key) and
+    ``canonical`` (the target key). The resulting dict has only the
+    canonical keys. Sources that aren't present in ``row`` produce a
+    missing canonical key (not a None) so downstream code that does
+    ``row.get(...)`` keeps working.
+
+    Matches the catalog pattern already used by the HTML extractor.
+    """
+    mapped: dict[str, Any] = {}
+    for entry in column_map:
+        source = entry.get("source")
+        canonical = entry.get("canonical")
+        if not isinstance(source, str) or not isinstance(canonical, str):
+            continue
+        if source in row:
+            mapped[canonical] = row[source]
+    return mapped
 
 
 def _build_name_to_guid_map(definition: Any) -> dict[str, str]:
