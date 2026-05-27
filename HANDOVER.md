@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-27 (data flow audit refresh)
+**Last updated:** 2026-05-27 (ADR design workflow in tool-selection)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `c520086` — docs: refresh data flow audit for post-ADR-0002 architecture
+**Last commit:** `e86c18a` — docs: add ADR design workflow to tool-selection guidance
 **Test status:** 554 passing
 
 ---
