@@ -10,6 +10,38 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (ADR 0003 amendment: protocol pivots to GET-only)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `5fcfa61`, plus the wrap-up commit that publishes this entry.
+**Test status:** 581 passing (docs only — no code change this session).
+
+Interstitial amendment between phase 3 and the next code-touching session. The steering chat re-examined ADR 0003's protocol decision against the HTTP 419 surfaced during phase 3's smoke test (POST `reportBuilder.do` rejected by the lab CommCell across every payload, token format, and token age tried). The original decision adopted the cacheId acquisition pattern based on a License Summary browser capture; closer reading of that capture showed the POST served interactive UI rendering (drill-downs, sorting, pagination cursors), not programmatic data collection. SA and LS have been successfully collecting against this CommCell using direct dataset GETs with no cacheId step. ADR 0003 is amended so the catalog-driven extractor uses that same GET-only protocol rather than introducing the cacheId POST. Phase 2's code still uses the old protocol and is broken against the lab; the fix is the next single-recommended action.
+
+### Changed
+
+- **ADR 0003 "Context"** — rewrites the "Investigation of the License Summary report's actual API traffic" paragraph to describe two observed patterns (browser-UI cacheId vs. SA/LS direct GET) without picking a winner there; the Decision section picks GET-only.
+- **ADR 0003 "Decision → Catalog schema"** — replaces "the `reportBuilder.do` POST happens once per subject collection, the returned `cacheId` is reused…" with "the report definition fetch (`GET /reports/<report_id>`) happens once per subject collection, and the resolved `dataset_name` → `dataset_guid` map is reused across all section fetches…".
+- **ADR 0003 "Decision → Extractor shape"** — step 2 now describes GETting the report definition and building a name→guid map. Step 4 now describes GETting `/datasets/<guid>/data` directly. The cacheId sentence is dropped from the error-handling paragraph. A new closing paragraph explains the browser-vs-programmatic distinction so a fresh reader understands why the ADR doesn't use cacheId despite the LS browser capture showing one.
+- **ADR 0003 "Consequences → Positive"** — the "cacheId pattern means one `reportBuilder.do` POST per subject" sentence is replaced with "one report definition GET per subject collection (instead of per-dataset metadata lookups)" framing.
+- **ADR 0003 "Consequences → Negative"** — the "cacheId pattern is more state to manage" sentence is removed (no longer applies).
+- **ADR 0003 "Consequences → Open questions"** — the cacheId-lifetime question is removed entirely. The only remaining question is the same-`report_id`-per-subject constraint vs runtime check (resolved in phase 1 as runtime check; left documented for the historical record).
+- **ADR 0003 "Pointers for implementation"** — the `CommvaultSession` pointer drops "cacheId-aware session; the protocol shape ADR 0003 standardizes on" in favor of a neutral "shared HTTP session for Reports Plus; the extractor uses its dataset GET helper".
+- **ADR 0003 Context bullet for the generic `RESTExtractor`** — the "official two-step pattern" framing is dropped; just "a two-step pattern" now (factual, no implication that this is the right choice).
+
+### Notes
+
+- **The survey doc at `docs/adr/0003-survey.md` is unchanged.** Its "Surprises and observations" section S1 describes the protocol fork as observed at survey time. Survey docs are historical snapshots; corrections live in the ADR, not in the survey.
+- **`CommvaultSession.init_report` and the rest of the cacheId machinery in `session.py` are not deleted.** The amendment is doc-only; the next session's extractor fix will simply stop calling `init_report`. Whether to retire the method entirely is a separate YAGNI decision deferred until the fix lands.
+- **The 419 is no longer a "diagnose me" question.** It was the lab CommCell rejecting a POST it doesn't accept from a non-browser caller — possibly missing CSRF, possibly disabled endpoint, possibly version-dependent. The amendment makes the diagnosis moot by removing the POST from the protocol.
+- **Phase 2's extractor is now provably broken against the lab** (HTTP 419 reproducible with a bare `CommvaultSession` independent of Flask). The next code-touching session rewrites it to match the amended protocol and re-runs the smoke for `client_growth`, `capacity_license`, `backup_job_summary`.
+
+### Carry-forward for the next session
+
+The interstitial fix: rewrite `RESTExtractor.extract()` to drop the `session.init_report(...)` call, make `CommvaultSession.fetch_dataset` work without a stored cacheId (the lab GET endpoint auto-generates one), update the tests at `tests/test_rest_extractor.py` to drop cacheId-reuse mock assertions, and verify end-to-end against the three existing REST subjects. Phase 4 (SA migration) remains gated on the fix.
+
+---
+
 ## 2026-05-27 (ADR 0003 phase 3: customer-bound CommCell auth)
 
 **Branch:** `feature/basic-healthcheck-report-output`

@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-27 (ADR 0003 phase 3: customer-bound CommCell auth)
+**Last updated:** 2026-05-27 (ADR 0003 amendment: protocol pivots to GET-only)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `c7d25ae` — CHANGELOG + HANDOVER: ADR 0003 phase 3
-**Test status:** 581 passing
+**Last commit:** *the amendment CHANGELOG+HANDOVER commit; pointer-update commit follows.*
+**Test status:** 581 passing (docs only — no code change this session)
 
 ---
 
@@ -24,49 +24,49 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## What was just completed
 
-**ADR 0003 phase 3 — customer-bound CommCell auth.** Repurposes `/login` (and `/api/login`) as the customer-aware credentials prompt: it authenticates against the active customer's `commcell_hostname` (not `CV_BASE_URL`) and binds the issued token to that customer's id in the Flask session. Switching customer (or hitting a route whose active customer doesn't match the bound one) clears the token and bounces to `/login`. The generic REST collect handler resolves the active customer, gates on `is_authenticated_for(customer_id)`, uses `customer.commcell_hostname` as the CommvaultSession base_url, and pulls provenance fields (`commcell_id`, `commcell_name`) from the customer row instead of `data/catalog/rest/commserv.json`. New session key `SESSION_CUSTOMER_ID_KEY`; new helpers `is_authenticated_for` and `get_active_customer`; `set_current_token` now requires `customer_id`. Two commits this session (implementation + wrap-up) plus the pointer-update commit. 18 new tests, 581 total (was 563). Step 1 surfaced that `/login` had always been CommCell auth (never separate "app auth") — Path A (repurpose `/login`) was chosen over Path B (parallel `/connect-commcell` route).
+**ADR 0003 protocol amendment — pivots from cacheId POST to GET-only.** Docs-only session. The steering chat re-examined ADR 0003's protocol decision against the 419 surfaced during phase 3's smoke and concluded the cacheId acquisition step (POST `reportBuilder.do`) is a browser/UI-session concern, not a programmatic-collection requirement. The dataset GET endpoint accepts requests without a cacheId and returns one auto-generated in the response body — which is what SA and LS have been doing successfully all along. ADR 0003 is amended so that the catalog-driven extractor uses the same GET-only protocol SA and LS already use, rather than introducing a cacheId acquisition step the lab CommCell rejects. The amendment touches the ADR's Context, Catalog schema, Extractor shape (steps 2 and 4, error-handling paragraph, plus a new closing paragraph explaining browser-vs-programmatic), Consequences (Positive and Negative both rewritten), Open questions (cacheId-lifetime question removed), and Pointers for implementation (`CommvaultSession` description). The survey doc at `docs/adr/0003-survey.md` is unchanged — its "Surprises and observations" section is a historical snapshot.
 
 ---
 
 ## What is in-flight
 
-**ADR 0003 implementation — phase 3 complete, blocker before phase 4.** Phase 3 committed; phase 4 (SA migration) is the next ADR phase but is gated on resolving the `reportBuilder.do` HTTP 419 surfaced during phase 3's end-to-end smoke (see "Single recommended next action" below). Working tree is clean.
+**ADR 0003 implementation — phase 3 complete, an interstitial fix between phase 3 and phase 4.** Phase 2's extractor still uses the old cacheId protocol and is broken against the lab (HTTP 419 on the POST). The next code-touching session rewrites it to the amended GET-only protocol. Working tree is clean.
 
 ---
 
 ## Single recommended next action
 
-**Diagnose the `reportBuilder.do` HTTP 419** before starting phase 4.
+**ADR 0003 interstitial fix — rewrite the RESTExtractor to the amended GET-only protocol.**
 
-Phase 3's end-to-end smoke confirmed the auth flow lands correctly, but the **first call inside the new extractor that requires the cacheId pattern fails**: `session.init_report({"reportId": 318})` returns HTTP 419 against the lab CommCell at `https://192.168.182.129:4433`. This was reproduced with a bare CommvaultSession (no Flask, no test_client) and with multiple token variants:
+Spec: `docs/adr/0003-rest-extractor-with-credentials.md`, particularly the amended "Extractor shape" subsection. The amended protocol is:
 
-- Fresh `/Login`-issued token, no `QSDK ` prefix → 419
-- Fresh token with `QSDK ` prefix → 419
-- Pre-existing `.token` file value → 419
-- Minimal `{"reportId": 318}` body → 419
-- Phase 2's `{"reportId": 318, "datasets": [...]}` shape → 419
-- The full report dict echoed back from `GET /reports/318` → 419
-- `application/x-www-form-urlencoded` body → 419
+1. Open `CommvaultSession(base_url, token)`.
+2. GET `/reports/<report_id>` (via `session.get_report` which already exists from phase 2). Walk for `{dataset_name: dataset_guid}` map.
+3. Load section instructions. Assert all share `report_id` (already implemented in phase 2; keep).
+4. For each section: resolve `dataset_name` → `dataset_guid` from the map; GET `/datasets/<guid>/data` directly with the section's `fields`/`orderby`/`limit`/`parameters` from `extraction_instructions`; apply timestamp + null-value post-processing. **No cacheId acquisition POST.**
+5. Return ExtractionResult.
 
-The 419 response body is the generic Commvault Command Center HTML error page (`<h1>An error has occurred.</h1>`), not a JSON API error. In contrast, the **direct `GET /datasets/<guid>/data` (the pre-cacheId path) returns 200 cleanly AND includes a generated `cacheId` field in its response body** — the CommCell is auto-creating cacheIds for dataset GETs.
+### What the fix needs to do
 
-This blocks real-world collection through the new extractor and will block SA/LS migration (phases 4/5) since they're meant to inherit the cacheId pattern.
+1. **Stop calling `session.init_report` from the extractor.** The method itself stays in `session.py` — anything else depending on it (none in tree today, but don't audit-and-delete in this fix) keeps working. The generic extractor's `extract()` simply drops that call.
+2. **Stop passing the stored `_cache_id` through `fetch_dataset`.** `CommvaultSession.fetch_dataset` currently requires a cacheId (raises `CommvaultSessionError` if neither stored nor passed). Either (a) make `cache_id` truly optional and skip it in the request when None — the lab CommCell auto-generates one and includes it in the response body — or (b) change the extractor to call a thinner GET helper that doesn't require a cacheId. Option (a) is the smaller change.
+3. **Re-validate the existing fail-whole, hint-fallback, and same-report_id-per-subject behaviors** — none of these depend on cacheId acquisition; they're protocol-agnostic and stay as-is. Just make sure the tests still pass after the protocol change.
+4. **Update the tests at `tests/test_rest_extractor.py`** to drop the mock-`init_report` assertions and any cacheId-reuse assertions. The "multi-section cacheId reuse" test becomes "multi-section name-to-guid map reuse" — same idea, different mechanism.
+5. **End-to-end smoke against the real lab** — same three subjects (`client_growth`, `capacity_license`, `backup_job_summary`). Use the existing `data/app.db` state (Default customer's `commcell_hostname` is already set to `https://192.168.182.129:4433` from phase 3's smoke).
 
-### What to investigate (priority order)
+### Constraints
 
-1. **Capture a working browser POST.** Open the Command Center in a browser, log in, open DevTools' Network tab, navigate to a report that triggers a `reportBuilder.do` POST. Capture the full request — headers, cookies, body. Compare to what `CommvaultSession.init_report` sends. Suspect candidates: a CSRF token header (`X-CSRF-Token`, `X-XSRF-TOKEN`, or similar), a `Referer` requirement, a cookie that needs to round-trip from the login response.
-2. **Check whether the cacheId pattern is still necessary.** The direct dataset GET returns a cacheId in its body. If subsequent paginated GETs with that body-supplied cacheId work, the `reportBuilder.do` step might be redundant. This would be an **ADR 0003 design re-examination** — the ADR currently calls out `reportBuilder.do` as the canonical cacheId acquisition. Re-validating the "writes converge / reads stay diverse" claim against current CommCell behavior is appropriate before committing to a code change.
-3. **Verify the lab itself hasn't changed.** Phase 2's "end-to-end verified" report was made before this session. If the CommCell was upgraded, reconfigured, or had reportBuilder.do disabled, that's the explanation. Check the CommCell admin interface for service / version state.
+- **Don't delete `CommvaultSession.init_report` or any cacheId machinery in `session.py`.** Decoupling is the only required change. The next session (after the fix lands) can decide whether to retire init_report entirely or leave it as dead code under YAGNI rules.
+- **Don't relitigate any other ADR 0003 decision** (auth, catalog schema for `report_id`/`dataset_name`, `output_as` values, customer-row provenance, fail-whole error handling). Only the protocol changes.
+- **Phases 4 and 5 stay gated** on the fix-phase landing AND on a successful end-to-end smoke for the three existing REST subjects.
 
-Default's `commcell_hostname` is already set to `https://192.168.182.129:4433` and `commcell_id` to `SMOKE-TEST-CS` (left in place from the phase 3 smoke). Use those for further probes.
-
-### After the 419 is resolved
+### After the fix lands
 
 Phase 4 — SA migration — becomes the next single recommended action: seed `subject_section_sources` for Security Assessment (report 336, the 6+ tables it renders), delete `SecurityAssessmentService.collect_from_rest`, delete `reportsplus/security_assessment.py`, retire the SA-specific normalizer/persister/adapter, delete existing SA artifact directories so subjects re-collect into the new canonical shape (no forward-migration script — see methodology entry #19 below and ADR 0002 precedent). Spec: `docs/adr/0003-rest-extractor-with-credentials.md` "Migration" section.
 
 ### Priority-ordered backlog (everything else)
 
-1. **Diagnose the `reportBuilder.do` HTTP 419** (the single recommended next action above). Blocking phase 4 because the cacheId pattern is the canonical collect path SA/LS will inherit.
+1. **ADR 0003 interstitial fix — rewrite extractor to GET-only** (the single recommended next action above).
 2. **ADR 0003 phase 4 — SA migration**: seed `subject_section_sources` for Security Assessment (report 336, the 6+ tables it renders), delete `SecurityAssessmentService.collect_from_rest`, delete `reportsplus/security_assessment.py`, retire the SA-specific normalizer / persister / adapter, delete existing SA artifact directories so subjects re-collect into the new canonical shape (no forward-migration script — see methodology entry below and ADR 0002 precedent). **Gated on #1.**
 3. **ADR 0003 phase 5 — LS migration**: same shape as phase 4 for License Summary (report 206, 7 tables, this is where `output_as: "card"` first gets seeded for the header datasets). Phase 5 also deletes the now-orphaned `REPORT_DEFINITIONS` dict at `src/cvhealthcheck/reportsplus/report_definitions.py` (no callers in tree as of phase 2). **Gated on #1.**
 4. **AI import workstream — staging UI for proposal review, compliance rules.**
@@ -144,8 +144,8 @@ Smaller cleanups:
 - **`init_db()` and `schema.sql` are gone.** `run_migrations()` is the sole bootstrap path.
 - **ADR 0001 source-building fork is orthogonal.** `_legacy_builders` continue to serve their subjects globally; ADR 0002 changed *where* canonical artifacts live, not *how* legacy tile data is shaped.
 - **Active-project session.** Lives in the Flask session as `session['active_project'] = {'customer_id': ..., 'project_id': ...}`. The active-project selector partial at `templates/partials/active_project_selector.html` is included on every workspace page (via `base.html` and the self-contained top-level templates).
-- **ADR 0003 phases 1, 2, and 3 landed.** Phase 1 extended `subject_section_sources.extraction_instructions` with `report_id` + `dataset_name` (the new canonical reference). Phase 2 built the new `RESTExtractor` that consumes those fields. Phase 3 made auth customer-aware: `/login` authenticates against the active customer's `commcell_hostname` (not `CV_BASE_URL`); the token is bound to `customer_id` in the Flask session via `SESSION_CUSTOMER_ID_KEY`; the collect handler gates on `is_authenticated_for(customer_id)` and falls back to `/login` on mismatch (clearing wrong-customer tokens first). The generic REST collect route is the only customer-aware caller today; SA and LS still use their old direct-GET modules (phases 4/5).
-- **`reportBuilder.do` returns HTTP 419 against the current lab CommCell.** Surfaced during phase 3's smoke test. Independent of phase 3's code — reproduces with a bare CommvaultSession and any token format. Blocks real-world collection through the new extractor. **The single recommended next action.** The direct dataset GET still returns 200 and now includes its own auto-generated cacheId — that's the fallback / pivot avenue.
+- **ADR 0003 phases 1, 2, and 3 landed.** Phase 1 extended `subject_section_sources.extraction_instructions` with `report_id` + `dataset_name` (the new canonical reference). Phase 2 built the new `RESTExtractor`. Phase 3 made auth customer-aware: `/login` authenticates against the active customer's `commcell_hostname` (not `CV_BASE_URL`); the token is bound to `customer_id` in the Flask session via `SESSION_CUSTOMER_ID_KEY`; the collect handler gates on `is_authenticated_for(customer_id)` and falls back to `/login` on mismatch (clearing wrong-customer tokens first). The generic REST collect route is the only customer-aware caller today; SA and LS still use their old direct-GET modules (phases 4/5).
+- **ADR 0003 protocol amended (this session) to GET-only.** The cacheId acquisition step (POST `reportBuilder.do`) is a browser/UI concern — it keeps state coherent across drill-downs and pagination cursors. Programmatic collection doesn't need it: the dataset GET endpoint accepts requests without a cacheId and returns one auto-generated in the response body. SA and LS were already doing this; ADR 0003 generalizes their pattern rather than introducing a separate one. The 419 surfaced in phase 3's smoke was the lab CommCell rejecting the unnecessary POST — diagnosing the 419 is no longer the goal; making the extractor not depend on the POST is. **Phase 2's code still uses the old cacheId protocol and is broken against the lab; the single recommended next action is the interstitial fix to rewrite it.**
 - **Default customer's CommCell binding is configured.** `commcell_hostname = https://192.168.182.129:4433`, `commcell_id = SMOKE-TEST-CS` — set during phase 3 verification, kept in place for follow-up testing of the 419.
 - **`set_current_token` signature changed.** It now requires `customer_id` (positional after `token`). Two production callsites updated (`/login`, `/api/login`). Tests that wrote directly to `session[SESSION_TOKEN_KEY]` continue to work — they don't go through `set_current_token` and only the loose `is_authenticated()` decorator gate (`login_required`) cares about them. Tests that need customer binding should write `SESSION_CUSTOMER_ID_KEY` too.
 - **`is_authenticated()` vs `is_authenticated_for(customer_id)`** — the first is loose (any token in session); the second is strict (token AND bound customer matches). `login_required` decorator still uses the loose check; new customer-aware routes use the strict check. Don't mix them up.
