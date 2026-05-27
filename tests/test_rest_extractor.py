@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from cvhealthcheck.extractors.html import ExtractionResult
 from cvhealthcheck.extractors.rest import RESTExtractor, _convert_timestamp
 from cvhealthcheck.reportsplus.session import CommvaultSession, CommvaultSessionError
 
@@ -63,16 +62,23 @@ def db():
     return conn
 
 
-def _seed_subject(db, subject_id="test_subject", source_type="rest", instructions=None):
+def _seed_subject(db, subject_id="test_subject", sections=None, source_type="rest"):
+    """Seed a subject with one or more REST sections.
+
+    sections: list of (section_id_suffix, title, instructions_dict). If None,
+    a single default section with report_id "318" / dataset_name "DS1" is
+    inserted.
+    """
+    if sections is None:
+        sections = [(
+            "section1",
+            "My Section",
+            {"report_id": "318", "dataset_name": "DS1", "fields": ["col1"]},
+        )]
     db.execute(
         "INSERT INTO subjects (subject_id, version, title, category, category_label)"
         " VALUES (?, 1, 'Test Subject', 'operations', 'Operations')",
         (subject_id,),
-    )
-    db.execute(
-        "INSERT INTO subject_sections (subject_id, subject_version, section_id, title, section_type)"
-        " VALUES (?, 1, ?, 'My Section', 'table')",
-        (subject_id, f"{subject_id}.section1"),
     )
     db.execute(
         "INSERT INTO subject_sources (subject_id, subject_version, source_type)"
@@ -82,14 +88,47 @@ def _seed_subject(db, subject_id="test_subject", source_type="rest", instruction
     source_id = db.execute(
         "SELECT id FROM subject_sources WHERE subject_id = ?", (subject_id,)
     ).fetchone()["id"]
-    instr = instructions or {"dataset_guid": "abc-123", "fields": ["col1", "col2"]}
-    db.execute(
-        "INSERT INTO subject_section_sources (source_id, section_id, extraction_instructions)"
-        " VALUES (?, ?, ?)",
-        (source_id, f"{subject_id}.section1", json.dumps(instr)),
-    )
+    for index, (suffix, title, instructions) in enumerate(sections):
+        section_id = f"{subject_id}.{suffix}"
+        db.execute(
+            "INSERT INTO subject_sections"
+            " (subject_id, subject_version, section_id, title, section_type, sort_order)"
+            " VALUES (?, 1, ?, ?, 'table', ?)",
+            (subject_id, section_id, title, index),
+        )
+        db.execute(
+            "INSERT INTO subject_section_sources (source_id, section_id, extraction_instructions)"
+            " VALUES (?, ?, ?)",
+            (source_id, section_id, json.dumps(instructions)),
+        )
     db.commit()
     return source_id
+
+
+def _mock_session(report_payload=None, fetch_rows=None):
+    """Return a MagicMock CommvaultSession with get_report/init_report/fetch_dataset
+    wired up. Default report_payload exposes datasets DS1 (guid-1) and DS2 (guid-2).
+    """
+    if report_payload is None:
+        report_payload = {
+            "components": [
+                {
+                    "type": "table",
+                    "title": "Table One",
+                    "dataSet": {"dataSetName": "DS1", "dataSetGuid": "guid-1"},
+                },
+                {
+                    "type": "table",
+                    "title": "Table Two",
+                    "dataSet": {"dataSetName": "DS2", "dataSetGuid": "guid-2"},
+                },
+            ]
+        }
+    session = MagicMock()
+    session.get_report.return_value = report_payload
+    session.init_report.return_value = "CACHE-X"
+    session.fetch_dataset.return_value = fetch_rows if fetch_rows is not None else []
+    return session
 
 
 # ── CommvaultSession tests ─────────────────────────────────────────────────────
@@ -137,75 +176,265 @@ def test_fetch_dataset_paginates():
     assert rows == page1
 
 
+def test_get_report_returns_parsed_json():
+    session = CommvaultSession("http://host", "tok")
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {"reportId": 318, "content": "{}"}
+    mock_resp.raise_for_status = MagicMock()
+    with patch.object(session._http, "get", return_value=mock_resp) as mock_get:
+        result = session.get_report("318")
+    assert result == {"reportId": 318, "content": "{}"}
+    mock_get.assert_called_once()
+
+
+def test_get_report_raises_on_non_dict_response():
+    session = CommvaultSession("http://host", "tok")
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = ["not", "a", "dict"]
+    mock_resp.raise_for_status = MagicMock()
+    with patch.object(session._http, "get", return_value=mock_resp):
+        with pytest.raises(CommvaultSessionError, match="expected JSON object"):
+            session.get_report("318")
+
+
 # ── RESTExtractor tests ────────────────────────────────────────────────────────
 
 def test_extract_no_instructions_returns_error(db):
-    mock_session = MagicMock()
-    extractor = RESTExtractor(db, mock_session)
+    session = _mock_session()
+    extractor = RESTExtractor(db, session, customer_id="c1", project_id="p1")
     result = extractor.extract("no_such_subject", version=1)
     assert result.errors
     assert "No REST extraction instructions" in result.errors[0]
+    session.get_report.assert_not_called()
+    session.init_report.assert_not_called()
 
 
-def test_extract_calls_fetch_dataset(db):
-    _seed_subject(db, "alpha", instructions={"dataset_guid": "d-guid", "fields": ["x"]})
-    mock_session = MagicMock()
-    mock_session.fetch_dataset.return_value = [{"x": "val1"}, {"x": "val2"}]
-    extractor = RESTExtractor(db, mock_session)
+def test_extract_calls_get_report_init_report_and_fetch(db):
+    _seed_subject(db, "alpha")
+    session = _mock_session(fetch_rows=[{"col1": "val1"}, {"col1": "val2"}])
+    extractor = RESTExtractor(db, session, customer_id="c1", project_id="p1")
     result = extractor.extract("alpha", version=1)
     assert not result.errors
     assert "alpha.section1" in result.sections
     assert len(result.sections["alpha.section1"]) == 2
-    mock_session.fetch_dataset.assert_called_once_with(
-        "d-guid", fields=["x"], orderby=None, limit=None, parameters=None
+
+    session.get_report.assert_called_once_with("318")
+    session.init_report.assert_called_once_with({"reportId": 318})
+    session.fetch_dataset.assert_called_once_with(
+        "guid-1",
+        fields=["col1"],
+        orderby=None,
+        limit=None,
+        parameters=None,
     )
 
 
-def test_extract_with_report_definition_calls_init_report(db):
-    _seed_subject(db, "beta", instructions={"dataset_guid": "d-guid"})
-    mock_session = MagicMock()
-    mock_session.fetch_dataset.return_value = []
-    extractor = RESTExtractor(db, mock_session)
-    result = extractor.extract("beta", version=1, report_definition={"reportId": 99})
-    mock_session.init_report.assert_called_once_with({"reportId": 99})
+def test_extract_uses_dataset_name_resolution_not_hint(db):
+    """The stored dataset_guid is a hint; the live definition wins."""
+    _seed_subject(
+        db,
+        "beta",
+        sections=[(
+            "section1",
+            "Beta",
+            {
+                "report_id": "318",
+                "dataset_name": "DS1",
+                "dataset_guid": "stale-hint-guid",  # should be ignored
+                "fields": ["x"],
+            },
+        )],
+    )
+    session = _mock_session(fetch_rows=[])
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("beta", version=1)
+    assert not result.errors
+    # Resolved from the live definition, not the stored hint
+    args, kwargs = session.fetch_dataset.call_args
+    assert args[0] == "guid-1"
+
+
+def test_extract_falls_back_to_hint_when_name_not_in_definition(db):
+    """If the live definition lacks the dataset_name, fall back to hint with a warning."""
+    _seed_subject(
+        db,
+        "gamma",
+        sections=[(
+            "section1",
+            "Gamma",
+            {
+                "report_id": "318",
+                "dataset_name": "NotInDefinition",
+                "dataset_guid": "hint-guid",
+                "fields": ["x"],
+            },
+        )],
+    )
+    session = _mock_session(fetch_rows=[{"x": "v"}])
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("gamma", version=1)
+    assert not result.errors
+    assert any("not found in live report definition" in w for w in result.warnings)
+    args, _ = session.fetch_dataset.call_args
+    assert args[0] == "hint-guid"
+
+
+def test_extract_errors_when_name_missing_and_no_hint(db):
+    _seed_subject(
+        db,
+        "delta",
+        sections=[(
+            "section1",
+            "Delta",
+            {"report_id": "318", "dataset_name": "UnknownDataset", "fields": ["x"]},
+        )],
+    )
+    session = _mock_session(fetch_rows=[])
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("delta", version=1)
+    assert result.errors
+    assert "could not resolve dataset_guid" in result.errors[0]
+
+
+def test_extract_same_report_id_check_fails_on_mismatch(db):
+    _seed_subject(
+        db,
+        "epsilon",
+        sections=[
+            ("section1", "S1", {"report_id": "318", "dataset_name": "DS1"}),
+            ("section2", "S2", {"report_id": "999", "dataset_name": "DS2"}),
+        ],
+    )
+    session = _mock_session()
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("epsilon", version=1)
+    assert result.errors
+    assert "must share the same report_id" in result.errors[0]
+    assert "318" in result.errors[0] and "999" in result.errors[0]
+    session.get_report.assert_not_called()
+    session.init_report.assert_not_called()
+
+
+def test_extract_missing_report_id_returns_error(db):
+    _seed_subject(
+        db,
+        "zeta",
+        sections=[(
+            "section1",
+            "Zeta",
+            {"dataset_name": "DS1", "fields": ["x"]},  # no report_id
+        )],
+    )
+    session = _mock_session()
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("zeta", version=1)
+    assert result.errors
+    assert "missing report_id" in result.errors[0]
 
 
 def test_extract_init_report_failure_returns_error(db):
-    _seed_subject(db, "gamma", instructions={"dataset_guid": "d-guid"})
-    mock_session = MagicMock()
-    mock_session.init_report.side_effect = RuntimeError("init failed")
-    extractor = RESTExtractor(db, mock_session)
-    result = extractor.extract("gamma", version=1, report_definition={"reportId": 1})
+    _seed_subject(db, "eta")
+    session = _mock_session()
+    session.init_report.side_effect = RuntimeError("init failed")
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("eta", version=1)
     assert result.errors
-    assert "init_report failed" in result.errors[0]
+    assert "init_report(318) failed" in result.errors[0]
 
 
-def test_extract_fetch_failure_skips_section(db):
-    _seed_subject(db, "delta", instructions={"dataset_guid": "d-guid"})
-    mock_session = MagicMock()
-    mock_session.fetch_dataset.side_effect = RuntimeError("network error")
-    extractor = RESTExtractor(db, mock_session)
-    result = extractor.extract("delta", version=1)
+def test_extract_get_report_failure_returns_error(db):
+    _seed_subject(db, "theta")
+    session = _mock_session()
+    session.get_report.side_effect = RuntimeError("network down")
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("theta", version=1)
     assert result.errors
-    assert "delta.section1" not in result.sections
+    assert "get_report(318) failed" in result.errors[0]
+    session.init_report.assert_not_called()
+
+
+def test_extract_fail_whole_on_fetch_error(db):
+    """First section's fetch error aborts the whole collection (no partial artifact)."""
+    _seed_subject(
+        db,
+        "iota",
+        sections=[
+            ("section1", "S1", {"report_id": "318", "dataset_name": "DS1"}),
+            ("section2", "S2", {"report_id": "318", "dataset_name": "DS2"}),
+        ],
+    )
+    session = _mock_session()
+    session.fetch_dataset.side_effect = RuntimeError("boom")
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("iota", version=1)
+    assert result.errors
+    # Second section is never attempted: fetch_dataset called exactly once
+    assert session.fetch_dataset.call_count == 1
+    assert "iota.section1" not in result.sections
+    assert "iota.section2" not in result.sections
+
+
+def test_extract_output_as_card_keeps_first_row_only(db):
+    _seed_subject(
+        db,
+        "kappa",
+        sections=[(
+            "section1",
+            "Kappa",
+            {"report_id": "318", "dataset_name": "DS1", "output_as": "card"},
+        )],
+    )
+    session = _mock_session(
+        fetch_rows=[{"k": "v1"}, {"k": "v2"}, {"k": "v3"}],
+    )
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("kappa", version=1)
+    assert not result.errors
+    assert result.section_output_types["kappa.section1"] == "card"
+    assert result.sections["kappa.section1"] == [{"k": "v1"}]
 
 
 def test_extract_timestamp_conversion(db):
     _seed_subject(
-        db, "epsilon",
-        instructions={
-            "dataset_guid": "d-guid",
-            "timestamp_fields": ["ts"],
-            "timestamp_format": "unix_seconds",
-        },
+        db,
+        "lambda_",
+        sections=[(
+            "section1",
+            "L",
+            {
+                "report_id": "318",
+                "dataset_name": "DS1",
+                "timestamp_fields": ["ts"],
+                "timestamp_format": "unix_seconds",
+            },
+        )],
     )
-    mock_session = MagicMock()
-    mock_session.fetch_dataset.return_value = [{"ts": 1000000000}]
-    extractor = RESTExtractor(db, mock_session)
-    result = extractor.extract("epsilon", version=1)
+    session = _mock_session(fetch_rows=[{"ts": 1000000000}])
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("lambda_", version=1)
     assert not result.errors
-    rows = result.sections["epsilon.section1"]
+    rows = result.sections["lambda_.section1"]
     assert "2001-09-09" in rows[0]["ts"]
+
+
+def test_extract_multi_section_shares_cache_id(db):
+    """One init_report POST per subject; both sections fetched against same cacheId."""
+    _seed_subject(
+        db,
+        "mu",
+        sections=[
+            ("section1", "S1", {"report_id": "318", "dataset_name": "DS1"}),
+            ("section2", "S2", {"report_id": "318", "dataset_name": "DS2"}),
+        ],
+    )
+    session = _mock_session(fetch_rows=[{"v": 1}])
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("mu", version=1)
+    assert not result.errors
+    assert session.init_report.call_count == 1
+    assert session.fetch_dataset.call_count == 2
+    guids = [call.args[0] for call in session.fetch_dataset.call_args_list]
+    assert guids == ["guid-1", "guid-2"]
 
 
 # ── _convert_timestamp tests ───────────────────────────────────────────────────

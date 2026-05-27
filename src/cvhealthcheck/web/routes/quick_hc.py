@@ -10,13 +10,12 @@ from flask import jsonify
 from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.config import load_settings
 from cvhealthcheck.db import get_db
-from cvhealthcheck.web.active_project import make_active_project_store
+from cvhealthcheck.web.active_project import get_active_project, make_active_project_store
 from cvhealthcheck.db import staging as _staging_db
 from cvhealthcheck.db.subjects import delete_subject, get_subject
 from cvhealthcheck.extractors.dispatcher import extract_file
 from cvhealthcheck.extractors.rest import RESTExtractor
 from cvhealthcheck.extractors.result_to_artifact import result_to_artifact
-from cvhealthcheck.reportsplus.report_definitions import REPORT_DEFINITIONS
 from cvhealthcheck.reportsplus.session import CommvaultSession
 
 from .shared import (
@@ -164,7 +163,6 @@ def quick_hc_generic_collect(subject_id: str):
         return _workspace_redirect(subject_id)
 
     token = _current_token()
-    report_definition = REPORT_DEFINITIONS.get(subject_id)
 
     db = get_db()
     try:
@@ -176,9 +174,10 @@ def quick_hc_generic_collect(subject_id: str):
             return _workspace_redirect()
         title = subject["title"]
         version = subject["version"]
+        customer_id, project_id = get_active_project(db)
         with CommvaultSession(base_url, token, verify_ssl=settings.verify_ssl) as cv_session:
-            extractor = RESTExtractor(db, cv_session)
-            result = extractor.extract(subject_id, version, report_definition=report_definition)
+            extractor = RESTExtractor(db, cv_session, customer_id, project_id)
+            result = extractor.extract(subject_id, version)
     except Exception as exc:
         flash(f"Collection failed: {exc}", "error")
         return _workspace_redirect(subject_id)

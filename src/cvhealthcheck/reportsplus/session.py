@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 _BASE = "/commandcenter/api/cr/reportsplusengine"
 _REPORTBUILDER_PATH = f"{_BASE}/reportBuilder.do"
 _DATASETS_BASE = f"{_BASE}/datasets"
+_REPORTS_BASE = f"{_BASE}/reports"
 
 # Keys that the Commvault API may use for the cache/session identifier.
 _CACHE_ID_KEYS = ("cacheId", "sessionId", "id", "cache_id")
@@ -88,6 +89,36 @@ class CommvaultSession:
         return f"{self._base_url}{path}"
 
     # ── public interface ─────────────────────────────────────────────────
+
+    def get_report(self, report_id: str | int) -> dict:
+        """
+        GET the live report definition for `report_id`.
+
+        Returns the parsed JSON dict from /reportsplusengine/reports/<id>.
+        The Commvault response wraps the actual definition in a string-encoded
+        `content` field (or a `pages[].body` field) — callers that need the
+        walkable definition should pass the result through
+        `cvhealthcheck.reportsplus.inventory.parse_content_field`.
+
+        Raises:
+            requests.HTTPError: on a non-2xx response.
+            CommvaultSessionError: if the response body is not a JSON object.
+        """
+        url = self._url(f"{_REPORTS_BASE}/{report_id}")
+        response = self._http.get(
+            url,
+            headers=self._headers(),
+            verify=self._verify_ssl,
+            timeout=self._timeout,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            raise CommvaultSessionError(
+                f"get_report({report_id!r}): expected JSON object, got "
+                f"{type(data).__name__}"
+            )
+        return data
 
     def init_report(self, report_definition: dict) -> str:
         """

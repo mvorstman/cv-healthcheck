@@ -4,21 +4,25 @@ cvhealthcheck.extractors.rest
 Generic REST extractor driven by extraction instructions stored in the
 subject_section_sources table (source_type = 'rest').
 
-AUDIT FINDINGS (2026-05-25):
-  ExtractionResult dataclass and db query pattern taken from html.py.
-  CommvaultSession (reportsplus/session.py) wraps dataset fetching.
-  No Flask imports.
+Implements the ADR 0003 cacheId protocol: per collection run we GET the live
+report definition once, POST reportBuilder.do once to acquire a cacheId, then
+reuse that cacheId across one fetch_dataset call per section.
 
-Instruction keys (from db for client_growth.monthly_table):
-  dataset_guid      : str   GUID of the Reports Plus dataset
+Instruction keys (canonical form after migration 0006):
+  report_id         : str   Commvault report id (e.g. "318") — required
+  dataset_name      : str   display name of the dataset within the report —
+                            required; the canonical reference
+  dataset_guid      : str   optional cache hint; used as fallback only if the
+                            live report definition doesn't yield a guid for
+                            dataset_name
   fields            : list  Field names to request
   orderby           : str   e.g. "MonthStart Asc"
   limit             : int   Max rows to fetch
   parameters        : dict  Extra query-string params
   timestamp_fields  : list  Fields to convert to ISO strings
   timestamp_format  : str   "unix_seconds" | "unix_ms"
-  null_values       : list  Values to coerce to None (JSON null → None)
-  output_as         : str   "table" | "findings"
+  null_values       : list  Values to coerce to None
+  output_as         : str   "table" | "findings" | "card"
 """
 from __future__ import annotations
 
@@ -29,28 +33,29 @@ from datetime import UTC, datetime
 from typing import Any
 
 from cvhealthcheck.extractors.html import ExtractionResult
+from cvhealthcheck.reportsplus.extract_report import (
+    discover_dataset_references,
+    discover_widgets,
+)
+from cvhealthcheck.reportsplus.inventory import parse_content_field
 
 logger = logging.getLogger(__name__)
 
 
 class RESTExtractor:
-    def __init__(self, db_conn: sqlite3.Connection, session: Any) -> None:
+    def __init__(
+        self,
+        db_conn: sqlite3.Connection,
+        session: Any,
+        customer_id: str,
+        project_id: str,
+    ) -> None:
         self._db = db_conn
         self._session = session
+        self._customer_id = customer_id
+        self._project_id = project_id
 
-    def extract(
-        self,
-        subject_id: str,
-        version: int = 1,
-        report_definition: dict | None = None,
-    ) -> ExtractionResult:
-        """
-        Load REST instructions from db, optionally init the report,
-        fetch each section dataset, and return an ExtractionResult.
-
-        If report_definition is provided, session.init_report() is called
-        first (which sets the cache_id for subsequent fetch_dataset calls).
-        """
+    def extract(self, subject_id: str, version: int = 1) -> ExtractionResult:
         result = ExtractionResult(subject_id=subject_id, source_type="rest")
 
         instructions = self._load_section_instructions(subject_id, version)
@@ -60,27 +65,47 @@ class RESTExtractor:
             )
             return result
 
-        if report_definition is not None:
-            try:
-                self._session.init_report(report_definition)
-            except Exception as exc:
-                result.errors.append(f"init_report failed: {exc}")
-                return result
+        report_id = self._resolve_single_report_id(instructions, result)
+        if report_id is None:
+            return result
+
+        try:
+            report_payload = self._session.get_report(report_id)
+        except Exception as exc:
+            result.errors.append(f"get_report({report_id}) failed: {exc}")
+            return result
+
+        definition = parse_content_field(report_payload)
+        name_to_guid = _build_name_to_guid_map(definition)
+
+        try:
+            self._session.init_report({"reportId": int(report_id)})
+        except Exception as exc:
+            result.errors.append(f"init_report({report_id}) failed: {exc}")
+            return result
 
         for instr in instructions:
             section_id = instr["section_id"]
             section_title = instr.get("title", section_id)
             extraction = instr.get("extraction_instructions") or {}
 
-            rows, warnings, errors = self._fetch_section(section_id, extraction)
+            rows, warnings, errors = self._fetch_section(
+                section_id, extraction, name_to_guid
+            )
             result.warnings.extend(warnings)
 
             if errors:
                 result.errors.extend(errors)
-                continue
+                # Fail-whole: abort on first section error so we don't write a
+                # half-collected artifact. Subsequent sections are not attempted.
+                return result
+
+            output_as = extraction.get("output_as", "table")
+            if output_as == "card":
+                rows = rows[:1]
 
             result.sections[section_id] = rows
-            result.section_output_types[section_id] = extraction.get("output_as", "table")
+            result.section_output_types[section_id] = output_as
             result.section_titles[section_id] = section_title
 
         return result
@@ -126,17 +151,82 @@ class RESTExtractor:
             })
         return result
 
+    def _resolve_single_report_id(
+        self,
+        instructions: list[dict[str, Any]],
+        result: ExtractionResult,
+    ) -> str | None:
+        """Return the report_id shared by all REST sections, or None on error.
+
+        All sections of a single subject must reference the same report_id
+        because the cacheId is bound to one reportBuilder.do POST per
+        collection. Mismatches indicate catalog seeding bugs and are
+        surfaced with the offending section_ids.
+        """
+        by_report: dict[str, list[str]] = {}
+        missing: list[str] = []
+        for instr in instructions:
+            section_id = instr["section_id"]
+            report_id = (instr.get("extraction_instructions") or {}).get("report_id")
+            if not report_id:
+                missing.append(section_id)
+                continue
+            by_report.setdefault(str(report_id), []).append(section_id)
+
+        if missing:
+            result.errors.append(
+                "REST sections missing report_id in extraction_instructions: "
+                + ", ".join(sorted(missing))
+            )
+            return None
+
+        if len(by_report) > 1:
+            summary = "; ".join(
+                f"{rid}: [{', '.join(sorted(ids))}]"
+                for rid, ids in sorted(by_report.items())
+            )
+            result.errors.append(
+                "REST sections of a subject must share the same report_id; "
+                f"found {summary}"
+            )
+            return None
+
+        # exactly one report_id
+        return next(iter(by_report))
+
     def _fetch_section(
         self,
         section_id: str,
         instructions: dict[str, Any],
+        name_to_guid: dict[str, str],
     ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
         warnings: list[str] = []
         errors: list[str] = []
 
-        dataset_guid = instructions.get("dataset_guid")
+        dataset_name = instructions.get("dataset_name")
+        hint_guid = instructions.get("dataset_guid")
+
+        dataset_guid: str | None = None
+        if dataset_name:
+            dataset_guid = name_to_guid.get(dataset_name)
+            if dataset_guid is None and hint_guid:
+                warnings.append(
+                    f"Section '{section_id}': dataset_name '{dataset_name}' "
+                    f"not found in live report definition; falling back to "
+                    f"stored dataset_guid hint"
+                )
+                dataset_guid = hint_guid
+        else:
+            # No dataset_name at all — only the hint is available. This is
+            # legitimate for pre-0006 rows that never got dataset_name backfilled,
+            # but after the catalog is fully seeded it shouldn't happen.
+            dataset_guid = hint_guid
+
         if not dataset_guid:
-            errors.append(f"Section '{section_id}': no dataset_guid in instructions")
+            errors.append(
+                f"Section '{section_id}': could not resolve dataset_guid "
+                f"(dataset_name={dataset_name!r}, hint={hint_guid!r})"
+            )
             return [], warnings, errors
 
         fields: list[str] = instructions.get("fields") or []
@@ -171,6 +261,24 @@ class RESTExtractor:
             rows.append(row)
 
         return rows, warnings, errors
+
+
+def _build_name_to_guid_map(definition: Any) -> dict[str, str]:
+    """Walk a parsed report definition for dataset_name → dataset_guid pairs.
+
+    Uses the same widget and dataset-reference discovery as `extract_report`
+    so we agree on what counts as a dataset reference. Returns the first
+    guid seen per name (definitions sometimes mention the same dataset in
+    multiple widgets).
+    """
+    name_to_guid: dict[str, str] = {}
+    for source in (discover_widgets(definition), discover_dataset_references(definition)):
+        for entry in source:
+            name = entry.get("dataset_name")
+            guid = entry.get("dataset_guid")
+            if name and guid and name not in name_to_guid:
+                name_to_guid[name] = guid
+    return name_to_guid
 
 
 def _convert_timestamp(value: Any, fmt: str) -> Any:
