@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-27 (ADR 0003 phase 4: SA migrated to catalog-driven REST)
+**Last updated:** 2026-05-27 (ADR 0003 phase 5: cleanup pass — ADR implemented with LS caveat)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `465dc0f` — CHANGELOG + HANDOVER: ADR 0003 phase 4
-**Test status:** 560 passing
+**Last commit:** *the phase 5 CHANGELOG+HANDOVER commit; pointer-update commit follows.*
+**Test status:** 558 passing
 
 ---
 
@@ -24,79 +24,58 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## What was just completed
 
-**ADR 0003 phase 4 — SA migrated to catalog-driven REST collection.** Two functional commits this session: `5fa4b2d` (extractor extension + migration 0007 + tests) and `984864a` (bespoke deletion + UI URL + test churn). The new RESTExtractor gained `column_map` + `status_to_severity` + HTML stripping (gated on `output_as: "findings"`) mirroring the HTML extractor's existing pattern — Approach A per the steering chat. Six new catalog rows under `security_assessment.rest` describe report 336's findings datasets. The bespoke `SecurityAssessmentService.collect_from_rest`, `adapt_reportsplus_rest`, `extract_security_assessment`, and supporting modules are gone. End-to-end against the lab: SA produces 6 findings sections with 32 total findings (severities resolved correctly; HTML stripped); the three existing REST subjects regress nowhere. 560 tests passing (was 582; net –22 from SA-bespoke test deletions, +5 from new extractor tests).
+**ADR 0003 phase 5 — cleanup pass; ADR 0003 implemented with LS caveat.** Step 1 investigation surfaced that LS's report 206 structurally doesn't fit the catalog model defined in ADR 0003 (47+ pages with name-ambiguous datasets, runtime parameter-substitution-from-prior-results, per-row value-formula transforms). Steering chat approved Path A: leave LS bespoke, do the safe cleanup half of phase 5, mark ADR 0003 implemented with the caveat documented. Deleted: `CommvaultSession.init_report` (dormant since the interstitial fix), `REPORT_DEFINITIONS` dict + its file (orphan since phase 2), `_read_commcell_provenance` (zero callers since phase 3). ADR 0003's Migration / Consequences / Out-of-scope sections amended to reflect the actual outcome. The ADR status is now "Implemented (with LS caveat)."
 
 ---
 
 ## What is in-flight
 
-**ADR 0003 implementation — phases 1–4 complete. Phase 5 (LS migration) is the next ADR phase.** Working tree is clean.
+**ADR 0003 is implemented (with the documented LS caveat).** The catalog-driven REST extractor handles four of five REST subjects (client_growth, capacity_license, backup_job_summary, security_assessment); License Summary retains its bespoke `collect_from_rest` path. The methodology retrospective is the recommended next session. Working tree is clean.
 
 ---
 
 ## Single recommended next action
 
-**ADR 0003 phase 5 — License Summary migration to the catalog-driven extractor.**
+**Methodology retrospective for ADR 0003.**
 
-Spec: `docs/adr/0003-rest-extractor-with-credentials.md` "Migration" section. Same shape as phase 4's SA migration but larger and final. LS introduces the first `output_as: "card"` catalog rows (header-info datasets like CommCell ID / license expiry). After phase 5, the catalog-driven extractor is the only REST collection path in the codebase.
+ADR 0003's implementation produced four methodology lessons that the project hasn't reflected on yet. Conduct a retrospective conversation (Claude.ai is the right venue, not Claude Code — this is prose work, not filesystem work) covering:
 
-### What phase 5 needs to do
+1. **Wipe-and-recreate rule** (HANDOVER backlog item #17 / methodology marker from the 2026-05-27 ADR 0003 amendment). ADR 0002 set the precedent; ADR 0003 phases 1, 4, and 5 followed it. The retrospective decides whether it becomes a tool-wide default.
+2. **ADR workflow efficiency review** (HANDOVER backlog item #18). The survey-then-steer-then-draft-then-phased-implementation cycle has now run end-to-end twice (ADR 0002, ADR 0003). Was the overhead worth it? Particular lens: phase 5's discovery that the design model didn't fit LS — could a deeper survey or a prototype-against-real-data step have surfaced this earlier?
+3. **ADR-commit-alongside-first-phase pattern** (HANDOVER backlog item #19). ADR 0002 and ADR 0003 both landed this way (ADR doc committed in the same session as phase 1). Decide whether to document this in `docs/PATTERNS.md` or HANDOVER's "Where work happens" section.
+4. **NEW: Catalog-model expressiveness limits.** Phase 4 surfaced that the original ADR 0003 catalog schema (just `dataset_name` + `dataset_guid` + post-processing) didn't fit SA's findings rendering — Approach A added `column_map` + `status_to_severity` + HTML stripping mid-implementation. Phase 5 surfaced that even the expanded schema didn't fit LS — required deferring LS migration. Twice the implementation surfaced model gaps that the design conversation didn't catch. Worth a deliberate examination of how to surface "the model isn't expressive enough" earlier — perhaps a "prototype against a real second subject before declaring the design done" step.
 
-1. **Walk report 206's live definition** via `session.get_report("206")` → `parse_content_field` → `_build_name_to_guid_map`. Enumerate the datasets. Cross-reference against the existing bespoke flow (`LicenseSummaryService.collect_from_rest`, `license_summary/collect_rest.py`, `adapters/license_summary.py`) to determine which datasets correspond to the tables/cards consultants want rendered.
-2. **Write migration 0008** seeding `subject_section_sources` for LS. The LS subject already has a `rest` source row from migration 0003. Each section declares `report_id="206"`, `dataset_name`, `dataset_guid` (cache hint), plus the appropriate `column_map`/`status_to_severity`/`output_as`. The catalog hint pattern from phase 4 applies — `column_map` renames raw keys to canonical, no `parameters` unless a probe shows they're required.
-3. **Verify the workspace renderer for `output_as: "card"`.** Phase 2's extractor trims rows to `rows[:1]` for card sections, but `result_to_artifact._build_section` doesn't have a dedicated card branch yet — it falls through to the table path. The workspace may need either: (a) a `CardSection` artifact type with key-value rendering, or (b) a workspace template that treats single-row table sections as cards based on a section-type hint. Investigate whether the existing LS UI's CommCell-info card display is even rendered from the canonical artifact or from a separate code path — it might already be UI-overlay-driven.
-4. **Delete the bespoke LS REST code**:
-   - `src/cvhealthcheck/license_summary/service.py::collect_from_rest` (method)
-   - `src/cvhealthcheck/license_summary/collect_rest.py` (file)
-   - `src/cvhealthcheck/adapters/license_summary.py::adapt` (the LS-specific adapter — only callers are the bespoke flow and the orphan `cvhealthcheck.registry`)
-   - LS-specific normalizer/persister if SA-only after this phase (i.e. once LS is migrated, check whether anything still uses `normalize_license_summary_rest_extraction`, `persist_license_summary_artifact`).
-5. **Delete shared modules now safe to retire**:
-   - `src/cvhealthcheck/reportsplus/extract_report.py` — SA's last caller went away in phase 4; LS is the only remaining caller. After deleting LS's `collect_from_rest`, this file becomes dead and can be removed.
-   - `src/cvhealthcheck/reportsplus/report_definitions.py` — orphan since phase 2.
-   - `src/cvhealthcheck/reportsplus/checklist.py` — dead since phase 4 (only callers were the deleted SA modules). Could go in phase 5 or be a small post-phase cleanup.
-6. **Update the LS collect URL.** Phase 4 left `license_summary: "/quick-hc/license-summary/collect"` in `_DISPATCH_REST_COLLECT_URLS` (subject_data_service.py:182). Phase 5 changes it to `/quick-hc/license_summary/collect`. Drop the hardcoded `collect_url` on the LS TileDefinition in `quickhc/registry.py` (mirroring what phase 4 did for SA).
-7. **Wipe the LS canonical artifact directory** under `data/catalog/artifacts/<customer>/<project>/working/license_summary/` per the wipe-and-recreate rule (HANDOVER backlog #18). Don't touch the legacy LS store at `data/catalog/license_summary/` — that's backlog #15.
-8. **End-to-end verify** against the real lab CommCell: collect `security_assessment` (regression — should still produce 6 findings sections), `client_growth`/`capacity_license`/`backup_job_summary` (regression), and `license_summary` (new path — should produce the LS tables and any card sections).
+The retrospective produces decisions, not code. After the retrospective, the next concrete code work depends on what comes out — likely either a PATTERNS.md update + ADR workflow rule clarifications, or new backlog items for tool-wide rules.
 
-### Constraints
+### After the retrospective
 
-- **Don't touch the SA path.** Phase 4 is shipped; LS gets the same treatment.
-- **Don't extend the extractor's catalog-driven post-processing.** Phase 4's `column_map` + `status_to_severity` + HTML stripping should cover LS's findings-shaped sections. Card-style sections are an artifact-shape / renderer concern, not an extractor concern.
-- **Don't delete `_read_commcell_provenance` yet** unless step 1 confirms no LS-side caller. The HANDOVER backlog already notes it's dead code waiting on phase 5; do the audit during step 1.
-- **Don't touch CommvaultSession** — phase 4 already had the right machinery (`get_report`, `fetch_dataset` without cacheId).
-
-### Useful pointers for phase 5
-
-- `src/cvhealthcheck/license_summary/service.py::collect_from_rest` — current LS REST entry point.
-- `src/cvhealthcheck/license_summary/collect_rest.py` — bespoke collection wrapper.
-- `src/cvhealthcheck/adapters/license_summary.py::adapt` — bespoke adapter to canonical artifact.
-- `src/cvhealthcheck/reportsplus/extract_report.py::extract_report` — the SA-style metadata walker; LS uses it via the bespoke service.
-- Existing LS catalog rows: `subject_section_sources` has HTML/CSV instructions for license_summary; phase 5 adds REST ones to match.
-- LS's CommCell-info "card" section in the UI: check `quickhc/registry.py:208-232` and the LS templates — the existing rendering may not be canonical-artifact-backed at all, in which case phase 5's catalog rows just produce data, and the UI keeps reading from whatever it reads today.
+Whatever surfaces. The current backlog is healthy (no urgent next code action); LS-migration future-work is documented; ADR 0003 is done.
 
 ### Priority-ordered backlog (everything else)
 
-1. **ADR 0003 phase 5 — LS migration** (the single recommended next action above). Also retires `extract_report.py`, `REPORT_DEFINITIONS`, the bespoke LS service path, and the dead `checklist.py` module that's been unused since phase 4.
-2. **AI import workstream — staging UI for proposal review, compliance rules.**
-3. **CommCell-discovery flow for customer creation.** Auth plumbing overlaps with ADR 0003 phase 3 (landed). The discovery flow can reuse `get_active_customer` and the customer-bound auth model directly.
-4. **Report-provenance verification.** Check imported reports' embedded CommCell IDs against the active customer's stored CommCell ID. Catches "wrong customer's report" mistakes.
-5. **Read-only per-finalization view.** Deferred from ADR 0002 phase 5 step 5.
-6. **Customer panel on the right side of `quick_hc.html`.** Raised earlier, not acted on.
-7. **`shared.py` split.** 413-line god-module; flagged in the 2026-05-20 review.
-8. **`SecurityAssessmentArtifactRegistry` rename / generalize.** Now applicable post-phase-4 — the registry pattern is also used by LS; phase 5 may unify them or rename for clarity.
+### Priority-ordered backlog (everything else)
+
+1. **AI import workstream — staging UI for proposal review, compliance rules.**
+2. **CommCell-discovery flow for customer creation.** Auth plumbing overlaps with ADR 0003 phase 3 (landed). The discovery flow can reuse `get_active_customer` and the customer-bound auth model directly.
+3. **Report-provenance verification.** Check imported reports' embedded CommCell IDs against the active customer's stored CommCell ID. Catches "wrong customer's report" mistakes.
+4. **Read-only per-finalization view.** Deferred from ADR 0002 phase 5 step 5.
+5. **Customer panel on the right side of `quick_hc.html`.** Raised earlier, not acted on.
+6. **`shared.py` split.** 413-line god-module; flagged in the 2026-05-20 review.
+7. **`SecurityAssessmentArtifactRegistry` rename / generalize.** The registry pattern is used by both SA and LS but the class name is SA-specific. Decide: rename to a generic `ArtifactRegistry` and unify, or document the per-domain naming as intentional.
+8. **LS catalog migration.** Phase 5 of ADR 0003 deliberately left `license_summary` bespoke after investigation showed the catalog model's expressiveness was insufficient. To migrate LS would require three extractor extensions: (1) runtime parameter substitution from prior dataset results (LS's organization dataset returns `OrgGUID`s that downstream datasets need as parameters); (2) page-aware GUID resolution (LS's report 206 has 47+ pages where the same dataset name appears multiple times with different GUIDs); (3) value-formula transforms (LS uses per-row unit suffixing via a `LicUsageType` integer code → unit string dispatcher). Defer until consultant demand justifies. Until then, LS uses its existing bespoke `collect_from_rest` path; new LS-shaped reports continue to require Python code rather than catalog rows.
 9. **Hardcoded URLs in `report_service.py`.** Audit whether any remain after the 2026-05-20 partial cleanup.
 10. **Left-nav structural review.**
 11. **Two-CRUD-APIs investigation.** Customer routes use both inline SQL and `db/customers.py` helpers — pick one.
 12. **Template inheritance cleanup.** Uneven `base.html` extends.
 13. **`engagements` table cleanup.** Empty since migration 0001; pre-ADR-0002.
-14. **Project-scope the legacy SA/LS stores** under `data/catalog/{security_assessment,license_summary}/`. SA store still has its pre-ADR-0002 latest_*.json files; LS store similarly. Phases 4/5 don't touch them — separate cleanup.
+14. **Project-scope the legacy SA/LS stores** under `data/catalog/{security_assessment,license_summary}/`. SA store still has its pre-ADR-0002 latest_*.json files; LS store similarly. Phases 4/5 didn't touch them — separate cleanup. (LS store remains in active use through the bespoke path.)
 15. **`data/catalog/reportsplus/` retention.** Audit Section 6 #3.
 16. **Audit Section 6 #2/#5/#6** — legacy-store accumulation, orphaned SQLite registries, labreadiness unread.
-17. **Default rule for proof-of-concept phase: any change touching dev-only data preserved across schema edits is over-engineered.** Wipe and re-collect unless real customer data is at stake. ADR 0002 set the precedent; ADR 0003 phases 1–4 followed it. Apply to phase 5 (no LS artifact forward-migration; wipe the LS canonical directory). Revisit at the post-ADR-0003 retrospective to decide whether it becomes a tool-wide default.
-18. **Review ADR workflow efficiency after ADR 0003 lands.** Are the survey-then-steer-then-draft-then-phased-implementation cycles worth the overhead, or are we over-engineering process? Deliberate retrospective marker — don't act on this until ADR 0003 phase 5 is complete.
-19. **Document the "commit the ADR doc alongside its first implementation phase" pattern in PATTERNS.md or HANDOVER's "Where work happens" section.** ADR 0002 and ADR 0003 both landed this way. Low priority — established by precedent.
-20. **Cleanup: retire `CommvaultSession.init_report` and `_REPORTBUILDER_PATH`** if no in-tree caller surfaces. Dormant since the interstitial fix; deleting is YAGNI cleanup once ADR 0003 is fully implemented.
-21. **Cleanup: retire `reportsplus/checklist.py`** (dead since phase 4 — only callers were the deleted SA bespoke modules). Could fold into phase 5 if convenient.
+17. **Methodology marker: wipe-and-recreate rule.** Default rule for proof-of-concept phase: any change touching dev-only data preserved across schema edits is over-engineered. Wipe and re-collect unless real customer data is at stake. ADR 0002 set the precedent; ADR 0003 phases 1 and 4 followed it. Phase 5 didn't need it (LS not migrated). Up for retrospective decision: tool-wide default or ADR-by-ADR judgment.
+18. **Methodology marker: ADR workflow efficiency.** The survey-then-steer-then-draft-then-phased-implementation cycle ran end-to-end twice (ADR 0002, ADR 0003). Was the overhead worth it? Particular lens for ADR 0003: phase 4 surfaced an extractor-schema gap mid-implementation (column_map / status_to_severity), and phase 5 surfaced a deeper gap that forced LS to stay bespoke. Could a deeper survey or a prototype-against-real-data step have caught these earlier? Retrospective decides.
+19. **Methodology marker: ADR-commit-alongside-first-phase pattern.** ADR 0002 and ADR 0003 both landed this way (ADR doc committed in the same session as phase 1). Should `docs/PATTERNS.md` or HANDOVER's "Where work happens" section document this explicitly so future ADR sessions don't leave the doc uncommitted? Low-priority decision.
+20. **Methodology marker (new): catalog-model expressiveness limits.** ADR 0003 surfaced its model gaps twice — Approach A in phase 4 (added column_map + status_to_severity + HTML stripping) and the LS escalation in phase 5 (would need parameter substitution + page-aware GUID resolution + value-formula transforms). Both surfaced during *implementation*, not during *design*. Worth a deliberate examination of when to surface "the model isn't expressive enough" earlier in the ADR process. Retrospective fodder.
+21. **Cleanup: retire `reportsplus/checklist.py`** (dead since phase 4 — only callers were the deleted SA bespoke modules; LS doesn't use it). Small post-ADR-0003 cleanup.
 
 Smaller cleanups:
 
@@ -154,24 +133,18 @@ Smaller cleanups:
 - **`init_db()` and `schema.sql` are gone.** `run_migrations()` is the sole bootstrap path.
 - **ADR 0001 source-building fork is orthogonal.** `_legacy_builders` continue to serve their subjects globally; ADR 0002 changed *where* canonical artifacts live, not *how* legacy tile data is shaped.
 - **Active-project session.** Lives in the Flask session as `session['active_project'] = {'customer_id': ..., 'project_id': ...}`. The active-project selector partial at `templates/partials/active_project_selector.html` is included on every workspace page (via `base.html` and the self-contained top-level templates).
-- **ADR 0003 phases 1–4 landed.** Phase 1 extended catalog schema. Phase 2 built the `RESTExtractor`. Phase 3 made auth customer-aware. The interstitial fix switched the extractor to GET-only. **Phase 4 migrated Security Assessment**: the extractor gained `column_map` + `status_to_severity` + HTML stripping; migration 0007 seeded six SA catalog rows for report 336; bespoke `SecurityAssessmentService.collect_from_rest`, `adapt_reportsplus_rest`, `extract_security_assessment`, and supporting modules are gone. SA's user-visible rendering is unchanged (6 findings sections; severities, descriptions, recommendations all populated correctly).
-- **REST extractor catalog keys honored**: `report_id`, `dataset_name`, `dataset_guid` (cache hint), `fields`, `orderby`, `limit`, `parameters`, `timestamp_fields`, `timestamp_format`, `null_values`, **`column_map`** (project source keys → canonical, drop the rest), **`status_to_severity`** (when output_as=="findings", set row.severity from status mapping), `output_as` (`"table"` / `"findings"` / `"card"`). Under `output_as: "findings"`, the extractor strips embedded HTML via `html.parser` — necessary because Reports Plus returns raw `<a>`/`<br>` markup in some fields.
-- **Catalog-driven SA today** (the pattern phase 5 follows): migration 0007 seeded six rows under `security_assessment.rest` with `report_id="336"` plus a column_map renaming Parameter/Status/Remarks/Action to canonical lowercase + a status_to_severity dict mapping Commvault's prefixed codes (`1_Good`→`good`, etc.) + `output_as: "findings"`. No `parameters` declared — lab probes confirmed `parameter.sys_commCellId=10000` is a no-op on this single-CommCell lab.
-- **Dead code from phase 4 awaiting phase 5 cleanup**: `cvhealthcheck.reportsplus.checklist` (only callers were the deleted SA modules), `cvhealthcheck.reportsplus.extract_report` (LS is the last caller; deletable when LS's bespoke service goes), `cvhealthcheck.reportsplus.report_definitions` (orphan since phase 2).
-- **`CommvaultSession.fetch_dataset` operates in two modes.** Without a cacheId (the default for the catalog-driven extractor), it does a direct GET to `/datasets/<guid>/data` and ignores any `fields`/`orderby` from the call — the lab's CacheDB rejects those without a cacheId. With a cacheId (passed explicitly or stored via `init_report`), `fields` and `orderby` are honored and the cacheId is included in the request params. Both modes share the same pagination loop, which now reads `totalRecordCount` alongside `total`.
-- **`fields` and `orderby` from catalog rows are descriptive only in the GET-only path.** The catalog still declares them per section (`client_growth.monthly_table.fields = ["MonthStart","Total","Removed","Added"]`, etc.) — they document intent. But under the no-cacheId protocol the server returns all columns in natural order. Downstream code (extractor post-processing, `result_to_artifact`) doesn't depend on column subsets or sort order, so the divergence is invisible to consumers.
-- **The 419 from phase 3 is resolved.** Not by fixing the POST — by not making the POST. The extractor no longer calls `init_report`. The HANDOVER's "diagnose the 419" item from the post-phase-3 backlog is gone.
-- **`backup_job_summary` collects but produces 0 rows.** The lab's "Job details" dataset on report 194 is genuinely empty (probe: `GET /datasets/a30bd278-.../data?format=object` returns HTTP 200 with `totalRecordCount: 0, failures: {}`). Name resolution succeeds; the dataset just has no jobs. This is lab state, not a defect. If the lab gets backup jobs into that dataset, the next collect will pick them up.
-- **`init_report` and the rest of the cacheId machinery stay in `CommvaultSession`** as dormant code. Anything that calls them still works. Listed in the backlog as YAGNI cleanup once ADR 0003 phases 4 and 5 are complete.
-- **Default customer's CommCell binding is configured.** `commcell_hostname = https://192.168.182.129:4433`, `commcell_id = SMOKE-TEST-CS` — set during phase 3 verification, kept in place for follow-up testing of the 419.
-- **`set_current_token` signature changed.** It now requires `customer_id` (positional after `token`). Two production callsites updated (`/login`, `/api/login`). Tests that wrote directly to `session[SESSION_TOKEN_KEY]` continue to work — they don't go through `set_current_token` and only the loose `is_authenticated()` decorator gate (`login_required`) cares about them. Tests that need customer binding should write `SESSION_CUSTOMER_ID_KEY` too.
-- **`is_authenticated()` vs `is_authenticated_for(customer_id)`** — the first is loose (any token in session); the second is strict (token AND bound customer matches). `login_required` decorator still uses the loose check; new customer-aware routes use the strict check. Don't mix them up.
-- **`_read_commcell_provenance` and `commserv.json` are not consulted by the generic REST collect path anymore.** The function still exists at `quick_hc.py:77-86` and the JSON file still lives at `data/catalog/rest/commserv.json` — `/quick-hc/commcell` (the dev tooling page) reads them. They go away when phases 4/5 retire any remaining SA/LS provenance reads.
-- **`dataset_guid` in the JSON is an untrusted cache hint.** Phase 2's extractor resolves `dataset_name` against the live report definition first; the stored `dataset_guid` is used only as a fallback when the name isn't in the live definition (and emits a warning when used). Phase 1 surfaced one case where the stored value was wrong (backup_job_summary's was the report-level GUID, corrected in migration 0006).
-- **`output_as: "card"`** is partially implemented. Phase 2's extractor trims `result.sections[section_id]` to `rows[0:1]` when `output_as="card"`; the rendering as a key-value block still needs either a real `CardSection` artifact type or a workspace-template branch — phase 5 (LS) introduces the first card-shaped rows and is where this needs resolving.
-- **Same-report_id-per-subject rule is a runtime check, not a DB constraint.** Phase 2's extractor asserts at load time that all REST sections for a given subject share the same `report_id` and reports the offending section_ids on mismatch. ADR 0003 explicitly left this as an open question with no preference.
-- **`REPORT_DEFINITIONS` dict at `src/cvhealthcheck/reportsplus/report_definitions.py` is orphaned** after phase 2 (no callers in tree). Phase 5 deletes the file alongside the SA/LS-specific modules; left in place for now to keep phase 2's blast radius small.
-- **Auth flow is still single-CommCell.** Phase 2 deliberately left the auth flow alone: `/quick-hc/<subject_id>/collect` still uses `settings.base_url` (env-driven `CV_BASE_URL`) and the un-bound Flask session token. Phase 3 makes the auth flow customer-aware (`commcell_hostname` from the active customer row, token bound to a customer, 401 → clear-and-redirect).
+- **ADR 0003 is implemented (with LS caveat).** Phase 1 extended catalog schema. Phase 2 built the GET-only `RESTExtractor`. Phase 3 made auth customer-aware. The interstitial fix and protocol amendment landed the GET-only protocol. **Phase 4 migrated Security Assessment** — extractor gained `column_map` + `status_to_severity` + HTML stripping; migration 0007 seeded six SA catalog rows. **Phase 5 was the cleanup pass; LS retained bespoke** because LS's report 206 requires runtime parameter-substitution-from-prior-results, page-aware GUID resolution, and value-formula transforms that the catalog model doesn't express. Four of five REST subjects (client_growth, capacity_license, backup_job_summary, security_assessment) use the generic catalog-driven path; LS continues through `LicenseSummaryService.collect_from_rest`.
+- **REST extractor catalog keys honored**: `report_id`, `dataset_name`, `dataset_guid` (cache hint, used when the live name→guid map doesn't have the name), `fields`, `orderby`, `limit`, `parameters`, `timestamp_fields`, `timestamp_format`, `null_values`, **`column_map`** (rename source keys → canonical, drop the rest), **`status_to_severity`** (when output_as=="findings", set row.severity from status mapping), `output_as` (`"table"` / `"findings"` / `"card"`). Under `output_as: "findings"`, the extractor strips embedded HTML via `html.parser`. `fields` and `orderby` are only sent to the server when a cacheId is present — the lab's CacheDB rejects them without one.
+- **Catalog-driven SA reference**: migration 0007 seeded six rows under `security_assessment.rest` with `report_id="336"` plus column_map renaming Parameter/Status/Remarks/Action to canonical lowercase + status_to_severity mapping `1_Good→good` / `2_Info→info` / `3_Warning→warning` / `4_Critical→critical` + `output_as: "findings"`. Use as a template for any future catalog-driven REST subjects.
+- **Bespoke LS modules retained** (deliberately, per ADR 0003 amendment): `license_summary/collect_rest.py`, `license_summary/service.py::collect_from_rest`, `adapters/license_summary.py`, `normalize_license_summary_rest_extraction`, `persist_license_summary_artifact`, and `reportsplus/extract_report.py` (LS is its last caller). The LS UI continues to work through this path. Backlog item #8 records what extractor extensions would be needed to migrate LS in a future expansion.
+- **`backup_job_summary` collects but produces 0 rows.** The lab's "Job details" dataset on report 194 is genuinely empty (probe: `GET /datasets/a30bd278-.../data?format=object` returns HTTP 200 with `totalRecordCount: 0, failures: {}`). Name resolution succeeds; the dataset just has no jobs.
+- **Default customer's CommCell binding is configured.** `commcell_hostname = https://192.168.182.129:4433`, `commcell_id = SMOKE-TEST-CS` — set during phase 3 verification, useful for any future REST-path probing.
+- **`set_current_token` signature.** Required positional arg `customer_id` after `token`. Two production callsites (`/login`, `/api/login`). Tests that wrote directly to `session[SESSION_TOKEN_KEY]` still work for the loose `is_authenticated()` gate; customer-aware routes use `is_authenticated_for(customer_id)`.
+- **`is_authenticated()` vs `is_authenticated_for(customer_id)`** — the first is loose (any token in session); the second is strict (token AND bound customer matches). `login_required` decorator uses the loose check; the catalog-driven collect handler uses the strict check.
+- **Dead code retired in phase 5**: `CommvaultSession.init_report` (no callers since the GET-only protocol amendment), `REPORT_DEFINITIONS` dict + `reportsplus/report_definitions.py` (orphan since phase 2), `_read_commcell_provenance` (zero callers since phase 3).
+- **Still-dead code waiting on a cleanup pass**: `cvhealthcheck.reportsplus.checklist` (only callers were the SA bespoke modules; LS doesn't use it). Backlog item #21. Small post-ADR cleanup.
+- **`output_as: "card"`** is implemented in the extractor (trims `rows[:1]`) but not exercised in production today (no catalog rows declare it). If a future subject needs card rendering, the workspace renderer needs either a `CardSection` artifact type or a template branch — neither shipped with ADR 0003.
+- **Same-report_id-per-subject rule** is a runtime check in `_resolve_single_report_id`. Not a DB constraint. Reports offending section_ids in the error message on mismatch.
 
 ---
 
@@ -307,7 +280,7 @@ than attempting the work.
 cd /home/michiel/dev/cv-healthcheck
 source venv/bin/activate
 python -m compileall -q src
-python -m pytest -q                                # expect 560 passing
+python -m pytest -q                                # expect 558 passing
 git status --short                                 # expect clean
 sqlite3 data/app.db "SELECT customer_id,customer_name FROM customers;"
 sqlite3 data/app.db "SELECT project_id,customer_id,project_number FROM projects;"

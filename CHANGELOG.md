@@ -10,6 +10,58 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (ADR 0003 phase 5: cleanup pass — ADR implemented with LS caveat)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `5a0e2d1` (dead code deletion + tests), `69030bd` (ADR amendment), plus the wrap-up commit publishing this entry.
+**Test status:** 558 passing (was 560; -2 from the deleted `init_report` existence tests).
+
+Phase 5 of ADR 0003 — and the end of the ADR 0003 implementation arc. Step 1 investigation surfaced that LS's report 206 doesn't fit the catalog model defined in this ADR. Steering chat approved Path A: leave LS bespoke, do the safe cleanup half of phase 5, mark ADR 0003 implemented with the caveat documented. The catalog-driven REST extractor handles four of five REST subjects (client_growth, capacity_license, backup_job_summary, security_assessment); License Summary retains its bespoke `collect_from_rest` path until a future expansion adds the missing extractor capabilities.
+
+### Step 1 investigation — why LS was deferred
+
+Probes against the lab's report 206 surfaced three structural mismatches between LS's data model and the ADR 0003 catalog schema:
+
+1. **Name-ambiguous datasets across pages.** Report 206 has 47+ pages (Backup detail, Archive detail, Snapshot detail, Replication detail, per-workload-type pages, …). The dataset names the brief proposed (`Get Last Collection Time`, `GetLicenseSummaryCapacityV3`, etc.) appear multiple times across pages, each instance with a different GUID. The extractor's `_build_name_to_guid_map` (walking widget references) picks an arbitrary instance per name and produces *unusable* GUIDs — `GET /datasets/<guid>/data` returns `errorCode: 15020` "could not find data set" for them. The brief's hint GUID `02878d11-…` for "Get Last Collection Time" *does* work, but it came from the page-level `dataSets.dataSet[].guid` array, not from widget references. The new catalog schema has no way to express "this page's instance of this dataset name."
+2. **Runtime parameter substitution from prior dataset results.** LS's bespoke flow executes the `GetOrganizationName` dataset first to extract `OrgGUID` values from rows, then passes them as `parameter.GUID=<value>` to the downstream metadata/other/agent datasets. 5 of 8 probed datasets returned HTTP 500 without this substitution. The catalog schema has no `depends_on` concept; phase 4's `parameters` field only supports static values.
+3. **Per-row value formulas.** LS's bespoke `_format_other_license_value` does `LicUsageType` (integer code per row) → unit string ("TB" / "VMs" / "clients" / "users" / "millions" / "source VMs" / "instances") → append to numeric value. `_stringify_numeric_or_unlimited` converts -1 → "Unlimited". The phase 4 `column_map` schema does flat renames; it can't drive one column's formatting from another column's value.
+
+Adding the missing extractor capabilities (page-aware GUID resolution, parameter substitution from prior dataset results, value-formula transforms) would more than double the extractor's surface area for a single subject. The cost exceeds the cleanup benefit; LS stays bespoke pending future consultant demand.
+
+### Removed
+
+- **`CommvaultSession.init_report`** at `src/cvhealthcheck/reportsplus/session.py` — the cacheId POST acquisition method. No production callers since the interstitial fix made the catalog-driven extractor GET-only. Also drops `_REPORTBUILDER_PATH` and `_CACHE_ID_KEYS` module constants. The `_cache_id` attribute and `fetch_dataset`'s `cache_id` parameter stay — callers can still pass a cacheId from a prior response's body for UI-correlated multi-call sessions; only the acquisition POST is gone.
+- **`src/cvhealthcheck/reportsplus/report_definitions.py`** — the orphan `REPORT_DEFINITIONS` dict that fed `init_report`. Orphan since phase 2.
+- **`_read_commcell_provenance`** at `src/cvhealthcheck/web/routes/quick_hc.py` — read `commserv.json` for the generic REST artifact's `commcell_id`/`commcell_name`; replaced by customer-row reads in phase 3.
+- **Two `init_report` existence tests** + **four `init_report.assert_not_called()`** assertions at `tests/test_rest_extractor.py`. Trivially-true assertions and existence tests for the deleted method.
+
+### Changed
+
+- **ADR 0003 status** flipped from "Proposed" to "Implemented (with LS caveat)" with the caveat stated up front.
+- **ADR 0003 Decision → Migration** rewritten. SA's migration described as shipped (with the deleted module list); LS's non-migration stated explicitly with the three structural reasons; the phase-5 cleanup deletions noted.
+- **ADR 0003 Consequences → Negative** rewritten to mention LS's non-migration honestly. "One unified REST collection path" goal is partially achieved (4 of 5 REST subjects).
+- **ADR 0003 Consequences → Out of scope** adds "LS catalog migration is out of scope for ADR 0003 as implemented. Future expansion work documented in the backlog."
+- **HANDOVER backlog** adds an LS-catalog-migration entry documenting the three required extractor extensions for future work.
+
+### Notes
+
+- **`reportsplus/checklist.py` is still in the tree** but unused (only callers were the deleted SA bespoke modules; LS doesn't use it). Listed as backlog item #21 for a small post-ADR-0003 cleanup. Not deleted in phase 5 to keep the cleanup scope tight.
+- **`extract_report.py`** stays — LS is its caller. Listed implicitly as part of the LS-migration future-work backlog item.
+- **`_cache_id` attribute on `CommvaultSession`** is no longer set by any in-tree code (init_report is gone). Tests still set `session._cache_id = "C1"` directly to verify the cacheId-bound `fetch_dataset` path. The attribute and the parameter are kept because the GET-only protocol still permits passing an explicit cacheId from a prior response's body — useful if a future caller wants UI-correlated multi-call sessions without an acquisition POST.
+
+### Carry-forward — the retrospective
+
+ADR 0003's implementation arc (5 phases over 1 session + the prior 4-session sequence) produced four methodology lessons that haven't been processed yet:
+
+1. **Wipe-and-recreate rule** — ADR 0002 set the precedent; ADR 0003 phases 1 and 4 followed it. Tool-wide default or ADR-by-ADR judgment?
+2. **ADR workflow efficiency** — survey-then-steer-then-draft-then-phased-implementation. Was the overhead worth it given that phase 4 surfaced a model gap mid-implementation (column_map / status_to_severity) and phase 5 surfaced a deeper gap that forced LS bespoke?
+3. **ADR-commit-alongside-first-phase pattern** — both ADR 0002 and ADR 0003 landed this way. Document in PATTERNS.md?
+4. **NEW: Catalog-model expressiveness limits surfacing during implementation rather than design.** Twice during ADR 0003 the model turned out to be less expressive than the design conversation assumed. Worth a deliberate examination of how to surface this earlier — perhaps a "prototype against a real second subject before declaring the design done" step.
+
+The retrospective is the recommended next session. It's prose work for Claude.ai, not filesystem work for Claude Code.
+
+---
+
 ## 2026-05-27 (ADR 0003 phase 4: SA migrated to catalog-driven REST collection)
 
 **Branch:** `feature/basic-healthcheck-report-output`
