@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed.
+Implemented (with LS caveat). The catalog-driven REST extractor handles four of five REST subjects (client_growth, capacity_license, backup_job_summary, security_assessment). License Summary retains its bespoke `collect_from_rest` path — see the Migration and Out-of-scope sections for the rationale and the backlog item that records the future-expansion work.
 
 ## Context
 
@@ -70,19 +70,19 @@ For v1, only per-subject collection through `/quick-hc/<subject_id>/collect` is 
 
 ### Migration
 
-SA and LS subjects move into the catalog. Their report definitions (336 for SA, 206 for LS) are walked once during implementation to produce seed rows in `subject_sections` and `subject_section_sources`, one section per table the consultant wants to render. After seeding, the following are deleted:
+Security Assessment migrates to the catalog-driven REST extractor (phase 4 of implementation). License Summary is deliberately left in its bespoke `collect_from_rest` path. Investigation during phase 5 surfaced that LS's report structure (47+ pages with name-ambiguous datasets, runtime dataset-result-to-parameter dependencies, and per-row value formulas like unit suffixing) does not fit the catalog model's expressiveness as defined in this ADR. Migrating LS would require extractor extensions (parameter substitution from prior dataset results, page-aware GUID resolution, value-formula transforms) whose cost exceeds the cleanup benefit for a single subject. A backlog item records the work needed to migrate LS in a future expansion; meanwhile LS continues to work through its existing bespoke flow, unchanged by this ADR.
 
-- `src/cvhealthcheck/security_assessment/service.py::collect_from_rest`
-- `src/cvhealthcheck/reportsplus/security_assessment.py`
-- `src/cvhealthcheck/license_summary/service.py::collect_from_rest`
-- `src/cvhealthcheck/license_summary/collect_rest.py`
-- `src/cvhealthcheck/reportsplus/extract_report.py`
-- `src/cvhealthcheck/reportsplus/report_definitions.py` (the one-entry `REPORT_DEFINITIONS` dict)
-- The SA-specific and LS-specific normalizers, persisters, and adapters (`normalize_security_assessment`, `persist_security_assessment_artifact`, `adapt_reportsplus_rest`, `normalize_license_summary_rest_extraction`, `persist_license_summary_artifact`, `_adapt_license_summary`) — anything that exists to produce the SA/LS-shaped artifact and isn't shared with the generic path.
+For SA's migration: report 336 was walked during phase 4 implementation to seed rows in `subject_section_sources`, one section per topic table. After seeding, the following SA-specific modules were deleted:
 
-`SecurityAssessmentService` and `LicenseSummaryService` themselves are not deleted if they hold non-REST behavior (UI helpers, HTML extraction paths, etc.); only their `collect_from_rest` paths and the modules that exist solely to support them go away.
+- `src/cvhealthcheck/security_assessment/service.py::collect_from_rest` (method)
+- `src/cvhealthcheck/reportsplus/security_assessment.py`'s REST-collection helpers (`extract_security_assessment`, `normalize_security_assessment`)
+- `src/cvhealthcheck/adapters/security_assessment.py::adapt_reportsplus_rest`
 
-Existing SA/LS artifacts under `data/catalog/artifacts/<customer>/<project>/working/security_assessment/` and `…/license_summary/` are dev-only state, not real customer work. ADR 0002 set the precedent that throwaway dev artifacts are deleted cleanly during a migration rather than preserved through a compatibility layer. ADR 0003 follows the same rule: existing SA/LS artifact directories are deleted as part of phases 4 and 5, and subjects re-collect into the new canonical shape on first use of the new extractor. No forward-migration script, no dual-read compatibility, no shape-translation code. If real customer data ever lands before this work ships, the rule revisits; until then, "wipe and re-collect" is the cheaper, simpler path.
+`SecurityAssessmentService` itself stays (HTML/CSV import paths are unchanged). Equivalent LS deletions (`license_summary/collect_rest.py`, `license_summary/service.py::collect_from_rest`, `_adapt_license_summary`, `normalize_license_summary_rest_extraction`, `persist_license_summary_artifact`) and the shared `extract_report.py` are deliberately retained because LS continues to use them.
+
+The pre-amendment cacheId machinery — `CommvaultSession.init_report`, the `REPORT_DEFINITIONS` dict at `src/cvhealthcheck/reportsplus/report_definitions.py`, and the display-only `_read_commcell_provenance` helper — are deleted as part of phase 5's cleanup since they had no remaining production callers after the GET-only protocol amendment.
+
+Existing SA artifacts under `data/catalog/artifacts/<customer>/<project>/working/security_assessment/` are dev-only state, not real customer work. ADR 0002 set the precedent that throwaway dev artifacts are deleted cleanly during a migration rather than preserved through a compatibility layer. ADR 0003 follows the same rule for SA: existing SA artifact directories are deleted as part of phase 4, and subjects re-collect into the new canonical shape on first use of the new extractor. No forward-migration script, no dual-read compatibility, no shape-translation code. LS artifacts are not wiped because LS is not migrated.
 
 ### Active-project resolution
 
@@ -92,9 +92,9 @@ The new extractor takes `customer_id` and `project_id` as explicit arguments. Th
 
 **Positive.** One extractor replaces three. AI-proposed subjects can use REST without a Python edit. The catalog becomes the single source of truth for what a REST collection does. One report definition GET per subject collection (instead of per-dataset metadata lookups) keeps the request count low for multi-section subjects like License Summary. CommCell URL and provenance derive from the active customer row, making multi-customer collection work correctly. Credentials remain unstored, preserving ADR 0002's decision.
 
-**Negative.** SA and LS artifact shapes change. Existing dev artifacts under those subjects get deleted rather than migrated; consultants who had those artifacts around need to re-collect after phases 4 and 5 land. Out-of-tree code reading the old shape (none known to exist) would break. Switching active customers mid-session invalidates the token and forces re-authentication, which is friction the current single-CommCell model doesn't have.
+**Negative.** SA's artifact shape changed. Existing SA dev artifacts under those subjects got deleted rather than migrated; consultants who had those artifacts around needed to re-collect after phase 4 landed. Out-of-tree code reading the old shape (none known to exist) would break. Switching active customers mid-session invalidates the token and forces re-authentication, which is friction the current single-CommCell model doesn't have. **LS was not migrated.** The bespoke LS REST code, including `extract_report.py` (which is no longer shared with SA), remains in place. ADR 0003's stated goal of one unified REST collection path is partially achieved — the generic path handles four of five REST subjects (client_growth, capacity_license, backup_job_summary, security_assessment); LS retains the bespoke path.
 
-**Out of scope.** Multi-CommCell-per-customer collection (deferred per ADR 0002). Project-wide "Collect All" invocation. Credential storage of any form. Auto-reauthentication on 401. Live `commcell_id` discovery from the CommCell at collect time (the customer row's stored values are authoritative; if they're wrong, the customer page is the place to fix them).
+**Out of scope.** Multi-CommCell-per-customer collection (deferred per ADR 0002). Project-wide "Collect All" invocation. Credential storage of any form. Auto-reauthentication on 401. Live `commcell_id` discovery from the CommCell at collect time (the customer row's stored values are authoritative; if they're wrong, the customer page is the place to fix them). **LS catalog migration is out of scope for ADR 0003 as implemented.** Future expansion work documented in the backlog.
 
 **Open questions.** Whether `subject_section_sources` needs a constraint enforcing "all REST sections in a subject share the same `report_id`," or whether that's a runtime check.
 
