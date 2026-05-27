@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-27 (bugfix: inline JSON response for system-subject uploads)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *the bugfix CHANGELOG+HANDOVER commit; pointer-update commit follows.*
+**Last commit:** `280acf3` — CHANGELOG + HANDOVER: inline-upload bugfix
 **Test status:** 562 passing
 
 ---
