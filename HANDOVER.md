@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-27 (ADR 0003 phase 2: generic REST extractor)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *the phase 2 CHANGELOG+HANDOVER commit; the pointer-update commit follows.*
+**Last commit:** `61eefc5` — CHANGELOG + HANDOVER: ADR 0003 phase 2
 **Test status:** 563 passing
 
 ---
