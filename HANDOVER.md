@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-27 (ADR 0003 amendment: wipe-and-re-collect)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `760ead2` — CHANGELOG: ADR 0003 amendment entry
+**Last commit:** `44b9d4c` — HANDOVER backlog: add missing methodology marker for ADR-commit-alongside pattern
 **Test status:** 554 passing
 
 ---
