@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-27 (ADR 0003 phase 4: SA migrated to catalog-driven REST)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *the phase 4 CHANGELOG+HANDOVER commit; pointer-update commit follows.*
+**Last commit:** `465dc0f` — CHANGELOG + HANDOVER: ADR 0003 phase 4
 **Test status:** 560 passing
 
 ---
