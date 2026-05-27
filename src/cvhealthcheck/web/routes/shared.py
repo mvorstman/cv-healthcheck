@@ -20,9 +20,11 @@ from cvhealthcheck.api_client import CommvaultApiClient
 from cvhealthcheck.auth import (
     AuthError,
     clear_current_token,
+    get_current_customer_id,
     get_current_token,
     get_current_username,
     is_authenticated,
+    is_authenticated_for,
     login_to_commvault,
     set_current_token,
 )

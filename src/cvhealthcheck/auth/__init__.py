@@ -7,9 +7,11 @@ from pathlib import Path
 from .commvault_auth import (
     AuthError,
     clear_current_token,
+    get_current_customer_id,
     get_current_token,
     get_current_username,
     is_authenticated,
+    is_authenticated_for,
     login_to_commvault,
     set_current_token,
 )
@@ -50,9 +52,11 @@ def load_login_token(token_path: Path | str = ".login_token") -> str | None:
 __all__ = [
     "AuthError",
     "clear_current_token",
+    "get_current_customer_id",
     "get_current_token",
     "get_current_username",
     "is_authenticated",
+    "is_authenticated_for",
     "load_login_token",
     "load_token",
     "login_to_commvault",

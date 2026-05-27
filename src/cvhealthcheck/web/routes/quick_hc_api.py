@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from flask import jsonify
 
+from cvhealthcheck.web.active_project import (
+    ActiveProjectMissingError,
+    get_active_customer,
+)
+
 from .shared import (
     AuthError,
     LicenseSummaryService,
@@ -9,7 +14,6 @@ from .shared import (
     bp,
     get_current_username,
     is_authenticated,
-    load_settings,
     login_to_commvault,
     request,
     set_current_token,
@@ -21,20 +25,36 @@ from cvhealthcheck.quickhc.registry import QUICK_HC_TILE_BY_ID
 
 @bp.route("/api/login", methods=["POST"])
 def api_login():
-    """Inline login — accepts JSON credentials, returns JSON result."""
+    """Inline login — accepts JSON credentials, returns JSON result.
+
+    Customer-aware under ADR 0003 phase 3: authenticates against the
+    active customer's CommCell and binds the resulting token to that
+    customer's id.
+    """
     payload = request.get_json(force=True, silent=True) or {}
     username = str(payload.get("username", "")).strip()
     password = str(payload.get("password", ""))
-    settings = load_settings()
-    if not settings.base_url:
-        return jsonify({"success": False, "error": "Commvault base URL is not configured on this server."}), 400
     try:
-        token = login_to_commvault(settings.base_url, username, password)
+        customer = get_active_customer()
+    except ActiveProjectMissingError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
+    base_url = customer.get("commcell_hostname")
+    if not base_url:
+        customer_name = customer.get("customer_name") or customer["customer_id"]
+        return jsonify({
+            "success": False,
+            "error": (
+                f"Customer '{customer_name}' has no CommCell URL configured. "
+                "Edit the customer and set commcell_hostname before signing in."
+            ),
+        }), 400
+    try:
+        token = login_to_commvault(base_url, username, password)
     except AuthError as exc:
         return jsonify({"success": False, "error": str(exc)}), 401
     except Exception as exc:
         return jsonify({"success": False, "error": f"Login failed: {exc}"}), 500
-    set_current_token(token, username=username)
+    set_current_token(token, customer_id=customer["customer_id"], username=username)
     return jsonify({"success": True})
 
 

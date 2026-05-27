@@ -11,6 +11,7 @@ from cvhealthcheck.config import load_settings, warn_if_ssl_verification_disable
 
 SESSION_TOKEN_KEY = "commvault_token"
 SESSION_USERNAME_KEY = "commvault_username"
+SESSION_CUSTOMER_ID_KEY = "commvault_customer_id"
 
 
 class AuthError(RuntimeError):
@@ -53,10 +54,21 @@ def login_to_commvault(base_url: str, username: str, password: str) -> str:
     return token
 
 
-def set_current_token(token: str, username: str | None = None) -> None:
+def set_current_token(token: str, customer_id: str, username: str | None = None) -> None:
+    """Bind a CommCell token to the customer it was issued for.
+
+    Under ADR 0003 the Flask session holds at most one CommCell token at
+    a time, bound to a customer; switching customers invalidates the
+    token. customer_id is required — there is no "unbound" token under
+    this model.
+    """
     if not has_request_context():
         return
+    cleaned_customer = (customer_id or "").strip()
+    if not cleaned_customer:
+        raise ValueError("set_current_token requires a non-empty customer_id")
     session[SESSION_TOKEN_KEY] = token
+    session[SESSION_CUSTOMER_ID_KEY] = cleaned_customer
     if username is not None:
         cleaned = username.strip()
         if cleaned:
@@ -70,6 +82,14 @@ def get_current_token() -> str | None:
         return None
     token = session.get(SESSION_TOKEN_KEY)
     return token if isinstance(token, str) and token.strip() else None
+
+
+def get_current_customer_id() -> str | None:
+    """Return the customer_id the current token is bound to, if any."""
+    if not has_request_context():
+        return None
+    value = session.get(SESSION_CUSTOMER_ID_KEY)
+    return value if isinstance(value, str) and value.strip() else None
 
 
 def get_current_username() -> str | None:
@@ -89,10 +109,24 @@ def clear_current_token() -> None:
     if has_request_context():
         session.pop(SESSION_TOKEN_KEY, None)
         session.pop(SESSION_USERNAME_KEY, None)
+        session.pop(SESSION_CUSTOMER_ID_KEY, None)
 
 
 def is_authenticated() -> bool:
     return get_current_token() is not None
+
+
+def is_authenticated_for(customer_id: str) -> bool:
+    """Return True iff there's a token AND it is bound to ``customer_id``.
+
+    Stricter than ``is_authenticated``: a token bound to a different
+    customer (or a legacy unbound token, e.g. set in tests via the
+    raw session key) returns False here.
+    """
+    if get_current_token() is None:
+        return False
+    bound = get_current_customer_id()
+    return bound is not None and bound == customer_id
 
 
 def _response_json(response: requests.Response) -> Any:

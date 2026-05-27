@@ -23,6 +23,7 @@ from flask import has_request_context, session
 
 from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.db import get_db
+from cvhealthcheck.db.customers import get_customer
 
 _SESSION_KEY = "active_project"
 
@@ -117,6 +118,26 @@ def _value_at(row: Any, key: str, fallback_index: int) -> str:
         return row[key]
     except (KeyError, TypeError):
         return row[fallback_index]
+
+
+def get_active_customer(db: sqlite3.Connection | None = None) -> dict[str, Any]:
+    """Return the customer row backing the active project.
+
+    Chains get_active_project → get_customer. Used by the CommCell auth
+    flow and the collect handler under ADR 0003 phase 3: both need the
+    active customer's commcell_hostname, commcell_id, and customer_name.
+    Raises ActiveProjectMissingError if the customer row is missing (the
+    project FK should make this impossible in a healthy DB).
+    """
+    customer_id, _ = get_active_project(db)
+    customer = get_customer(customer_id)
+    if customer is None:
+        raise ActiveProjectMissingError(
+            f"Active project references customer_id={customer_id!r} but no "
+            "matching row exists in customers. The projects.customer_id FK "
+            "should make this impossible — check DB integrity."
+        )
+    return customer
 
 
 def make_active_project_store(db: sqlite3.Connection | None = None) -> ArtifactStore:

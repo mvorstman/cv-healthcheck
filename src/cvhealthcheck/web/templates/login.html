@@ -2,12 +2,16 @@
 
 {% block content %}
 <section class="login-card">
-  <p class="login-appname">Connect to CS</p>
-  <p class="login-subtitle">Sign in to the Commvault operational workspace.</p>
+  <p class="login-appname">Connect to CommCell</p>
+  <p class="login-subtitle">for <strong>{{ customer_name }}</strong></p>
   {% if base_url %}
     <p class="helper-text" style="text-align:center;margin-bottom:1rem">{{ base_url }}</p>
   {% else %}
-    <p class="helper-text" style="text-align:center;margin-bottom:1rem">CV_BASE_URL is not configured.</p>
+    <p class="helper-text" style="text-align:center;margin-bottom:1rem">
+      No CommCell URL configured for this customer.
+      <a href="{{ url_for('main.customers_edit', customer_id=customer_id) }}">Edit customer</a>
+      to set <code>commcell_hostname</code>.
+    </p>
   {% endif %}
   {% if error %}
     <p class="error">{{ error }}</p>
@@ -16,13 +20,15 @@
     <input type="hidden" name="next" value="{{ next_url }}">
     <div>
       <label for="username">Username</label>
-      <input id="username" name="username" type="text" autocomplete="username" required>
+      <input id="username" name="username" type="text" autocomplete="username"
+             required {% if not base_url %}disabled{% endif %}>
     </div>
     <div>
       <label for="password">Password</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <input id="password" name="password" type="password" autocomplete="current-password"
+             required {% if not base_url %}disabled{% endif %}>
     </div>
-    <button type="submit" class="login-submit">Connect</button>
+    <button type="submit" class="login-submit" {% if not base_url %}disabled{% endif %}>Connect</button>
   </form>
 </section>
 {% endblock %}

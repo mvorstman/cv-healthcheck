@@ -10,7 +10,12 @@ from flask import jsonify
 from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.config import load_settings
 from cvhealthcheck.db import get_db
-from cvhealthcheck.web.active_project import get_active_project, make_active_project_store
+from cvhealthcheck.web.active_project import (
+    ActiveProjectMissingError,
+    get_active_customer,
+    get_active_project,
+    make_active_project_store,
+)
 from cvhealthcheck.db import staging as _staging_db
 from cvhealthcheck.db.subjects import delete_subject, get_subject
 from cvhealthcheck.extractors.dispatcher import extract_file
@@ -32,6 +37,7 @@ from .shared import (
     get_current_username,
     get_flashed_messages,
     is_authenticated,
+    is_authenticated_for,
     login_required,
     read_json,
     redirect,
@@ -154,13 +160,40 @@ def quick_hc_delete_subject(subject_id: str):
 
 
 @bp.route("/quick-hc/<subject_id>/collect", methods=["POST"])
-@login_required
 def quick_hc_generic_collect(subject_id: str):
+    """Collect a subject's REST data using the active customer's CommCell.
+
+    Under ADR 0003 phase 3 the auth flow is customer-bound: the CommCell
+    URL comes from the active customer's row, and the session token must
+    be bound to that same customer. A token bound to a different customer
+    is cleared before redirecting to /login. Artifact provenance comes
+    from the customer row, not from the global commserv.json.
+    """
     settings = load_settings()
-    base_url = settings.base_url
-    if not base_url:
-        flash("Commvault base URL is not configured.", "error")
+    try:
+        customer = get_active_customer()
+    except ActiveProjectMissingError as exc:
+        flash(str(exc), "error")
         return _workspace_redirect(subject_id)
+
+    customer_id = customer["customer_id"]
+    base_url = customer.get("commcell_hostname")
+    if not base_url:
+        customer_name = customer.get("customer_name") or customer_id
+        flash(
+            f"Customer '{customer_name}' has no CommCell URL configured. "
+            "Edit the customer to set commcell_hostname before collecting.",
+            "error",
+        )
+        return _workspace_redirect(subject_id)
+
+    # Customer-bound auth check. A bare is_authenticated() token bound to a
+    # different customer (or unbound) is not good enough — clear it and
+    # redirect to the customer-aware /login.
+    if not is_authenticated_for(customer_id):
+        if is_authenticated():
+            clear_current_token()
+        return redirect(url_for("main.login", next=request.path))
 
     token = _current_token()
 
@@ -174,7 +207,7 @@ def quick_hc_generic_collect(subject_id: str):
             return _workspace_redirect()
         title = subject["title"]
         version = subject["version"]
-        customer_id, project_id = get_active_project(db)
+        _, project_id = get_active_project(db)
         with CommvaultSession(base_url, token, verify_ssl=settings.verify_ssl) as cv_session:
             extractor = RESTExtractor(db, cv_session, customer_id, project_id)
             result = extractor.extract(subject_id, version)
@@ -188,13 +221,12 @@ def quick_hc_generic_collect(subject_id: str):
         flash(f"Collection errors: {'; '.join(result.errors)}", "error")
         return _workspace_redirect(subject_id)
 
-    commcell_id, commcell_name = _read_commcell_provenance()
     artifact = result_to_artifact(
         result,
         subject_id=subject_id,
         subject_title=title,
-        commcell_id=commcell_id,
-        commcell_name=commcell_name,
+        commcell_id=customer.get("commcell_id"),
+        commcell_name=customer.get("customer_name"),
     )
     make_active_project_store().save_artifact(artifact)
 
