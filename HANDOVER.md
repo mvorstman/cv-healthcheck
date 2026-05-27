@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-27 (ADR design workflow in tool-selection)
+**Last updated:** 2026-05-27 (ADR 0003 survey committed)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `e86c18a` — docs: add ADR design workflow to tool-selection guidance
+**Last commit:** `b5505c6` — docs: add ADR 0003 survey report
 **Test status:** 554 passing
 
 ---
@@ -24,25 +24,25 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## What was just completed
 
-**`docs/data_flow_audit.md` refresh.** Targeted update so the audit reflects the post-ADR-0002 architecture before the ADR 0003 design conversation. Section 1 (directory tree) now shows the project-scoped `<customer>/<project>/{working,finalized}/` subtree alongside the still-globally-scoped legacy stores; a new "Three on-disk regions" summary calls out the structural split. Section 3 (read paths) has a new "Request → active project → ArtifactStore" subsection at the top describing the resolver flow through `make_active_project_store()` and friends. Section 4 (write paths) updates `ArtifactStore.save_artifact` to reflect project-scoping and adds two new write-path entries: `finalize_project` as the only writer to `finalized/<n>/`, and `reload_latest_finalization` as the working/ restorer. Section 5 (forks) gains a "Working/finalized split (ADR 0002 phase 5)" entry. Section 6 surprises #1 and #2 are refreshed to current state. No code touched; test count unchanged at 554.
+**ADR 0003 survey committed** at `docs/adr/0003-survey.md` (commit `b5505c6`). Survey grounds the ADR 0003 design conversation: existing auth surface, the two REST-collection patterns coexisting today (generic `RESTExtractor` with `cacheId` vs SA/LS's `extract_report` with direct dataset GETs), the catalog `extraction_instructions` schema, the write path from REST call to project-scoped storage. Eight design forks surfaced (F1–F8) for the design chat to settle.
+
+Two prior steps in this short arc were already on the branch: `c520086` / `6778b46` (data flow audit refresh against post-ADR-0002 architecture) and `e86c18a` / `5cf1425` (ADR design workflow added to the tool-selection section). CHANGELOG has the longer history.
 
 ---
 
 ## What is in-flight
 
-Nothing. Working tree is clean.
+**ADR 0003 design conversation.** The survey is committed; the design chat happens next in a fresh Claude.ai session (filesystem-free). The chat's output is the ADR 0003 draft itself, which will land in a subsequent Claude Code session. Working tree is clean.
 
 ---
 
 ## Single recommended next action
 
-**ADR 0003 — REST extractor with credentials.** Design first; the customer/project foundation it builds on is now in place.
+**ADR 0003 design conversation — fresh Claude.ai chat.** The survey is at `docs/adr/0003-survey.md` (commit `b5505c6`). Paste its contents into a new Claude.ai chat as grounding context, then drive the design conversation from the forks the survey surfaces (F1–F8). See the "ADR design sessions: the survey-then-steer pattern" subsection of "Where work happens" for the four-step workflow this session is in step 3 of (Claude Code produced the survey; user pastes it into Claude.ai; Claude.ai drafts the ADR; a follow-up Claude Code session verifies/lands the ADR file).
 
-The REST extractor is the "live collection" half of the consulting workflow. Customers exist (phase 3); projects exist (phase 4); the workspace operates per-project (phase 2); finalization captures audit-trail snapshots (phase 5). What's still missing is a path from "the customer has a CommCell I can authenticate against" to "the project's working state holds real data collected from it." Today the workspace is empty unless someone manually drops files into a project's `working/` directory.
+The conversation's deliverable is ADR 0003 itself — a design proposal, no implementation. The survey's "Surprises and observations" section calls out things worth knowing before the chat starts: the existing code has three REST patterns (not two), the customer's `commcell_id` field is already on the schema but display-only, the three-layer identity model is not yet how the code is structured, and the LS persist path has half-built customer/commcell/engagement context plumbing that ADR 0003 might want to repurpose or retire.
 
-The session that lands next should write ADR 0003 as a design proposal — no implementation. The shape of the conversation: what authentication patterns work for the consulting-engagement model? Are credentials stored, prompted per session, or supplied per-collection? How does the extractor route collected data into the active project's storage? What's the relationship with the existing `RESTExtractor` (`src/cvhealthcheck/extractors/rest.py`) used by the generic collect route today, and the dedicated `SecurityAssessmentService.collect_from_rest` / `LicenseSummaryService.collect_from_rest` paths?
-
-`docs/data_flow_audit.md` was refreshed against current architecture in the previous session — read it before writing ADR 0003 for the project-scoped storage layout, the active-project resolver flow, and the forks in place today.
+`docs/data_flow_audit.md` was refreshed against the current architecture in a prior session — read it alongside the survey if the design chat needs the storage-layout picture.
 
 ### Existing tooling worth surveying for ADR 0003
 
