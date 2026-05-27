@@ -10,6 +10,25 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (tool-selection guidance)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** the two commits that publish this entry (the section addition and the last-commit pointer).
+**Test status:** 554 passing (docs only).
+
+Added a "Where work happens — Claude Code vs Claude.ai" section to HANDOVER, documenting which tool runs which kind of session and the handoff pattern between them. Prompted by a fresh Claude.ai chat correctly identifying that filesystem work can't happen there.
+
+### Added
+
+- **HANDOVER.md "Where work happens" section** sits between "Session workflow disciplines" and "Quick verification commands". Names Claude Code as the filesystem-aware tool (every implementation session in this project's history) and Claude.ai as the chat interface for design conversations and prompt drafting. Lists the explicit signal phrases ("read", "update", "run pytest", "the audit", "the schema", etc.) that mean a brief needs Claude Code.
+
+### Notes
+
+- No code changes. Docs only.
+- The user remains the bridge between the two tools: Claude.ai drafts the brief, Claude Code executes, the user pastes the report back into Claude.ai if work continues strategically.
+
+---
+
 ## 2026-05-27 (workflow discipline: push to GitHub regularly)
 
 **Branch:** `feature/basic-healthcheck-report-output`

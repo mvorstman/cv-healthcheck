@@ -141,6 +141,62 @@ leave a gap than to document the wrong thing.
 
 ---
 
+## Where work happens — Claude Code vs Claude.ai
+
+This project's sessions run in two different tools. Knowing which is
+which saves a fresh chat from trying work it can't do.
+
+### Claude Code (agentic CLI, filesystem access)
+
+Runs every session that touches the codebase. Every implementation
+session in this project's history has been Claude Code. Use it for:
+
+- ADR implementation phases
+- Audit refreshes and documentation passes that verify against code
+- Schema migrations
+- Refactors and cleanups
+- Anything that needs to read source files, run tests, commit, or push
+
+If the work involves the filesystem at all, it belongs here.
+
+### Claude.ai (chat interface, no filesystem)
+
+Handles work that is pure conversation and prose. Use it for:
+
+- Design conversations and strategic decisions
+- Prompt drafting for Claude Code sessions
+- Meta-discussions about the project's direction
+- ADR drafting *when* the ADR doesn't need verification against
+  current code (if it does, Claude Code is faster — it can grep
+  while drafting)
+
+### The handoff pattern
+
+The user is the bridge between the two tools:
+
+1. Claude.ai conversation produces a session brief (prompt) and any
+   strategic decisions
+2. User runs the brief in Claude Code at the dev machine
+3. Claude Code executes, commits, pushes, reports back
+4. User pastes the report into the next Claude.ai conversation if
+   the work continues strategically
+
+### Signal that a session needs Claude Code
+
+Any of these in the brief means filesystem access is required:
+
+- "read `<file>`", "update `<file>`", "edit `<file>`"
+- "run the tests", "run pytest", "confirm test count"
+- "commit", "push", "update CHANGELOG", "update HANDOVER"
+- "verify against current code", "grep for", "check whether"
+- "the audit", "the schema", "the migrations"
+
+A Claude.ai chat seeing these signals should respond: *"this work
+needs Claude Code — here's the prompt"*, then draft the prompt rather
+than attempting the work.
+
+---
+
 ## Quick verification commands
 
 ```bash
