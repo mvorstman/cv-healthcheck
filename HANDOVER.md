@@ -60,7 +60,7 @@ Spec: `docs/adr/0003-rest-extractor-with-credentials.md`, particularly the "Extr
 
 1. **ADR 0003 phase 2 — generic REST extractor** (the single recommended next action above).
 2. **ADR 0003 phase 3 — route handler + auth wiring** for the new customer-bound token model.
-3. **ADR 0003 phase 4 — SA migration**: seed `subject_section_sources` for Security Assessment (report 336, the 6+ tables it renders), delete `SecurityAssessmentService.collect_from_rest`, delete `reportsplus/security_assessment.py`, retire the SA-specific normalizer / persister / adapter, one-time forward migration of existing SA artifacts to the new canonical shape.
+3. **ADR 0003 phase 4 — SA migration**: seed `subject_section_sources` for Security Assessment (report 336, the 6+ tables it renders), delete `SecurityAssessmentService.collect_from_rest`, delete `reportsplus/security_assessment.py`, retire the SA-specific normalizer / persister / adapter, delete existing SA artifact directories so subjects re-collect into the new canonical shape (no forward-migration script — see methodology entry below and ADR 0002 precedent).
 4. **ADR 0003 phase 5 — LS migration**: same shape as phase 4 for License Summary (report 206, 7 tables, this is where `output_as: "card"` first gets seeded for the header datasets).
 5. **AI import workstream — staging UI for proposal review, compliance rules.**
 6. **CommCell-discovery flow for customer creation.** Auth plumbing overlaps with ADR 0003 phases 2/3.
@@ -77,7 +77,8 @@ Spec: `docs/adr/0003-rest-extractor-with-credentials.md`, particularly the "Extr
 17. **Project-scope the legacy SA/LS stores** under `data/catalog/{security_assessment,license_summary}/`. Mostly obsolete once ADR 0003 phases 4/5 land — but the historical artifacts in those directories may still need a one-time cleanup pass.
 18. **`data/catalog/reportsplus/` retention.** Audit Section 6 #3.
 19. **Audit Section 6 #2/#5/#6** — legacy-store accumulation, orphaned SQLite registries, labreadiness unread.
-20. **Review ADR workflow efficiency after ADR 0003 lands.** Are the survey-then-steer-then-draft-then-phased-implementation cycles worth the overhead, or are we over-engineering process? Deliberate retrospective marker — don't act on this until ADR 0003 phases 2–5 are complete.
+20. **Default rule for proof-of-concept phase: any change touching dev-only data preserved across schema edits is over-engineered.** Wipe and re-collect unless real customer data is at stake. The cost of a migration script is paid up front; the cost of "delete and recreate" is paid in five minutes of re-collection. ADR 0002 set the precedent; ADR 0003 follows it. Apply this rule to remaining ADR 0003 phases (no artifact forward-migration; delete existing SA/LS artifacts before seeding new catalog rows in phases 4 and 5). Revisit at the post-ADR-0003 retrospective to decide whether it becomes a tool-wide default.
+21. **Review ADR workflow efficiency after ADR 0003 lands.** Are the survey-then-steer-then-draft-then-phased-implementation cycles worth the overhead, or are we over-engineering process? Deliberate retrospective marker — don't act on this until ADR 0003 phases 2–5 are complete.
 
 Smaller cleanups:
 
