@@ -79,6 +79,7 @@ Spec: `docs/adr/0003-rest-extractor-with-credentials.md`, particularly the "Extr
 19. **Audit Section 6 #2/#5/#6** — legacy-store accumulation, orphaned SQLite registries, labreadiness unread.
 20. **Default rule for proof-of-concept phase: any change touching dev-only data preserved across schema edits is over-engineered.** Wipe and re-collect unless real customer data is at stake. The cost of a migration script is paid up front; the cost of "delete and recreate" is paid in five minutes of re-collection. ADR 0002 set the precedent; ADR 0003 follows it. Apply this rule to remaining ADR 0003 phases (no artifact forward-migration; delete existing SA/LS artifacts before seeding new catalog rows in phases 4 and 5). Revisit at the post-ADR-0003 retrospective to decide whether it becomes a tool-wide default.
 21. **Review ADR workflow efficiency after ADR 0003 lands.** Are the survey-then-steer-then-draft-then-phased-implementation cycles worth the overhead, or are we over-engineering process? Deliberate retrospective marker — don't act on this until ADR 0003 phases 2–5 are complete.
+22. **Document the "commit the ADR doc alongside its first implementation phase" pattern in PATTERNS.md or HANDOVER's "Where work happens" section.** ADR 0002 and ADR 0003 both landed this way (ADR doc commit immediately followed by phase 1 commits in the same session). Neither HANDOVER nor PATTERNS.md says this explicitly; future ADR drafting sessions might leave the ADR doc uncommitted unintentionally. Low priority — established by precedent.
 
 Smaller cleanups:
 
