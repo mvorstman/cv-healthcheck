@@ -10,6 +10,30 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (ADR 0003 amendment: wipe-and-re-collect, no forward-migration script)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `bd5262e`, plus the wrap-up commit that publishes this entry.
+**Test status:** 554 passing (docs only).
+
+Interstitial amendment between phase 1 (already landed) and phase 2. The steering chat re-examined ADR 0003's forward-migration step against ADR 0002's precedent ("existing canonical-store data on disk is not preserved during the migration; the current layout is throwaway dev state") and concluded the forward-migration is over-engineered for proof-of-concept stage. New rule: phases 4 and 5 delete existing SA/LS artifact directories rather than migrating them; subjects re-collect into the new canonical shape on first use of the new extractor.
+
+### Changed
+
+- **ADR 0003 "Decision → Migration"** paragraph rewritten to describe wipe-and-re-collect and cite ADR 0002's precedent. The "No forward-migration script, no dual-read compatibility, no shape-translation code" sentence states the rule plainly; the ADR reads as if this were the decision from the start (no changelog-of-itself).
+- **ADR 0003 "Consequences → Negative"** sentence rewritten: SA/LS shapes still change, dev artifacts get deleted rather than migrated, consultants re-collect after phases 4 and 5.
+- **HANDOVER backlog #3 (phase 4 — SA migration)** updated to drop the forward-migration substep in favor of "delete existing SA artifact directories so subjects re-collect."
+
+### Added
+
+- **HANDOVER backlog #20** — methodology marker: "Default rule for proof-of-concept phase: any change touching dev-only data preserved across schema edits is over-engineered. Wipe and re-collect unless real customer data is at stake." Includes the directive to apply this rule to remaining ADR 0003 phases (4 and 5), and a retrospective trigger to decide whether it becomes a tool-wide default after ADR 0003 fully lands.
+
+### Notes
+
+- No code changes. No phase-count correction needed in HANDOVER — the forward-migration was a substep of phase 4, not a separate phase 6.
+
+---
+
 ## 2026-05-27 (ADR 0003 phase 1: extraction_instructions extended for catalog-driven REST)
 
 **Branch:** `feature/basic-healthcheck-report-output`
