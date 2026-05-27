@@ -10,6 +10,52 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-27 (ADR 0003 phase 3: customer-bound CommCell auth)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `284174a` (phase 3 implementation + tests), plus the wrap-up commit publishing this entry.
+**Test status:** 581 passing (+18 from 563; new tests cover `is_authenticated_for`, customer-aware `/login` GET/POST, `/api/login` JSON variant, collect-handler redirects on missing or wrong-customer tokens, the missing-hostname error path, and `get_active_customer`).
+
+Phase 3 of ADR 0003. Auth becomes customer-aware: `/login` authenticates against the active customer's `commcell_hostname` (not `CV_BASE_URL`), the resulting token is bound to that customer's id, and switching customer (or hitting a route whose active customer doesn't match the bound one) clears the token and bounces to `/login`. Generic-REST artifact provenance now comes from the customer row instead of `data/catalog/rest/commserv.json`.
+
+### Step 1 surprise
+
+The brief planned a new `/connect-commcell` route distinct from `/login`, on the premise that `/login` was app auth. Step 1 surfaced that **`/login` had always been the CommCell credentials prompt** — there was never a separate app-auth layer; `is_authenticated()` is exactly "session has a CommCell token." Creating a parallel route would have duplicated the same job with one URL-source difference. STOP-and-report fired; steering chat picked Path A (repurpose `/login`) over Path B (parallel route). SA/LS modules redirect to `/login` on 401 today and will continue to — they now land on the customer-aware prompt automatically, which is the right behavior heading into phases 4/5.
+
+### Added
+
+- **`SESSION_CUSTOMER_ID_KEY = "commvault_customer_id"`** at `src/cvhealthcheck/auth/commvault_auth.py` — third session key alongside the existing token and username keys.
+- **`get_current_customer_id() -> str | None`** — reads the bound customer id from the session.
+- **`is_authenticated_for(customer_id: str) -> bool`** — stricter than `is_authenticated()`: returns True iff a token is present AND it's bound to `customer_id`. Legacy unbound tokens (test fixtures that set `session[SESSION_TOKEN_KEY]` directly) return False here.
+- **`get_active_customer(db=None) -> dict`** at `src/cvhealthcheck/web/active_project.py` — chains `get_active_project` → `get_customer`. Raises `ActiveProjectMissingError` if the FK is broken.
+- **`tests/test_phase3_auth_customer_bound.py`** — 18 tests covering the new auth surface area end-to-end via Flask test_client.
+
+### Changed
+
+- **`set_current_token(token, customer_id, username=None)`** — `customer_id` is now a required keyword. Raises `ValueError` on empty/whitespace. Two production callsites updated; tests that bypass this function (set the session key directly) are unaffected.
+- **`clear_current_token()`** also clears the customer id key.
+- **`/login`** at `src/cvhealthcheck/web/routes/basic.py` resolves the active customer, displays "Connect to CommCell for {Customer Name}" with the customer's `commcell_hostname`, and authenticates against that hostname. When `commcell_hostname` is unconfigured, the form renders in a disabled state with a link to the customer edit page. POST without hostname returns the same disabled form with an explanatory error and does not call `login_to_commvault`.
+- **`/api/login`** at `src/cvhealthcheck/web/routes/quick_hc_api.py` — same customer-aware flow; returns 400 with a JSON error when the active customer has no hostname.
+- **`/quick-hc/<subject_id>/collect`** at `src/cvhealthcheck/web/routes/quick_hc.py` — dropped `@login_required` (it only checks `is_authenticated()` which is too loose under customer binding). Replaced with: resolve active customer → check `is_authenticated_for(customer_id)` → on mismatch, `clear_current_token()` if there's a token and redirect to `/login?next=…`; on missing hostname, flash error and redirect to the workspace. CommvaultSession base_url comes from `customer.commcell_hostname`; artifact provenance fields (`commcell_id`, `commcell_name`) come from `customer.commcell_id` and `customer.customer_name`. The `_read_commcell_provenance()` helper is no longer called from this path (still present for any future SA/LS retention).
+- **`src/cvhealthcheck/web/templates/login.html`** — customer-aware copy ("Connect to CommCell" → "for {Customer Name}"); renders inputs and submit button as disabled when no hostname; links to the customer edit page.
+- **`src/cvhealthcheck/web/routes/shared.py`** re-exports `is_authenticated_for` and `get_current_customer_id` for the route modules.
+
+### Notes
+
+- **End-to-end smoke against the real lab CommCell** (with Default's `commcell_hostname` set to the previous `CV_BASE_URL` value):
+  - GET `/login` renders with the customer name + hostname.
+  - POST `/login` with real lab creds returns 302 → `/quick-hc`; session has the token bound to `customer_id="default"`.
+  - POST `/quick-hc/client_growth/collect` returns 302 back to the workspace (not to `/login`) — the auth check passes correctly and the request is delegated to the extractor.
+- **A separate CommCell-side issue surfaced during the smoke test, *not* caused by phase 3:** the bare CommvaultSession isolation test (no Flask, no test_client, fresh token from `login_to_commvault`) shows `session.get_report("318")` returns 200 cleanly, but `session.init_report({"reportId": 318})` returns **HTTP 419** with a generic Commvault Command Center HTML error page, regardless of payload shape, token format, token age (fresh from `/Login` vs. the pre-existing `.token` file), or `QSDK ` prefix. The direct `GET /datasets/<guid>/data` path returns 200 and notably **includes a generated `cacheId` in the response body** — the CommCell auto-creates cacheIds for dataset GETs. Either the lab CommCell was reconfigured/upgraded since the phase 2 "end-to-end verified" report or there's a header/CSRF requirement the browser provides and Python's `requests` does not. This blocks real-world collection but is out of phase 3's scope; documented as the next session's investigation target in HANDOVER.
+- **Default's customer row was updated for verification** (`commcell_hostname = https://192.168.182.129:4433`, `commcell_id = SMOKE-TEST-CS`). Left in place per the steering chat's instruction — useful for follow-up testing of the 419.
+- **`_read_commcell_provenance` and `data/catalog/rest/commserv.json` still exist** but are no longer consulted by the generic REST collect path. They remain for `/quick-hc/commcell` and any SA/LS provenance reads until phases 4/5 retire that code.
+
+### Carry-forward for phase 4 — and a blocker first
+
+Phase 4 is the SA migration: seed `subject_section_sources` for Security Assessment (report 336), delete `collect_from_rest`, `reportsplus/security_assessment.py`, and the SA-specific normalizer/persister/adapter, wipe `data/catalog/artifacts/<customer>/<project>/working/security_assessment/`. But **before phase 4 can produce a working SA collection, the `reportBuilder.do` 419 needs to be diagnosed and resolved** — the cacheId pattern is the canonical collect path under ADR 0003 and SA will inherit it. Options when investigating: try a fresh CV admin session with browser DevTools to capture the exact headers/cookies on a working `reportBuilder.do` POST and compare; check whether a CSRF token is required; consider whether ADR 0003's cacheId pattern should pivot to "first dataset GET creates the cacheId" given that the direct GET works and returns a cacheId in its body. The third option is an ADR 0003 design re-examination, not just a fix.
+
+---
+
 ## 2026-05-27 (ADR 0003 phase 2: generic REST extractor with cacheId-aware session)
 
 **Branch:** `feature/basic-healthcheck-report-output`
