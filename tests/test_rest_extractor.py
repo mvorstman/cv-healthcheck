@@ -108,9 +108,8 @@ def _seed_subject(db, subject_id="test_subject", sections=None, source_type="res
 def _mock_session(report_payload=None, fetch_rows=None):
     """Return a MagicMock CommvaultSession with get_report/fetch_dataset wired up.
 
-    The new extractor uses only get_report + fetch_dataset (GET-only protocol
-    per ADR 0003 amendment). init_report stays on the MagicMock implicitly so
-    tests can still call assert_not_called() on it.
+    The catalog-driven extractor uses only get_report + fetch_dataset
+    (GET-only protocol per ADR 0003).
     """
     if report_payload is None:
         report_payload = {
@@ -134,28 +133,6 @@ def _mock_session(report_payload=None, fetch_rows=None):
 
 
 # ── CommvaultSession tests ─────────────────────────────────────────────────────
-
-def test_init_report_stores_cache_id():
-    session = CommvaultSession("http://host", "tok")
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {"cacheId": "CACHE-001"}
-    mock_resp.raise_for_status = MagicMock()
-    with patch.object(session._http, "post", return_value=mock_resp) as mock_post:
-        result = session.init_report({"reportId": 1})
-    assert result == "CACHE-001"
-    assert session._cache_id == "CACHE-001"
-    mock_post.assert_called_once()
-
-
-def test_init_report_raises_when_no_cache_id():
-    session = CommvaultSession("http://host", "tok")
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {"someOtherKey": "value"}
-    mock_resp.raise_for_status = MagicMock()
-    with patch.object(session._http, "post", return_value=mock_resp):
-        with pytest.raises(CommvaultSessionError, match="no cache_id key"):
-            session.init_report({"reportId": 1})
-
 
 def test_fetch_dataset_direct_get_when_no_cache_id():
     """Without a cache_id, fetch_dataset does a direct GET — the lab CommCell
@@ -250,15 +227,10 @@ def test_extract_no_instructions_returns_error(db):
     assert result.errors
     assert "No REST extraction instructions" in result.errors[0]
     session.get_report.assert_not_called()
-    session.init_report.assert_not_called()
 
 
 def test_extract_calls_get_report_then_fetch(db):
-    """GET-only protocol: one get_report + one fetch_dataset per section.
-
-    init_report is never called from the new extractor (the cacheId
-    acquisition step is a browser/UI concern under the amended ADR 0003).
-    """
+    """GET-only protocol: one get_report + one fetch_dataset per section."""
     _seed_subject(db, "alpha")
     session = _mock_session(fetch_rows=[{"col1": "val1"}, {"col1": "val2"}])
     extractor = RESTExtractor(db, session, customer_id="c1", project_id="p1")
@@ -268,7 +240,6 @@ def test_extract_calls_get_report_then_fetch(db):
     assert len(result.sections["alpha.section1"]) == 2
 
     session.get_report.assert_called_once_with("318")
-    session.init_report.assert_not_called()
     session.fetch_dataset.assert_called_once_with(
         "guid-1",
         fields=["col1"],
@@ -361,7 +332,6 @@ def test_extract_same_report_id_check_fails_on_mismatch(db):
     assert "must share the same report_id" in result.errors[0]
     assert "318" in result.errors[0] and "999" in result.errors[0]
     session.get_report.assert_not_called()
-    session.init_report.assert_not_called()
 
 
 def test_extract_missing_report_id_returns_error(db):
@@ -389,7 +359,6 @@ def test_extract_get_report_failure_returns_error(db):
     result = extractor.extract("theta", version=1)
     assert result.errors
     assert "get_report(318) failed" in result.errors[0]
-    session.init_report.assert_not_called()
 
 
 def test_extract_fail_whole_on_fetch_error(db):
@@ -457,11 +426,7 @@ def test_extract_timestamp_conversion(db):
 
 
 def test_extract_multi_section_reuses_name_to_guid_map(db):
-    """One get_report per subject; the name→guid map is reused across sections.
-
-    init_report is not called (GET-only protocol). Both sections fetch via
-    fetch_dataset against the GUIDs resolved from the single get_report call.
-    """
+    """One get_report per subject; the name→guid map is reused across sections."""
     _seed_subject(
         db,
         "mu",
@@ -475,7 +440,6 @@ def test_extract_multi_section_reuses_name_to_guid_map(db):
     result = extractor.extract("mu", version=1)
     assert not result.errors
     assert session.get_report.call_count == 1
-    assert session.init_report.call_count == 0
     assert session.fetch_dataset.call_count == 2
     guids = [call.args[0] for call in session.fetch_dataset.call_args_list]
     assert guids == ["guid-1", "guid-2"]

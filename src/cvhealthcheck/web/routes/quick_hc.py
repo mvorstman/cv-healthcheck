@@ -79,18 +79,6 @@ def _workspace_redirect(subject_id: str | None = None):
     return redirect(url)
 
 
-def _read_commcell_provenance() -> tuple[str | None, str | None]:
-    """Read CommCell identity from commserv.json for artifact provenance."""
-    try:
-        payload = read_json("commserv.json", catalog_dir=Path("data/catalog/rest"))
-        identity = payload.get("identity") if isinstance(payload, dict) else {}
-        if not isinstance(identity, dict):
-            identity = {}
-        return identity.get("csGUID") or None, identity.get("hostName") or None
-    except Exception:
-        return None, None
-
-
 def _quick_hc_asset_version() -> str:
     base = Path(__file__).resolve().parents[1] / "static"
     parts = []

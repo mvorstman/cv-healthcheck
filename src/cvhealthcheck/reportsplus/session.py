@@ -3,21 +3,11 @@ cvhealthcheck.reportsplus.session
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 HTTP session for Reports Plus dataset access.
 
-AUDIT FINDINGS (2026-05-25):
-  CASE 2 — Existing code handles auth and direct dataset GET via
-  CommvaultApiClient / ReportsPlusClient (reportsplus/client.py), but
-  no reportBuilder.do / init_report / cache_id pattern exists anywhere.
-
-  CommvaultApiClient wraps requests.Session and requires Settings objects
-  loaded from env vars; it is not suitable as a base class here because
-  the collect route provides base_url and token directly (from Flask session).
-
-  ReportsPlusClient.get_dataset_data() performs a direct GET to
-  /datasets/{guid}/data — the same endpoint used here.
-
-  This module adds init_report() (POST to reportBuilder.do) and a typed
-  fetch_dataset() with pagination on top of the existing pattern.
-  No Flask imports anywhere in this file.
+Per ADR 0003, programmatic collection uses the GET-only protocol:
+GET /reports/<id> for the live report definition, GET /datasets/<guid>/data
+for each section's rows. No cacheId acquisition POST — the dataset GET
+endpoint accepts requests without one and the CommCell auto-generates a
+cacheId in the response body that we ignore.
 """
 from __future__ import annotations
 
@@ -30,35 +20,26 @@ from requests import Session
 logger = logging.getLogger(__name__)
 
 _BASE = "/commandcenter/api/cr/reportsplusengine"
-_REPORTBUILDER_PATH = f"{_BASE}/reportBuilder.do"
 _DATASETS_BASE = f"{_BASE}/datasets"
 _REPORTS_BASE = f"{_BASE}/reports"
 
-# Keys that the Commvault API may use for the cache/session identifier.
-_CACHE_ID_KEYS = ("cacheId", "sessionId", "id", "cache_id")
-
 
 class CommvaultSessionError(RuntimeError):
-    """Raised for session-level failures (missing cache_id, bad response)."""
+    """Raised for session-level failures (bad response shape)."""
 
 
 class CommvaultSession:
     """
     Thin stateful HTTP session for Reports Plus.
 
-    Direct dataset access (the default; no acquisition step needed):
+    Direct dataset access (GET-only protocol per ADR 0003):
         rows = session.fetch_dataset(guid, ...)
         # → GET /datasets/<guid>/data — CommCell auto-generates a cacheId
         #   in the response body, which is ignored here.
 
-    Browser-style reportBuilder pattern (UI-session use, not the catalog-
-    driven extractor's path):
-        session.init_report(report_definition)  # POST → cache_id stored
-        rows = session.fetch_dataset(guid, ...) # GET pages with cacheId
-
-    fetch_dataset() works in both modes: with no cache_id set or passed it
-    performs a direct GET (the ADR 0003 GET-only protocol); with a cache_id
-    it includes it in the request params for UI-correlated rendering.
+    Caller can pass an explicit cache_id to fetch_dataset (e.g. from a
+    prior request's response body) to keep multiple GETs correlated under
+    one CommCell-side session, but the catalog-driven extractor does not.
     """
 
     def __init__(
@@ -124,36 +105,6 @@ class CommvaultSession:
             )
         return data
 
-    def init_report(self, report_definition: dict) -> str:
-        """
-        POST report_definition to reportBuilder.do, store and return cache_id.
-
-        Raises:
-            requests.HTTPError: on a non-2xx response.
-            CommvaultSessionError: if the response contains no recognised
-                cache_id key (cacheId, sessionId, id, cache_id).
-        """
-        url = self._url(_REPORTBUILDER_PATH)
-        response = self._http.post(
-            url,
-            headers={**self._headers(), "Content-Type": "application/json"},
-            json=report_definition,
-            verify=self._verify_ssl,
-            timeout=self._timeout,
-        )
-        response.raise_for_status()
-        data: Any = response.json()
-        if isinstance(data, dict):
-            for key in _CACHE_ID_KEYS:
-                value = data.get(key)
-                if isinstance(value, str) and value.strip():
-                    self._cache_id = value.strip()
-                    return self._cache_id
-        raise CommvaultSessionError(
-            "init_report: no cache_id key found in response; "
-            f"got keys={list(data.keys()) if isinstance(data, dict) else type(data).__name__}"
-        )
-
     def fetch_dataset(
         self,
         dataset_guid: str,
@@ -166,11 +117,12 @@ class CommvaultSession:
         """
         GET rows from a dataset endpoint with automatic pagination.
 
-        With no cache_id set on the session and none passed, performs a
-        direct GET — the lab CommCell auto-generates a cacheId in the
-        response body, which we ignore. With a cache_id (passed explicitly
-        or stored by a prior init_report() call), the cacheId is included
-        in the request params for UI-correlated rendering.
+        With no cache_id set or passed, performs a direct GET — the
+        CommCell auto-generates a cacheId in the response body which we
+        ignore. With an explicit cache_id (passed by the caller or set on
+        ``self._cache_id`` externally — e.g. from a prior response's
+        ``cacheId`` field), the cacheId is included in the request params
+        for UI-correlated multi-call sessions.
 
         Returns a flat list of row dicts. Handles both the list-of-lists
         (columns + records) and list-of-dicts (format=object) response shapes.
