@@ -450,6 +450,9 @@ route -> server-side chart payload -> metric_detail.html -> Chart.js render
 - [DATA_SOURCE_MAPPING.md](DATA_SOURCE_MAPPING.md) is the operating-mode source strategy. It documents which datasource should be used per healthcheck subject across Quick HC, Daily Reporting, and Full Healthcheck, including REST, Reports Plus / Metrics, and import/manual fallbacks.
 - [API_MAPPING.md](API_MAPPING.md) is the technical collection and source catalog. It tracks what data can be collected, where it comes from, required authentication and parameters, and whether the source is proven.
 - [HEALTHCHECK_MATRIX.md](HEALTHCHECK_MATRIX.md) is the health evaluation and rule catalog. It tracks the health questions, required collected data, evaluation rules, severities, and reporting categories.
+- [docs/PATTERNS.md](docs/PATTERNS.md) — two project-wide patterns to know before adding new code: writes converge to canonical / reads stay diverse, and verify before write.
+- [docs/data_flow_audit.md](docs/data_flow_audit.md) — read-only audit of where data lives on disk and which code paths read/write each location.
+- [docs/adr/](docs/adr/) — Architecture Decision Records (ADR 0001 source-building fork, ADR 0002 customer and project entities). Required reading before touching the areas they govern.
 
 The API mapping feeds the collector capability layer. The health matrix consumes collected data and feeds the health rule engine, reports, and UI.
 
