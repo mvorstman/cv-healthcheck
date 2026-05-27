@@ -180,6 +180,32 @@ The user is the bridge between the two tools:
 4. User pastes the report into the next Claude.ai conversation if
    the work continues strategically
 
+### ADR design sessions: the survey-then-steer pattern
+
+ADR drafting looks like prose work, but the prose's value depends
+on accurate reading of the codebase. So ADR design sessions follow
+this four-step pattern:
+
+1. **Claude Code produces a survey report.** Reads the relevant
+   files (existing services, schemas, related ADRs), summarizes
+   findings, surfaces the design forks. No design work, no
+   drafting — just grounding.
+2. **User pastes the survey report into a fresh Claude.ai chat.**
+3. **Claude.ai does the design conversation.** Surfaces forks
+   from the survey, takes steers from the user, drafts the ADR.
+4. **If the draft needs verification against code**, another
+   Claude Code session handles that. Often this is the start of
+   the implementation phases rather than a separate verification
+   pass.
+
+The survey is filesystem work even though it produces prose,
+because guessing at file contents from a chat without filesystem
+access produces unreliable design conversations. The pattern was
+adopted after a Claude.ai chat drafted a Claude Code brief that
+asserted "the diagrams are SVG embedded in the markdown" — the
+file had no diagrams, and the wasted round trip motivated this
+discipline.
+
 ### Signal that a session needs Claude Code
 
 Any of these in the brief means filesystem access is required:
