@@ -4,9 +4,11 @@ cvhealthcheck.extractors.rest
 Generic REST extractor driven by extraction instructions stored in the
 subject_section_sources table (source_type = 'rest').
 
-Implements the ADR 0003 cacheId protocol: per collection run we GET the live
-report definition once, POST reportBuilder.do once to acquire a cacheId, then
-reuse that cacheId across one fetch_dataset call per section.
+Implements the ADR 0003 GET-only protocol: per collection run we GET the
+live report definition once, walk it for a name→guid map, and GET each
+section's dataset directly. The cacheId acquisition step (POST
+reportBuilder.do) is a browser/UI concern and is not used here — the
+dataset GET endpoint accepts requests without one.
 
 Instruction keys (canonical form after migration 0006):
   report_id         : str   Commvault report id (e.g. "318") — required
@@ -77,12 +79,6 @@ class RESTExtractor:
 
         definition = parse_content_field(report_payload)
         name_to_guid = _build_name_to_guid_map(definition)
-
-        try:
-            self._session.init_report({"reportId": int(report_id)})
-        except Exception as exc:
-            result.errors.append(f"init_report({report_id}) failed: {exc}")
-            return result
 
         for instr in instructions:
             section_id = instr["section_id"]
@@ -159,9 +155,10 @@ class RESTExtractor:
         """Return the report_id shared by all REST sections, or None on error.
 
         All sections of a single subject must reference the same report_id
-        because the cacheId is bound to one reportBuilder.do POST per
-        collection. Mismatches indicate catalog seeding bugs and are
-        surfaced with the offending section_ids.
+        because the report definition GET happens once per collection and
+        its dataset name→guid map is reused across section fetches.
+        Mismatches indicate catalog seeding bugs and are surfaced with the
+        offending section_ids.
         """
         by_report: dict[str, list[str]] = {}
         missing: list[str] = []

@@ -46,15 +46,19 @@ class CommvaultSession:
     """
     Thin stateful HTTP session for Reports Plus.
 
-    Two-step reportBuilder pattern:
+    Direct dataset access (the default; no acquisition step needed):
+        rows = session.fetch_dataset(guid, ...)
+        # → GET /datasets/<guid>/data — CommCell auto-generates a cacheId
+        #   in the response body, which is ignored here.
+
+    Browser-style reportBuilder pattern (UI-session use, not the catalog-
+    driven extractor's path):
         session.init_report(report_definition)  # POST → cache_id stored
         rows = session.fetch_dataset(guid, ...) # GET pages with cacheId
 
-    Direct dataset access (explicit cache_id):
-        rows = session.fetch_dataset(guid, ..., cache_id="<known>")
-
-    fetch_dataset() raises CommvaultSessionError if no cache_id is available
-    (neither stored from init_report() nor passed explicitly).
+    fetch_dataset() works in both modes: with no cache_id set or passed it
+    performs a direct GET (the ADR 0003 GET-only protocol); with a cache_id
+    it includes it in the request params for UI-correlated rendering.
     """
 
     def __init__(
@@ -162,19 +166,16 @@ class CommvaultSession:
         """
         GET rows from a dataset endpoint with automatic pagination.
 
-        A cache_id is required — either passed explicitly or set by a prior
-        call to init_report().  Raises CommvaultSessionError if neither is
-        available.
+        With no cache_id set on the session and none passed, performs a
+        direct GET — the lab CommCell auto-generates a cacheId in the
+        response body, which we ignore. With a cache_id (passed explicitly
+        or stored by a prior init_report() call), the cacheId is included
+        in the request params for UI-correlated rendering.
 
-        Returns a flat list of row dicts.  Handles both the list-of-lists
+        Returns a flat list of row dicts. Handles both the list-of-lists
         (columns + records) and list-of-dicts (format=object) response shapes.
         """
         effective_cache_id = cache_id or self._cache_id
-        if effective_cache_id is None:
-            raise CommvaultSessionError(
-                "fetch_dataset: cache_id required — call init_report() first "
-                "or pass cache_id explicitly"
-            )
 
         page_size = limit if limit is not None else 1000
         all_records: list[dict] = []
@@ -183,14 +184,21 @@ class CommvaultSession:
         while True:
             params: dict[str, Any] = {
                 "format": "object",
-                "cacheId": effective_cache_id,
                 "limit": page_size,
                 "offset": offset,
             }
-            if fields:
-                params["fields"] = ",".join(fields)
-            if orderby:
-                params["orderby"] = orderby
+            if effective_cache_id is not None:
+                params["cacheId"] = effective_cache_id
+                # `fields` and `orderby` only work with a cacheId — the lab's
+                # CacheDB rejects field-filtered or sorted requests in the
+                # no-cacheId GET-only path with "Bad Request. Please check
+                # the parameters." The catalog can declare both for
+                # self-documentation; they just aren't sent to the server
+                # when we don't have a cacheId.
+                if fields:
+                    params["fields"] = ",".join(fields)
+                if orderby:
+                    params["orderby"] = orderby
             if parameters:
                 params.update(parameters)
 
@@ -214,7 +222,10 @@ class CommvaultSession:
             if limit is not None and len(all_records) >= limit:
                 return all_records[:limit]
 
-            total = data.get("total") if isinstance(data, dict) else None
+            # The lab returns totalRecordCount; some deployments return total.
+            total = None
+            if isinstance(data, dict):
+                total = data.get("totalRecordCount", data.get("total"))
             offset += len(records)
             if total is not None and offset >= total:
                 break

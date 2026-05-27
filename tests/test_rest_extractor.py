@@ -106,8 +106,11 @@ def _seed_subject(db, subject_id="test_subject", sections=None, source_type="res
 
 
 def _mock_session(report_payload=None, fetch_rows=None):
-    """Return a MagicMock CommvaultSession with get_report/init_report/fetch_dataset
-    wired up. Default report_payload exposes datasets DS1 (guid-1) and DS2 (guid-2).
+    """Return a MagicMock CommvaultSession with get_report/fetch_dataset wired up.
+
+    The new extractor uses only get_report + fetch_dataset (GET-only protocol
+    per ADR 0003 amendment). init_report stays on the MagicMock implicitly so
+    tests can still call assert_not_called() on it.
     """
     if report_payload is None:
         report_payload = {
@@ -126,7 +129,6 @@ def _mock_session(report_payload=None, fetch_rows=None):
         }
     session = MagicMock()
     session.get_report.return_value = report_payload
-    session.init_report.return_value = "CACHE-X"
     session.fetch_dataset.return_value = fetch_rows if fetch_rows is not None else []
     return session
 
@@ -155,10 +157,37 @@ def test_init_report_raises_when_no_cache_id():
             session.init_report({"reportId": 1})
 
 
-def test_fetch_dataset_requires_cache_id():
+def test_fetch_dataset_direct_get_when_no_cache_id():
+    """Without a cache_id, fetch_dataset does a direct GET — the lab CommCell
+    auto-generates a cacheId in the response body and we don't need it.
+    """
     session = CommvaultSession("http://host", "tok")
-    with pytest.raises(CommvaultSessionError, match="cache_id required"):
-        session.fetch_dataset("guid-123")
+    assert session._cache_id is None
+
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = [{"col1": "a"}]
+    mock_resp.raise_for_status = MagicMock()
+    with patch.object(session._http, "get", return_value=mock_resp) as mock_get:
+        rows = session.fetch_dataset("guid-xyz", limit=100)
+    assert rows == [{"col1": "a"}]
+    # The cacheId param must NOT be in the request when no cache_id is set.
+    _, kwargs = mock_get.call_args
+    params = kwargs.get("params") or {}
+    assert "cacheId" not in params
+
+
+def test_fetch_dataset_includes_cache_id_when_set():
+    """When a cache_id is stored or passed, fetch_dataset includes it as a param."""
+    session = CommvaultSession("http://host", "tok")
+    session._cache_id = "C1"
+
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = [{"col1": "a"}]
+    mock_resp.raise_for_status = MagicMock()
+    with patch.object(session._http, "get", return_value=mock_resp) as mock_get:
+        session.fetch_dataset("guid-xyz", limit=100)
+    _, kwargs = mock_get.call_args
+    assert kwargs["params"]["cacheId"] == "C1"
 
 
 def test_fetch_dataset_paginates():
@@ -174,6 +203,21 @@ def test_fetch_dataset_paginates():
     with patch.object(session._http, "get", side_effect=responses):
         rows = session.fetch_dataset("guid-xyz", limit=100)
     assert rows == page1
+
+
+def test_fetch_dataset_terminates_on_totalRecordCount():
+    """Pagination terminates when offset >= totalRecordCount (lab response key)."""
+    session = CommvaultSession("http://host", "tok")
+    # First page: 2 rows, totalRecordCount = 2 — should stop after first page.
+    page = {"records": [{"col1": "a"}, {"col1": "b"}], "totalRecordCount": 2}
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = page
+    mock_resp.raise_for_status = MagicMock()
+    with patch.object(session._http, "get", return_value=mock_resp) as mock_get:
+        rows = session.fetch_dataset("guid-xyz")
+    assert rows == [{"col1": "a"}, {"col1": "b"}]
+    # Only one HTTP call — pagination terminated on totalRecordCount.
+    assert mock_get.call_count == 1
 
 
 def test_get_report_returns_parsed_json():
@@ -209,7 +253,12 @@ def test_extract_no_instructions_returns_error(db):
     session.init_report.assert_not_called()
 
 
-def test_extract_calls_get_report_init_report_and_fetch(db):
+def test_extract_calls_get_report_then_fetch(db):
+    """GET-only protocol: one get_report + one fetch_dataset per section.
+
+    init_report is never called from the new extractor (the cacheId
+    acquisition step is a browser/UI concern under the amended ADR 0003).
+    """
     _seed_subject(db, "alpha")
     session = _mock_session(fetch_rows=[{"col1": "val1"}, {"col1": "val2"}])
     extractor = RESTExtractor(db, session, customer_id="c1", project_id="p1")
@@ -219,7 +268,7 @@ def test_extract_calls_get_report_init_report_and_fetch(db):
     assert len(result.sections["alpha.section1"]) == 2
 
     session.get_report.assert_called_once_with("318")
-    session.init_report.assert_called_once_with({"reportId": 318})
+    session.init_report.assert_not_called()
     session.fetch_dataset.assert_called_once_with(
         "guid-1",
         fields=["col1"],
@@ -332,16 +381,6 @@ def test_extract_missing_report_id_returns_error(db):
     assert "missing report_id" in result.errors[0]
 
 
-def test_extract_init_report_failure_returns_error(db):
-    _seed_subject(db, "eta")
-    session = _mock_session()
-    session.init_report.side_effect = RuntimeError("init failed")
-    extractor = RESTExtractor(db, session, "c1", "p1")
-    result = extractor.extract("eta", version=1)
-    assert result.errors
-    assert "init_report(318) failed" in result.errors[0]
-
-
 def test_extract_get_report_failure_returns_error(db):
     _seed_subject(db, "theta")
     session = _mock_session()
@@ -417,8 +456,12 @@ def test_extract_timestamp_conversion(db):
     assert "2001-09-09" in rows[0]["ts"]
 
 
-def test_extract_multi_section_shares_cache_id(db):
-    """One init_report POST per subject; both sections fetched against same cacheId."""
+def test_extract_multi_section_reuses_name_to_guid_map(db):
+    """One get_report per subject; the name→guid map is reused across sections.
+
+    init_report is not called (GET-only protocol). Both sections fetch via
+    fetch_dataset against the GUIDs resolved from the single get_report call.
+    """
     _seed_subject(
         db,
         "mu",
@@ -431,7 +474,8 @@ def test_extract_multi_section_shares_cache_id(db):
     extractor = RESTExtractor(db, session, "c1", "p1")
     result = extractor.extract("mu", version=1)
     assert not result.errors
-    assert session.init_report.call_count == 1
+    assert session.get_report.call_count == 1
+    assert session.init_report.call_count == 0
     assert session.fetch_dataset.call_count == 2
     guids = [call.args[0] for call in session.fetch_dataset.call_args_list]
     assert guids == ["guid-1", "guid-2"]
