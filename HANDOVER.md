@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-28 (pre-ADR-0004 cleanup: vendor-stable keys, loud failure for unsupported section types, report-ID backlog)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `0f939ae` — CHANGELOG + HANDOVER: pre-ADR-0004 cleanup landed; backlog #23 added
+**Last commit:** `d7ff271` — Add ADR 0004 survey document: three-face metadata vocabulary stress-test
 **Test status:** **575 passing** under both `pytest` and `python -m pytest` (was 566; +9 across two pre-ADR-0004 cleanup commits).
 
 ---
@@ -60,14 +60,16 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## Single recommended next action
 
-**ADR 0004 steering conversation — three-face metadata vocabulary design, with survey corpus + supplementary captures as evidence base.**
+**Draft ADR 0004 — three-face metadata vocabulary, grounded in the in-repo survey.**
 
-The ADR 0004 survey is delivered (see chat transcript). Its consolidated gaps section lists every place the proposed three-face vocabulary (semantic / presentational / evaluative) strained against real data — these are the inputs the steering conversation needs. The three pre-ADR-0004 cleanup items the survey surfaced as load-bearing-and-not-design-dependent have just landed (vendor-stable keys, loud failure for unsupported section types, HANDOVER backlog #23 for report-ID cross-CommCell instability). With those out of the way, the steering conversation can focus on the actual design forks without being entangled with cleanup.
+The ADR 0004 survey landed in the repo at `docs/adr/0004-survey.md`. It stress-tests the proposed three-face vocabulary (semantic / presentational / evaluative) against real Commvault data — Phase 1 (six in-corpus subjects), Phase 2 (LS report 206 in full + vendor severity + blind-spot novel reports), Phase 3 (adversarial probes A–E), Consolidated gaps, Surprises S1–S10. Its consolidated-gaps section is the input the design conversation needs.
+
+The three pre-ADR-0004 cleanup items the survey surfaced as load-bearing-and-not-design-dependent have landed (vendor-stable keys, loud failure for unsupported section types, HANDOVER backlog #23 for report-ID cross-CommCell instability). The design conversation can focus on the actual forks.
 
 Claude.ai is the right venue (prose work, no filesystem). The flow:
-1. Paste the survey report (delivered in this session's chat) plus the cross-CommCell evidence into a fresh Claude.ai conversation.
-2. Walk the consolidated-gaps and surprises sections. Decide scope (in/out of ADR 0004), pick a formula language (the D1 gap — JSONPath / CEL / jq / Python expr), reconcile S3 (the dropped-`attrName` problem now fixed in code — the ADR should reflect the model), choose the vendor → template → override precedence shape (E2/E6/E7), decide whether to address LS-specific gaps (LS1-5) in this ADR or leave LS bespoke as ADR 0003 phase 5 did.
-3. Draft ADR 0004 with the steering decisions encoded.
+1. Open a fresh Claude.ai conversation with `docs/adr/0004-survey.md` plus the cross-CommCell evidence (backlog #23) as context.
+2. Walk the consolidated-gaps and surprises sections. Decide scope (in/out of ADR 0004), pick a formula language (the D1 gap — JSONPath / CEL / jq / Python expr), reconcile S3 (the dropped-`attrName` problem now fixed in code — the ADR should reflect the model), choose the vendor → template → override precedence shape (E2/E6/E7), decide whether to address LS-specific gaps (LS1–5) in this ADR or leave LS bespoke as ADR 0003 phase 5 did.
+3. Draft `docs/adr/0004-three-face-metadata-vocabulary.md` (or similar) with the steering decisions encoded. Commit the ADR doc alongside the first phase per the methodology marker (#19) precedent set by ADR 0002 and ADR 0003.
 4. Implementation comes back to Claude Code in phases.
 
 ### Methodology retrospective for ADR 0003 — deferred
