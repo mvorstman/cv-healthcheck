@@ -10,6 +10,41 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-28 (bugfix: upload field-name mismatch for already-collected system subjects)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `cf14c15` (fix + contract test), plus the wrap-up commit publishing this entry.
+**Test status:** 563 passing (+1 from the new contract test).
+
+Yesterday's inline-JSON fix (`130e28b`) unmasked a second latent bug. With the JSON-response path wired correctly, the JS now received a server-side error JSON it could display — and that error read "No file selected." even though the user clearly had a file selected. Root cause: the server-side path that builds the action dict shipped to the JS declared the wrong field name once a canonical artifact existed for the subject.
+
+### Root cause
+
+`build_subject_initial_data` takes two paths depending on whether the subject has a canonical artifact:
+
+- **No-canonical path** (`_build_license_summary_subject` / `_build_security_assessment_subject` nodata branches) declared the correct subject-specific field names (`"license_summary_file"` / `"assessment_file"`) via `_upload_action(...)`. Correct.
+- **Canonical-present path** (`_build_generic_subject` → `_build_generic_sources` → `_provenance_to_tile_sources` for subjects with a registered provenance builder — SA + LS) hardcoded `import_field="file"` at `subject_data_service.py:226`. **Wrong** — the handler reads `request.files[handler.form_field]` where `form_field` is the subject-prefixed name from `UPLOAD_HANDLERS`.
+
+The JS correctly forwarded whatever `uploadAction.importField` the server told it. So the first successful collect of SA or LS produced a canonical artifact; every subsequent inline import POSTed under `"file"` while the handler looked for the subject-prefixed name; the handler returned `{"success": false, "error": "No file selected."}` — even though the file was clearly attached. This is also what produced the 41-of-42 LS duplicate artifacts: each failed UI attempt actually succeeded server-side and persisted a new artifact, but the JS reported the JSON-parse error (yesterday's bug) and the user retried.
+
+### Fixed
+
+- **`_provenance_to_tile_sources`** at `src/cvhealthcheck/quickhc/subject_data_service.py:226` now imports `get_handler` from `upload_dispatch` and uses `handler.form_field` as `import_field` for the action dict. Falls back to `"file"` when no handler is registered (the AI-subject case — the generic dispatcher reads `request.files["file"]`, which is correct).
+
+### Added
+
+- **`test_upload_action_field_matches_handler_form_field`** at `tests/test_unified_upload_route.py` — pins the invariant that for every subject in `UPLOAD_HANDLERS`, every upload action produced by `_provenance_to_tile_sources` declares `importField` equal to `handler.form_field`. Verified the test FAILS against the pre-fix code (`importField='file'` vs `form_field='assessment_file'` for SA) and PASSES against the fix.
+
+### Notes
+
+- **Source-of-truth principle.** The fix makes the action dict declare what the handler expects, rather than adding a multi-name fallback to `_handle_system_upload` that would accept "file" or the subject-prefixed name. The handler is the source of truth for what the file field is called; the action dict's job is to mirror that.
+- **No JS change.** `submitImport` was already correct — it forwards `uploadAction.importField` verbatim. The server side was internally inconsistent (action dict said one thing, handler expected another).
+- **The other side of `_upload_action(..., import_field="file", ...)` at line 269 (in `_build_generic_sources`) is correct as-is.** That path is for AI subjects, whose handler is `_unified_dispatcher_upload`, which reads `request.files.get("file")`. The fix correctly leaves the AI path alone.
+- **Why the existing tests missed it.** All four tests added in yesterday's fix hardcoded the field name on both sides of the request (passed `"license_summary_file"` directly in the multipart data and confirmed the server accepted it). Both sides could agree on a wrong name and the tests would still pass. The new contract test reads the action dict the JS would actually receive, so it pins the cross-boundary invariant directly.
+- **Verification was done against the provenance path** (canonical artifacts present at `data/catalog/artifacts/default/default/working/{license_summary,security_assessment}/latest.json`) — not against a fresh tile where the nodata builder would have masked the bug. Both subjects upload cleanly under the JS-derived field names; the user's exact failing filename `License%20summary_2026-05-27-20-16-24.html` also succeeds.
+
+---
+
 ## 2026-05-27 (bugfix: inline JSON response for system-subject uploads)
 
 **Branch:** `feature/basic-healthcheck-report-output`

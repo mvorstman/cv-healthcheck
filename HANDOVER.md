@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-27 (bugfix: inline JSON response for system-subject uploads)
+**Last updated:** 2026-05-28 (bugfix: upload field-name mismatch for already-collected system subjects)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `280acf3` — CHANGELOG + HANDOVER: inline-upload bugfix
-**Test status:** 562 passing
+**Last commit:** *the field-name fix CHANGELOG+HANDOVER commit; pointer-update commit follows.*
+**Test status:** 563 passing
 
 ---
 
@@ -24,7 +24,11 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## What was just completed
 
-**Bugfix: inline JSON response for system-subject uploads.** Image evidence showed CSV and HTML offline imports for `license_summary` failing in the UI with "Import failed: The string did not match the expected pattern." Investigation surfaced a latent server-side bug since 2026-05-25: `_handle_system_upload` ignored the JS's `X-Inline: 1` header and always replied with flash+redirect (302 → HTML body); the JS then failed `resp.json()` parsing and surfaced WebKit's SyntaxError. The underlying import was actually succeeding — the LS legacy store has 7 content-duplicate groups (2-10 artifacts each, tight time windows) from user retries. SA's legacy store has 29 unique artifacts (no retry pattern). The fix is a 12-line addition to `_handle_system_upload` mirroring the inline branch from `_unified_dispatcher_upload`. 4 new tests, 562 total passing. ADR 0003 is unaffected by this bug — it predates the ADR and the upload path is unrelated. The duplicate artifacts in the LS legacy store were not cleaned up — backlog #14 (legacy SA/LS store retirement) is the right place for that.
+**Bugfix: upload field-name mismatch for already-collected system subjects.** Yesterday's inline-JSON fix (`130e28b`) unmasked a second latent bug. With the JSON-response path wired correctly, the JS now received an error JSON it could display — and that error read "No file selected." even though a file was clearly selected. Root cause: `_provenance_to_tile_sources` at `subject_data_service.py:226` hardcoded `import_field="file"`, but the SA/LS handlers read `request.files[handler.form_field]` where `form_field` is `"assessment_file"` / `"license_summary_file"`. The bug fires when a canonical artifact exists for the subject (the orchestration takes the provenance path instead of the nodata path, where the right field names ARE declared). Fix uses `get_handler(subject_id).form_field` as the source of truth. Contract test added that pins the action-dict-importField ↔ handler.form_field invariant — it fails against the pre-fix code, passes against the fix. End-to-end verification with canonical artifacts present: LS HTML / LS CSV / SA HTML all upload cleanly through the JS-derived field names; the user's exact failing filename `License%20summary_2026-05-27-20-16-24.html` also succeeds. 563 tests pass (was 562).
+
+### Prior session: inline JSON response fix
+
+**Bugfix: inline JSON response for system-subject uploads.** Image evidence showed CSV and HTML offline imports for `license_summary` failing in the UI with "Import failed: The string did not match the expected pattern." Investigation surfaced a latent server-side bug since 2026-05-25: `_handle_system_upload` ignored the JS's `X-Inline: 1` header and always replied with flash+redirect (302 → HTML body); the JS then failed `resp.json()` parsing and surfaced WebKit's SyntaxError. The underlying import was actually succeeding — the LS legacy store has 7 content-duplicate groups (2-10 artifacts each, tight time windows) from user retries. SA's legacy store has 29 unique artifacts (no retry pattern). The fix added X-Inline handling to `_handle_system_upload` and 4 inline-mode tests. ADR 0003 was unaffected by this bug — it predates the ADR and the upload path is unrelated. The duplicate artifacts in the LS legacy store were not cleaned up — backlog #14 (legacy SA/LS store retirement) is the right place for that.
 
 ### Prior session: ADR 0003 phase 5 cleanup
 
@@ -284,7 +288,7 @@ than attempting the work.
 cd /home/michiel/dev/cv-healthcheck
 source venv/bin/activate
 python -m compileall -q src
-python -m pytest -q                                # expect 562 passing
+python -m pytest -q                                # expect 563 passing
 git status --short                                 # expect clean
 sqlite3 data/app.db "SELECT customer_id,customer_name FROM customers;"
 sqlite3 data/app.db "SELECT project_id,customer_id,project_number FROM projects;"
