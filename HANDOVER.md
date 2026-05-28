@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-28 (bugfix: LS numeric value extraction for combined value+unit cells)
+**Last updated:** 2026-05-28 (bugfix: LS HTML workload-section detection for Commvault export markup)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `d715b0e` — CHANGELOG + HANDOVER: LS numeric value extraction fix
-**Test status:** 564 passing
+**Last commit:** `1abc097` — fix + tests; CHANGELOG + HANDOVER pointer commit follows
+**Test status:** 556 passing. `tests/test_unified_upload_route.py` has a pre-existing collection error (`from tests.test_security_assessment_import import HTML_SAMPLE` with no `tests/__init__.py`) — unrelated to this fix.
 
 ---
 
@@ -23,6 +23,10 @@ If you are a new chat / new session, read these files in order before doing anyt
 ---
 
 ## What was just completed
+
+**Bugfix: LS HTML workload-section detection for Commvault export markup.** The prior numeric-extraction fix made values render correctly, but the user pointed out that workload summary sections (Capacity / Operating Instances / Virtualization / User / Data Insights / Air Gap Protect / Other) are the CORE of a License Summary report — and the artifact was reporting **0 workload sections** for real exports. Investigation surfaced two stacked bugs. (1) `_table_section_name` at `license_summary/import_html.py:128-133` walked `find_previous(["h1",...,"div"])`, landed on the table's own wrapper `<div class="exportTable">`, then `.get_text()` dumped the table's full contents as the "section name" — never matched `SUMMARY_SECTION_NAMES`. Commvault exports wrap titles in `<span class="component-title-text">` inside nested divs, with zero `<h2>`-`<h6>` headings in the entire file. (2) Two workload tables (Virtualization Licenses, Data Insights Licenses) use bare `Available Total`/`Used` headers without unit qualifiers, so the header-only classifier returns `"other"` and the rows pile into `other_licenses`. The user's "9 Other Licenses rows" was actually 2+7 from mis-bucketed Virtualization and Data Insights sections. Fix: `_table_section_name` walks `find_all_previous()` matching against direct text only (string children, not recursive `get_text()`) against `_KNOWN_SECTION_TITLES`; a claimed-titles guard prevents cross-wiring; the parse loop routes section_name-in-SUMMARY_SECTION_NAMES tables to workload-summary regardless of classifier output. Real-file verification confirms 7 sections / 23 rows (4/2/2/5/7/1/2), 0 standalone other_licenses, 0 agent_feature, no cross-wiring. Two new tests use the real markup shape and would have caught both bugs.
+
+### Prior session: LS numeric value extraction
 
 **Bugfix: LS numeric value extraction for combined value+unit cells.** After the prior two fixes wired up the inline-import path correctly, the LS HTML import landed an artifact whose `Other Licenses` table rendered blank `Available Total` and `Used` columns in the workspace — only the unit survived. Root cause: `parse_number` at `license_summary/normalize.py:64-72` float-parsed the whole cell, so combined cells like `"500 VMs"` / `"25 TB"` raised `ValueError` and returned `None`. The unit extractor (a separate regex) worked fine, which is why the Unit column was the only one populated. Fix: regex-extract the leading numeric prefix; also strip `\x00` from `clean_text` as belt-and-braces (the real export has 84 NUL bytes scattered between tags, none inside cells, but the cost is negligible). One fix covers all three normalize callsites by construction (Other Licenses HTML+CSV; Agent/Feature uses the same `parse_number` call shape — unverified against real data because the user's export had 0 agent/feature rows). Real-file verification confirmed: 9 Other Licenses rows parse correctly; the user's `Auto Recovery` row now shows `available_total=500, used=0`. New + extended tests proven to fail-against-old / pass-against-fix. 564 tests pass (was 563).
 

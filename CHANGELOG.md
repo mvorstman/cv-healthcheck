@@ -10,6 +10,41 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-28 (bugfix: LS HTML workload-section detection for Commvault export markup)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `1abc097` (fix + tests), plus the wrap-up commit publishing this entry.
+**Test status:** 556 passing (+2 new tests). `tests/test_unified_upload_route.py` collection error is pre-existing and unrelated.
+
+After the prior LS numeric-extraction fix, the HTML import succeeded end-to-end but the artifact reported **0 workload-summary sections** despite the user pointing out that workload summary tables (Capacity / Operating Instances / Virtualization / User / Data Insights / Air Gap Protect / Other) are the CORE of a License Summary report. Investigation against the real Commvault export confirmed all seven section names ARE present in the file — they were being silently dropped (or mis-bucketed) by the parser.
+
+### Root cause — two stacked bugs
+
+**Bug 1 (primary): `_table_section_name` at `license_summary/import_html.py:128-133` resolved the wrong text.** The Commvault HTML export wraps section titles in `<span class="input-title tileHelpLabels component-title-text">Capacity Licenses</span>` inside several nested `<div>` wrappers — there are zero `<h2>`-`<h6>` headings in the entire 2 MB file. The old heuristic `table.find_previous(["h1", ..., "p", "div"])` walked DOM order backward looking for the first match in that tag list, found the `<div class="exportTable">` *immediately enclosing the table itself*, then called `.get_text(" ", strip=True)` on it — which dumped the entire table's text, producing strings like `'License Available Total (TB) Used (TB) Summary  Backup and Recovery 100 0%  Snapshot 500 0% ... 1 to 4 of 4 entries.'`. None of these match `SUMMARY_SECTION_NAMES`, so the parse loop's `elif section_name in SUMMARY_SECTION_NAMES:` branch never fired.
+
+**Bug 2 (secondary): the header classifier can't distinguish workload sections from Other Licenses when the table's headers omit unit qualifiers.** Real Commvault exports have two workload sections (Virtualization Licenses, Data Insights Licenses) whose headers are bare `('License', 'Available Total', 'Used', 'Summary')` — no `(TB)` / `(instances)` / `(users)` suffix. `classify_header` checks the strict `OTHER_LICENSE_HEADERS = ("license", "available total", "used")` pattern first and returns `"other"` for those tables, so the parse-loop's `if table_kind == "other":` branch lights up first and the rows pile into `other_licenses`. The user's "9 Other Licenses rows" was actually 2 (Virtualization VM Sockets + Auto Recovery) + 7 (Data Insights E-Discovery / Risk Analysis / Threat Scan) merged together.
+
+### Fixed
+
+- **`_table_section_name` now walks `find_all_previous()` and matches against direct text only** (string children of each element, not recursive `get_text()`). The candidate must equal exactly a known section title from `_KNOWN_SECTION_TITLES = SUMMARY_SECTION_NAMES ∪ {OTHER_LICENSE_SECTION, AGENT_FEATURE_SECTION}`. Wrapper divs that contain `<table>` children no longer match — only the `<span>`/`<div>`/`<h*>` whose immediate text reads exactly e.g. "Capacity Licenses" qualifies. Returns `None` (never garbage) when no match exists.
+- **Claimed-titles guard** prevents cross-wiring: once a title has been attributed to one table, later tables walking the DOM backward skip it rather than silently inheriting the prior table's section. The parse loop threads a `claimed_section_names: set[str]` through each `_table_section_name(table, claimed=...)` call.
+- **Parse loop restructured** so `section_name in SUMMARY_SECTION_NAMES` is the *primary* discriminator for workload-summary tables, with classifier-based routing (`"other"` / `"agent"`) as the fallback for the legacy detail tables. Tables with non-unit-qualified headers now route by their resolved title — Virtualization Licenses lands in workload-summary instead of other_licenses.
+
+### Added
+
+- **`test_parse_license_summary_html_handles_commvault_export_markup_shape`** — fixture mimics the real export shape: section titles in `<span class="input-title tileHelpLabels component-title-text">` inside two layers of `<div>` wrappers, ~4 DOM steps before the table. Three sections, one with non-unit-qualified headers ("Virtualization Licenses" with bare `Available Total`/`Used`). Asserts each table resolves to its correct title, the non-unit-qualified section is NOT mis-bucketed as other_licenses, and row values flow through correctly (`Auto Recovery` → entitlement_value=`"500 VMs"`, used=`"0 VMs"`, status=`"0%"`).
+- **`test_parse_license_summary_html_does_not_cross_wire_section_titles`** — fixture has two adjacent tables but only one preceding `<span>` title ("Capacity Licenses"). Asserts only the first table claims the title; the second table's `"Should Not Cross Wire"` row does NOT pile onto Capacity Licenses. Without the claimed-titles guard, the second table's `find_all_previous` walk would still match the first title.
+
+### Notes
+
+- **Real-file verification** against `data/imports/license_summary/License20summary_2026-05-27-20-16-24-20260528T113252Z-5eac3c37.html` (2 MB): 7 workload-summary sections (Capacity Licenses=4 rows, Operating Instance Licenses=2, Virtualization Licenses=2, User Licenses=5, Data Insights Licenses=7, Air Gap Protect Licenses=1, Other Licenses=2) totalling **23 workload rows** — exactly the brief's expected count. 0 standalone `other_licenses`, 0 `agent_feature_licenses` (the export genuinely contains no "Agent and Feature Licenses" section). No duplicate section names — the guard didn't fire because no cross-wiring needed correcting in this file, but it's there for future malformed exports.
+- **`used=None` for some Capacity Licenses rows is the source's own data, not a parser issue.** The HTML cells are literally `<td></td>` for the `Used (TB)` column on Backup and Recovery / Snapshot / Replication / Backup and Recovery for Unstructured Data — the Summary cell carries the percentage (`<div class="status-bar complete-bar">0%</div>`) instead. The parser correctly preserves None where the source has no value.
+- **Why existing tests missed the bug.** The HTML fixture at `tests/test_license_summary.py:51-102` uses `<h2>Capacity Licenses</h2>` followed by the table — the original heuristic's `find_previous(["h1","h2",...])` matches the `<h2>` first and correctly returns "Capacity Licenses". The real export has no headings; its titles live in nested `<span>`/`<div>` markup. Same pattern as the prior LS numeric-extraction bug: the test fixture is too clean to catch the real-world shape. The new fixture explicitly mimics the real markup so the test would have caught both bugs in advance.
+- **Legacy detail-table compatibility preserved.** The legacy `OTHER_LICENSE_SECTION = "Other Licenses - current usage details"` and `AGENT_FEATURE_SECTION = "Agent and Feature Licenses - current usage details"` are in `_KNOWN_SECTION_TITLES` (so `_table_section_name` resolves them) but NOT in `SUMMARY_SECTION_NAMES`, so they continue flowing through the existing `elif table_kind == "other":` / `elif table_kind == "agent":` paths. Both the new compact workload layout and the older detail-table layout work.
+- **CSV path is untouched** — it uses explicit section labels in the row stream, not adjacent markup, so the section-detection bug doesn't apply there. `normalize.py` classifier stays as a fallback for the legacy detail tables. The catalog-driven REST extractor is unaffected (REST has its own dataset routing).
+
+---
+
 ## 2026-05-28 (bugfix: LS numeric value extraction for combined value+unit cells)
 
 **Branch:** `feature/basic-healthcheck-report-output`
