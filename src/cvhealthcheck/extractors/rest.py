@@ -42,6 +42,10 @@ from datetime import UTC, datetime
 from html.parser import HTMLParser
 from typing import Any
 
+from cvhealthcheck.db.section_types import (
+    UnsupportedSectionTypeError,
+    validate_section_type,
+)
 from cvhealthcheck.extractors.html import ExtractionResult
 from cvhealthcheck.reportsplus.extract_report import (
     discover_dataset_references,
@@ -74,6 +78,21 @@ class RESTExtractor:
                 f"No REST extraction instructions found for {subject_id} v{version}"
             )
             return result
+
+        # Validate each wired section's declared type is runtime-supported.
+        # Loud failure for unsupported types (today: only 'chart') rather
+        # than silent render-nothing. See cvhealthcheck.db.section_types
+        # and ADR 0004.
+        for instr in instructions:
+            try:
+                validate_section_type(
+                    instr["section_type"],
+                    subject_id=subject_id,
+                    section_id=instr["section_id"],
+                )
+            except UnsupportedSectionTypeError as exc:
+                result.errors.append(str(exc))
+                return result
 
         report_id = self._resolve_single_report_id(instructions, result)
         if report_id is None:

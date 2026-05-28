@@ -4,6 +4,8 @@ import json
 import sqlite3
 from typing import Any
 
+from .section_types import validate_section_type
+
 
 def create_subject_from_proposal(db: sqlite3.Connection, proposal: dict) -> dict[str, Any]:
     """
@@ -52,6 +54,11 @@ def create_subject_from_proposal(db: sqlite3.Connection, proposal: dict) -> dict
         )
 
         for section in sections:
+            validate_section_type(
+                section["section_type"],
+                subject_id=subject_id,
+                section_id=section["section_id"],
+            )
             db.execute(
                 """
                 INSERT OR IGNORE INTO subject_sections
