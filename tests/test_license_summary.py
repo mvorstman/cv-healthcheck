@@ -187,6 +187,177 @@ def test_parse_license_summary_html_extracts_value_and_unit_combined_cell() -> N
     assert rows[1]["unit"] == "VMs"
 
 
+def test_parse_license_summary_html_handles_commvault_export_markup_shape() -> None:
+    """Real Commvault HTML exports wrap section titles in
+    <span class="component-title-text"> inside nested <div> wrappers,
+    not in <h2>/<h3> headings. The original find_previous heuristic
+    returned the table's own concatenated text as the section_name —
+    no match against SUMMARY_SECTION_NAMES — so every workload section
+    was silently dropped. In addition, when workload tables omit unit
+    qualifiers ("Available Total" / "Used" rather than "Available
+    Total (TB)" / "Used (TB)"), the header-only classifier returns
+    "other" and the rows get mis-bucketed into other_licenses. Both
+    must be fixed together: section_name resolution must walk past
+    nested divs to find the real title span, and the parse-loop must
+    route section_name-in-SUMMARY_SECTION_NAMES tables to the
+    workload bucket regardless of classifier output.
+    """
+    html = """
+    <html><body>
+      <h1>License summary</h1>
+      <div class="section">
+        <div class="component-title">
+          <span class="input-title tileHelpLabels component-title-text">Capacity Licenses</span>
+        </div>
+        <div class="component-body">
+          <div class="exportTable">
+            <table>
+              <thead><tr>
+                <th>License</th><th>Available Total (TB)</th><th>Used (TB)</th><th>Summary</th>
+              </tr></thead>
+              <tbody>
+                <tr><td>Backup and Recovery</td><td>100</td><td>0</td><td>0%</td></tr>
+                <tr><td>Snapshot</td><td>500</td><td>0</td><td>0%</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="component-title">
+          <span class="input-title tileHelpLabels component-title-text">Virtualization Licenses</span>
+        </div>
+        <div class="component-body">
+          <div class="exportTable">
+            <table>
+              <thead><tr>
+                <th>License</th><th>Available Total</th><th>Used</th><th>Summary</th>
+              </tr></thead>
+              <tbody>
+                <tr><td>VM Sockets</td><td>0 sockets</td><td>0 sockets</td><td>License not purchased</td></tr>
+                <tr><td>Auto Recovery</td><td>500 VMs</td><td>0 VMs</td><td>0%</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="component-title">
+          <span class="input-title tileHelpLabels component-title-text">Other Licenses</span>
+        </div>
+        <div class="component-body">
+          <div class="exportTable">
+            <table>
+              <thead><tr>
+                <th>License</th><th>Available Total</th><th>Used</th><th>Summary</th>
+              </tr></thead>
+              <tbody>
+                <tr><td>E-Discovery For Files</td><td>100 TB</td><td>0</td><td>0%</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </body></html>
+    """
+    artifact = parse_license_summary_html(html, source_file="/tmp/real-shape.html")
+
+    # All three workload tables resolve to their correct titles.
+    sections_by_name = {
+        section["section_name"]: section
+        for section in artifact["workload_summary_sections"]
+    }
+    assert set(sections_by_name) == {
+        "Capacity Licenses",
+        "Virtualization Licenses",
+        "Other Licenses",
+    }
+
+    # Row counts per section.
+    assert len(sections_by_name["Capacity Licenses"]["rows"]) == 2
+    assert len(sections_by_name["Virtualization Licenses"]["rows"]) == 2
+    assert len(sections_by_name["Other Licenses"]["rows"]) == 1
+
+    # Virtualization Licenses uses bare "Available Total" / "Used"
+    # headers — without the parse-loop fix, the classifier returns
+    # "other" and these rows would end up in other_licenses. Pin both
+    # invariants: rows land in the right section, and other_licenses
+    # is empty.
+    assert artifact["other_licenses"] == []
+    assert artifact["agent_feature_licenses"] == []
+
+    virt_rows = {
+        row["license"]: row
+        for row in sections_by_name["Virtualization Licenses"]["rows"]
+    }
+    assert "VM Sockets" in virt_rows
+    assert "Auto Recovery" in virt_rows
+    assert virt_rows["Auto Recovery"]["entitlement_value"] == "500 VMs"
+    assert virt_rows["Auto Recovery"]["used"] == "0 VMs"
+    assert virt_rows["Auto Recovery"]["status"] == "0%"
+
+    cap_rows = {
+        row["license"]: row
+        for row in sections_by_name["Capacity Licenses"]["rows"]
+    }
+    assert cap_rows["Backup and Recovery"]["entitlement_value"] == "100"
+    assert cap_rows["Backup and Recovery"]["used"] == "0"
+
+
+def test_parse_license_summary_html_does_not_cross_wire_section_titles() -> None:
+    """Cross-wire guard: if a single preceding section title sits before
+    two adjacent tables, only the first table should claim that title.
+    The second table should fall through to the classifier-based
+    bucketing (or be dropped) — it must NOT silently inherit the
+    first table's section_name and pile its rows onto a section they
+    don't belong to. Without the claimed-titles guard, the second
+    table's find_all_previous walk would still match the first
+    title, cross-wiring its rows.
+    """
+    html = """
+    <html><body>
+      <div class="section">
+        <div class="component-title">
+          <span class="input-title tileHelpLabels component-title-text">Capacity Licenses</span>
+        </div>
+      </div>
+      <div class="exportTable">
+        <table>
+          <thead><tr>
+            <th>License</th><th>Available Total (TB)</th><th>Used (TB)</th><th>Summary</th>
+          </tr></thead>
+          <tbody>
+            <tr><td>Backup and Recovery</td><td>100</td><td>0</td><td>0%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="exportTable">
+        <table>
+          <thead><tr>
+            <th>License</th><th>Available Total (TB)</th><th>Used (TB)</th><th>Summary</th>
+          </tr></thead>
+          <tbody>
+            <tr><td>Should Not Cross Wire</td><td>50</td><td>10</td><td>0%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </body></html>
+    """
+    artifact = parse_license_summary_html(html, source_file="/tmp/cross-wire.html")
+
+    sections_by_name = {
+        section["section_name"]: section
+        for section in artifact["workload_summary_sections"]
+    }
+
+    assert "Capacity Licenses" in sections_by_name
+    licenses_in_capacity = {
+        row["license"] for row in sections_by_name["Capacity Licenses"]["rows"]
+    }
+    assert licenses_in_capacity == {"Backup and Recovery"}
+    assert "Should Not Cross Wire" not in licenses_in_capacity
+
+
 def test_parse_license_summary_xlsx_recording_extracts_rest_artifact() -> None:
     workbook = _build_xlsx(
         [
