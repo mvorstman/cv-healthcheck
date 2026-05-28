@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-28 (WORKFLOW.md committed: living workflow document)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `b06c152` (WORKFLOW.md), plus the wrap-up commit publishing this entry.
+
+WORKFLOW.md committed: living document codifying the AI-assisted architecture workflow used on this project. Sections marked as "emerging practice" will be revisited as those practices stabilize.
+
+### Added
+
+- **`WORKFLOW.md`** at the repo root, peer to README.md / CHANGELOG.md / HANDOVER.md / ROADMAP.md. 734 lines, 17 numbered sections covering scope of applicability, when NOT to use the workflow, human / AI division of labor, workflow stages (survey → steering → pre-cleanup → ADR → phased implementation → reality verification), STOP-and-steer protocol, design / implementation / system truth distinction, established vs emerging practices, continuous methodology marker capture, multi-context AI workflow, process cost, concrete lessons learned, retrospectives, important warnings, and summary.
+
+### Notes
+
+- The document is explicitly a living one; section 10 distinguishes established practices (survey-then-steer, phased implementation, STOP-and-steer, ADR-commit-alongside-first-phase, wipe-and-recreate, continuous marker capture, reality verification) from emerging practices (formula language selection, vocabulary expressiveness review, AI rebuild loop, conformance-failure structured record). Sections 14 (lessons learned) and 15 (retrospectives) will need revisiting as methodology retrospectives land.
+
+---
+
 ## 2026-05-28 (ADR 0004 drafted: three-face metadata vocabulary)
 
 **Branch:** `feature/basic-healthcheck-report-output`

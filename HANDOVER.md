@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-28 (ADR 0004 drafted: three-face metadata vocabulary)
+**Last updated:** 2026-05-28 (WORKFLOW.md committed)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `7f77eea` — HANDOVER backlog: dev tools retirement (#24) + tile detail_endpoint decision during ADR 0004 phase 4 (#25)
+**Last commit:** (this session's WORKFLOW.md commit; CHANGELOG + HANDOVER pointer commit follows)
 **Test status:** **575 passing** under both `pytest` and `python -m pytest` (unchanged from prior session — this session is docs-only).
 
 ---
@@ -319,6 +319,13 @@ relied on transcript JSONL access that may not always be the
 right tool. Write the plan file as a first action of the survey
 session, then update it as findings accumulate, then exit plan
 mode with the file present.
+
+**Operational note on WORKFLOW.md.** WORKFLOW.md committed at the
+repo root. Living document describing the AI-assisted architecture
+workflow. Sections 14 (lessons learned) and 15 (retrospectives)
+will need revisiting after the first methodology retrospective
+lands. The "established vs emerging practices" split in section 10
+should be promoted item-by-item as emerging practices stabilize.
 
 ### Signal that a session needs Claude Code
 
