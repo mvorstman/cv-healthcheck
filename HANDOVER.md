@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-28 (bugfix: LS HTML workload-section detection for Commvault export markup)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `1abc097` — fix + tests; CHANGELOG + HANDOVER pointer commit follows
+**Last commit:** `02722a4` — CHANGELOG + HANDOVER: LS HTML workload-section detection fix
 **Test status:** 556 passing. `tests/test_unified_upload_route.py` has a pre-existing collection error (`from tests.test_security_assessment_import import HTML_SAMPLE` with no `tests/__init__.py`) — unrelated to this fix.
 
 ---
