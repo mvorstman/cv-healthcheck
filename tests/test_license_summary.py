@@ -121,6 +121,10 @@ def test_parse_license_summary_csv_extracts_sections_and_metadata() -> None:
     assert len(artifact["other_licenses"]) == 2
     assert len(artifact["agent_feature_licenses"]) == 2
     assert artifact["other_licenses"][1]["unit"] == "TB"
+    # Combined-cell row in the CSV ("25 TB" / "10 TB") — same fix as HTML
+    # applies because both paths go through normalize_other_license_record.
+    assert artifact["other_licenses"][1]["available_total"] == 25
+    assert artifact["other_licenses"][1]["used"] == 10
     assert artifact["agent_feature_licenses"][0]["license"] == "Virtual Server"
 
 
@@ -138,6 +142,49 @@ def test_parse_license_summary_html_extracts_canonical_records() -> None:
     assert len(artifact["agent_feature_licenses"]) == 1
     assert artifact["other_licenses"][0]["available_total"] == 100
     assert artifact["agent_feature_licenses"][0]["permanent_used"] == 12
+    # Combined-cell row ("25 TB" / "10 TB") — was previously dropped by
+    # parse_number's float-parse-the-whole-string path. The numeric
+    # prefix must be extracted now.
+    assert artifact["other_licenses"][1]["available_total"] == 25
+    assert artifact["other_licenses"][1]["used"] == 10
+    assert artifact["other_licenses"][1]["unit"] == "TB"
+
+
+def test_parse_license_summary_html_extracts_value_and_unit_combined_cell() -> None:
+    """Matches the user-reported real-world row shape: cells like
+    "500 VMs" / "0 VMs" (value + space + unit in one <td>).
+
+    Without the parse_number regex-extraction fix, both available_total
+    and used would be None and only the unit would survive — exactly
+    the symptom the user reported (Other Licenses table renders blank
+    columns for value/used).
+    """
+    html = """
+    <html><body>
+      <h2>Other Licenses - current usage details</h2>
+      <table>
+        <thead><tr><th>License</th><th>Available Total</th><th>Used</th></tr></thead>
+        <tbody>
+          <tr><td>VM Sockets</td><td>0 sockets</td><td>0 sockets</td></tr>
+          <tr><td>Auto Recovery</td><td>500 VMs</td><td>0 VMs</td></tr>
+        </tbody>
+      </table>
+    </body></html>
+    """
+    artifact = parse_license_summary_html(html, source_file="/tmp/x.html")
+
+    rows = artifact["other_licenses"]
+    assert len(rows) == 2
+
+    assert rows[0]["license"] == "VM Sockets"
+    assert rows[0]["available_total"] == 0
+    assert rows[0]["used"] == 0
+    assert rows[0]["unit"] == "sockets"
+
+    assert rows[1]["license"] == "Auto Recovery"
+    assert rows[1]["available_total"] == 500
+    assert rows[1]["used"] == 0
+    assert rows[1]["unit"] == "VMs"
 
 
 def test_parse_license_summary_xlsx_recording_extracts_rest_artifact() -> None:
