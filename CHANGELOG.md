@@ -10,6 +10,41 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-28 (bugfix: LS numeric value extraction for combined value+unit cells)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `3b25d8b` (fix + tests), plus the wrap-up commit publishing this entry.
+**Test status:** 564 passing (+1 new test; two existing tests gained the previously-missing combined-cell assertions).
+
+The LS HTML import succeeded end-to-end after the prior two fixes, but the imported data was incomplete — the workspace's Other Licenses table rendered blank `Available Total` and `Used` columns. The source HTML did contain the data; the bespoke LS normalizer was dropping the numeric prefix from cells shaped `"<number> <unit>"`.
+
+### Root cause
+
+`parse_number` at `src/cvhealthcheck/license_summary/normalize.py:64-72` ran `int(float(text.replace(",", "")))` against the whole cell string. For real-world cells like `"500 VMs"`, `"0 sockets"`, or `"25 TB"`, `float(...)` raises `ValueError` because of the space and the trailing letters → function returns `None`. The neighbouring `maybe_unit_from_value` correctly extracted the trailing alpha via regex, which is why the Unit column survived. The numeric columns vanished.
+
+### Fixed
+
+- **`parse_number`** now extracts the leading numeric prefix via regex `r"\s*(-?[\d,]+(?:\.\d+)?)"` before parsing it. Handles `"500 VMs"` → 500, `"0 sockets"` → 0, `"25 TB"` → 25; preserves `"1,234"` → 1234, `"100"` → 100, `""` → None.
+- **`clean_text`** also strips literal `\x00` (NUL) bytes. The user's real LS HTML export has 84 NUL bytes scattered between tags (between `</thead>` and `<tbody>`, between `</tr>` and `<tr>`, etc. — none inside `<td>` content; BeautifulSoup ignores them). The clean_text change closes the brief's null-byte hypothesis as belt-and-braces — costs ~10 characters and immunises against any future case where a NUL byte lands inside a cell.
+
+### Added
+
+- **`test_parse_license_summary_html_extracts_value_and_unit_combined_cell`** — new test that pins the user's reported row shape (`VM Sockets` / `0 sockets`, `Auto Recovery` / `500 VMs` / `0 VMs`). Asserts the numeric fields parse correctly.
+- **Two existing tests** (`test_parse_license_summary_html_extracts_canonical_records` and `test_parse_license_summary_csv_extracts_sections_and_metadata`) gained the previously-missing `available_total == 25` / `used == 10` assertions on the existing `"25 TB"` / `"10 TB"` row that the fixtures had always carried but no test ever checked the parsed numeric for.
+
+### Notes
+
+- **One fix covers three callsites** by construction: `normalize_other_license_record` (the demonstrated bug), `normalize_agent_feature_record` (same `parse_number` call shape — unverified against real-world data because the user's export had 0 agent/feature rows; the fix handles the at-risk shape if it ever appears), and the CSV path which goes through the same normalizers.
+- **Real-file verification** against `data/imports/license_summary/License20summary_2026-05-27-20-16-24-20260528T113252Z-5eac3c37.html` (2 MB): all 9 Other Licenses rows now parse correctly. `Auto Recovery` (the user's specific blank-column row) now reads `available_total=500, used=0, unit="VMs"`. Other rows include 100 TB / None (a few Used cells in the real file are genuinely empty — the parser correctly preserves None there).
+- **The real file has 0 `agent_feature_licenses` rows and 0 `workload_summary_sections`.** The Agent/Feature parsing the prior investigation flagged as "structurally at risk but can't tell from fixtures" remains unverified against real-world data because the real export contains no rows in those sections. The fix handles the at-risk shape if it ever appears. The 0 workload_summary_sections is also notable — the parser's section-detection may not match this lab's HTML structure, but that's outside this bug's scope.
+- **Why existing tests missed the bug.** The HTML fixture had `<tr><td>Cloud Storage</td><td>100</td><td>40</td></tr>` (plain numeric) and `<tr><td>Deduplication</td><td>25 TB</td><td>10 TB</td></tr>` (combined). The asserted-value test fired against row 0 (`available_total == 100` — passed because plain numeric works); only `unit == "TB"` was asserted against row 1, which works fine because the unit extractor uses a different regex. A missing assertion, not a wrong one.
+
+### Verification: tests fail-against-old, pass-against-new
+
+Confirmed before applying the fix that all three new/extended assertions failed against the old `parse_number` with the same `assert None == 25` / `assert None == 10` / `assert None == 500` pattern. After applying the fix, all three pass plus the rest of the suite.
+
+---
+
 ## 2026-05-28 (bugfix: upload field-name mismatch for already-collected system subjects)
 
 **Branch:** `feature/basic-healthcheck-report-output`

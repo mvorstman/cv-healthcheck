@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-28 (bugfix: upload field-name mismatch for already-collected system subjects)
+**Last updated:** 2026-05-28 (bugfix: LS numeric value extraction for combined value+unit cells)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `e87b125` — CHANGELOG + HANDOVER: upload field-name fix
-**Test status:** 563 passing
+**Last commit:** *the LS-value-extraction CHANGELOG+HANDOVER commit; pointer-update commit follows.*
+**Test status:** 564 passing
 
 ---
 
@@ -24,7 +24,11 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## What was just completed
 
-**Bugfix: upload field-name mismatch for already-collected system subjects.** Yesterday's inline-JSON fix (`130e28b`) unmasked a second latent bug. With the JSON-response path wired correctly, the JS now received an error JSON it could display — and that error read "No file selected." even though a file was clearly selected. Root cause: `_provenance_to_tile_sources` at `subject_data_service.py:226` hardcoded `import_field="file"`, but the SA/LS handlers read `request.files[handler.form_field]` where `form_field` is `"assessment_file"` / `"license_summary_file"`. The bug fires when a canonical artifact exists for the subject (the orchestration takes the provenance path instead of the nodata path, where the right field names ARE declared). Fix uses `get_handler(subject_id).form_field` as the source of truth. Contract test added that pins the action-dict-importField ↔ handler.form_field invariant — it fails against the pre-fix code, passes against the fix. End-to-end verification with canonical artifacts present: LS HTML / LS CSV / SA HTML all upload cleanly through the JS-derived field names; the user's exact failing filename `License%20summary_2026-05-27-20-16-24.html` also succeeds. 563 tests pass (was 562).
+**Bugfix: LS numeric value extraction for combined value+unit cells.** After the prior two fixes wired up the inline-import path correctly, the LS HTML import landed an artifact whose `Other Licenses` table rendered blank `Available Total` and `Used` columns in the workspace — only the unit survived. Root cause: `parse_number` at `license_summary/normalize.py:64-72` float-parsed the whole cell, so combined cells like `"500 VMs"` / `"25 TB"` raised `ValueError` and returned `None`. The unit extractor (a separate regex) worked fine, which is why the Unit column was the only one populated. Fix: regex-extract the leading numeric prefix; also strip `\x00` from `clean_text` as belt-and-braces (the real export has 84 NUL bytes scattered between tags, none inside cells, but the cost is negligible). One fix covers all three normalize callsites by construction (Other Licenses HTML+CSV; Agent/Feature uses the same `parse_number` call shape — unverified against real data because the user's export had 0 agent/feature rows). Real-file verification confirmed: 9 Other Licenses rows parse correctly; the user's `Auto Recovery` row now shows `available_total=500, used=0`. New + extended tests proven to fail-against-old / pass-against-fix. 564 tests pass (was 563).
+
+### Prior session: upload field-name mismatch
+
+**Bugfix: upload field-name mismatch for already-collected system subjects.** Yesterday's inline-JSON fix (`130e28b`) unmasked a second latent bug. With the JSON-response path wired correctly, the JS now received an error JSON it could display — and that error read "No file selected." even though a file was clearly selected. Root cause: `_provenance_to_tile_sources` at `subject_data_service.py:226` hardcoded `import_field="file"`, but the SA/LS handlers read `request.files[handler.form_field]` where `form_field` is `"assessment_file"` / `"license_summary_file"`. The bug fires when a canonical artifact exists for the subject (the orchestration takes the provenance path instead of the nodata path, where the right field names ARE declared). Fix uses `get_handler(subject_id).form_field` as the source of truth. Contract test added that pins the action-dict-importField ↔ handler.form_field invariant — it fails against the pre-fix code, passes against the fix.
 
 ### Prior session: inline JSON response fix
 
@@ -288,7 +292,7 @@ than attempting the work.
 cd /home/michiel/dev/cv-healthcheck
 source venv/bin/activate
 python -m compileall -q src
-python -m pytest -q                                # expect 563 passing
+python -m pytest -q                                # expect 564 passing
 git status --short                                 # expect clean
 sqlite3 data/app.db "SELECT customer_id,customer_name FROM customers;"
 sqlite3 data/app.db "SELECT project_id,customer_id,project_number FROM projects;"
