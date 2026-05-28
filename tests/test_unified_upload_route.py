@@ -483,3 +483,53 @@ def test_system_upload_inline_returns_500_on_generic_exception(
     assert body["success"] is False
     assert "upstream crashed" in body["error"]
     assert body["error"].startswith("Import failed:")
+
+
+# ---------------------------------------------------------------------------
+# Contract test: the action dict shipped to the JS must declare the same
+# field name the server-side handler reads from request.files.
+#
+# Catches the 2026-05-25 → 2026-05-28 field-name mismatch bug: the JS
+# correctly forwards uploadAction.importField verbatim, but
+# _provenance_to_tile_sources hardcoded import_field="file" while the
+# corresponding _handle_system_upload(handler) reads
+# request.files[handler.form_field] which is "license_summary_file" /
+# "assessment_file". Result: silent "No file selected." errors after
+# the first successful collect of an SA/LS subject (which triggers the
+# provenance path instead of the nodata path).
+# ---------------------------------------------------------------------------
+
+def test_upload_action_field_matches_handler_form_field() -> None:
+    """The action dict's importField must equal handler.form_field for
+    each system subject with a registered upload handler. Pin the
+    invariant directly — the existing inline-upload tests hardcoded
+    the field name on both sides and so couldn't catch this mismatch.
+    """
+    from cvhealthcheck.quickhc.subject_data_service import _provenance_to_tile_sources
+    from cvhealthcheck.web.routes.upload_dispatch import get_handler
+
+    for subject_id in ("security_assessment", "license_summary"):
+        provenance_items = [
+            {"source_type": "html", "status": "available", "label": "HTML import", "description": ""},
+            {"source_type": "csv",  "status": "available", "label": "CSV import",  "description": ""},
+        ]
+        sources = _provenance_to_tile_sources(subject_id, provenance_items)
+        handler = get_handler(subject_id)
+        assert handler is not None, f"{subject_id!r} should have an upload handler registered"
+
+        upload_actions = [
+            action
+            for source in sources
+            for action in source.get("actions", [])
+            if action.get("kind") == "upload"
+        ]
+        assert upload_actions, (
+            f"{subject_id!r} provenance path should produce at least one upload action"
+        )
+        for action in upload_actions:
+            assert action["importField"] == handler.form_field, (
+                f"action.importField={action['importField']!r} for {subject_id!r} differs "
+                f"from handler.form_field={handler.form_field!r} — the JS would submit "
+                f"under the wrong field name; _handle_system_upload would respond "
+                f"'No file selected.'"
+            )

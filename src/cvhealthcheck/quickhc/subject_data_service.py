@@ -211,6 +211,17 @@ def _provenance_to_tile_sources(
 ) -> list[dict[str, Any]]:
     import_url_base = f"/quick-hc/{subject_id}/import"
     rest_collect_url = _DISPATCH_REST_COLLECT_URLS.get(subject_id)
+    # The server-side _handle_system_upload reads request.files[handler.form_field].
+    # Ship the matching field name to the JS so it submits under the name the
+    # handler will look up. Without this, subjects with an upload handler
+    # (security_assessment, license_summary) silently fail with "No file
+    # selected." once their canonical artifact exists and the provenance
+    # path replaces the nodata builder. The nodata builders declare their
+    # own (correct) field name; this branch is the one that had been
+    # hardcoded to the AI-subject default.
+    from cvhealthcheck.web.routes.upload_dispatch import get_handler
+    handler = get_handler(subject_id)
+    import_field = handler.form_field if handler is not None else "file"
     result = []
     for item in provenance_items:
         src_id = _PROVENANCE_TYPE_TO_SOURCE_ID.get(item.get("source_type", ""))
@@ -223,7 +234,7 @@ def _provenance_to_tile_sources(
         if is_html or is_csv:
             accept = ".html,.htm" if is_html else ".csv"
             actions: list[dict[str, str]] = [
-                _upload_action(import_url=import_url_base, import_field="file", accept=accept)
+                _upload_action(import_url=import_url_base, import_field=import_field, accept=accept)
             ]
         elif is_rest and rest_collect_url:
             actions = [{"kind": "collect", "label": "Collect", "collectUrl": rest_collect_url}]
