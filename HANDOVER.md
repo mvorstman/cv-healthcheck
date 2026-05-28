@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-28 (bugfix: LS numeric value extraction for combined value+unit cells)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *the LS-value-extraction CHANGELOG+HANDOVER commit; pointer-update commit follows.*
+**Last commit:** `d715b0e` — CHANGELOG + HANDOVER: LS numeric value extraction fix
 **Test status:** 564 passing
 
 ---
