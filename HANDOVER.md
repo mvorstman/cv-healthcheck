@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-28 (infra: fix test-suite collection error; reconcile reported pass counts)
+**Last updated:** 2026-05-28 (pre-ADR-0004 cleanup: vendor-stable keys, loud failure for unsupported section types, report-ID backlog)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `6e3f015` — CHANGELOG + HANDOVER: test collection fix + count reconciliation
-**Test status:** **566 passing** under both `pytest` and `python -m pytest`. The collection error in `tests/test_unified_upload_route.py` (`from tests.test_security_assessment_import import HTML_SAMPLE` — `tests` not a package) is fixed. The prior session's "556 passing" was a mis-count; see the CHANGELOG reconciliation table for the corrected counts at each session.
+**Last commit:** (this session's cleanup commits; CHANGELOG + HANDOVER pointer commit follows)
+**Test status:** **575 passing** under both `pytest` and `python -m pytest` (was 566; +9 across two pre-ADR-0004 cleanup commits).
 
 ---
 
@@ -23,6 +23,10 @@ If you are a new chat / new session, read these files in order before doing anyt
 ---
 
 ## What was just completed
+
+**Pre-ADR-0004 cleanup: vendor-stable keys, loud failure for unsupported section types, report-ID backlog.** Three load-bearing fixes the ADR 0004 survey surfaced; none depend on ADR 0004's design being settled. (1) **SA vendor-stable identifiers preserved.** Migration 0007's column_map dropped `attrName` and `PARAMID` — Commvault's stable identifiers — leaving rule overrides nothing reliable to target. Migration 0008 extends the column_map for all six SA sections to add `attrName→vendor_key` and `PARAMID→vendor_id`. The Finding model gains additive `vendor_key`/`vendor_id` fields; `result_to_artifact._build_finding` populates them. Verified end-to-end against the on-disk raw 336 captures: all 32 SA findings now carry both identifiers populated. (2) **Loud failure for unsupported catalog section types.** New `cvhealthcheck.db.section_types` module pins `SUPPORTED_SECTION_TYPES = {findings, table, metric}` and raises `UnsupportedSectionTypeError` with a clear informational message. Two enforcement layers: insert-time in `create_subject_from_proposal` (rolls back on chart-type sections), collection-time in `RESTExtractor.extract` (fails before any GET). 7 chart-typed rows exist in the live catalog (1 system seed `client_growth.chart` + 4 cloud + 2 storage); rows preserved (no destructive cleanup), validator catches new attempts. (3) **HANDOVER backlog #23 — Report IDs are CommCell-specific.** Three lab captures showed LS=206/178, BJS=194/168, Storage Utilization By Application=199/603 across deployments — and dataset column schema differs too. ADR 0004 must address subject identity across deployments. 575 passing under both pytest invocations (was 566).
+
+### Prior session: test-suite collection-error fix and pass-count reconciliation
 
 **Infra: fix test-suite collection error; reconcile reported pass counts.** `tests/test_unified_upload_route.py` carried `from tests.test_security_assessment_import import HTML_SAMPLE` since 2026-05-25 (`dff43f1`). The project has no `tests/__init__.py`, so `tests` is not a package — and the result depended entirely on invocation: `pytest` (plain entrypoint) aborts at collection with 0 tests run; `python -m pytest` succeeds because cwd lands on `sys.path` and `tests` resolves as an implicit namespace package. 12 tests were silently uncollectable under plain `pytest`, including the 5 headline tests from the recent inline-upload and field-name-contract fixes. The prior session's "556 passing" report (the LS workload-section CHANGELOG) was a mis-count caused by running `pytest --ignore=tests/test_unified_upload_route.py` instead of investigating the collection error; the true count under `python -m pytest` at that point was 568. Fix drops the `tests.` prefix from the two cross-test imports — convention matches every other test file. Both invocations now collect 566 and pass 566. CHANGELOG carries a reconciliation table for every recent count claim.
 
@@ -56,16 +60,19 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## Single recommended next action
 
-**Methodology retrospective for ADR 0003.**
+**ADR 0004 steering conversation — three-face metadata vocabulary design, with survey corpus + supplementary captures as evidence base.**
 
-ADR 0003's implementation produced four methodology lessons that the project hasn't reflected on yet. Conduct a retrospective conversation (Claude.ai is the right venue, not Claude Code — this is prose work, not filesystem work) covering:
+The ADR 0004 survey is delivered (see chat transcript). Its consolidated gaps section lists every place the proposed three-face vocabulary (semantic / presentational / evaluative) strained against real data — these are the inputs the steering conversation needs. The three pre-ADR-0004 cleanup items the survey surfaced as load-bearing-and-not-design-dependent have just landed (vendor-stable keys, loud failure for unsupported section types, HANDOVER backlog #23 for report-ID cross-CommCell instability). With those out of the way, the steering conversation can focus on the actual design forks without being entangled with cleanup.
 
-1. **Wipe-and-recreate rule** (HANDOVER backlog item #17 / methodology marker from the 2026-05-27 ADR 0003 amendment). ADR 0002 set the precedent; ADR 0003 phases 1, 4, and 5 followed it. The retrospective decides whether it becomes a tool-wide default.
-2. **ADR workflow efficiency review** (HANDOVER backlog item #18). The survey-then-steer-then-draft-then-phased-implementation cycle has now run end-to-end twice (ADR 0002, ADR 0003). Was the overhead worth it? Particular lens: phase 5's discovery that the design model didn't fit LS — could a deeper survey or a prototype-against-real-data step have surfaced this earlier?
-3. **ADR-commit-alongside-first-phase pattern** (HANDOVER backlog item #19). ADR 0002 and ADR 0003 both landed this way (ADR doc committed in the same session as phase 1). Decide whether to document this in `docs/PATTERNS.md` or HANDOVER's "Where work happens" section.
-4. **NEW: Catalog-model expressiveness limits.** Phase 4 surfaced that the original ADR 0003 catalog schema (just `dataset_name` + `dataset_guid` + post-processing) didn't fit SA's findings rendering — Approach A added `column_map` + `status_to_severity` + HTML stripping mid-implementation. Phase 5 surfaced that even the expanded schema didn't fit LS — required deferring LS migration. Twice the implementation surfaced model gaps that the design conversation didn't catch. Worth a deliberate examination of how to surface "the model isn't expressive enough" earlier — perhaps a "prototype against a real second subject before declaring the design done" step.
+Claude.ai is the right venue (prose work, no filesystem). The flow:
+1. Paste the survey report (delivered in this session's chat) plus the cross-CommCell evidence into a fresh Claude.ai conversation.
+2. Walk the consolidated-gaps and surprises sections. Decide scope (in/out of ADR 0004), pick a formula language (the D1 gap — JSONPath / CEL / jq / Python expr), reconcile S3 (the dropped-`attrName` problem now fixed in code — the ADR should reflect the model), choose the vendor → template → override precedence shape (E2/E6/E7), decide whether to address LS-specific gaps (LS1-5) in this ADR or leave LS bespoke as ADR 0003 phase 5 did.
+3. Draft ADR 0004 with the steering decisions encoded.
+4. Implementation comes back to Claude Code in phases.
 
-The retrospective produces decisions, not code. After the retrospective, the next concrete code work depends on what comes out — likely either a PATTERNS.md update + ADR workflow rule clarifications, or new backlog items for tool-wide rules.
+### Methodology retrospective for ADR 0003 — deferred
+
+The four methodology questions (wipe-and-recreate rule, ADR workflow efficiency, ADR-commit-alongside-first-phase pattern, catalog-model expressiveness limits — backlog #17–#20) remain open. They're orthogonal to ADR 0004's design and can run after.
 
 ### After the retrospective
 
@@ -97,6 +104,7 @@ Whatever surfaces. The current backlog is healthy (no urgent next code action); 
 20. **Methodology marker (new): catalog-model expressiveness limits.** ADR 0003 surfaced its model gaps twice — Approach A in phase 4 (added column_map + status_to_severity + HTML stripping) and the LS escalation in phase 5 (would need parameter substitution + page-aware GUID resolution + value-formula transforms). Both surfaced during *implementation*, not during *design*. Worth a deliberate examination of when to surface "the model isn't expressive enough" earlier in the ADR process. Retrospective fodder.
 21. **Cleanup: retire `reportsplus/checklist.py`** (dead since phase 4 — only callers were the deleted SA bespoke modules; LS doesn't use it). Small post-ADR-0003 cleanup.
 22. **LS Capacity Licenses consumption shape.** In the Commvault HTML export, the Capacity Licenses section encodes usage as a percentage status-bar in the Summary column (`<div class="status-bar complete-bar">0%</div>`), NOT as a number in the Used (TB) column — that cell is literally `<td></td>` for every Capacity Licenses row. After the 2026-05-28 workload-section fix, those rows now parse with `used=None`, `entitlement_value` populated, `status="0%"`. The recommendations / growth-trend work needs consumption in absolute terms — it must either derive TB-used from the Summary percentage × entitlement (with regex on the `0%` / `15%` text in `status`), or source consumption from the REST collect path where it may be structured. Flagged so the recommendations engine doesn't assume the Used column is populated for Capacity Licenses; the other six workload sections do populate Used.
+23. **Report IDs are CommCell-specific, not portable identifiers.** API captures from three different CommCells confirmed: License Summary is report 206 on the dev lab but 178 on another; Backup Job Summary is 194 vs 168; Storage Utilization By Application is 199 vs 603. Worse, the column schema of "the same" dataset can differ across CommCells (e.g. BJS Job details has `JobStatus, JobId, SizeofApplication, EstimatedMediaSize, ProtectedObjects, FailedObjects, FailedFolders` on one CommCell and `ClientName, Status, StartTime, SizeKB` on another). Any catalog row that hardcodes a numeric `report_id` is implicitly single-deployment-scoped. ADR 0004 must address how subjects identify themselves across deployments — likely by report name or some other stable semantic identifier, with per-deployment resolution to numeric ID. Surface during ADR 0004 design conversation; don't try to fix in pre-cleanup.
 
 Smaller cleanups:
 

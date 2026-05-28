@@ -10,6 +10,42 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-28 (pre-ADR-0004 cleanup: vendor-stable keys, loud failure for unsupported section types, report-ID backlog)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `b871c46` (vendor-key preservation), `4589409` (loud-failure validation), plus the wrap-up commit publishing this entry.
+**Test status:** **575 passing** under both `pytest` and `python -m pytest` (was 566; +9 across two cleanup commits).
+
+Three load-bearing fixes the ADR 0004 survey surfaced. None depend on ADR 0004's design conversation being settled; ADR 0004 will build on top of them.
+
+### Fixed
+
+- **Preserve SA vendor-stable identifiers (`attrName`, `PARAMID`) in canonical Finding.** Migration 0007's column_map dropped both — the canonical Finding had no slot for vendor-stable IDs at all, leaving rule overrides under ADR 0004's evaluative face with only free-text `Parameter` to match against. Commvault could rename the human-readable label and silently break any rule keyed on it. Migration 0008 extends the column_map for all six SA sections: `attrName → vendor_key`, `PARAMID → vendor_id`. Other operational columns (`Data Source`, `ccid`, `sys_rowid`, `GROUP`) remain dropped — `Data Source`/`ccid` are CommCell-level (already on `ArtifactSource`), `sys_rowid` is volatile, `GROUP` duplicates `section_id`.
+
+### Added
+
+- **`Finding.vendor_key: str | None` and `Finding.vendor_id: str | None`** — additive fields on the canonical Finding model. Both default to `None`, so existing artifacts predating this change validate cleanly.
+- **`_build_finding` in `result_to_artifact.py`** — populates the new fields from the row dict.
+- **Migration `0008_security_assessment_preserve_vendor_keys.sql`** — UPDATEs the existing six (security_assessment, rest, section_id) rows to add the two new column_map entries. Idempotent.
+- **`cvhealthcheck.db.section_types` module** — pins `SUPPORTED_SECTION_TYPES = {findings, table, metric}` (the set the runtime can honour today) and raises `UnsupportedSectionTypeError` with a clear, informational message naming subject, section, declared type, supported set, and pointing at ADR 0004 for chart support.
+- **Insert-time validation in `create_subject_from_proposal`** — future AI proposals declaring chart-typed sections fail loudly; the transaction rolls back; no half-state.
+- **Collection-time validation in `RESTExtractor.extract`** — anyone bypassing the proposal flow (raw SQL, migrations, direct DB edit) with extraction wiring for a chart-typed section gets a clear error before any GET is attempted.
+- **HANDOVER backlog #23 — Report IDs are CommCell-specific.** Three CommCell captures showed LS=206/178, BJS=194/168, Storage Utilization By Application=199/603 across deployments — and the dataset column schema differs between CommCells too. Any catalog row hardcoding a numeric `report_id` is single-deployment-scoped. ADR 0004 must address how subjects identify themselves across deployments (likely by report name or stable semantic identifier with per-deployment resolution to numeric ID).
+- **Tests:**
+  - `test_result_to_artifact_findings_preserves_vendor_keys` and `test_result_to_artifact_findings_vendor_keys_default_none` — pin the row dict → Finding hop and backwards compatibility.
+  - `test_extract_preserves_vendor_keys_via_column_map` — pins the end-to-end column_map → extracted row shape with vendor identifiers present and operational fields dropped.
+  - `tests/test_section_type_validation.py` — six tests covering the supported set, validator behaviour, insert-time rollback, and collection-time fail-whole.
+  - `test_migration_status_reports_all_applied` count bumped 7 → 8.
+
+### Notes
+
+- **Real-data verification (vendor keys).** Replayed all six on-disk raw 336 dataset captures through the new column_map + result_to_artifact pipeline and wrote the resulting artifact via `ArtifactStore.save_artifact` to `data/catalog/artifacts/default/default/working/security_assessment/latest.json`. All 32 SA findings now carry both `vendor_key` and `vendor_id` populated. Sample finding: `title='Two-factor authentication'`, `vendor_key='2FAEnabled'`, `vendor_id='2501'`. This is equivalent to a fresh lab recollection because the raw captures ARE the lab's responses from 2026-05-27.
+- **Real-catalog verification (loud failure).** The live DB has 7 chart-typed catalog rows today: `client_growth.chart` (system seed; legacy builder fulfills it via its own `chart_growth` typed section, so the canonical-driven path never asks for it), 4 cloud_storage_egress_ingress chart sections, 2 storage_utilization chart sections. The validator fires loudly against all 7 when exercised. The brief was scoped to NOT delete the existing rows — they're preserved as catalog declarations awaiting runtime support; the validator catches new attempts and any attempt to actually collect data for these sections.
+- **Why insert-time AND collection-time.** Insert-time is the primary mechanism (catches AI proposals before they land in the DB). Collection-time is the safety net (catches anyone bypassing the proposal flow — migrations, raw SQL, direct edits). The same helper backs both; one test exercises each layer.
+- **Surprise extension to the survey finding.** The survey identified storage_utilization and cloud_storage_egress_ingress as chart over-declarers. Step 1 surfaced that `client_growth.chart` (a SYSTEM seed in migration 0003, not an AI proposal) is ALSO chart-typed. The system-seed pattern shows the silent-render-nothing problem isn't limited to AI proposals — the seed itself has the same issue. The legacy builder happens to fulfill the chart for client_growth via its own `chart_growth` section emission outside the canonical model. The new validator preserves this row (no rollback for existing rows) and would fire if anyone added REST wiring for it.
+
+---
+
 ## 2026-05-28 (infra: fix test-suite collection error; reconcile reported pass counts)
 
 **Branch:** `feature/basic-healthcheck-report-output`
