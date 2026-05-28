@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-28 (WORKFLOW.md committed)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** (this session's WORKFLOW.md commit; CHANGELOG + HANDOVER pointer commit follows)
+**Last commit:** `7b839ea` — CHANGELOG + HANDOVER: WORKFLOW.md committed
 **Test status:** **575 passing** under both `pytest` and `python -m pytest` (unchanged from prior session — this session is docs-only).
 
 ---
