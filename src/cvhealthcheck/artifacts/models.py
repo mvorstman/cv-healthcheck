@@ -51,6 +51,14 @@ class Finding(BaseModel):
     recommendation: str | None                 = None
     references:     list[FindingReference]     = Field(default_factory=list)
     raw_ref:        Any | None                 = None
+    # Vendor-stable identifiers preserved across collections so rule
+    # overrides have something stable to target. vendor_key is the
+    # vendor's text identifier (e.g. Commvault's attrName = "2FAEnabled");
+    # vendor_id is the vendor's numeric identifier as a string (e.g.
+    # PARAMID = "25018"). Both optional — older artifacts predating
+    # 2026-05-28 carry neither.
+    vendor_key:     str | None                 = None
+    vendor_id:      str | None                 = None
 
 
 class TableColumn(BaseModel):

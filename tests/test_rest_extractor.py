@@ -596,6 +596,96 @@ def test_extract_does_not_strip_html_for_table_output(db):
     assert result.sections["delta.section1"] == [{"col": "<b>bold</b> text"}]
 
 
+def test_extract_preserves_vendor_keys_via_column_map(db):
+    """Migration 0008 wires attrName→vendor_key and PARAMID→vendor_id in SA's
+    REST column_map so rule overrides under ADR 0004's evaluative face have
+    stable identifiers to target. Without the new column_map entries, those
+    fields are dropped by _apply_column_map and the canonical Finding has
+    vendor_key=None — a load-bearing data loss.
+
+    This test pins the column_map shape end-to-end: extract → row dict
+    contains vendor_key/vendor_id. The result_to_artifact unit tests cover
+    the row dict → Finding hop separately.
+    """
+    _seed_subject(
+        db,
+        "sa_test",
+        sections=[(
+            "access_security",
+            "Access Security",
+            {
+                "report_id": "336",
+                "dataset_name": "Access Security",
+                "column_map": [
+                    {"source": "Parameter", "canonical": "parameter", "type": "string"},
+                    {"source": "Status", "canonical": "status", "type": "string"},
+                    {"source": "Remarks", "canonical": "remarks", "type": "string"},
+                    {"source": "Action", "canonical": "action", "type": "string"},
+                    {"source": "attrName", "canonical": "vendor_key", "type": "string"},
+                    {"source": "PARAMID", "canonical": "vendor_id", "type": "string"},
+                ],
+                "status_to_severity": {
+                    "1_Good": "good", "2_Info": "info",
+                    "3_Warning": "warning", "4_Critical": "critical",
+                },
+                "output_as": "findings",
+            },
+        )],
+        source_type="rest",
+    )
+    # Mock the live report definition to expose dataset_name "Access Security"
+    # so name→guid resolution succeeds without falling back to the hint.
+    report_payload = {
+        "components": [
+            {
+                "type": "table",
+                "title": "Access Security",
+                "dataSet": {
+                    "dataSetName": "Access Security",
+                    "dataSetGuid": "7bdc4b02-a846-431e-8f16-9e567c81cdc6",
+                },
+            },
+        ],
+    }
+    session = _mock_session(
+        report_payload=report_payload,
+        fetch_rows=[
+            {
+                "Parameter": "Two-factor authentication",
+                "Status": "2_Info",
+                "Remarks": "Disabled.",
+                "Action": "How to enable",
+                "attrName": "2FAEnabled",
+                "PARAMID": 2501,
+                "Data Source": "cs01",
+                "sys_rowid": 1,
+                "ccid": 10000,
+                "GROUP": "Access Security",
+            },
+        ],
+    )
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("sa_test", version=1)
+    assert not result.errors
+
+    rows = result.sections["sa_test.access_security"]
+    assert len(rows) == 1
+    row = rows[0]
+    # Vendor-stable identifiers preserved
+    assert row["vendor_key"] == "2FAEnabled"
+    assert row["vendor_id"] == 2501
+    # Canonical fields still present
+    assert row["parameter"] == "Two-factor authentication"
+    assert row["status"] == "2_Info"
+    assert row["severity"] == "info"
+    # Other operational fields still dropped (CommCell-level data lives on
+    # ArtifactSource; sys_rowid is volatile; GROUP duplicates section_id)
+    assert "ccid" not in row
+    assert "sys_rowid" not in row
+    assert "Data Source" not in row
+    assert "GROUP" not in row
+
+
 def test_extract_no_column_map_preserves_raw_keys(db):
     """Without column_map, rows pass through with original keys (existing behavior)."""
     _seed_subject(db, "epsilon")  # default instructions, no column_map

@@ -334,6 +334,74 @@ def test_result_to_artifact_findings(tmp_path: Path) -> None:
     assert critical_metric.value == 1
 
 
+def test_result_to_artifact_findings_preserves_vendor_keys(tmp_path: Path) -> None:
+    """Vendor-stable identifiers (vendor_key, vendor_id) must round-trip from
+    the canonical row dict into the Finding model. Rule overrides under
+    ADR 0004's evaluative face need a stable identifier; free-text Parameter
+    can be renamed by Commvault between releases. Migration 0008 wires
+    SA's column_map to populate vendor_key from attrName and vendor_id
+    from PARAMID; _build_finding copies them onto the Finding.
+    """
+    result = ExtractionResult(subject_id="security_assessment")
+    sec_id = "security_assessment.access_security"
+    result.sections[sec_id] = [
+        {
+            "parameter": "Two-factor authentication",
+            "status": "2_Info",
+            "remarks": "Disabled",
+            "action": "How to enable",
+            "severity": "info",
+            "vendor_key": "2FAEnabled",
+            "vendor_id": "2501",
+        },
+        {
+            "parameter": "Ransomware protection",
+            "status": "1_Good",
+            "remarks": "Secured",
+            "action": "",
+            "severity": "good",
+            "vendor_key": "SecureMountPaths-Secure",
+            "vendor_id": "25013",
+        },
+    ]
+    result.section_output_types[sec_id] = "findings"
+    result.section_titles[sec_id] = "Access Security"
+
+    artifact = result_to_artifact(
+        result, "security_assessment", "Security Assessment", tmp_path / "t.html"
+    )
+
+    sec = artifact.sections[0]
+    assert isinstance(sec, FindingsSection)
+    assert sec.items[0].vendor_key == "2FAEnabled"
+    assert sec.items[0].vendor_id == "2501"
+    assert sec.items[1].vendor_key == "SecureMountPaths-Secure"
+    assert sec.items[1].vendor_id == "25013"
+
+
+def test_result_to_artifact_findings_vendor_keys_default_none(tmp_path: Path) -> None:
+    """Backwards compatibility: rows without vendor_key/vendor_id (older
+    artifacts, or sources without the new column_map entries) must still
+    produce a valid Finding — both fields default to None.
+    """
+    result = ExtractionResult(subject_id="security_assessment")
+    sec_id = "security_assessment.access_security"
+    result.sections[sec_id] = [
+        {"parameter": "Old finding", "status": "Info",
+         "remarks": "x", "action": "y", "severity": "info"},
+    ]
+    result.section_output_types[sec_id] = "findings"
+    result.section_titles[sec_id] = "Access Security"
+
+    artifact = result_to_artifact(
+        result, "security_assessment", "Security Assessment", tmp_path / "t.html"
+    )
+    sec = artifact.sections[0]
+    assert isinstance(sec, FindingsSection)
+    assert sec.items[0].vendor_key is None
+    assert sec.items[0].vendor_id is None
+
+
 # ---------------------------------------------------------------------------
 # Test 7 — result_to_artifact: table section
 # ---------------------------------------------------------------------------

@@ -126,6 +126,18 @@ def _build_finding(section_id: str, row: dict[str, Any]) -> Finding:
     recommendation = row.get("action") or None
     if isinstance(recommendation, str) and not recommendation.strip():
         recommendation = None
+    vendor_key_raw = row.get("vendor_key")
+    vendor_key = (
+        str(vendor_key_raw).strip() or None
+        if vendor_key_raw is not None
+        else None
+    )
+    vendor_id_raw = row.get("vendor_id")
+    vendor_id = (
+        str(vendor_id_raw).strip() or None
+        if vendor_id_raw is not None
+        else None
+    )
     return Finding(
         id=finding_id,
         severity=severity,
@@ -134,6 +146,8 @@ def _build_finding(section_id: str, row: dict[str, Any]) -> Finding:
         title=parameter,
         description=row.get("remarks") or None,
         recommendation=recommendation,
+        vendor_key=vendor_key,
+        vendor_id=vendor_id,
     )
 
 
