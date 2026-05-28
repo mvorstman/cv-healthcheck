@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-28 (bugfix: upload field-name mismatch for already-collected system subjects)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *the field-name fix CHANGELOG+HANDOVER commit; pointer-update commit follows.*
+**Last commit:** `e87b125` — CHANGELOG + HANDOVER: upload field-name fix
 **Test status:** 563 passing
 
 ---
