@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-28 (infra: fix test-suite collection error; reconcile reported pass counts)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `06c70b4` — fix test-suite collection error; CHANGELOG + HANDOVER pointer commit follows
+**Last commit:** `6e3f015` — CHANGELOG + HANDOVER: test collection fix + count reconciliation
 **Test status:** **566 passing** under both `pytest` and `python -m pytest`. The collection error in `tests/test_unified_upload_route.py` (`from tests.test_security_assessment_import import HTML_SAMPLE` — `tests` not a package) is fixed. The prior session's "556 passing" was a mis-count; see the CHANGELOG reconciliation table for the corrected counts at each session.
 
 ---
