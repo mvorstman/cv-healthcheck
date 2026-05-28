@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-28 (pre-ADR-0004 cleanup: vendor-stable keys, loud failure for unsupported section types, report-ID backlog)
+**Last updated:** 2026-05-28 (ADR 0004 drafted: three-face metadata vocabulary)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `d7ff271` — Add ADR 0004 survey document: three-face metadata vocabulary stress-test
-**Test status:** **575 passing** under both `pytest` and `python -m pytest` (was 566; +9 across two pre-ADR-0004 cleanup commits).
+**Last commit:** (this session's ADR 0004 commit; CHANGELOG + HANDOVER pointer commit follows)
+**Test status:** **575 passing** under both `pytest` and `python -m pytest` (unchanged from prior session — this session is docs-only).
 
 ---
 
@@ -23,6 +23,14 @@ If you are a new chat / new session, read these files in order before doing anyt
 ---
 
 ## What was just completed
+
+**ADR 0004 (three-face metadata vocabulary) drafted and committed at `docs/adr/0004-three-face-metadata-vocabulary.md`.** Status: Proposed. The ADR defines a three-face metadata vocabulary (semantic / presentational / evaluative), six section types (table / findings / metric / chart / card / multi_section), CEL as the formula language with a defined primitive set and STOP-and-steer rule for extensions, the three vendor-compliance shapes (per-row severity codes / StatusRow / inline threshold), the vendor → template → override rules layering with a `muted` severity for explicit suppression, section-grained conformance failures with a structured rebuild-bridge record, subject versioning via `_vN` suffix subjects (not a version field), and migration of the three regressed subjects (Capacity Licenses, Client Growth, Backup Job Summary) as the ADR's end-to-end validation. The survey at `docs/adr/0004-survey.md` is the evidence base. Explicitly out of scope: License Summary migration, the AI authoring loop, recommendations / predictive face, cross-CommCell report identification (HANDOVER backlog #23), and implementation phase planning.
+
+### Prior session: ADR 0004 survey landed in repo
+
+**Add ADR 0004 survey document: three-face metadata vocabulary stress-test.**
+
+### Prior session: pre-ADR-0004 cleanup
 
 **Pre-ADR-0004 cleanup: vendor-stable keys, loud failure for unsupported section types, report-ID backlog.** Three load-bearing fixes the ADR 0004 survey surfaced; none depend on ADR 0004's design being settled. (1) **SA vendor-stable identifiers preserved.** Migration 0007's column_map dropped `attrName` and `PARAMID` — Commvault's stable identifiers — leaving rule overrides nothing reliable to target. Migration 0008 extends the column_map for all six SA sections to add `attrName→vendor_key` and `PARAMID→vendor_id`. The Finding model gains additive `vendor_key`/`vendor_id` fields; `result_to_artifact._build_finding` populates them. Verified end-to-end against the on-disk raw 336 captures: all 32 SA findings now carry both identifiers populated. (2) **Loud failure for unsupported catalog section types.** New `cvhealthcheck.db.section_types` module pins `SUPPORTED_SECTION_TYPES = {findings, table, metric}` and raises `UnsupportedSectionTypeError` with a clear informational message. Two enforcement layers: insert-time in `create_subject_from_proposal` (rolls back on chart-type sections), collection-time in `RESTExtractor.extract` (fails before any GET). 7 chart-typed rows exist in the live catalog (1 system seed `client_growth.chart` + 4 cloud + 2 storage); rows preserved (no destructive cleanup), validator catches new attempts. (3) **HANDOVER backlog #23 — Report IDs are CommCell-specific.** Three lab captures showed LS=206/178, BJS=194/168, Storage Utilization By Application=199/603 across deployments — and dataset column schema differs too. ADR 0004 must address subject identity across deployments. 575 passing under both pytest invocations (was 566).
 
@@ -60,17 +68,27 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## Single recommended next action
 
-**Draft ADR 0004 — three-face metadata vocabulary, grounded in the in-repo survey.**
+**ADR 0004 phase planning — slice the implementation into phases.**
 
-The ADR 0004 survey landed in the repo at `docs/adr/0004-survey.md`. It stress-tests the proposed three-face vocabulary (semantic / presentational / evaluative) against real Commvault data — Phase 1 (six in-corpus subjects), Phase 2 (LS report 206 in full + vendor severity + blind-spot novel reports), Phase 3 (adversarial probes A–E), Consolidated gaps, Surprises S1–S10. Its consolidated-gaps section is the input the design conversation needs.
+The ADR explicitly leaves phase slicing to a follow-on decision; a planning session should produce the phase list before any code work starts. The ADR itself suggests "six to eight phases" with the implied shape: vocabulary plumbing, section types one by one, the three regressions, evaluative face, conformance — but the slicing is deliberately deferred. Inputs the phase-planning conversation needs:
 
-The three pre-ADR-0004 cleanup items the survey surfaced as load-bearing-and-not-design-dependent have landed (vendor-stable keys, loud failure for unsupported section types, HANDOVER backlog #23 for report-ID cross-CommCell instability). The design conversation can focus on the actual forks.
+- **`docs/adr/0004-three-face-metadata-vocabulary.md`** — the proposed decision; phase planning encodes the implementation order.
+- **`docs/adr/0004-survey.md`** — the evidence base; phase boundaries should be chosen so each phase can be validated against survey findings.
+- **Pre-cleanup commits** (`b871c46` vendor-key preservation, `4589409` loud-failure validation) — already in place; phase 1 doesn't redo them.
+- **ADR's "Pointers for implementation"** section — names the specific files each phase will touch.
 
-Claude.ai is the right venue (prose work, no filesystem). The flow:
-1. Open a fresh Claude.ai conversation with `docs/adr/0004-survey.md` plus the cross-CommCell evidence (backlog #23) as context.
-2. Walk the consolidated-gaps and surprises sections. Decide scope (in/out of ADR 0004), pick a formula language (the D1 gap — JSONPath / CEL / jq / Python expr), reconcile S3 (the dropped-`attrName` problem now fixed in code — the ADR should reflect the model), choose the vendor → template → override precedence shape (E2/E6/E7), decide whether to address LS-specific gaps (LS1–5) in this ADR or leave LS bespoke as ADR 0003 phase 5 did.
-3. Draft `docs/adr/0004-three-face-metadata-vocabulary.md` (or similar) with the steering decisions encoded. Commit the ADR doc alongside the first phase per the methodology marker (#19) precedent set by ADR 0002 and ADR 0003.
-4. Implementation comes back to Claude Code in phases.
+Recommended phase-planning prompts to consider:
+- Which phase introduces CEL? The first or somewhere in the middle? (Implication: derived values can't be catalog-expressed until CEL is in place.)
+- Which of the six section types come first? Likely `metric` and `chart` (because they unlock the three regressions) before `card` and `multi_section`.
+- Do conformance + structured-failure records ship as their own phase, or threaded through every section-type phase?
+- Does each regressed subject get its own phase, or do all three migrate together once the vocabulary is in place?
+- Where does subject versioning land — early (foundational schema work) or late (after the first AI-rebuild forcing function)?
+
+Claude.ai is the right venue (prose work). The flow:
+1. Open a fresh Claude.ai conversation with the ADR and survey as context.
+2. Produce a phase-by-phase plan with names, scope, success criteria, and dependencies.
+3. Land the phase plan in `docs/adr/` or `docs/` alongside the ADR.
+4. Implementation comes back to Claude Code, one phase per session, per the ADR-0002/0003 precedent.
 
 ### Methodology retrospective for ADR 0003 — deferred
 
@@ -288,6 +306,17 @@ adopted after a Claude.ai chat drafted a Claude Code brief that
 asserted "the diagrams are SVG embedded in the markdown" — the
 file had no diagrams, and the wasted round trip motivated this
 discipline.
+
+**Operational note on survey persistence.** Future ADR surveys
+should write their plan-file deliverable to
+`/home/michiel/.claude/plans/` proactively before `ExitPlanMode`,
+so the post-survey commit task has a persistent source. The
+ADR 0004 survey had to be extracted from the chat transcript
+retroactively because no plan file was written — it worked but
+relied on transcript JSONL access that may not always be the
+right tool. Write the plan file as a first action of the survey
+session, then update it as findings accumulate, then exit plan
+mode with the file present.
 
 ### Signal that a session needs Claude Code
 

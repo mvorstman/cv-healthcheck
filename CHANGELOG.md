@@ -10,6 +10,26 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-28 (ADR 0004 drafted: three-face metadata vocabulary)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `8a0f4fa` (ADR doc), plus the wrap-up commit publishing this entry.
+**Status:** Proposed.
+
+ADR 0004 (three-face metadata vocabulary) drafted and committed at `docs/adr/0004-three-face-metadata-vocabulary.md`. The survey at `docs/adr/0004-survey.md` is the evidence base. Implementation phasing is deferred to a follow-on phase-planning session per the ADR's own scope statement.
+
+### Added
+
+- **`docs/adr/0004-three-face-metadata-vocabulary.md`** — defines the three faces (semantic / presentational / evaluative), six section types (table / findings / metric / chart / card / multi_section), CEL as the formula language with a defined primitive set and a STOP-and-steer rule for extensions, the three vendor-compliance shapes (per-row severity codes / StatusRow / inline threshold), the vendor → template → override rules layering with explicit precedence and a `muted` severity, conformance failures as section-grained structured records that bridge to the future AI-rebuild flow, subject versioning via `_vN` suffix subjects rather than a version field, and migration of the three regressed subjects (Capacity Licenses, Client Growth, Backup Job Summary) as the ADR's end-to-end validation.
+
+### Notes
+
+- **Out of scope for ADR 0004** (per the ADR itself): License Summary migration, AI authoring loop, recommendations / predictive face, cross-CommCell report identification (HANDOVER backlog #23), and implementation phase planning.
+- **The pre-ADR-0004 cleanup commits already address two of the survey's load-bearing gaps:** vendor-stable key preservation (`b871c46`) and unsupported-section-type loud failure (`4589409`). ADR 0004's Pointers section names them explicitly so implementation builds on top of them.
+- **Methodology marker.** Future ADR surveys should write their plan-file deliverable to `/home/michiel/.claude/plans/` proactively before `ExitPlanMode`, so the post-survey commit task has a persistent source. The ADR 0004 survey had to be extracted from the chat transcript retroactively because no plan file was written.
+
+---
+
 ## 2026-05-28 (pre-ADR-0004 cleanup: vendor-stable keys, loud failure for unsupported section types, report-ID backlog)
 
 **Branch:** `feature/basic-healthcheck-report-output`
