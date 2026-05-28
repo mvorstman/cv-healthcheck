@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-28 (pre-ADR-0004 cleanup: vendor-stable keys, loud failure for unsupported section types, report-ID backlog)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** (this session's cleanup commits; CHANGELOG + HANDOVER pointer commit follows)
+**Last commit:** `0f939ae` — CHANGELOG + HANDOVER: pre-ADR-0004 cleanup landed; backlog #23 added
 **Test status:** **575 passing** under both `pytest` and `python -m pytest` (was 566; +9 across two pre-ADR-0004 cleanup commits).
 
 ---
