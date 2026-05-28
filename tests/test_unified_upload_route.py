@@ -43,9 +43,11 @@ from cvhealthcheck.web.app import create_app
 
 # Reuse the SA-HTML and LS-CSV builders from the existing tests so the
 # new route is exercised against the same input shapes the old routes
-# already pass.
-from tests.test_security_assessment_import import HTML_SAMPLE
-from tests.test_license_summary_web import CSV_SAMPLE
+# already pass. The `tests/` directory is on sys.path during pytest
+# collection (no `tests/__init__.py`), so the sibling test modules are
+# imported directly by name rather than via a `tests.` package prefix.
+from test_security_assessment_import import HTML_SAMPLE
+from test_license_summary_web import CSV_SAMPLE
 
 
 # ---------------------------------------------------------------------------
