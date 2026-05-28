@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-28 (ADR 0004 drafted: three-face metadata vocabulary)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `343bd07` — CHANGELOG + HANDOVER: ADR 0004 drafted; next action is phase planning
+**Last commit:** `7f77eea` — HANDOVER backlog: dev tools retirement (#24) + tile detail_endpoint decision during ADR 0004 phase 4 (#25)
 **Test status:** **575 passing** under both `pytest` and `python -m pytest` (unchanged from prior session — this session is docs-only).
 
 ---
