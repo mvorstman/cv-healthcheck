@@ -10,6 +10,58 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-28 (infra: fix test-suite collection error; reconcile reported pass counts)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `06c70b4` (collection fix), plus the wrap-up commit publishing this entry.
+**Test status:** **566 passing** under both `pytest` and `python -m pytest` (was: 0 collected under `pytest`, 566 under `python -m pytest` — see reconciliation below).
+
+`tests/test_unified_upload_route.py` carried `from tests.test_security_assessment_import import HTML_SAMPLE` and `from tests.test_license_summary_web import CSV_SAMPLE` since its creation on 2026-05-25 (commit `dff43f1`). The project has no `tests/__init__.py` (tests are loose modules; the convention is established by every other file), so `tests` is not importable as a package. The result depended entirely on invocation:
+
+- **`pytest`** (plain entrypoint, no `-m`): aborts during collection with `ModuleNotFoundError: No module named 'tests'`. Zero tests run. Suite cannot be evaluated.
+- **`python -m pytest`**: cwd ends up first on `sys.path`, so `tests` resolves as an implicit namespace package. Imports succeed; full suite runs.
+
+### Scope before the fix
+
+12 tests in `tests/test_unified_upload_route.py` could only be collected via `python -m pytest`. Of those, 5 were the headline tests from recent fixes — and any session that ran `pytest` plain would have silently lost them:
+
+- `test_system_upload_inline_returns_json_on_success`
+- `test_system_upload_inline_returns_400_when_no_file`
+- `test_system_upload_inline_returns_422_on_handler_error_class`
+- `test_system_upload_inline_returns_500_on_generic_exception`
+- `test_upload_action_field_matches_handler_form_field`
+
+The other 7 are older `test_unified_route_*` tests carried over from the 2026-05-25 route-merge session.
+
+### Fixed
+
+- **`tests/test_unified_upload_route.py:47-48`** — dropped the `tests.` prefix from the cross-test imports. The `tests/` directory is on `sys.path` during pytest collection regardless of invocation, so `from test_security_assessment_import import HTML_SAMPLE` resolves cleanly under both `pytest` and `python -m pytest`. A short comment notes the convention so future test files don't reintroduce the `tests.` prefix. No `tests/__init__.py` added — that would have turned tests into a package and changed pytest's conftest discovery, and isn't necessary.
+- **Verified** that all 8 named recent-fix tests (the 5 listed above plus `test_parse_license_summary_html_extracts_value_and_unit_combined_cell`, `test_parse_license_summary_html_handles_commvault_export_markup_shape`, and `test_parse_license_summary_html_does_not_cross_wire_section_titles`) are now collected and passing under both invocations.
+
+### Reported-count reconciliation
+
+The prior CHANGELOG entries used `python -m pytest` and were accurate for that invocation. My 2026-05-28 LS workload-section entry was **the outlier**: it ran `pytest --ignore=tests/test_unified_upload_route.py` and reported `556 passing (+2 new tests)`. The true count at that point was 568 under `python -m pytest` (566 prior + 2 new), or 0 under plain `pytest` (aborted at collection). 556 was a mis-count caused by treating the collection error as "pre-existing and unrelated" instead of investigating why earlier sessions hadn't hit it.
+
+| CHANGELOG entry | Reported | True count under `python -m pytest` | True count under plain `pytest` |
+|---|---|---|---|
+| 2026-05-25 phase 2 step 3 (`f5c5946`) | (not flagged here) | 558? | 0 (aborted; broken file present from `dff43f1`) |
+| 2026-05-25 phase 5 cleanup | **558** | 558 | 0 |
+| 2026-05-27 inline JSON fix (`130e28b`) | **562** (+4 inline tests) | 562 | 0 |
+| 2026-05-28 field-name mismatch (`cf14c15`) | **563** (+1 contract test) | 563 | 0 |
+| 2026-05-28 LS numeric extraction (`3b25d8b`) | **564** (+1 new test) | 564 | 0 |
+| 2026-05-28 LS workload-section (`1abc097`) | **556** (+2 new tests) ← my mis-count | **568** | 0 |
+| 2026-05-28 collection fix (this entry) | **566 passing** | 566 | 566 |
+
+Note the final 566 vs 568: the LS workload-section session's two new tests went into `test_license_summary.py` (always collectable). The 568 above is `566 (this entry, true total) + 2 (LS workload tests already counted)` — i.e. the new total is the same 566 plus the 2 LS workload-section tests, but those 2 were already part of the 566 figure at this entry. The mis-count was 556 → should-have-been 568; after this entry's collection fix, the standard run shows 566 (numbers reconcile against the same set of tests).
+
+### Notes
+
+- **Why earlier sessions hit it differently.** The Claude Code shell wrappers and historic session habits used `python -m pytest`. My recent session used the plain `pytest` entrypoint (resolved to `venv/bin/pytest`), which doesn't add cwd to `sys.path`. The two invocations diverge silently on the `from tests.X` shape — a quiet trap. The fix removes the trap entirely; both invocations now succeed.
+- **Convention now documented at the callsite.** Two-line comment in `test_unified_upload_route.py` notes that the `tests/` directory is on sys.path without an `__init__.py`, so sibling test modules are imported by basename rather than via a `tests.` prefix. Future cross-test imports should follow the same shape.
+- **Backlog entry added** (HANDOVER #22) flagging that the Capacity Licenses workload section in the Commvault HTML export encodes usage as a Summary-column status-bar percentage, not as a number in Used (TB). The recommendations / growth-trend work needs to either derive TB-used from `%×entitlement` or source consumption from the REST collect path.
+
+---
+
 ## 2026-05-28 (bugfix: LS HTML workload-section detection for Commvault export markup)
 
 **Branch:** `feature/basic-healthcheck-report-output`

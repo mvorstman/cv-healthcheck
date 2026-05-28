@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-28 (bugfix: LS HTML workload-section detection for Commvault export markup)
+**Last updated:** 2026-05-28 (infra: fix test-suite collection error; reconcile reported pass counts)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `02722a4` — CHANGELOG + HANDOVER: LS HTML workload-section detection fix
-**Test status:** 556 passing. `tests/test_unified_upload_route.py` has a pre-existing collection error (`from tests.test_security_assessment_import import HTML_SAMPLE` with no `tests/__init__.py`) — unrelated to this fix.
+**Last commit:** `06c70b4` — fix test-suite collection error; CHANGELOG + HANDOVER pointer commit follows
+**Test status:** **566 passing** under both `pytest` and `python -m pytest`. The collection error in `tests/test_unified_upload_route.py` (`from tests.test_security_assessment_import import HTML_SAMPLE` — `tests` not a package) is fixed. The prior session's "556 passing" was a mis-count; see the CHANGELOG reconciliation table for the corrected counts at each session.
 
 ---
 
@@ -23,6 +23,10 @@ If you are a new chat / new session, read these files in order before doing anyt
 ---
 
 ## What was just completed
+
+**Infra: fix test-suite collection error; reconcile reported pass counts.** `tests/test_unified_upload_route.py` carried `from tests.test_security_assessment_import import HTML_SAMPLE` since 2026-05-25 (`dff43f1`). The project has no `tests/__init__.py`, so `tests` is not a package — and the result depended entirely on invocation: `pytest` (plain entrypoint) aborts at collection with 0 tests run; `python -m pytest` succeeds because cwd lands on `sys.path` and `tests` resolves as an implicit namespace package. 12 tests were silently uncollectable under plain `pytest`, including the 5 headline tests from the recent inline-upload and field-name-contract fixes. The prior session's "556 passing" report (the LS workload-section CHANGELOG) was a mis-count caused by running `pytest --ignore=tests/test_unified_upload_route.py` instead of investigating the collection error; the true count under `python -m pytest` at that point was 568. Fix drops the `tests.` prefix from the two cross-test imports — convention matches every other test file. Both invocations now collect 566 and pass 566. CHANGELOG carries a reconciliation table for every recent count claim.
+
+### Prior session: LS HTML workload-section detection
 
 **Bugfix: LS HTML workload-section detection for Commvault export markup.** The prior numeric-extraction fix made values render correctly, but the user pointed out that workload summary sections (Capacity / Operating Instances / Virtualization / User / Data Insights / Air Gap Protect / Other) are the CORE of a License Summary report — and the artifact was reporting **0 workload sections** for real exports. Investigation surfaced two stacked bugs. (1) `_table_section_name` at `license_summary/import_html.py:128-133` walked `find_previous(["h1",...,"div"])`, landed on the table's own wrapper `<div class="exportTable">`, then `.get_text()` dumped the table's full contents as the "section name" — never matched `SUMMARY_SECTION_NAMES`. Commvault exports wrap titles in `<span class="component-title-text">` inside nested divs, with zero `<h2>`-`<h6>` headings in the entire file. (2) Two workload tables (Virtualization Licenses, Data Insights Licenses) use bare `Available Total`/`Used` headers without unit qualifiers, so the header-only classifier returns `"other"` and the rows pile into `other_licenses`. The user's "9 Other Licenses rows" was actually 2+7 from mis-bucketed Virtualization and Data Insights sections. Fix: `_table_section_name` walks `find_all_previous()` matching against direct text only (string children, not recursive `get_text()`) against `_KNOWN_SECTION_TITLES`; a claimed-titles guard prevents cross-wiring; the parse loop routes section_name-in-SUMMARY_SECTION_NAMES tables to workload-summary regardless of classifier output. Real-file verification confirms 7 sections / 23 rows (4/2/2/5/7/1/2), 0 standalone other_licenses, 0 agent_feature, no cross-wiring. Two new tests use the real markup shape and would have caught both bugs.
 
@@ -92,6 +96,7 @@ Whatever surfaces. The current backlog is healthy (no urgent next code action); 
 19. **Methodology marker: ADR-commit-alongside-first-phase pattern.** ADR 0002 and ADR 0003 both landed this way (ADR doc committed in the same session as phase 1). Should `docs/PATTERNS.md` or HANDOVER's "Where work happens" section document this explicitly so future ADR sessions don't leave the doc uncommitted? Low-priority decision.
 20. **Methodology marker (new): catalog-model expressiveness limits.** ADR 0003 surfaced its model gaps twice — Approach A in phase 4 (added column_map + status_to_severity + HTML stripping) and the LS escalation in phase 5 (would need parameter substitution + page-aware GUID resolution + value-formula transforms). Both surfaced during *implementation*, not during *design*. Worth a deliberate examination of when to surface "the model isn't expressive enough" earlier in the ADR process. Retrospective fodder.
 21. **Cleanup: retire `reportsplus/checklist.py`** (dead since phase 4 — only callers were the deleted SA bespoke modules; LS doesn't use it). Small post-ADR-0003 cleanup.
+22. **LS Capacity Licenses consumption shape.** In the Commvault HTML export, the Capacity Licenses section encodes usage as a percentage status-bar in the Summary column (`<div class="status-bar complete-bar">0%</div>`), NOT as a number in the Used (TB) column — that cell is literally `<td></td>` for every Capacity Licenses row. After the 2026-05-28 workload-section fix, those rows now parse with `used=None`, `entitlement_value` populated, `status="0%"`. The recommendations / growth-trend work needs consumption in absolute terms — it must either derive TB-used from the Summary percentage × entitlement (with regex on the `0%` / `15%` text in `status`), or source consumption from the REST collect path where it may be structured. Flagged so the recommendations engine doesn't assume the Used column is populated for Capacity Licenses; the other six workload sections do populate Used.
 
 Smaller cleanups:
 
