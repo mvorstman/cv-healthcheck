@@ -204,7 +204,8 @@ function secBody(sec) {
         ? `<span class="m-badge ${bm[it.sev] || ''}" title="${esc(it.reason || '')}">${lm[it.sev] || esc(it.sev)}</span>`
         : '';
       const derived = it.derived ? `<span class="m-derived" title="Derived at collection time">ƒ</span>` : '';
-      const unit = it.unit ? `<span class="m-unit">${esc(it.unit)}</span>` : '';
+      // Suppress the unit for a sentinel ("n/a") value so it doesn't read "n/aTB".
+      const unit = (it.unit && it.value !== 'n/a') ? `<span class="m-unit">${esc(it.unit)}</span>` : '';
       return `<div class="metric-card">
         <div class="metric-lbl">${esc(it.label)}${derived}</div>
         <div class="metric-val">${esc(it.value)}${unit}</div>
