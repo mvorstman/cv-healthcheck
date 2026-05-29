@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-29 (ADR 0004 phase 4 — card section type, browser-verified)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `1cbd5f8` — HANDOVER: record card status-border idea in the cosmetic styling-pass note
+**Last commit:** `4a847ce` — HANDOVER #24: three-category classification for dev-tools retirement
 **Test status:** **691 passing** under both `pytest` and `python -m pytest` (was 673).
 
 ---
