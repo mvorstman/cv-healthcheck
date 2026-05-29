@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-29 (ADR 0004 phase plan committed)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** (this session's phase plan commit; CHANGELOG + HANDOVER pointer commit follows)
+**Last commit:** `63f23f9` — CHANGELOG + HANDOVER: ADR 0004 phase plan landed; next action is phase 1
 **Test status:** **575 passing** under both `pytest` and `python -m pytest` (unchanged from prior session — this session is docs-only).
 
 ---
