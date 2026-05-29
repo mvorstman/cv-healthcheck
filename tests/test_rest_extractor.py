@@ -382,7 +382,10 @@ def test_extract_fail_whole_on_fetch_error(db):
     assert "iota.section2" not in result.sections
 
 
-def test_extract_output_as_card_keeps_first_row_only(db):
+def test_extract_output_as_card_does_not_trim_rows(db):
+    # ADR 0004 phase 4: output_as == "card" now means only "this is a card
+    # section" — the extractor no longer trims to one row (the earlier rows[:1]
+    # stub was removed). Row selection is the card builder's concern.
     _seed_subject(
         db,
         "kappa",
@@ -399,7 +402,7 @@ def test_extract_output_as_card_keeps_first_row_only(db):
     result = extractor.extract("kappa", version=1)
     assert not result.errors
     assert result.section_output_types["kappa.section1"] == "card"
-    assert result.sections["kappa.section1"] == [{"k": "v1"}]
+    assert result.sections["kappa.section1"] == [{"k": "v1"}, {"k": "v2"}, {"k": "v3"}]
 
 
 def test_extract_timestamp_conversion(db):

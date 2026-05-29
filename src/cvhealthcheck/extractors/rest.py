@@ -127,8 +127,12 @@ class RESTExtractor:
                 return result
 
             output_as = extraction.get("output_as", "table")
-            if output_as == "card":
-                rows = rows[:1]
+            # ADR 0004 phase 4: output_as == "card" now means exactly one thing —
+            # "this is a card section" (result_to_artifact emits a CardSection).
+            # The "typically one row" selection is the card builder's concern
+            # (build_card_section reads the card's row), not a generic row trim
+            # here — so the earlier rows[:1] stub was removed to keep the token
+            # doing one job.
 
             # ADR 0004 conformance: validate the collected shape against the
             # section's declared schema (if any). On failure, record a

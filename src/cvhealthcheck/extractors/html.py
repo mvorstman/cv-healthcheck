@@ -72,6 +72,11 @@ class ExtractionResult:
     # result_to_artifact, which calls build_chart_section. Present only for
     # sections whose output_as == "chart".
     section_chart_specs: dict[str, dict] = field(default_factory=dict)
+    # ADR 0004 card sections: maps section_id → the catalog `card` declaration
+    # (items field-mapping, columns, optional evaluative rule). Carried to
+    # result_to_artifact, which calls build_card_section. Present only for
+    # sections whose output_as == "card".
+    section_card_specs: dict[str, dict] = field(default_factory=dict)
 
 
 class HTMLExtractor:

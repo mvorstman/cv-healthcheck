@@ -11,6 +11,7 @@ from cvhealthcheck.artifacts.models import (
     ArtifactSubject,
     ArtifactSummary,
     CanonicalArtifact,
+    CardSection,
     ChartSection,
     Finding,
     FindingsSection,
@@ -19,6 +20,7 @@ from cvhealthcheck.artifacts.models import (
     TableColumn,
     TableSection,
 )
+from cvhealthcheck.extractors.card_section import build_card_section
 from cvhealthcheck.extractors.chart_section import build_chart_section
 from cvhealthcheck.extractors.html import ExtractionResult
 from cvhealthcheck.extractors.metric_section import build_metric_section, worst_metric_severity
@@ -69,6 +71,7 @@ def result_to_artifact(
     severity_counts: dict[str, int] = {"critical": 0, "warning": 0, "good": 0, "info": 0}
     has_findings_section = False
     metric_sections: list[MetricSection] = []
+    card_sections: list[CardSection] = []
 
     for section_id, rows in result.sections.items():
         output_as = result.section_output_types.get(section_id, "table")
@@ -99,6 +102,13 @@ def result_to_artifact(
             # ADR 0004 phase 3: map table columns to a chart view (line/pie/…).
             spec = result.section_chart_specs.get(section_id, {})
             sections.append(build_chart_section(section_id, title, spec, rows))
+        elif output_as == "card":
+            # ADR 0004 phase 4: a labeled identity block; carries a section-level
+            # verdict via the reused metric threshold evaluator.
+            spec = result.section_card_specs.get(section_id, {})
+            card_section = build_card_section(section_id, title, spec, rows)
+            sections.append(card_section)
+            card_sections.append(card_section)
         else:
             columns = _derive_columns(rows)
             sections.append(TableSection(
@@ -110,11 +120,11 @@ def result_to_artifact(
             ))
 
     if not has_findings_section:
-        # A metric section's verdict drives overall status when there are no
-        # findings (e.g. the phase-2 test subject, and phase-5 capacity_license).
-        metric_status = _metric_overall_status(metric_sections)
-        if metric_status is not None:
-            summary = ArtifactSummary(status=metric_status)
+        # A metric or card section's verdict drives overall status when there
+        # are no findings (e.g. the phase-2/4 test subjects).
+        verdict_status = _verdict_overall_status(metric_sections, card_sections)
+        if verdict_status is not None:
+            summary = ArtifactSummary(status=verdict_status)
         else:
             has_data = any(
                 (isinstance(s, TableSection) and len(s.items) > 0)
@@ -213,17 +223,25 @@ _METRIC_SEV_TO_STATUS: dict[FindingSeverity, ArtifactStatus] = {
 }
 
 
-def _metric_overall_status(
+def _verdict_overall_status(
     metric_sections: list[MetricSection],
+    card_sections: list[CardSection],
 ) -> ArtifactStatus | None:
-    """Overall status from the worst metric verdict, or None if no metric
-    section carries a (non-muted) severity."""
+    """Overall status from the worst metric/card verdict, or None if nothing
+    carries a (non-muted) severity. Metric severity is per-item (worst item);
+    card severity is section-level."""
     rank = {ArtifactStatus.good: 0, ArtifactStatus.warning: 1, ArtifactStatus.critical: 2}
-    worst: ArtifactStatus | None = None
+    severities: list[FindingSeverity] = []
     for section in metric_sections:
         sev = worst_metric_severity(section)
-        if sev is None:
-            continue
+        if sev is not None:
+            severities.append(sev)
+    for card in card_sections:
+        if card.severity is not None and card.severity != FindingSeverity.muted:
+            severities.append(card.severity)
+
+    worst: ArtifactStatus | None = None
+    for sev in severities:
         status = _METRIC_SEV_TO_STATUS.get(sev, ArtifactStatus.good)
         if worst is None or rank.get(status, 0) > rank.get(worst, 0):
             worst = status

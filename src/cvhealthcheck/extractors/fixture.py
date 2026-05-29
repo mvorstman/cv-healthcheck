@@ -92,6 +92,8 @@ class FixtureExtractor:
                 result.section_metric_specs[section_id] = extraction.get("metric", {})
             elif output_as == "chart":
                 result.section_chart_specs[section_id] = extraction.get("chart", {})
+            elif output_as == "card":
+                result.section_card_specs[section_id] = extraction.get("card", {})
             result.sections[section_id] = rows
             result.section_output_types[section_id] = output_as
             result.section_titles[section_id] = section_title
