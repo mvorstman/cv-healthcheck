@@ -90,10 +90,10 @@ def test_subjects_table_seeded_after_migration(fresh_db: Path) -> None:
     finally:
         conn.close()
 
-    # Six system subjects + the internal "_metric_test" (migration 0010,
-    # phase 2) and "_chart_test" (migration 0011, phase 3) subjects, both
-    # hidden in the UI by default.
-    assert count == 8
+    # Six system subjects + the internal "_metric_test" (0010, phase 2),
+    # "_chart_test" (0011, phase 3), and "_card_test" (0013, phase 4) subjects,
+    # all hidden in the UI by default.
+    assert count == 9
     assert subject_ids == {
         "environment",
         "security_assessment",
@@ -103,6 +103,7 @@ def test_subjects_table_seeded_after_migration(fresh_db: Path) -> None:
         "backup_job_summary",
         "_metric_test",
         "_chart_test",
+        "_card_test",
     }
 
 
@@ -153,7 +154,7 @@ def test_all_seeded_subjects_are_active(fresh_db: Path) -> None:
 
 def test_migration_status_reports_all_applied(fresh_db: Path) -> None:
     statuses = migration_status(db_path=fresh_db)
-    assert len(statuses) == 12
+    assert len(statuses) == 13
     assert all(s["status"] == "applied" for s in statuses)
     migration_ids = [s["migration_id"] for s in statuses]
     assert migration_ids == sorted(migration_ids)

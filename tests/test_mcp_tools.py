@@ -139,7 +139,7 @@ def test_list_subjects_returns_seeded_subjects(patch_db: None) -> None:
     # Six system subjects + the internal "_metric_test" subject (migration
     # 0010, ADR 0004 phase 2).
     subjects = server.list_subjects()
-    assert len(subjects) == 8
+    assert len(subjects) == 9
 
 
 def test_list_subjects_items_have_expected_keys(patch_db: None) -> None:
@@ -157,7 +157,7 @@ def test_list_subjects_contains_security_assessment_and_license_summary(patch_db
 def test_list_subjects_status_filter_returns_only_active(patch_db: None) -> None:
     active = server.list_subjects(status="active")
     assert all(s["status"] == "active" for s in active)
-    assert len(active) == 8
+    assert len(active) == 9
 
 
 def test_list_subjects_status_filter_returns_empty_for_proposed(patch_db: None) -> None:
