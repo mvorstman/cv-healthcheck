@@ -174,8 +174,8 @@ function toggleInclude(id, val) {
 
 // ── SECTION BODY RENDERER ──
 function secBody(sec) {
-  const lm = {crit:'Critical',warn:'Warning',info:'Info',good:'Good'};
-  const bm = {crit:'b-crit',warn:'b-warn',info:'b-info',good:'b-good'};
+  const lm = {crit:'Critical',warn:'Warning',info:'Info',good:'Good',muted:'Muted'};
+  const bm = {crit:'b-crit',warn:'b-warn',info:'b-info',good:'b-good',muted:'b-muted'};
   const cm = {crit:'fc-crit',warn:'fc-warn',info:'fc-info',good:'fc-good'};
 
   if (sec.type === 'meta') {
@@ -183,6 +183,25 @@ function secBody(sec) {
     return `<div class="meta-grid ${gc}">${sec.rows.map(r =>
       `<div class="meta-card"><div class="meta-lbl">${esc(r.k)}</div><div class="meta-val ${r.cls || ''}">${esc(r.v)}</div></div>`
     ).join('')}</div>`;
+  }
+
+  if (sec.type === 'metric') {
+    // ADR 0004 metric section: summary values, CEL-derived values, and a
+    // severity badge (from a template-default threshold rule). A "n/a" value
+    // is a sentinel (e.g. capacity_license -1), distinct from a real 0.
+    if (!sec.items || !sec.items.length) return `<div style="font-size:12px;color:var(--text-3)">No metric data.</div>`;
+    return `<div class="metric-grid">${sec.items.map(it => {
+      const badge = it.sev
+        ? `<span class="m-badge ${bm[it.sev] || ''}" title="${esc(it.reason || '')}">${lm[it.sev] || esc(it.sev)}</span>`
+        : '';
+      const derived = it.derived ? `<span class="m-derived" title="Derived at collection time">ƒ</span>` : '';
+      const unit = it.unit ? `<span class="m-unit">${esc(it.unit)}</span>` : '';
+      return `<div class="metric-card">
+        <div class="metric-lbl">${esc(it.label)}${derived}</div>
+        <div class="metric-val">${esc(it.value)}${unit}</div>
+        ${badge}
+      </div>`;
+    }).join('')}</div>`;
   }
 
   if (sec.type === 'counters') {
