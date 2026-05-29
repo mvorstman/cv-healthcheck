@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-29 (ADR 0004 phase plan committed)
+**Last updated:** 2026-05-29 (ADR 0004 phase 1 — Foundation implemented)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `63f23f9` — CHANGELOG + HANDOVER: ADR 0004 phase plan landed; next action is phase 1
-**Test status:** **575 passing** under both `pytest` and `python -m pytest` (unchanged from prior session — this session is docs-only).
+**Last commit:** see the pointer commit at the end of this session (CHANGELOG + HANDOVER for phase 1).
+**Test status:** **625 passing** under both `pytest` and `python -m pytest` (was 575).
 
 ---
 
@@ -23,6 +23,20 @@ If you are a new chat / new session, read these files in order before doing anyt
 ---
 
 ## What was just completed
+
+**ADR 0004 phase 1 (Foundation) implemented.** Five deliverables, each its own commit(s) with tests, all infrastructure with **no user-visible change to existing subjects' content** (the three regressed subjects stay degraded — phases 5–7 fix them):
+
+- **2a CEL plumbing** (`2956afc`) — `cvhealthcheck.cel` evaluator wrapper over `cel-python` (`celpy`). `evaluate(expression, context)`, loud-fail, registers the ADR's `sum/count/avg/min/max/latest` aggregation primitives. ADR example #2 was shorthand (`.used_capacity` field-projection on a list isn't valid CEL; the working form is `.map(r, r.used_capacity)`).
+- **2b `template_version`** (`d3b6da6`) — `ArtifactSource.template_version` (optional read, set on write); REST also sets `collected_at`.
+- **2c family-derivation** (`aaeca6b`) — `subject_family(subject_id)` in `db/subjects.py`.
+- **2d source-tile cleanup + version pinning** (`7e1e611` backend, `4852c93` UI) — migration 0009 `customer_subject_pin`; resolution helpers; collect route resolves the active version; environment source tile drops CommCell version (kept in identity card); "Last collected" + version dropdown in the Data Source section; `/quick-hc/<id>/pin-version` route.
+- **2e conformance** (`5951750`) — `extractors/conformance.check_conformance`; `conformance` block in `extraction_instructions` JSON; verbatim ADR failure-record shape; section-grained in `RESTExtractor.extract`, emitted onto `artifact.metadata["conformance_failures"]`. Plumbing-only.
+
+625 passing under both invocations (was 575).
+
+**⚠️ Remaining gate for phase-1 sign-off: human browser verification.** Programmatic + app-level checks pass (`/quick-hc` renders 200, no template error; assembled data shows the cleaned environment source tile, `version_info`/`last_collected` per subject, old artifacts loading without `template_version`). The *visual* gate — open the workspace against the lab and confirm SA + LS still render correctly and capacity_license / client_growth / backup_job_summary remain in their **current degraded state** (NOT fixed yet — that's phases 5–7), and the source tile shows no CommCell version + a Last-collected timestamp + the (single-option) version dropdown — is the chart-regression lesson's mandatory step and needs a human at the browser. If anything other than the source-tile cleanup looks different on an existing subject, STOP (that would mean phase 1 accidentally changed rendering).
+
+### Prior: ADR 0004 phase plan committed at `docs/adr/0004-phase-plan.md`
 
 **ADR 0004 phase plan committed at `docs/adr/0004-phase-plan.md`.** Nine phases: 1 Foundation (CEL plumbing, `template_version`, version dropdown, source tile cleanup, conformance mechanism) → 2 `metric` section type → 3 `chart` section type → 4 `card` section type → 5 capacity_license migration → 6 client_growth migration → 6.5 dev tools retirement (HANDOVER backlog #24/#25 land here) → 7 backup_job_summary migration → 8 evaluative face. Two scope adjustments from the ADR: `multi_section` deferred to whatever ADR addresses License Summary as a whole (no in-scope consumer; one open design question), and dev tools retirement explicitly folded into the sequence as phase 6.5 rather than left as post-ADR cleanup. The ADR's vocabulary documentation still stands at six section types; the implementation ships five.
 
@@ -72,18 +86,17 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## Single recommended next action
 
-**ADR 0004 phase 1 implementation — Foundation: CEL plumbing, `template_version`, version dropdown, source tile cleanup, conformance mechanism.**
+**ADR 0004 phase 2 — `metric` section type. See `docs/adr/0004-phase-plan.md` §Phase 2 for scope.**
 
-Phase planning is complete. The plan document lives at `docs/adr/0004-phase-plan.md` and pins nine phases (1 Foundation → 2 metric → 3 chart → 4 card → 5 capacity_license → 6 client_growth → 6.5 dev tools retirement → 7 backup_job_summary → 8 evaluative face). Phase 1 is the foundation that subsequent phases build on; everything from CEL evaluation through subject versioning through the conformance-failure record shape lands here.
+Phase 1 (Foundation) is implemented and committed; phase 2 is the first section-type phase and the first to *exercise* phase 1's machinery (CEL derivations stored at collection time, the conformance mechanism per section). Scope per the phase plan: catalog declaration for metric sections (semantic + presentational + evaluative metadata), canonical model extension, CEL-driven derivations, Python + JS renderers, conformance applied. Validation gate: a test subject (or partial migration of a regressed subject) exercises a metric section end-to-end, **browser-verified against real data**.
 
-Inputs the phase 1 session needs:
+**Before phase 2 starts**, close phase 1's open gate: a human browser-verification pass against the lab (see "What was just completed" above). If that pass surfaces any unexpected rendering change to an existing subject, that's a phase-1 STOP, not a phase-2 concern.
 
-- **`docs/adr/0004-phase-plan.md`** — the phase 1 scope, validation gate, and STOP triggers.
-- **`docs/adr/0004-three-face-metadata-vocabulary.md`** — the ADR itself; phase 1 implements the foundational pieces of the Decision section.
-- **`docs/adr/0004-survey.md`** — the evidence base; gap D1 (formula language) is the foundational CEL decision phase 1 makes concrete.
-- **Pre-cleanup commits** (`b871c46` vendor-key preservation, `4589409` loud-failure validation) — already in place; phase 1 builds on them, doesn't redo them.
+Inputs phase 2 needs:
 
-The phase ends with a clean working tree, all tests passing under both `pytest` invocations, and HANDOVER updated to point at phase 2. Phase succession is documented in the phase plan's last section.
+- **`docs/adr/0004-phase-plan.md`** §Phase 2 — scope, validation gate.
+- **`docs/adr/0004-three-face-metadata-vocabulary.md`** §"Section types", §"The three faces".
+- Phase 1 surfaces it builds on: `cvhealthcheck.cel.evaluate`, `extractors/conformance.check_conformance`, `db/subjects.subject_family` + version pinning, `ArtifactSource.template_version`.
 
 ### Methodology retrospective for ADR 0003 — deferred
 
@@ -122,6 +135,7 @@ Whatever surfaces. The current backlog is healthy (no urgent next code action); 
 23. **Report IDs are CommCell-specific, not portable identifiers.** API captures from three different CommCells confirmed: License Summary is report 206 on the dev lab but 178 on another; Backup Job Summary is 194 vs 168; Storage Utilization By Application is 199 vs 603. Worse, the column schema of "the same" dataset can differ across CommCells (e.g. BJS Job details has `JobStatus, JobId, SizeofApplication, EstimatedMediaSize, ProtectedObjects, FailedObjects, FailedFolders` on one CommCell and `ClientName, Status, StartTime, SizeKB` on another). Any catalog row that hardcodes a numeric `report_id` is implicitly single-deployment-scoped. ADR 0004 must address how subjects identify themselves across deployments — likely by report name or some other stable semantic identifier, with per-deployment resolution to numeric ID. Surface during ADR 0004 design conversation; don't try to fix in pre-cleanup.
 24. **Dev tools retirement (full retirement, post-ADR-0004).** Dev tools surface (`src/cvhealthcheck/web/routes/development.py` plus 14 dedicated templates, 7 orphan helpers in `shared.py`, 4 stale data files in `data/catalog/metrics/`) is queued for retirement. Investigation 2026-05-28 produced a three-tier removal plan (Tier A safe-to-delete, Tier B requires callsite updates, Tier C requires product decisions). Most consequential dependency: the production Quick HC report's tile detail links resolve to dev routes (`main.metrics_client_growth`, `main.metrics_capacity_license`). Natural sequencing: retire after ADR 0004 phase 4 (chart section type) lands, so the workspace has its own canonical chart rendering surface that tile `detail_endpoint`s can point at. Investigation details in the chat transcript; concrete surfaces include 14 templates, 7 orphan helpers, the Chart.js CDN dependency (only consumer), the dev `/security-assessment` cluster (overlaps backlog item about retiring the legacy `/security-assessment` page in the smaller-cleanups list), the `/reportsplus/*` exploration pages (HTML wraps around CLI output), and updates needed in 4 test files plus README.md.
 25. **Tile detail_endpoint resolution during ADR 0004.** Quick HC report tile `detail_endpoint`s for `client_growth` and `capacity_license` currently resolve to dev routes. ADR 0004's chart section type (phase 4) must account for this: either repoint `detail_endpoint` to a new in-workspace chart view, or drop `detail_endpoint`s from these tiles. Decision point during phase 4 design. Affects: `quickhc/registry.py:248,282`; `quickhc/report_service._detail_url_for_tile()`; `templates/quick_hc_report.html:366,380,411`.
+26. **ADR 0004 text: uniqueness-constraint wording fix (queued for Proposed→Accepted).** ADR 0004 §"Subject versioning" says the catalog's uniqueness constraint is "on `subject_id` (unchanged)." The actual constraint (ADR 0003 migration 0003) is `UNIQUE (subject_id, version)` — there's an integer `version` column plus the new `_vN`-suffix-on-subject_id convention. The two don't conflict (`capacity_license_v2` is a distinct `subject_id` row with its own `version=1`), so this is a wording inaccuracy, not a design problem. Surfaced during phase 1 step 1; steering decision was to leave the ADR text as-is for now and fix the wording when ADR 0004 changes status from Proposed to Accepted (end of all phases). Also worth a sentence then on the two-versioning-mechanisms coexistence.
 
 Smaller cleanups:
 
@@ -344,10 +358,10 @@ than attempting the work.
 cd /home/michiel/dev/cv-healthcheck
 source venv/bin/activate
 python -m compileall -q src
-python -m pytest -q                                # expect 564 passing
+python -m pytest -q                                # expect 625 passing
 git status --short                                 # expect clean
 sqlite3 data/app.db "SELECT customer_id,customer_name FROM customers;"
 sqlite3 data/app.db "SELECT project_id,customer_id,project_number FROM projects;"
 sqlite3 data/app.db "SELECT finalization_number, project_id FROM finalizations ORDER BY project_id, finalization_number;"
-ls docs/adr/                                       # expect 0001, 0002, README
+ls docs/adr/                                       # expect 0001-0004 + phase-plan + survey + README
 ```

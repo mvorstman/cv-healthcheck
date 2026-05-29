@@ -10,6 +10,37 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-29 (ADR 0004 phase 1 — Foundation)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `2956afc` (2a CEL), `d3b6da6` (2b template_version), `aaeca6b` (2c family), `7e1e611` (2d backend pinning), `4852c93` (2d UI), `5951750` (2e conformance), plus the wrap-up + pointer commits publishing this entry.
+
+ADR 0004 phase 1 (Foundation) implemented. All infrastructure; **no user-visible change to existing subjects' content** (the three regressed subjects stay degraded — that's phases 5–7). 625 passing under both `pytest` and `python -m pytest` (was 575).
+
+### Added
+
+- **CEL plumbing (library: `cel-python`, imported as `celpy`).** New `cvhealthcheck.cel` package with a thin evaluator wrapper: `evaluate(expression, context) -> native value`. Loud-fail (`CELCompileError` / `CELEvaluationError`, both under `CELError`); never returns None to signal failure. Registers the ADR's catalog-vs-code-boundary aggregation primitives (`sum/count/avg/min/max/latest`) as custom CEL functions — plain CEL has `size()` but not these. Field transforms (`parse_number`, `parse_percent`, `strip_html`, `lookup`) deferred until a section type exercises them (phase 2+).
+- **`ArtifactSource.template_version`** — the version-bearing subject_id a collection ran under. Optional on read (old artifacts load cleanly), set on every write via `result_to_artifact`. REST collection now also sets `collected_at`.
+- **`subject_family(subject_id)`** + `version_number`, `list_family_versions`, `get/set_pinned_subject_id`, `resolve_active_version` in `db/subjects.py` — the family-derivation convention (strip terminal `_vN`) and version resolution.
+- **Migration 0009 `customer_subject_pin`** `(customer_id, subject_family, pinned_subject_id)` PK `(customer_id, subject_family)` — per-customer template-version pinning. Collection resolves the pin (else latest version); the `/quick-hc/<subject_id>/pin-version` route persists the dropdown selection.
+- **Source-tile version dropdown + "Last collected" (UTC)** in the workspace Data Source section, injected per subject by `build_subject_initial_data` (no edits to individual builders). Single-version families render a disabled one-option select.
+- **Conformance mechanism** — `extractors/conformance.check_conformance(rows, conformance)` validates collected section data against a `conformance` block in the section's `extraction_instructions` JSON (`required_fields` / `field_types` / `enums` / `cardinality`). Returns the verbatim ADR 0004 failure-record shape on the first failing aspect. Section-grained in `RESTExtractor.extract` (failed section recorded in `ExtractionResult.section_failures`, siblings continue); emitted onto `artifact.metadata["conformance_failures"]`. Plumbing-only — no section type exercises it in phase 1.
+
+### Changed
+
+- **CommCell server version removed from the environment subject's DATA SOURCE tile** (it's a deployment property, not a property of this collection — ADR 0004 §Provenance). It remains in the environment subject's identity card.
+- `RESTExtractor.extract` now distinguishes hard transport errors (fail-whole, unchanged) from conformance failures (section-grained, new).
+
+### Notes
+
+- **CEL library choice — `cel-python` over `common-expression-language` (Rust).** Both resolve with prebuilt aarch64 wheels and evaluate the ADR's example expressions. `cel-python` won on maturity (Cloud Custodian, latest release 2026-01-31), a distinct exception hierarchy (clean loud-fail), and dependency hygiene — the Rust binding failed to import out of the box (undeclared `typing_extensions`) and drags CLI deps (`typer`/`rich`/`prompt-toolkit`) into a library install. Performance is irrelevant here (derivations run once at collection over ≤13-row windows). Confirmed by the steering chat before code landed.
+- **ADR example #2 was shorthand.** `sum(records.filter(r, ...).used_capacity)` projects a field off a *list*, which is not valid CEL; the working form uses `.map(r, r.used_capacity)`. Also `sum`/etc. are not CEL builtins — they're the ADR's documented aggregation primitives, registered in the wrapper. This implements the primitive set; it does not extend it (the stop-and-steer rule holds).
+- **Two versioning mechanisms coexist.** ADR 0003's integer `version` column (`UNIQUE (subject_id, version)`) and ADR 0004's `_vN`-suffix-on-subject_id convention. They don't conflict — `capacity_license_v2` is a distinct subject_id row. The ADR text says the uniqueness constraint is "on subject_id (unchanged)"; the actual constraint is `(subject_id, version)`. Wording fix queued for ADR 0004's Proposed→Accepted transition (HANDOVER backlog).
+- **Storage-keying for real multi-version is phase 5+.** Today every family has one version, so `resolve_active_version` returns the requested subject_id unchanged and artifacts store under the family id as before. When a real v2 lands and the dropdown switches versions, how the artifact store keys versioned-vs-family artifacts needs settling — out of scope for phase 1 (one version everywhere).
+- **Browser verification (the workflow's central gate) is the user's remaining step.** Programmatic + app-level verification done: `/quick-hc` renders 200 with no template error; the assembled data shows the cleaned environment source tile, `version_info`/`last_collected` on every subject, and existing artifacts loading without `template_version`. The visual gate — confirming SA/LS still render correctly and capacity_license/client_growth/backup_job_summary remain in their current degraded state (NOT fixed yet) against the live lab — needs a human at the browser per the chart-regression lesson.
+
+---
+
 ## 2026-05-29 (ADR 0004 phase plan committed)
 
 **Branch:** `feature/basic-healthcheck-report-output`
