@@ -12,10 +12,13 @@ or:
 
 from __future__ import annotations
 
+import functools
 import json
 import sqlite3
 from typing import Any
 from uuid import uuid4
+
+import anyio
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -85,7 +88,6 @@ def _load_pending_staged_record(db: sqlite3.Connection, stage_id: str) -> dict[s
     return record
 
 
-@mcp.tool()
 def get_canonical_schema() -> dict:
     """
     Return the canonical artifact schema so Claude understands
@@ -94,7 +96,6 @@ def get_canonical_schema() -> dict:
     return _canonical_schema()
 
 
-@mcp.tool()
 def list_subjects(status: str | None = None) -> list[dict]:
     """List all subjects in the Report Inventory catalog."""
     db = get_db()
@@ -113,7 +114,6 @@ def list_subjects(status: str | None = None) -> list[dict]:
         db.close()
 
 
-@mcp.tool()
 def save_staged_artifact(
     subject_id: str,
     artifact_json: str,
@@ -150,7 +150,6 @@ def save_staged_artifact(
         db.close()
 
 
-@mcp.tool()
 def list_staged_artifacts(
     status: str | None = None,
     subject_id: str | None = None,
@@ -167,7 +166,6 @@ def list_staged_artifacts(
         db.close()
 
 
-@mcp.tool()
 def approve_staged_artifact(
     stage_id: str,
     reviewed_by: str | None = None,
@@ -183,7 +181,6 @@ def approve_staged_artifact(
         db.close()
 
 
-@mcp.tool()
 def reject_staged_artifact(
     stage_id: str,
     reviewed_by: str | None = None,
@@ -202,7 +199,6 @@ def reject_staged_artifact(
         db.close()
 
 
-@mcp.tool()
 def propose_new_subject(
     subject_id: str,
     version: int,
@@ -283,7 +279,6 @@ def propose_new_subject(
     return {"stage_id": stage_id, "subject_id": subject_id, "status": "pending"}
 
 
-@mcp.tool()
 def list_proposed_subjects(status: str | None = None) -> list[dict]:
     """
     List subject proposals in the staging queue.
@@ -321,7 +316,6 @@ def list_proposed_subjects(status: str | None = None) -> list[dict]:
         db.close()
 
 
-@mcp.tool()
 def delete_subject(subject_id: str) -> dict:
     """
     Delete a subject from the Report Inventory catalog.
@@ -345,6 +339,46 @@ def delete_subject(subject_id: str) -> dict:
         db.close()
     store.delete_artifact(subject_id)
     return result
+
+
+# ── Tool registration (ADR 0004 #35 hardening) ──
+#
+# FastMCP (mcp 1.27.1) runs a SYNC tool function *inline on the asyncio event
+# loop* that also drives the stdio transport — call_fn_with_arg_validation does
+# `else: return fn(...)`, with no thread offload. So a slow/blocking tool (a live
+# REST/CommCell call, or DB lock contention) would freeze the transport, not just
+# that one call. We register each tool wrapped so its blocking body runs in a
+# worker thread, keeping the event loop free to service stdio.
+#
+# The module-level functions above stay SYNC — directly callable and unit-tested
+# as-is; only their REGISTERED form is thread-offloaded, and tool LOGIC is
+# unchanged (this includes the writers — only their execution context moves off
+# the loop). This is proactive hardening against the confirmed loop-blocking
+# fragility; it is NOT the fix for the client->SSH->transport hang (#35), which
+# is separate and remains open pending the client launch config.
+def _run_in_thread(fn):
+    """Register-time wrapper: run a sync tool's blocking body in a worker thread
+    so it never blocks the MCP event loop / stdio transport. Preserves the
+    function's signature + annotations (functools.wraps) so FastMCP's schema
+    introspection is unchanged."""
+    @functools.wraps(fn)
+    async def _wrapper(*args, **kwargs):
+        return await anyio.to_thread.run_sync(functools.partial(fn, *args, **kwargs))
+    return _wrapper
+
+
+for _tool in (
+    get_canonical_schema,
+    list_subjects,
+    save_staged_artifact,
+    list_staged_artifacts,
+    approve_staged_artifact,
+    reject_staged_artifact,
+    propose_new_subject,
+    list_proposed_subjects,
+    delete_subject,
+):
+    mcp.tool()(_run_in_thread(_tool))
 
 
 def main() -> None:
