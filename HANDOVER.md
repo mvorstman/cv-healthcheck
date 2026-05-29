@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-29 (MCP #35 resolved + hardened; phase 6 complete)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** see the pointer commit at the end of this session.
+**Last commit:** `8f48b19` — CHANGELOG + HANDOVER: MCP #35 resolved (SSH idle-timeout) + hardening recorded
 **Test status:** **708 passing** under both `pytest` and `python -m pytest` (was 704; +3 MCP hardening commits this session).
 
 ---
