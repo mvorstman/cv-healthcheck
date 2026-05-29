@@ -799,7 +799,10 @@ def test_quick_hc_renderer_does_not_repeat_subject_title_in_report_sections_pane
     assert "Description saved." in body
     assert "Not yet persisted" not in body
     assert 'oninput="autoResizeDescription(this)"' in body
-    assert "requestAnimationFrame(bindDescriptionEditor);" in body
+    # bindDescriptionEditor is still invoked post-render via requestAnimationFrame
+    # (ADR 0004 phase 3 also mounts charts in the same rAF callback).
+    assert "requestAnimationFrame(" in body
+    assert "bindDescriptionEditor()" in body
 
 
 def test_quick_hc_workspace_sources_use_standardized_shape_and_labels(

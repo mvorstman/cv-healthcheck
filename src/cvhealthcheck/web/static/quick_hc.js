@@ -214,6 +214,16 @@ function secBody(sec) {
     }).join('')}</div>`;
   }
 
+  if (sec.type === 'chart') {
+    // ADR 0004 chart section: emit a canvas placeholder carrying the canonical
+    // chart data; mountCharts() (run after this HTML is inserted) instantiates
+    // the Chart.js chart. One renderer, chart_type-discriminated.
+    const cd = sec.chart || {};
+    if (!cd.series || !cd.series.length) return `<div style="font-size:12px;color:var(--text-3)">No chart data.</div>`;
+    const cfg = esc(JSON.stringify(cd));
+    return `<div class="chart-wrap"><canvas class="chart-canvas" id="cc-${esc(sec.id)}" data-chart-config="${cfg}"></canvas></div>`;
+  }
+
   if (sec.type === 'counters') {
     const cc = {Critical:'cc-crit',Warning:'cc-warn',Info:'cc-info',Good:'cc-good'};
     const total = Object.values(sec.counters).reduce((a, b) => a + b, 0);
@@ -327,6 +337,7 @@ function showOverview() {
   activeId = null; mode = 'overview';
   _writeSubjectToHash(null);
   _setNavActive('nav-overview');
+  teardownCharts();  // leaving the config view — release any chart instances
   renderLeft();
   document.getElementById('right-footer').style.display = 'none';
 
@@ -522,7 +533,7 @@ function openConfig(id) {
     </div>
     ${deleteSection}
   </div>`;
-  requestAnimationFrame(bindDescriptionEditor);
+  requestAnimationFrame(() => { bindDescriptionEditor(); mountCharts(); });
 }
 
 function toggleSec(sid, secId, val) {
@@ -552,6 +563,87 @@ function setVersion(subjId, version) {
   f.appendChild(inp);
   document.body.appendChild(f);
   f.submit();
+}
+
+// ── CHART.JS LIFECYCLE (ADR 0004 chart section) ──
+// Module-level registry of live Chart instances. We destroy them before every
+// re-render so re-collect / source-switch never leaks a chart instance or hits
+// Chart.js's "Canvas is already in use" footgun.
+let _chartInstances = [];
+
+function teardownCharts() {
+  _chartInstances.forEach(c => { try { c.destroy(); } catch (e) { /* already gone */ } });
+  _chartInstances = [];
+}
+
+// Chart.js config from the canonical chart data. ONE function; chart_type
+// discriminates. Line/bar: labels + N datasets over a shared X. Pie/doughnut:
+// labels (slices) + the single series' data as slice values.
+const _CHART_PALETTE = ['#4f8ef7', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#14b8a6'];
+
+function buildChartJsConfig(cd) {
+  const type = cd.chart_type || 'line';
+  const labels = cd.labels || [];
+  const series = cd.series || [];
+  const isCircular = (type === 'pie' || type === 'doughnut' || type === 'polarArea');
+
+  let datasets;
+  if (isCircular) {
+    // Single proportional series: its data are the slice values.
+    datasets = [{
+      label: series[0] ? series[0].label : '',
+      data: series[0] ? series[0].data : [],
+      backgroundColor: labels.map((_, i) => _CHART_PALETTE[i % _CHART_PALETTE.length]),
+      borderWidth: 1,
+    }];
+  } else {
+    datasets = series.map((s, i) => ({
+      label: s.label,
+      data: s.data,
+      borderColor: _CHART_PALETTE[i % _CHART_PALETTE.length],
+      backgroundColor: _CHART_PALETTE[i % _CHART_PALETTE.length] + '33',
+      fill: false,
+      tension: 0.25,
+      pointRadius: 2,
+    }));
+  }
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: true, position: isCircular ? 'right' : 'top' } },
+  };
+  if (!isCircular) {
+    options.scales = {
+      x: { title: { display: !!cd.x_axis, text: cd.x_axis || '' } },
+      y: { title: { display: !!cd.y_axis, text: cd.y_axis || '' }, beginAtZero: true },
+    };
+  }
+  return { type, data: { labels, datasets }, options };
+}
+
+// Instantiate Chart.js for every chart canvas in the right panel. Tears down
+// prior instances first. If Chart.js failed to load (CDN down), shows a
+// visible fallback instead of silently rendering nothing.
+function mountCharts() {
+  teardownCharts();
+  const canvases = document.querySelectorAll('.chart-canvas');
+  if (!canvases.length) return;
+  if (typeof Chart === 'undefined') {
+    canvases.forEach(cv => {
+      if (cv.parentElement) cv.parentElement.innerHTML =
+        '<div class="chart-unavailable">Chart library unavailable — could not load Chart.js.</div>';
+    });
+    return;
+  }
+  canvases.forEach(cv => {
+    let cd;
+    try { cd = JSON.parse(cv.dataset.chartConfig); } catch (e) { return; }
+    // Belt-and-braces: destroy any instance still bound to this exact canvas.
+    const existing = Chart.getChart(cv);
+    if (existing) { try { existing.destroy(); } catch (e) {} }
+    _chartInstances.push(new Chart(cv.getContext('2d'), buildChartJsConfig(cd)));
+  });
 }
 
 // Format an ISO timestamp as "YYYY-MM-DD HH:MM UTC" for the source tile.

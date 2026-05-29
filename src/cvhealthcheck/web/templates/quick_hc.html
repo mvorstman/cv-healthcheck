@@ -137,6 +137,11 @@
 </div>
 {% endif %}
 
+<!-- Chart.js for ADR 0004 chart section types (loaded before quick_hc.js so
+     window.Chart is available when section bodies mount). Pinned to major 4
+     (current stable); the chart renderer shows a visible fallback if it fails
+     to load rather than rendering nothing. -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="{{ url_for('static', filename='quick_hc.js', v=asset_version) }}"></script>
 <script>
   (function () {
