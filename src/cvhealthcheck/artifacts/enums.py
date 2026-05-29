@@ -22,6 +22,10 @@ class FindingSeverity(str, Enum):
     warning  = "warning"
     good     = "good"
     info     = "info"
+    # ADR 0004 evaluative face: explicit suppression severity. Used by
+    # mute_on_sentinel (a metric whose value is "n/a" is not judged) and, in
+    # phase 8, by override rules that neutralize a prior layer's verdict.
+    muted    = "muted"
 
 
 class FindingStatus(str, Enum):
