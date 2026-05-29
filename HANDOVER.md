@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-29 (ADR 0004 phase 2 — metric section type implemented + browser-verified)
+**Last updated:** 2026-05-29 (ADR 0004 phase 3 — chart section type + MCP schema reconciliation, browser-verified)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `9478541` — HANDOVER: MCP staleness backlog (#30-#33) + phase-3 scope note
-**Test status:** **658 passing** under both `pytest` and `python -m pytest` (was 625).
+**Last commit:** see the pointer commit at the end of this session (CHANGELOG + HANDOVER for phase 3).
+**Test status:** **673 passing** under both `pytest` and `python -m pytest` (was 658).
 
 ---
 
@@ -23,6 +23,19 @@ If you are a new chat / new session, read these files in order before doing anyt
 ---
 
 ## What was just completed
+
+**ADR 0004 phase 3 (chart section type + MCP schema reconciliation) implemented and browser-verified PASS** (Safari + Firefox). The `chart` section type lands as a single `chart_type`-discriminated renderer (line + pie), bundled with the MCP schema reconciliation (#30/#31). Deliverables, each its own commit(s) with tests:
+
+- **3a+3b** (`6423a34`) — `build_chart_section` (reusable; a chart is a view over a table — labels + series column mapping; chart_type discriminates). The `ChartSection` model carried both shapes with **no change**. `result_to_artifact` emits on `output_as=="chart"`.
+- **3d** (`225ddf7`) — `canonical_view` chart branch → one canonical chart-data structure.
+- **3e** (`618b7c3`) — Chart.js 4 in the workspace; ONE `buildChartJsConfig`; module-level instance registry + `teardownCharts()` (no leaked canvases — browser-verified clean re-render); CDN-fail fallback.
+- **3f** (`6f066a0`) — `chart` added to `SUPPORTED_SECTION_TYPES`; loud guard still rejects `card`/`multi_section`.
+- **3g+3c** (`f929c7c`) — `_chart_test` subject (migration 0011) with line + pie sections from fixtures; conformance per chart section; `is_test` toggle.
+- **3h** (`ce88cac`) — MCP `get_canonical_schema` now **derives** from `model_json_schema()` (drift structurally impossible); `supported_section_types` sourced from `SUPPORTED_SECTION_TYPES`; **non-negotiable drift-guard test** (verified it fires on a stale hand-schema). Backlog **#30 and #31 closed**.
+
+673 passing both invocations (was 658). Browser-verified: line + pie render correctly from the same renderer; canvas lifecycle clean across Collect / re-navigation (the chart-regression-class bug is verified absent); SA, LS, the three regressed subjects, and the phase-2 metric subject all unchanged; toggle hides test subjects by default.
+
+### Prior: ADR 0004 phase 2 (metric section type) — implemented + browser-verified PASS
 
 **ADR 0004 phase 2 (metric section type) implemented and browser-verified PASS.** The `metric` section type lands end-to-end — the first canonical metric rendering through the full three-face vocabulary. Eight deliverables, each its own commit(s) with tests:
 
@@ -98,19 +111,20 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## Single recommended next action
 
-**ADR 0004 phase 3 — `chart` section type, Chart.js renderer. See `docs/adr/0004-phase-plan.md` §Phase 3 for scope.**
+**ADR 0004 phase 4 — `card` section type. See `docs/adr/0004-phase-plan.md` §Phase 4 for scope.**
 
-Phases 1 (Foundation) and 2 (metric) are implemented and browser-verified PASS. Phase 3 adds the `chart` section type: catalog declaration (axis, series, render mode), canonical model extension, Python renderer, JS renderer using **Chart.js** (the chosen library; `metric_detail.html` and `quick_hc_report.html` already load it from CDN), conformance applied. Validation gate: a test subject exercises a chart section end-to-end, **browser-verified against real data**.
+Phases 1 (Foundation), 2 (metric), and 3 (chart) are implemented and browser-verified PASS. Phase 4 adds the `card` section type (key-value identity block, typically one row): catalog declaration, canonical model (a `CardSection` model does **not** exist yet — unlike Metric/Chart which pre-existed; phase 4 adds it), Python renderer, JS renderer, conformance applied. Validation gate: a test subject exercises a card section end-to-end, **browser-verified**.
 
-**Phase 3 also owns the MCP schema reconciliation (backlog #30 + #31).** Phase 3 is touching the section vocabulary anyway — adding `chart` to `SUPPORTED_SECTION_TYPES` and the renderers — which is the natural moment to (a) reconcile the MCP `get_canonical_schema` with the live models (the hand-maintained schema is two phases stale: see #30) and add the **non-negotiable drift-guard test**, and (b) make `valid_section_types` true for `chart` (#31). Without the drift guard, the schema/validator split (stale schema advertises shapes the live-model validator rejects — the May-24 errors) will keep recurring as the models evolve; it's the loud-fail mechanism missing from the tool most central to ADR 0005's AI-authoring loop. See the MCP consistency investigation in this session's chat for the full finding.
+Phase 4 reuses the now well-worn pattern directly: a `_card_test` internal subject collecting from a fixture via `FixtureExtractor` (one test subject per section type — `_metric_test`, `_chart_test`, then `_card_test`), the `output_as` discriminator, the `is_test` toggle, and a `build_card_section` mirroring `build_metric_section`/`build_chart_section`. **`card` must be added to `SUPPORTED_SECTION_TYPES`** (it's currently the loud-fail example) **and the `subject_sections` CHECK constraint** — note the CHECK currently allows only `('findings','table','metric','chart')`, so phase 4 needs a migration to add `'card'` before a card row can be inserted (this is new vs. phases 2/3, where metric/chart were already CHECK-allowed). The drift-guard test will automatically cover the new `CardSection` via the derived MCP schema.
 
-Phase 3 should reuse phase 2's machinery directly: it can add a second internal test subject (or a chart section on the existing `_metric_test`) collecting from a fixture via `FixtureExtractor`, governed by the same `is_test` visibility toggle. The `ChartSection` model already exists in `models.py` (type/chart_type/axes/labels/series) but, like MetricSection before phase 2, is **not emitted by `result_to_artifact`** — phase 3 makes it real and adds the renderers. Note `section_types.SUPPORTED_SECTION_TYPES` currently pins `{findings, table, metric}`; phase 3 adds `chart`.
+Inputs phase 4 needs:
+- **`docs/adr/0004-phase-plan.md`** §Phase 4; **ADR** §"Section types" (card = key-value identity block).
+- Phase 2/3 surfaces it builds on: `build_metric_section`/`build_chart_section` (pattern for `build_card_section`), `FixtureExtractor`, `result_to_artifact` `output_as` dispatch, `canonical_view`/`quick_hc.js` section dispatch, the `is_test` toggle.
 
-Inputs phase 3 needs:
+### Carried forward for later phases
 
-- **`docs/adr/0004-phase-plan.md`** §Phase 3 — scope, validation gate, the Chart.js / mini-chart distinction.
-- **`docs/adr/0004-three-face-metadata-vocabulary.md`** §"Section types".
-- Phase 2 surfaces it builds on: `extractors/metric_section.build_metric_section` (pattern for a `build_chart_section`), `FixtureExtractor`, the `render_mode`/`output_as` discriminator pattern, the `is_test` toggle, `cvhealthcheck.cel.evaluate`.
+- **Phase 5 (capacity_license) — TWO chart-ish surfaces, neither a phase-3 chart section.** (1) Per-row utilisation **bars** (`usage-fill`, the `workload` JS type) = a **table-with-bar-column** presentation. (2) A legacy inline monthly-trend **mini-chart** (raw-div `chart_capacity`). Phase 5 decides whether that inline trend becomes a real `ChartSection` (line) — now possible since phase 3 — or stays a mini-chart; the per-row bars are a table-column presentation, not a chart. Classified against the actual rendering during phase 3 step 1.
+- **Chart types deferred (architecture allows, not built).** Phase 3 built only `line` + `pie`. `bar`/`area`/`doughnut`/`bubble`/`radar`/`polar`/`scatter` are "a `chart_type` string + confirming the data-shaping for that type" away — the single discriminated renderer doesn't preclude them. Add when a real subject needs one.
 
 ### Methodology retrospective for ADR 0003 — deferred
 
@@ -155,8 +169,8 @@ Whatever surfaces. The current backlog is healthy (no urgent next code action); 
 27. **Source tile contract unification.** Define the target contract: every subject's source tile shows (a) a data-acquisition timestamp, (b) a source identifier (Endpoint + Host for REST, filename for file imports), consistently formatted and labeled. Current implementation violates this across LS Reports Plus, LS file-import paths, BJS Reports Plus, the environment subject, and possibly others — different field labels, field combinations, and empty states. The label naming inconsistency ("Last collected" / "Last Imported" / "Last Generated") falls under this entry — pick one term and apply consistently. Phases 5–7 fix this for the three regressed subjects as they migrate to canonical; the LS bespoke path and the file-import paths each need their own pass. Surfaced during phase 1 browser verification — phase 1 didn't cause it and didn't fix it.
 28. **Legacy workspace pages investigation and retirement.** `/quick-hc/commcell` duplicates what `/quick-hc#subject=environment` shows on the canonical workspace; `/quick-hc/report` was flagged as needing "major rework" — possibly the same legacy-duplicate pattern; other legacy workspace pages may exist. Investigation needed before retirement: confirm which pages are genuine legacy duplicates of canonical surfaces; confirm what links to each (navigation entries, hardcoded URLs, redirects); identify any tile `detail_endpoint`s pointing at them (LB-1-style dependency). Natural retirement window: alongside or shortly after phase 6.5 (dev tools retirement), since the legacy pages share a navigation cluster with dev tools and the same architectural pattern — possibly fold into 6.5 if the work is small, or its own phase 6.6. A first read-only enumeration was run at the close of phase 1 (see the phase-1 closing session report / chat); it does not change phase 2.
 29. **Active customer/project selector placement.** The `ACTIVE <customer>/<project>` selector floats top-right and crowds adjacent controls. Integrate it into the left-hand nav structure rather than floating in the content area's top-right corner. Pre-existing chrome issue, not tied to any phase. Part of the broader workspace navigation/chrome consolidation theme (cf. backlog #28 legacy pages). Address as a focused UI task when convenient; not blocking any ADR 0004 phase. Surfaced during phase 2 browser verification.
-30. **`get_canonical_schema` drift — derive from models + add drift guard. SCHEDULED FOR PHASE 3.** The MCP server's `get_canonical_schema` (`cvhealthcheck/mcp/server.py::_canonical_schema`) is a hand-maintained dict that has drifted two phases behind the live `CanonicalArtifact` models: missing `template_version` (phase 1), the entire rich `MetricItem` surface (nullable `value`, `derived`, `severity`, `verdict_chain`), `MetricSection.render_mode`, `VerdictEntry`, and (pre-existing) `vendor_key`/`vendor_id` and `commcell_id`/`commcell_name`. Meanwhile `save_staged_artifact` validates against the live model, so the schema advertises a loose/stale shape that the validator then rejects — the root cause of the May-24 "Input should be an object" errors. Fix: derive `get_canonical_schema` from `CanonicalArtifact.model_json_schema()` so it cannot drift; OR if a curated hand-shape is kept for AI readability, update it for phases 1/2 AND add a drift-guard test that fails loudly when live-model fields aren't described in the schema. **The drift guard is the non-negotiable part** — it's the loud-fail mechanism missing from the one tool most central to ADR 0005 (AI authoring). Phase 3 already touches the section vocabulary; reconcile the schema there.
-31. **`valid_section_types` vs `SUPPORTED_SECTION_TYPES` reconciliation. SCHEDULED FOR PHASE 3.** The MCP schema advertises `chart` as a valid section type, but the runtime `SUPPORTED_SECTION_TYPES = {findings, table, metric}` rejects `chart` at insert/collect (`UnsupportedSectionTypeError`). The schema over-promises until phase 3 lands `chart`. Phase 3 adds `chart` to `SUPPORTED_SECTION_TYPES` and the renderers — at that moment the advertisement becomes true. Fold into phase 3 alongside #30.
+30. **[CLOSED — phase 3, commit `ce88cac`] `get_canonical_schema` drift — derive from models + drift guard.** Done: `get_canonical_schema` now derives from `CanonicalArtifact.model_json_schema()` (drift structurally impossible) and a non-negotiable drift-guard test was added (verified to fire on a stale hand-schema). Original finding for the record: The MCP server's `get_canonical_schema` (`cvhealthcheck/mcp/server.py::_canonical_schema`) is a hand-maintained dict that has drifted two phases behind the live `CanonicalArtifact` models: missing `template_version` (phase 1), the entire rich `MetricItem` surface (nullable `value`, `derived`, `severity`, `verdict_chain`), `MetricSection.render_mode`, `VerdictEntry`, and (pre-existing) `vendor_key`/`vendor_id` and `commcell_id`/`commcell_name`. Meanwhile `save_staged_artifact` validates against the live model, so the schema advertises a loose/stale shape that the validator then rejects — the root cause of the May-24 "Input should be an object" errors. Fix: derive `get_canonical_schema` from `CanonicalArtifact.model_json_schema()` so it cannot drift; OR if a curated hand-shape is kept for AI readability, update it for phases 1/2 AND add a drift-guard test that fails loudly when live-model fields aren't described in the schema. **The drift guard is the non-negotiable part** — it's the loud-fail mechanism missing from the one tool most central to ADR 0005 (AI authoring). Phase 3 already touches the section vocabulary; reconcile the schema there.
+31. **[CLOSED — phase 3, commit `ce88cac`] `valid_section_types` vs `SUPPORTED_SECTION_TYPES` reconciliation.** Done: the MCP schema's `supported_section_types` is now sourced from the runtime `SUPPORTED_SECTION_TYPES` (which now includes `chart`), so they can't diverge; the drift guard asserts `SUPPORTED_SECTION_TYPES ⊆` the modelled section types. Original finding: the hand-schema advertised `chart` while the runtime rejected it — over-promising until phase 3 landed `chart`.
 32. **MCP import-time `run_migrations()` silent DB creation (latent, low priority).** `get_db` resolves `app.db` via `parents[3]`/`parents[4]` from source location — correct under the current editable install. But `run_migrations()` runs at import (`mcp/server.py:59`), so under a NON-editable install (e.g. if the MCP is ever packaged for distribution), `parents[3]` would point into site-packages and silently create an empty `app.db` at the wrong path rather than failing loudly — serving an empty catalog. Not active today. Add a loud-fail guard (assert the resolved DB path is the expected project `data/` dir, or refuse to auto-create) IF the MCP is ever packaged. Revisit only at packaging time.
 33. **MCP `list_subjects` exposes `_metric_test` (decision, minor).** MCP `list_subjects` has no `is_test` filter, so it returns the internal `_metric_test` subject (migration 0010), while the web sidebar hides it behind the client-side toggle. Decide: expose-but-flag (mark `is_test` in the MCP output so an AI consumer knows it's internal), or filter it out like the web app. Lean expose-but-flag since the MCP is a dev/AI tool, but make the divergence intentional rather than accidental. Resolve whenever convenient.
 
@@ -386,7 +400,7 @@ than attempting the work.
 cd /home/michiel/dev/cv-healthcheck
 source venv/bin/activate
 python -m compileall -q src
-python -m pytest -q                                # expect 658 passing
+python -m pytest -q                                # expect 673 passing
 git status --short                                 # expect clean
 sqlite3 data/app.db "SELECT customer_id,customer_name FROM customers;"
 sqlite3 data/app.db "SELECT project_id,customer_id,project_number FROM projects;"

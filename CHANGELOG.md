@@ -10,6 +10,34 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-29 (ADR 0004 phase 3 — chart section type + MCP schema reconciliation)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `6423a34` (3a+3b model/build/emit), `225ddf7` (3d Python renderer), `618b7c3` (3e JS Chart.js + lifecycle), `6f066a0` (3f SUPPORTED += chart), `f929c7c` (3g+3c test subject + conformance), `ce88cac` (3h MCP reconciliation), plus the wrap-up + pointer commits.
+
+The `chart` section type, end-to-end, as a **single `chart_type`-discriminated renderer** (line + pie), browser-verified in Safari + Firefox. Bundled with the MCP schema reconciliation (backlog #30, #31), since phase 3 grows `SUPPORTED_SECTION_TYPES` — the surface the MCP schema over-advertised. 673 passing under both `pytest` and `python -m pytest` (was 658).
+
+### Added
+
+- **`build_chart_section(section_id, title, spec, rows)`** (`extractors/chart_section.py`) — reusable, mirrors `build_metric_section`. A chart is a *view* over a table: it maps `labels` from one column and each `series` from a column across rows; `chart_type` discriminates drawing. Column mapping only — no CEL in phase 3 (charts read raw columns); no verdict (the evaluative face is empty for charts). The pre-existing `ChartSection` model carried both data shapes with **no change** (line/bar = labels + N series over shared X; pie = labels + one proportional series; the existing validator holds) — the architectural settle.
+- **`result_to_artifact` emits `ChartSection`** on `output_as == "chart"` (via `ExtractionResult.section_chart_specs`); a chart-only artifact registers as `good`.
+- **Python + JS renderers.** `canonical_view` emits one canonical chart-data structure; `quick_hc.js` renders it via **Chart.js 4** (now loaded in the workspace template). ONE `buildChartJsConfig`, `chart_type`-discriminated. **Canvas lifecycle:** a module-level Chart instance registry + `teardownCharts()` destroys instances before every re-render and on leaving the config view (belt-and-braces `Chart.getChart(canvas)?.destroy()`); a visible fallback renders if Chart.js fails to load. Browser-verified: clean re-render across Collect / re-navigation, no leaked instances (the chart-regression-class bug is verified absent).
+- **`_chart_test` subject** (migration 0011) — two chart sections (line: Added+Total trend; pie: job status breakdown) from JSON fixtures, exercising the single renderer across both shapes. Phase-1 conformance fires per chart section (section-grained). Rides the `is_test` toggle (one test subject per section type).
+- **`chart` added to `SUPPORTED_SECTION_TYPES`** — now produced and rendered, so it joins `{findings, table, metric, chart}`; the loud-failure guard still rejects modelled-but-unsupported types (`card`, `multi_section`).
+
+### Changed
+
+- **MCP `get_canonical_schema` now derives from `CanonicalArtifact.model_json_schema()`** instead of a hand-maintained dict (backlog #30 — **closed**). The hand-schema had drifted two phases behind the models while `save_staged_artifact` validated against the live model, so it advertised shapes the validator rejected (the May-24 errors). Derivation makes drift structurally impossible. `supported_section_types` is sourced from `SUPPORTED_SECTION_TYPES` (backlog #31 — **closed**): the `$defs` describe what the model can express, this lists what the runtime accepts; they can't diverge.
+
+### Notes
+
+- **A chart is a view over tabular data, not a separate kind of data.** Phase 3's renderer is one `chart_type`-discriminated function, not a family of per-type renderers; adding bar/area/doughnut/radar/etc. is "a string + confirming the data-shaping," not a new renderer. Only line + pie are *built*; the architecture doesn't preclude the rest. They are **deferred** (architecture allows, not implemented).
+- **NON-NEGOTIABLE drift guard added.** A test asserts the MCP schema equals the live model schema (+ the one `supported_section_types` annotation), describes the load-bearing phase-1/2/3 fields, and that `SUPPORTED_SECTION_TYPES ⊆` the modelled section types. Verified it fires loudly against a stale hand-schema — the loud-fail mechanism that was missing from the tool most central to ADR 0005.
+- **Capacity Licenses classification (for phase 5).** Confirmed against the actual rendering: capacity_license has TWO chart-ish surfaces, **neither a phase-3 chart section** — (1) per-row utilisation **bars** (`usage-fill`, a table-with-bar-column presentation) and (2) a legacy inline monthly-trend **mini-chart** (raw `chart_capacity` divs). Phase 5 decides whether that inline trend becomes a real `ChartSection` (line) or stays a mini-chart; the per-row bars are a table-column presentation.
+- **Browser verification PASS** (Safari + Firefox): line + pie both render correctly from the same renderer; canvas lifecycle clean across repeated re-renders; SA / LS / the three regressed subjects / the phase-2 metric subject all unchanged; toggle hides test subjects by default.
+
+---
+
 ## 2026-05-29 (ADR 0004 phase 2 — metric section type)
 
 **Branch:** `feature/basic-healthcheck-report-output`
