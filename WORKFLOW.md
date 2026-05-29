@@ -463,6 +463,31 @@ Examples:
 
 Surprise is architectural signal. Do not power through surprise.
 
+**Reversibility tiers (declared in step-1)**
+
+The step-1 investigation tags its changes by reversibility, in one line. The tier sets how hard the STOP gate bites — a one-way change demands more confirmation before proceeding than a reversible one.
+
+- **REVERSIBLE** — renderer, presentational, additive model fields. Cheap to undo (`git revert`). Lightest scrutiny.
+- **MIGRATION-REVERSIBLE** — schema changes, data migrations. Reversible only with a down-migration / rebuild. Moderate scrutiny; confirm the down-path exists or is acceptable before proceeding.
+- **ONE-WAY** — data destruction, external commitments, anything in the prohibited / explicit-permission action classes. Hardest scrutiny; the gate bites hardest here.
+
+A phase tags its deliverables with the highest tier they touch. This formalizes an intuition already in use (a CHECK-constraint migration earns more caution as migration-reversible than a CSS change does as reversible). One line, not a sub-procedure.
+
+**Phase exit criteria (declared in step-1)**
+
+The step-1 investigation also *declares* the phase's exit criteria — the specific, checkable conditions for "done" — written **before** implementation and checked **at** sign-off. This converts sign-off from a fresh judgment ("does this feel done?") into verification against a pre-written list ("are these specific things true?"), which is more resistant to end-of-phase fatigue, when judgment is weakest.
+
+A terse checklist, not prose. Typical:
+
+- tests pass under both `pytest` and `python -m pytest`,
+- browser verification shows [the specific thing this phase produces],
+- no regression on [the specific existing subjects/behaviors at risk],
+- pushed and confirmed (per §10.1).
+
+Phases add phase-specific criteria as needed (a migration: "renders match-or-improve vs. the legacy, verified against real data"). The point is they are written at step-1 and the sign-off checks against them — not invented at sign-off.
+
+Both of these live in step-1, which is already the heaviest part of the loop. Keep them terse — a one-line tier and a short checklist. If they ever make step-1 feel bloated, streamline them; do not expand them.
+
 ---
 
 ## 9. Design Truth vs System Truth
