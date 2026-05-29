@@ -10,6 +10,35 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-29 (ADR 0004 phase 6.5 — dev tools retirement, part 1)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `c243057` (#25 repoint), `70d8a0f` ((a) metrics pages), `27101e1` ((b) scaffolding), `a3a9d47` ((c) staging guard), plus wrap-up + pointer.
+
+Retired the disposable Development-page dev tools now that the canonical workspace renders the migrated subjects (phases 5/6). STEP 1 was a **classification gate** — every Development surface assigned to (a) auto-obviated / (b) disposable scaffolding / (c) load-bearing — approved before any deletion. Browser-verified PASS. **713 passing** under both `pytest` and `python -m pytest` (was 708; +3 repoint guards, +2 staging-preservation guards).
+
+### Removed
+
+- **(a) obviated metric dev pages** (`70d8a0f`) — `/metrics/client-count`, `/metrics/client-growth`, `/metrics/capacity-license` routes + the exclusive `metric_detail.html` template + the Metric Details landing section. Client Growth (phase 6) and Capacity License (phase 5) render canonically in the workspace now.
+- **(b) disposable scaffolding** (`27101e1`) — `/lab-readiness`, `/api/test`, and the entire Reports Plus exploration cluster (`/reportsplus/reports`, `…/reports/<id>`, `…/report/<id>`, `…/report/<id>/metrics`, `…/datasets`, `…/dataset/<guid>`, `…/data/<guid>`, `…/health-candidates`, `…/execution-validation`) — 11 routes + their 11 exclusive templates + the now-unused `shared.py` imports in the dev blueprint.
+
+### Changed
+
+- **#25 detail_endpoint repoint** (`c243057`, repoint-FIRST) — `client_growth`/`capacity_license` tile `detail_endpoint` → `main.quick_hc` (registry.py:248,282), matching SA/LS. They were the only two tiles pointing at dev routes; repointed before deletion so `_detail_url_for_tile`'s `url_for()` can't `BuildError`. **#25 RESOLVED.**
+- Dev landing slimmed to the surviving Workspace / License-Summary links + the held Security Assessment cluster; `base.html` dev-link active-check and the kept `security_assessment.html` raw-extraction link de-referenced from the deleted routes.
+
+### Added (guards)
+
+- **Repoint guards** (`c243057`) — every tile `detail_endpoint` resolves under app context; no tile points at a retired dev route; the two migrated tiles open the workspace.
+- **(c) staging-preservation guards** (`a3a9d47`) — the AI-authoring review loop (`/quick-hc/staging` + approve/reject) endpoints stay registered, and web + MCP staging share the same `db.staging` backend.
+
+### Notes
+
+- **The gate corrected the brief's load-bearing premise.** The AI-authoring review loop is the **top-level `/quick-hc/staging` page** (`staging.py` → `main.quick_hc_staging`), *not* in the dev-tools blueprint — so retiring dev tools can't touch it. Verified: the web Staging page and the MCP tools (`list_staged_artifacts`/`execute_approval`/`reject_staged_artifact`) both drive `cvhealthcheck.db.staging` (the `staged_artifacts` table). The dev **"Security Assessment Registry (internal)"** view is a *different* surface — `SecurityAssessmentService.get_history()` (SA artifact-collection history), touching no staging — so it is **(b) deletable**, not the load-bearing (c) the brief feared. (Backlog #24 corrected accordingly.)
+- **The Security Assessment dev cluster is HELD for its own pass** (steering decision) — `reportsplus_security_assessment` + import/history/registry-export/registry-view. Biggest blast radius, entangled with canonical-SA coverage parity, and it has its own backlog item (#14 legacy-store retirement). Phase 6.5 deleted only the unambiguous (a)+(b); the dev blueprint + its remaining `shared.py` orphan helpers get fully reaped when the SA cluster's dedicated pass lands.
+
+---
+
 ## 2026-05-29 (MCP server #35 — root-caused + defense-in-depth hardening)
 
 **Branch:** `feature/basic-healthcheck-report-output`
