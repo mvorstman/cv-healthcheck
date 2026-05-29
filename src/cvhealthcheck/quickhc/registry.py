@@ -245,7 +245,10 @@ _SYSTEM_TILES: tuple[TileDefinition, ...] = (
         preview_renderer="client_growth_preview",
         report_renderer="client_growth_report",
         sources=_UNIVERSAL_SOURCES,
-        detail_endpoint="main.metrics_client_growth",
+        # ADR 0004 #25: client_growth now renders canonically in the workspace
+        # (phase 6), so its report "detail" link opens the workspace like SA/LS —
+        # not the retired dev metrics page (phase 6.5).
+        detail_endpoint="main.quick_hc",
         sections=(
             SectionDefinition(
                 id=CLIENT_GROWTH_SUMMARY_SECTION_ID,
@@ -279,7 +282,10 @@ _SYSTEM_TILES: tuple[TileDefinition, ...] = (
         preview_renderer="capacity_license_preview",
         report_renderer="capacity_license_report",
         sources=_UNIVERSAL_SOURCES,
-        detail_endpoint="main.metrics_capacity_license",
+        # ADR 0004 #25: capacity_license now renders canonically in the workspace
+        # (phase 5), so its report "detail" link opens the workspace like SA/LS —
+        # not the retired dev metrics page (phase 6.5).
+        detail_endpoint="main.quick_hc",
         sections=(
             SectionDefinition(
                 id=CAPACITY_LICENSE_SUMMARY_SECTION_ID,
