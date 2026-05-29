@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-29 (ADR 0004 phase 3 — chart section type + MCP schema reconciliation, browser-verified)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** see the pointer commit at the end of this session (CHANGELOG + HANDOVER for phase 3).
+**Last commit:** `9ae2f9a` — CHANGELOG + HANDOVER: ADR 0004 phase 3 (chart section type + MCP reconciliation)
 **Test status:** **673 passing** under both `pytest` and `python -m pytest` (was 658).
 
 ---
