@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-29 (ADR 0004 phase 1 — Foundation implemented)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `8a94962` — CHANGELOG + HANDOVER: ADR 0004 phase 1 (Foundation) implemented
+**Last commit:** `e93f24b` — HANDOVER backlog #26: add ADR 0004 CEL example-expression text fix
 **Test status:** **625 passing** under both `pytest` and `python -m pytest` (was 575).
 
 ---
