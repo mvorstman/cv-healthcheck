@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-29 (ADR 0004 phase 6 — client_growth migrated, browser-verified)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** see the pointer commit at the end of this session (CHANGELOG + HANDOVER for phase 6).
+**Last commit:** `6219ff6` — CHANGELOG + HANDOVER: ADR 0004 phase 6 (client_growth migrated) complete
 **Test status:** **704 passing** under both `pytest` and `python -m pytest` (was 697).
 
 ---
