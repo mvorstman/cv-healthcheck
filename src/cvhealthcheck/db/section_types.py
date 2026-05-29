@@ -7,11 +7,13 @@ The subject_sections table has a schema-level CHECK constraint allowing
 section_type IN ('findings','table','metric','chart'). That's the
 *structural* set of values the catalog can hold.
 
-The *runtime-supported* set is narrower: the canonical extractor produces
-FindingsSection / TableSection / MetricSection (the latter via the legacy
-builders, not the catalog-driven path). ChartSection is defined in the
-artifact schema but never instantiated by any code path — see the ADR 0004
-survey for the silent-render-nothing pattern this creates.
+The *runtime-supported* set is the subset of those that some code path
+actually produces and renders. ADR 0004 grows it phase by phase:
+`findings` and `table` (ADR 0003), `metric` (phase 2), and `chart`
+(phase 3) are all produced by the catalog-driven extractor + result_to_artifact
+and rendered in the workspace. Types modelled but not yet produced/rendered
+(e.g. `card`, `multi_section`) stay OUT of the supported set and fail loudly,
+so a catalog row can never silently render nothing.
 
 This module pins the runtime-supported set and surfaces a clear error
 when a catalog row declares a section_type the runtime cannot honour.
@@ -22,31 +24,26 @@ The validation fires at two layers:
 - Collection-time, from `RESTExtractor._load_section_instructions` —
   catches anyone bypassing insert-time (raw SQL, migrations).
 
-The mismatch is loud and informational, not destructive. Existing chart
-catalog rows (storage_utilization, cloud_storage_egress_ingress,
-client_growth.chart) are preserved on disk; ADR 0004 will address chart
-support. Only NEW writes and ATTEMPTS TO COLLECT against chart sections
-fail loudly.
+The mismatch is loud and informational, not destructive.
 """
 from __future__ import annotations
 
 
-SUPPORTED_SECTION_TYPES: frozenset[str] = frozenset({"findings", "table", "metric"})
+SUPPORTED_SECTION_TYPES: frozenset[str] = frozenset({"findings", "table", "metric", "chart"})
 """Section types the runtime can honour today.
 
-`findings` and `table` are produced by the catalog-driven extractor.
-`metric` is produced by legacy builders (the canonical schema has
-MetricSection but result_to_artifact does not emit it).
-
-`chart` is structurally allowed by the schema CHECK but produces
-nothing at runtime — see ADR 0004.
+All four are produced by the catalog-driven extractor + result_to_artifact and
+rendered in the workspace: `findings`/`table` (ADR 0003), `metric` (ADR 0004
+phase 2), `chart` (ADR 0004 phase 3). Section types that are modelled but not
+yet produced/rendered (e.g. `card`, `multi_section`) are intentionally absent
+and fail loudly until their phase lands.
 """
 
 
 class UnsupportedSectionTypeError(ValueError):
     """Raised when a catalog row declares a section_type the runtime cannot
     honour. The error message names the subject, section, declared type,
-    and the supported set — and points at ADR 0004 for chart support."""
+    and the supported set."""
 
 
 def validate_section_type(
@@ -72,6 +69,7 @@ def validate_section_type(
             f"section_type={section_type!r}, which is not yet supported "
             f"by the runtime. Supported types: "
             f"{sorted(SUPPORTED_SECTION_TYPES)}. "
-            f"This catalog row is preserved — ADR 0004 will address "
-            f"support for additional section types (e.g. chart)."
+            f"This catalog row is preserved — a later ADR 0004 phase will "
+            f"address support for additional section types (e.g. card, "
+            f"multi_section)."
         )
