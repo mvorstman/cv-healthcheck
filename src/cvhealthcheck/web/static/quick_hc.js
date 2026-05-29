@@ -346,6 +346,27 @@ function openConfig(id) {
   rf.style.display = 'flex';
   document.getElementById('rf-source').textContent = s.activeSource ? 'Source: ' + (srcName[s.activeSource] || s.activeSource) : '';
 
+  // ADR 0004: provenance rows for the Data Source section — last-collected
+  // timestamp (UTC) and the template-version dropdown. The dropdown lists the
+  // subject family's versions; selecting one pins it for the next collection.
+  // Today every family has one version, so the dropdown shows a single option.
+  const vi = s.version_info || {};
+  const versions = vi.versions || [];
+  const activeVer = vi.active || s.id;
+  let provRows = '';
+  if (s.last_collected) {
+    provRows += `<div class="src-meta-row"><span>Last collected</span><span>${esc(fmtUtc(s.last_collected))}</span></div>`;
+  }
+  if (versions.length) {
+    const opts = versions.map(v =>
+      `<option value="${esc(v)}"${v === activeVer ? ' selected' : ''}>${esc(v)}</option>`
+    ).join('');
+    provRows += `<div class="src-meta-row"><span>Template</span><span>`
+      + `<select class="version-dropdown" onchange="setVersion('${esc(s.id)}', this.value)"${versions.length < 2 ? ' disabled' : ''}>${opts}</select>`
+      + `</span></div>`;
+  }
+  const provBlock = provRows ? `<div class="src-provenance" style="margin-top:8px">${provRows}</div>` : '';
+
   // Source buttons
   const sl = {v:'● Validated', a:'● Available', n:'○ Not configured', ni:'○ Not implemented'};
   const sc = {v:'ss-v', a:'ss-v', n:'ss-n', ni:'ss-n'};
@@ -463,6 +484,7 @@ function openConfig(id) {
       <div class="cfg-sec-title">Data Source</div>
       <div class="src-selector-row"><span class="src-selector-label">Select source</span>${srcBtns}</div>
       ${srcPanel}
+      ${provBlock}
     </div>` : ''}
     <div class="cfg-sec">
       <div class="cfg-sec-title">Report Sections</div>
@@ -485,6 +507,32 @@ function setActiveSrc(subjId, srcId) {
   findSubj(subjId).activeSource = srcId;
   _saveState();
   openConfig(subjId);
+}
+
+// ADR 0004: persist the source-tile version-dropdown selection. POSTs to the
+// pin route, which records the choice for the active customer + subject
+// family; the next collection of this family uses the chosen template.
+function setVersion(subjId, version) {
+  const f = document.createElement('form');
+  f.method = 'POST';
+  f.action = '/quick-hc/' + encodeURIComponent(subjId) + '/pin-version';
+  const inp = document.createElement('input');
+  inp.type = 'hidden';
+  inp.name = 'version';
+  inp.value = version;
+  f.appendChild(inp);
+  document.body.appendChild(f);
+  f.submit();
+}
+
+// Format an ISO timestamp as "YYYY-MM-DD HH:MM UTC" for the source tile.
+function fmtUtc(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} `
+       + `${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
 }
 
 function setDescriptionStatus(status, message) {

@@ -20,7 +20,10 @@ from cvhealthcheck.db import staging as _staging_db
 from cvhealthcheck.db.subjects import (
     delete_subject,
     get_subject,
+    list_family_versions,
     resolve_active_version,
+    set_pinned_subject_id,
+    subject_family,
 )
 from cvhealthcheck.extractors.dispatcher import extract_file
 from cvhealthcheck.extractors.rest import RESTExtractor
@@ -100,7 +103,12 @@ def _quick_hc_asset_version() -> str:
 def quick_hc():
     db = get_db()
     try:
-        initial_data = build_subject_initial_data(db)
+        # Best-effort active customer for the source-tile version dropdown.
+        try:
+            customer_id = get_active_customer(db).get("customer_id")
+        except Exception:
+            customer_id = None
+        initial_data = build_subject_initial_data(db, customer_id=customer_id)
     finally:
         db.close()
     flashes = [
@@ -231,6 +239,39 @@ def quick_hc_generic_collect(subject_id: str):
         flash(f"REST collection completed for '{title}'. Warnings: {warn_str}", "success")
     else:
         flash(f"REST collection completed for '{title}'.", "success")
+    return _workspace_redirect(subject_id)
+
+
+@bp.route("/quick-hc/<subject_id>/pin-version", methods=["POST"])
+def quick_hc_pin_version(subject_id: str):
+    """ADR 0004: pin which template version this customer's family collects next.
+
+    Writes the source-tile version dropdown's selection into
+    customer_subject_pin for the active customer. The chosen version must be a
+    real member of the subject's family.
+    """
+    chosen = (request.form.get("version") or "").strip()
+    try:
+        customer = get_active_customer()
+    except ActiveProjectMissingError as exc:
+        flash(str(exc), "error")
+        return _workspace_redirect(subject_id)
+
+    db = get_db()
+    try:
+        family = subject_family(subject_id)
+        versions = list_family_versions(db, family)
+        if chosen not in versions:
+            flash(
+                f"'{chosen}' is not a known version of {family!r}.",
+                "error",
+            )
+            return _workspace_redirect(subject_id)
+        set_pinned_subject_id(db, customer["customer_id"], family, chosen)
+    finally:
+        db.close()
+
+    flash(f"Template version for '{family}' set to '{chosen}'.", "success")
     return _workspace_redirect(subject_id)
 
 

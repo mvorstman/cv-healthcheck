@@ -131,3 +131,65 @@ def test_resolve_active_version_no_customer(migrated_db_path: Path):
         assert resolve_active_version(conn, None, "capacity_license") == "capacity_license"
     finally:
         conn.close()
+
+
+# ── Source-tile UI injection (ADR 0004 2d) ──
+
+def test_version_info_helper(migrated_db_path: Path):
+    from cvhealthcheck.quickhc.subject_data_service import _version_info
+
+    conn = _conn(migrated_db_path)
+    try:
+        info = _version_info(conn, "default", "capacity_license")
+        assert info == {
+            "family": "capacity_license",
+            "versions": ["capacity_license"],
+            "active": "capacity_license",
+        }
+        # No db handle -> subject is its own only version.
+        offline = _version_info(None, "default", "capacity_license_v2")
+        assert offline["versions"] == ["capacity_license_v2"]
+        assert offline["family"] == "capacity_license"
+    finally:
+        conn.close()
+
+
+def test_last_collected_helper():
+    from datetime import datetime, timezone
+
+    from cvhealthcheck.artifacts.enums import ArtifactStatus, SourceType
+    from cvhealthcheck.artifacts.models import (
+        ArtifactSource,
+        ArtifactSubject,
+        ArtifactSummary,
+        CanonicalArtifact,
+    )
+    from cvhealthcheck.quickhc.subject_data_service import _last_collected
+
+    assert _last_collected(None) is None
+
+    ts = datetime(2026, 5, 28, 14, 23, tzinfo=timezone.utc)
+    artifact = CanonicalArtifact(
+        artifact_type="capacity_license",
+        generated_at=ts,
+        source=ArtifactSource(type=SourceType.rest, collected_at=ts),
+        subject=ArtifactSubject(id="capacity_license", title="Capacity Licenses"),
+        summary=ArtifactSummary(status=ArtifactStatus.good),
+    )
+    assert _last_collected(artifact) == ts.isoformat()
+
+
+def test_build_subject_initial_data_injects_version_info(migrated_db_path: Path):
+    from cvhealthcheck.quickhc.subject_data_service import build_subject_initial_data
+
+    conn = _conn(migrated_db_path)
+    try:
+        data = build_subject_initial_data(conn, customer_id="default")
+        subjects = [s for cat in data["cats"] for s in cat["subjects"]]
+        assert subjects, "expected at least one subject"
+        for subj in subjects:
+            assert "version_info" in subj
+            assert subj["version_info"]["active"] in subj["version_info"]["versions"]
+            assert "last_collected" in subj
+    finally:
+        conn.close()

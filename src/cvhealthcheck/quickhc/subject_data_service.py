@@ -8,6 +8,11 @@ from typing import Any
 
 from cvhealthcheck.artifacts.models import CanonicalArtifact
 from cvhealthcheck.artifacts.store import ArtifactStore
+from cvhealthcheck.db.subjects import (
+    list_family_versions,
+    resolve_active_version,
+    subject_family,
+)
 from cvhealthcheck.license_summary.service import LicenseSummaryService
 
 
@@ -67,8 +72,16 @@ _CATEGORY_ICONS = {
 }
 
 
-def build_subject_initial_data(db: sqlite3.Connection | None = None) -> dict[str, Any]:
-    """Build the full initial data structure for the Quick HC frontend."""
+def build_subject_initial_data(
+    db: sqlite3.Connection | None = None,
+    customer_id: str | None = None,
+) -> dict[str, Any]:
+    """Build the full initial data structure for the Quick HC frontend.
+
+    ``customer_id`` is used to resolve the active (pinned) template version
+    per subject family for the source-tile version dropdown. When omitted,
+    the dropdown shows the latest version as active.
+    """
     if db is not None:
         all_tiles = get_tiles(db)
     else:
@@ -123,6 +136,9 @@ def build_subject_initial_data(db: sqlite3.Connection | None = None) -> dict[str
                 continue
 
         built["created_by"] = tile.get("created_by", "system")
+        # ADR 0004 source-tile cleanup: version dropdown + last-collected.
+        built["version_info"] = _version_info(db, customer_id, subject_id)
+        built["last_collected"] = _last_collected(artifact)
         category_groups[cat_id]["subjects"].append(built)
 
     cats = list(category_groups.values())
@@ -294,6 +310,31 @@ def _build_generic_sources(
             actions=actions,
         ))
     return result
+
+
+def _version_info(
+    db: sqlite3.Connection | None, customer_id: str | None, subject_id: str
+) -> dict[str, Any]:
+    """ADR 0004: the family, available versions, and active version for the
+    source-tile version dropdown. Without a db handle (list_tiles path) the
+    subject is its own only version."""
+    family = subject_family(subject_id)
+    if db is None:
+        return {"family": family, "versions": [subject_id], "active": subject_id}
+    versions = list_family_versions(db, family) or [subject_id]
+    return {
+        "family": family,
+        "versions": versions,
+        "active": resolve_active_version(db, customer_id, subject_id),
+    }
+
+
+def _last_collected(artifact: CanonicalArtifact | None) -> str | None:
+    """ISO timestamp the artifact was collected (REST) or imported (file)."""
+    if artifact is None:
+        return None
+    ts = artifact.source.collected_at or artifact.source.imported_at
+    return ts.isoformat() if ts else None
 
 
 def _build_generic_subject(tile: dict[str, Any], artifact: CanonicalArtifact | None) -> dict:
@@ -573,10 +614,13 @@ def _build_environment_subject(cc: dict | None) -> dict:
                 HTML_IMPORT_SOURCE_ID: "ni",
             },
             meta={
+                # ADR 0004: CommCell server version is NOT shown on the data
+                # source tile — it's a property of the deployment, not of this
+                # collection. It stays in the environment subject's identity
+                # card (metadata_rows below), where it's the whole point.
                 REST_COMMAND_CENTER_API_SOURCE_ID: [
                     {"k": "Endpoint", "v": "GET /commandcenter/api/CommServ"},
                     {"k": "Host", "v": name},
-                    {"k": "Version", "v": version or "Unknown"},
                 ],
             },
             descriptions={
