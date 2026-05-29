@@ -1,0 +1,5 @@
+[
+  {"month": "2024-06", "used_capacity": 20.0, "purchased_capacity": 50.0, "prev_active_capacity": 18.0},
+  {"month": "2024-07", "used_capacity": 28.0, "purchased_capacity": 50.0, "prev_active_capacity": 22.0},
+  {"month": "2024-08", "used_capacity": 35.0, "purchased_capacity": 50.0, "prev_active_capacity": -1}
+]

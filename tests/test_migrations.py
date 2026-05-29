@@ -77,7 +77,7 @@ def test_schema_migrations_contains_all_three_migrations(fresh_db: Path) -> None
 # Seed data verification
 # ---------------------------------------------------------------------------
 
-def test_subjects_table_contains_six_rows_after_migration(fresh_db: Path) -> None:
+def test_subjects_table_seeded_after_migration(fresh_db: Path) -> None:
     import sqlite3
 
     conn = sqlite3.connect(str(fresh_db))
@@ -90,7 +90,9 @@ def test_subjects_table_contains_six_rows_after_migration(fresh_db: Path) -> Non
     finally:
         conn.close()
 
-    assert count == 6
+    # Six system subjects + the internal "_metric_test" subject seeded by
+    # migration 0010 (ADR 0004 phase 2; hidden in the UI by default).
+    assert count == 7
     assert subject_ids == {
         "environment",
         "security_assessment",
@@ -98,6 +100,7 @@ def test_subjects_table_contains_six_rows_after_migration(fresh_db: Path) -> Non
         "client_growth",
         "capacity_license",
         "backup_job_summary",
+        "_metric_test",
     }
 
 
@@ -118,7 +121,7 @@ def test_all_seeded_subjects_are_active(fresh_db: Path) -> None:
 
 def test_migration_status_reports_all_applied(fresh_db: Path) -> None:
     statuses = migration_status(db_path=fresh_db)
-    assert len(statuses) == 9
+    assert len(statuses) == 10
     assert all(s["status"] == "applied" for s in statuses)
     migration_ids = [s["migration_id"] for s in statuses]
     assert migration_ids == sorted(migration_ids)

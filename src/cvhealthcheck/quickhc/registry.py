@@ -389,11 +389,14 @@ def _build_db_source_entries(
         if src_id is None:
             continue
         has_instructions = bool(src.get("has_section_instructions", 0))
-        collect_url = (
-            f"/quick-hc/{subject_id}/collect"
-            if source_type == "rest" and has_instructions and subject_id
-            else None
-        )
+        if source_type == "rest" and has_instructions and subject_id:
+            collect_url = f"/quick-hc/{subject_id}/collect"
+        elif source_type == "json" and has_instructions and subject_id:
+            # ADR 0004: internal fixture-backed subjects collect from a shipped
+            # JSON file via the fixture route (no lab/auth).
+            collect_url = f"/quick-hc/{subject_id}/collect-fixture"
+        else:
+            collect_url = None
         entries.append({
             "id": src_id,
             "label": _SOURCE_TYPE_TO_LABEL.get(source_type, source_type.upper()),

@@ -26,6 +26,7 @@ from cvhealthcheck.db.subjects import (
     subject_family,
 )
 from cvhealthcheck.extractors.dispatcher import extract_file
+from cvhealthcheck.extractors.fixture import FixtureExtractor
 from cvhealthcheck.extractors.rest import RESTExtractor
 from cvhealthcheck.extractors.result_to_artifact import result_to_artifact
 from cvhealthcheck.reportsplus.session import CommvaultSession
@@ -272,6 +273,41 @@ def quick_hc_pin_version(subject_id: str):
         db.close()
 
     flash(f"Template version for '{family}' set to '{chosen}'.", "success")
+    return _workspace_redirect(subject_id)
+
+
+@bp.route("/quick-hc/<subject_id>/collect-fixture", methods=["POST"])
+def quick_hc_collect_fixture(subject_id: str):
+    """ADR 0004 phase 2: collect an internal/test subject from its shipped JSON
+    fixture. No lab/auth/CommCell needed — the FixtureExtractor reads a file
+    sandboxed to data/test_fixtures/ and produces a canonical artifact."""
+    db = get_db()
+    try:
+        active_subject_id = resolve_active_version(db, None, subject_id)
+        subject = get_subject(db, active_subject_id)
+        if subject is None:
+            flash(f"Subject '{active_subject_id}' not found.", "error")
+            return _workspace_redirect(subject_id)
+        title = subject["title"]
+        version = subject["version"]
+        result = FixtureExtractor(db).extract(active_subject_id, version)
+    finally:
+        db.close()
+
+    if result.errors:
+        flash(f"Fixture collection errors: {'; '.join(result.errors)}", "error")
+        return _workspace_redirect(subject_id)
+
+    artifact = result_to_artifact(
+        result, subject_id=active_subject_id, subject_title=title
+    )
+    try:
+        make_active_project_store().save_artifact(artifact)
+    except Exception as exc:
+        flash(f"Could not save artifact: {exc}", "error")
+        return _workspace_redirect(subject_id)
+
+    flash(f"Collected '{title}' from fixture.", "success")
     return _workspace_redirect(subject_id)
 
 
