@@ -1,10 +1,33 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from typing import Any
 
 from .section_types import validate_section_type
+
+
+# ADR 0004 subject versioning: v2+ land as new subject rows with a "_vN"
+# suffix on the subject_id (capacity_license_v2). v1 is implicit (no suffix).
+# The "family" is the subject_id with the suffix stripped; both
+# capacity_license and capacity_license_v2 belong to family capacity_license.
+# The suffix must be terminal and must not be the whole id ("v2" has no
+# family-bearing prefix, so it stays "v2").
+_VERSION_SUFFIX_RE = re.compile(r"^(?P<family>.+)_v\d+$")
+
+
+def subject_family(subject_id: str) -> str:
+    """Return the subject family for a subject_id by stripping a trailing _vN.
+
+    capacity_license      -> capacity_license   (no suffix; v1 is implicit)
+    capacity_license_v2   -> capacity_license
+    capacity_license_v10  -> capacity_license
+    something_v2_else     -> something_v2_else   (suffix must be terminal)
+    v2                    -> v2                  (suffix can't be the whole id)
+    """
+    match = _VERSION_SUFFIX_RE.match(subject_id)
+    return match.group("family") if match else subject_id
 
 
 def create_subject_from_proposal(db: sqlite3.Connection, proposal: dict) -> dict[str, Any]:
