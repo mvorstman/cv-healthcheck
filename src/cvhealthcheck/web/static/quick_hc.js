@@ -214,6 +214,25 @@ function secBody(sec) {
     }).join('')}</div>`;
   }
 
+  if (sec.type === 'card') {
+    // ADR 0004 card section: a labeled-value identity grid (reuses meta-card
+    // styling) plus a section-level status badge when the card carries a
+    // verdict (mirrors how a metric shows its badge).
+    const items = sec.items || [];
+    if (!items.length) return `<div style="font-size:12px;color:var(--text-3)">No card data.</div>`;
+    const cols = sec.columns === 3 ? 'meta-grid-3'
+               : sec.columns === 4 ? 'meta-grid-4'
+               : (items.length > 4 ? 'meta-grid-3' : 'meta-grid-4');
+    const badge = sec.sev
+      ? `<div class="card-status"><span class="m-badge ${bm[sec.sev] || ''}" title="${esc(sec.reason || '')}">${lm[sec.sev] || esc(sec.sev)}</span></div>`
+      : '';
+    const cells = items.map(it => {
+      const unit = (it.unit && it.value !== '—') ? `<span class="m-unit">${esc(it.unit)}</span>` : '';
+      return `<div class="meta-card"><div class="meta-lbl">${esc(it.label)}</div><div class="meta-val">${esc(it.value)}${unit}</div></div>`;
+    }).join('');
+    return `${badge}<div class="meta-grid ${cols}">${cells}</div>`;
+  }
+
   if (sec.type === 'chart') {
     // ADR 0004 chart section: emit a canvas placeholder carrying the canonical
     // chart data; mountCharts() (run after this HTML is inserted) instantiates
