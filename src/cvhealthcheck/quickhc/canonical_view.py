@@ -5,6 +5,7 @@ from typing import Any
 from cvhealthcheck.artifacts.enums import ArtifactStatus, FindingSeverity, SourceType
 from cvhealthcheck.artifacts.models import (
     CanonicalArtifact,
+    CardSection,
     Finding,
     FindingsSection,
     MetricSection,
@@ -143,6 +144,8 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
                 })
         elif isinstance(sec, ChartSection):
             sections.append(_chart_section_view(sec, sec_id))
+        elif isinstance(sec, CardSection):
+            sections.append(_card_section_view(sec, sec_id))
 
     return {
         "id": subject_id,
@@ -441,6 +444,37 @@ def _metric_section_view(sec: MetricSection, sec_id: str) -> dict[str, Any]:
         "type": "metric",
         "items": items,
     }
+
+
+def _card_section_view(sec: CardSection, sec_id: str) -> dict[str, Any]:
+    """Render a card section: a labeled-value grid plus a section-level status
+    badge (when the card carries a verdict). Mirrors how a metric shows its
+    badge; the badge code reuses the shared severity vocabulary."""
+    sev = sec.severity.value if sec.severity is not None else None
+    reason = sec.verdict_chain[-1].reason if sec.verdict_chain else ""
+    return {
+        "id": sec_id,
+        "title": sec.title,
+        "meta": "",
+        "included": True,
+        "type": "card",
+        "columns": sec.columns,
+        "items": [
+            {"label": item.label, "value": _fmt_card_value(item.value), "unit": item.unit or ""}
+            for item in sec.items
+        ],
+        "sev": _METRIC_SEV_CODE.get(sev) if sev else None,
+        "reason": reason,
+    }
+
+
+def _fmt_card_value(value: Any) -> str:
+    """Display string for a card field. None -> '—' (em dash, identity 'absent')."""
+    if value is None:
+        return "—"
+    if isinstance(value, float):
+        return str(int(value)) if value.is_integer() else f"{value:.1f}"
+    return str(value)
 
 
 def _chart_section_view(sec: ChartSection, sec_id: str) -> dict[str, Any]:
