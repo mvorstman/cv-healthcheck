@@ -29,14 +29,14 @@ The mismatch is loud and informational, not destructive.
 from __future__ import annotations
 
 
-SUPPORTED_SECTION_TYPES: frozenset[str] = frozenset({"findings", "table", "metric", "chart"})
+SUPPORTED_SECTION_TYPES: frozenset[str] = frozenset({"findings", "table", "metric", "chart", "card"})
 """Section types the runtime can honour today.
 
-All four are produced by the catalog-driven extractor + result_to_artifact and
+All five are produced by the catalog-driven extractor + result_to_artifact and
 rendered in the workspace: `findings`/`table` (ADR 0003), `metric` (ADR 0004
-phase 2), `chart` (ADR 0004 phase 3). Section types that are modelled but not
-yet produced/rendered (e.g. `card`, `multi_section`) are intentionally absent
-and fail loudly until their phase lands.
+phase 2), `chart` (phase 3), `card` (phase 4). Section types that are modelled
+but not yet produced/rendered (`multi_section`, deferred to a future LS ADR)
+are intentionally absent and fail loudly until their phase lands.
 """
 
 
