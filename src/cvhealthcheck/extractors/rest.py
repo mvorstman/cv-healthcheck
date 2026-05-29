@@ -46,6 +46,7 @@ from cvhealthcheck.db.section_types import (
     UnsupportedSectionTypeError,
     validate_section_type,
 )
+from cvhealthcheck.extractors.conformance import check_conformance
 from cvhealthcheck.extractors.html import ExtractionResult
 from cvhealthcheck.reportsplus.extract_report import (
     discover_dataset_references,
@@ -121,11 +122,23 @@ class RESTExtractor:
                 result.errors.extend(errors)
                 # Fail-whole: abort on first section error so we don't write a
                 # half-collected artifact. Subsequent sections are not attempted.
+                # NB: this is a hard fetch/transport error — distinct from a
+                # conformance failure, which is section-grained (below).
                 return result
 
             output_as = extraction.get("output_as", "table")
             if output_as == "card":
                 rows = rows[:1]
+
+            # ADR 0004 conformance: validate the collected shape against the
+            # section's declared schema (if any). On failure, record a
+            # structured failure record for this section and skip emitting its
+            # data — sibling sections continue to collect.
+            failure = check_conformance(rows, extraction.get("conformance"))
+            if failure is not None:
+                result.section_failures[section_id] = failure
+                result.section_titles[section_id] = section_title
+                continue
 
             result.sections[section_id] = rows
             result.section_output_types[section_id] = output_as

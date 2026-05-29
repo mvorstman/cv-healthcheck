@@ -112,6 +112,15 @@ def result_to_artifact(
             metrics=metrics,
         )
 
+    # ADR 0004 conformance: carry any section failure records onto the
+    # artifact. The renderer side (showing a failed section) is phase 2;
+    # phase 1 emits the structured record under metadata.conformance_failures,
+    # keyed by section_id, in the verbatim ADR shape.
+    metadata: dict[str, Any] = {}
+    section_failures = getattr(result, "section_failures", None)
+    if section_failures:
+        metadata["conformance_failures"] = dict(section_failures)
+
     return CanonicalArtifact(
         artifact_type=subject_id,
         generated_at=now,
@@ -119,6 +128,7 @@ def result_to_artifact(
         subject=subject,
         summary=summary,
         sections=sections,
+        metadata=metadata,
     )
 
 

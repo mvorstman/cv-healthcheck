@@ -56,6 +56,11 @@ class ExtractionResult:
     section_output_types: dict[str, str] = field(default_factory=dict)
     # populated by the extractor; maps section_id → human-readable title
     section_titles: dict[str, str] = field(default_factory=dict)
+    # ADR 0004 conformance: maps section_id → structured failure record for
+    # sections whose collected data failed schema conformance. A failed
+    # section is recorded here instead of in `sections`; sibling sections
+    # continue to collect. result_to_artifact emits these onto the artifact.
+    section_failures: dict[str, dict] = field(default_factory=dict)
 
 
 class HTMLExtractor:
