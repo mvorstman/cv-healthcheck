@@ -30,6 +30,88 @@ def subject_family(subject_id: str) -> str:
     return match.group("family") if match else subject_id
 
 
+def version_number(subject_id: str) -> int:
+    """Return the numeric version a subject_id encodes. v1 (no suffix) -> 1."""
+    match = _VERSION_SUFFIX_RE.match(subject_id)
+    if not match:
+        return 1
+    # The suffix is _v<digits> at the very end.
+    return int(subject_id.rsplit("_v", 1)[1])
+
+
+def list_family_versions(db: sqlite3.Connection, family: str) -> list[str]:
+    """Return the catalog subject_ids belonging to ``family``, naturally sorted.
+
+    Natural order = by version number ascending, so v1 (unsuffixed) first:
+    [capacity_license, capacity_license_v2, capacity_license_v10]. Only rows
+    whose subject_family() actually equals ``family`` are returned — a SQL
+    ``LIKE family || '_v%'`` would also match e.g. ``family_v2_else``.
+    """
+    rows = db.execute(
+        "SELECT DISTINCT subject_id FROM subjects "
+        "WHERE subject_id = ? OR subject_id LIKE ? ESCAPE '\\'",
+        (family, _like_escape(family) + "\\_v%"),
+    ).fetchall()
+    versions = [r["subject_id"] for r in rows if subject_family(r["subject_id"]) == family]
+    return sorted(versions, key=version_number)
+
+
+def get_pinned_subject_id(
+    db: sqlite3.Connection, customer_id: str, family: str
+) -> str | None:
+    """Return the pinned subject_id for (customer, family), or None if unpinned."""
+    row = db.execute(
+        "SELECT pinned_subject_id FROM customer_subject_pin "
+        "WHERE customer_id = ? AND subject_family = ?",
+        (customer_id, family),
+    ).fetchone()
+    return row["pinned_subject_id"] if row else None
+
+
+def set_pinned_subject_id(
+    db: sqlite3.Connection, customer_id: str, family: str, pinned_subject_id: str
+) -> None:
+    """Pin ``pinned_subject_id`` as the version (customer, family) collects next."""
+    db.execute(
+        "INSERT INTO customer_subject_pin "
+        "(customer_id, subject_family, pinned_subject_id, updated_at) "
+        "VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now')) "
+        "ON CONFLICT(customer_id, subject_family) DO UPDATE SET "
+        "pinned_subject_id = excluded.pinned_subject_id, "
+        "updated_at = excluded.updated_at",
+        (customer_id, family, pinned_subject_id),
+    )
+    db.commit()
+
+
+def resolve_active_version(
+    db: sqlite3.Connection, customer_id: str | None, subject_id: str
+) -> str:
+    """Return which subject_id the next collection of ``subject_id``'s family uses.
+
+    Resolution: the customer's pin for the family if set and still a real
+    version in the catalog; otherwise the latest version in the family
+    (highest _vN, or the unsuffixed id if it's the only one). If the family
+    has no catalog rows at all, fall back to the requested subject_id.
+
+    Today every family has one version, so this returns that one version.
+    """
+    family = subject_family(subject_id)
+    versions = list_family_versions(db, family)
+
+    if customer_id is not None:
+        pinned = get_pinned_subject_id(db, customer_id, family)
+        if pinned is not None and pinned in versions:
+            return pinned
+
+    return versions[-1] if versions else subject_id
+
+
+def _like_escape(value: str) -> str:
+    """Escape SQL LIKE wildcards in ``value`` for use with ESCAPE '\\'."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def create_subject_from_proposal(db: sqlite3.Connection, proposal: dict) -> dict[str, Any]:
     """
     Write a subject proposal dict into the catalog tables.

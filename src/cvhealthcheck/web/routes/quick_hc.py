@@ -17,7 +17,11 @@ from cvhealthcheck.web.active_project import (
     make_active_project_store,
 )
 from cvhealthcheck.db import staging as _staging_db
-from cvhealthcheck.db.subjects import delete_subject, get_subject
+from cvhealthcheck.db.subjects import (
+    delete_subject,
+    get_subject,
+    resolve_active_version,
+)
 from cvhealthcheck.extractors.dispatcher import extract_file
 from cvhealthcheck.extractors.rest import RESTExtractor
 from cvhealthcheck.extractors.result_to_artifact import result_to_artifact
@@ -187,9 +191,13 @@ def quick_hc_generic_collect(subject_id: str):
 
     db = get_db()
     try:
-        subject = get_subject(db, subject_id)
+        # ADR 0004: collection uses the template version pinned for this
+        # customer+family (or the latest version if unpinned). Today every
+        # family has one version, so this resolves to subject_id unchanged.
+        active_subject_id = resolve_active_version(db, customer_id, subject_id)
+        subject = get_subject(db, active_subject_id)
         if subject is None:
-            flash(f"Subject '{subject_id}' not found.", "error")
+            flash(f"Subject '{active_subject_id}' not found.", "error")
             # Subject doesn't exist — don't preserve the fragment, the
             # JS would fall back to the default anyway.
             return _workspace_redirect()
@@ -198,7 +206,7 @@ def quick_hc_generic_collect(subject_id: str):
         _, project_id = get_active_project(db)
         with CommvaultSession(base_url, token, verify_ssl=settings.verify_ssl) as cv_session:
             extractor = RESTExtractor(db, cv_session, customer_id, project_id)
-            result = extractor.extract(subject_id, version)
+            result = extractor.extract(active_subject_id, version)
     except Exception as exc:
         flash(f"Collection failed: {exc}", "error")
         return _workspace_redirect(subject_id)
@@ -211,7 +219,7 @@ def quick_hc_generic_collect(subject_id: str):
 
     artifact = result_to_artifact(
         result,
-        subject_id=subject_id,
+        subject_id=active_subject_id,
         subject_title=title,
         commcell_id=customer.get("commcell_id"),
         commcell_name=customer.get("customer_name"),
