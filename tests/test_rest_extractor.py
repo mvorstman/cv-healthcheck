@@ -405,6 +405,34 @@ def test_extract_output_as_card_does_not_trim_rows(db):
     assert result.sections["kappa.section1"] == [{"k": "v1"}, {"k": "v2"}, {"k": "v3"}]
 
 
+def test_extract_carries_metric_and_chart_specs_from_catalog(db):
+    # ADR 0004 phase 5: the REST path now carries the per-section-type three-face
+    # spec from extraction_instructions into the ExtractionResult, so
+    # result_to_artifact can build the metric/chart/card section (previously only
+    # FixtureExtractor did this).
+    metric_spec = {"items": [{"id": "u", "label": "U", "source": "field", "field": "x"}]}
+    chart_spec = {"chart_type": "line", "labels": {"source": "column", "column": "m"},
+                  "series": [{"id": "u", "label": "U", "column": "x"}]}
+    _seed_subject(
+        db,
+        "zeta",
+        sections=[
+            ("m", "Metric", {"report_id": "318", "dataset_name": "DS1",
+                             "output_as": "metric", "metric": metric_spec}),
+            ("c", "Chart", {"report_id": "318", "dataset_name": "DS1",
+                            "output_as": "chart", "chart": chart_spec}),
+        ],
+    )
+    session = _mock_session(fetch_rows=[{"m": "2024-08", "x": 5}])
+    extractor = RESTExtractor(db, session, "c1", "p1")
+    result = extractor.extract("zeta", version=1)
+    assert not result.errors
+    assert result.section_metric_specs["zeta.m"] == metric_spec
+    assert result.section_chart_specs["zeta.c"] == chart_spec
+    # A plain table section carries no metric/chart spec.
+    assert "zeta.m" not in result.section_chart_specs
+
+
 def test_extract_timestamp_conversion(db):
     _seed_subject(
         db,

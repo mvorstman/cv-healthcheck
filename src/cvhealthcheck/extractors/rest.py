@@ -144,6 +144,17 @@ class RESTExtractor:
                 result.section_titles[section_id] = section_title
                 continue
 
+            # ADR 0004 phase 5: carry the per-section-type three-face spec from
+            # the catalog extraction_instructions so result_to_artifact can build
+            # the metric/chart/card section (phases 2-4 only did this in the
+            # FixtureExtractor; this is the REST path's equivalent wiring).
+            if output_as == "metric":
+                result.section_metric_specs[section_id] = extraction.get("metric", {})
+            elif output_as == "chart":
+                result.section_chart_specs[section_id] = extraction.get("chart", {})
+            elif output_as == "card":
+                result.section_card_specs[section_id] = extraction.get("card", {})
+
             result.sections[section_id] = rows
             result.section_output_types[section_id] = output_as
             result.section_titles[section_id] = section_title
