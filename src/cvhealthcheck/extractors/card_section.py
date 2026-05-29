@@ -29,17 +29,33 @@ Spec = the ``card`` block of a section's ``extraction_instructions``:
       }
     }
 
-Direct field mapping — no CEL in phase 4 (a card reads raw identity fields).
-The row-mapped categorical variant (one card item per row, e.g. BJS status
-breakdown) is deferred to phase 7; the spec leaves room for a future
-``"source": "rows"`` without restructuring.
+Item value sources (ADR 0004 phase 7 — mirror ``build_metric_section``):
+
+  - ``"source": "field"`` (default) reads ONE row. Without ``agg`` it reads the
+    first row's field (the identity-card default, unchanged from phase 4); with
+    ``agg`` (sum/count/avg/min/max/latest/first) it reduces the column across
+    all rows.
+  - ``"source": "cel"`` evaluates ``expr`` over the section's ``records`` — the
+    aggregated/categorical variant. Phase 7's first consumer is the BJS status
+    breakdown: each of the six classify_job_status buckets is a CEL
+    ``count(records.filter(r, r.status == "..."))``. On the empty lab every
+    count is ``0`` (count() of an empty filter is 0, not n/a) — the all-zero
+    card that is phase 7's empty-state. (Bucket accuracy on REAL freetext
+    statuses — "Completed w/ errors" etc. — is a phase-8 item; the exact-match
+    counts are correct only for the canonical status strings until then.)
+
+Derivations run once here at collection time and are stored on the CardSection;
+they are never re-derived at render time (ADR 0004 §"Formula language"). Bad CEL
+raises (loud-fail) via the phase-1 evaluator.
 """
 from __future__ import annotations
 
 from typing import Any
 
 from cvhealthcheck.artifacts.models import CardItem, CardSection
+from cvhealthcheck.cel import evaluate as cel_evaluate
 from cvhealthcheck.evaluative.threshold import evaluate_threshold_rule
+from cvhealthcheck.extractors.metric_section import _aggregate
 
 
 def build_card_section(
@@ -55,8 +71,21 @@ def build_card_section(
 
     items: list[CardItem] = []
     for it in spec.get("items") or []:
-        field = it.get("field", it["label"])
-        items.append(CardItem(label=it["label"], value=row.get(field), unit=it.get("unit")))
+        label = it["label"]
+        source = it.get("source", "field")
+        if source == "field":
+            field = it.get("field", label)
+            if "agg" in it:
+                value = _aggregate(rows, field, it["agg"])
+            else:
+                value = row.get(field)
+        elif source == "cel":
+            # Card items don't cross-reference each other (no item id), so the
+            # CEL context is just the section's records.
+            value = cel_evaluate(it["expr"], {"records": rows})
+        else:
+            raise ValueError(f"Unknown card item source {source!r} for {label!r}")
+        items.append(CardItem(label=label, value=value, unit=it.get("unit")))
 
     section = CardSection(
         type="card",

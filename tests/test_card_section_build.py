@@ -97,3 +97,62 @@ def test_card_roundtrips_through_json():
     sec = next(s for s in reloaded.sections if isinstance(s, CardSection))
     assert {i.label for i in sec.items} == {"CommCell Name", "Version", "Timezone", "Free Space"}
     assert sec.verdict_chain[0].reason
+
+
+# ── ADR 0004 phase 7: aggregated / CEL card items (BJS status breakdown) ──
+
+# Six classify_job_status buckets bound as CEL counts over the section records.
+_BJS_STATUS_BUCKETS = ["Completed", "Failed", "Completed with errors/warnings",
+                       "Running", "Killed", "Other"]
+_BJS_CARD_SPEC = {
+    "columns": 3,
+    "items": [
+        {"label": b, "source": "cel",
+         "expr": f'count(records.filter(r, r.status == "{b}"))'}
+        for b in _BJS_STATUS_BUCKETS
+    ],
+    # No evaluative block — emptiness is shown, not graded (empty-state-A).
+}
+
+
+def test_card_cel_counts_all_zero_on_empty_rows():
+    # Phase 7's defining case: 0 jobs -> every bucket count is 0 (not blank/None).
+    sec = build_card_section("backup_job_summary.status_breakdown",
+                             "Status breakdown", _BJS_CARD_SPEC, [])
+    assert [i.label for i in sec.items] == _BJS_STATUS_BUCKETS
+    assert all(i.value == 0 for i in sec.items)
+    # No verdict on the all-zero card — emptiness is not graded.
+    assert sec.severity is None and sec.verdict_chain == []
+
+
+def test_card_cel_counts_populated():
+    rows = [{"status": "Completed"}, {"status": "Completed"}, {"status": "Failed"}]
+    sec = build_card_section("backup_job_summary.status_breakdown",
+                             "Status breakdown", _BJS_CARD_SPEC, rows)
+    by = {i.label: i.value for i in sec.items}
+    assert by["Completed"] == 2 and by["Failed"] == 1 and by["Running"] == 0
+
+
+def test_card_field_agg_reduces_column():
+    rows = [{"n": 1}, {"n": 2}, {"n": 4}]
+    spec = {"items": [
+        {"label": "Total", "field": "n", "source": "field", "agg": "sum"},
+        {"label": "Peak", "field": "n", "agg": "max"},
+    ]}
+    sec = build_card_section("x.y", "Agg", spec, rows)
+    by = {i.label: i.value for i in sec.items}
+    assert by["Total"] == 7.0 and by["Peak"] == 4
+
+
+def test_card_field_default_still_reads_first_row():
+    # Backward compat: no source/agg -> the phase-4 identity-card behavior.
+    sec = build_card_section("_card_test.identity", "CommCell", SPEC, ROWS)
+    assert {i.label for i in sec.items} == {"CommCell Name", "Version", "Timezone", "Free Space"}
+    assert next(i for i in sec.items if i.label == "CommCell Name").value == "cs01"
+
+
+def test_card_unknown_source_raises():
+    import pytest
+    spec = {"items": [{"label": "Bad", "source": "nope"}]}
+    with pytest.raises(ValueError, match="Unknown card item source"):
+        build_card_section("x.y", "Bad", spec, [{}])
