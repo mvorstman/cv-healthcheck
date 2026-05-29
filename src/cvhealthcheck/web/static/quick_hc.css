@@ -105,6 +105,10 @@ html,body{height:100%;background:var(--bg);color:var(--text-1);font-family:var(-
 .cat-label{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-2);font-family:var(--mono)}
 .cat-body{overflow:hidden;transition:max-height .2s ease;padding-left:8px}
 .cat-div{height:1px;background:var(--border);margin:4px 6px 4px}
+/* ADR 0004: the internal/test-subjects chapter — distinct, non-collapsible. */
+.cat-hdr-test{cursor:default;padding-left:8px}
+.cat-hdr-test:hover{background:transparent}
+.cat-hdr-test .cat-label{color:var(--text-3);font-style:italic}
 .subj-row{
   display:flex;align-items:center;gap:7px;
   padding:0 6px 0 4px;height:30px;border-radius:5px;

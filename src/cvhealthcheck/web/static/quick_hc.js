@@ -143,34 +143,54 @@ function _setNavActive(id) {
 }
 
 // ── LEFT CATALOG (no checkboxes) ──
+function _subjRow(s) {
+  const isActive = s.id === activeId && mode === 'config';
+  const hasData = s.state !== 'nodata';
+  const isDraft = s.status && s.status !== 'active';
+  return `<div class="subj-row${isActive ? ' active' : ''}" id="sr-${s.id}" onclick="openConfig('${s.id}')">
+    <span class="subj-dot${hasData ? ' dot-ok' : ''}"></span>
+    <span class="subj-name">${esc(s.name)}</span>
+    ${isDraft ? `<span class="subj-badge-draft">${esc(s.status)}</span>` : ''}
+  </div>`;
+}
+
 function renderLeft() {
   _updateConnBadge();
   _updateReportBar();
 
-  let h = '';
-  CATS.forEach((cat, ci) => {
-    h += `<div class="cat-group">
+  const groups = [];
+
+  // Real categories — render only NON-test subjects. A category whose only
+  // members are test subjects is skipped (no empty header).
+  CATS.forEach(cat => {
+    const real = cat.subjects.filter(s => !s.is_test);
+    if (!real.length) return;
+    groups.push(`<div class="cat-group">
       <div class="cat-hdr" onclick="toggleCat('${cat.id}',this)">
         <span class="cat-chevron">${cat.open ? '▾' : '▸'}</span>
         <span class="cat-label">${esc(cat.name)}</span>
       </div>
-      <div class="cat-body" id="cb-${cat.id}" style="max-height:${cat.open ? '2000px' : '0'}">`;
-    cat.subjects.forEach(s => {
-      // Internal/test subjects are hidden unless the dev toggle is on.
-      if (s.is_test && !showTestSubjects()) return;
-      const isActive = s.id === activeId && mode === 'config';
-      const hasData = s.state !== 'nodata';
-      const isDraft = s.status && s.status !== 'active';
-      h += `<div class="subj-row${isActive ? ' active' : ''}" id="sr-${s.id}" onclick="openConfig('${s.id}')">
-        <span class="subj-dot${hasData ? ' dot-ok' : ''}"></span>
-        <span class="subj-name">${esc(s.name)}</span>
-        ${isDraft ? `<span class="subj-badge-draft">${esc(s.status)}</span>` : ''}
-      </div>`;
-    });
-    h += `</div></div>`;
-    if (ci < CATS.length - 1) h += `<div class="cat-div"></div>`;
+      <div class="cat-body" id="cb-${cat.id}" style="max-height:${cat.open ? '2000px' : '0'}">${real.map(_subjRow).join('')}</div>
+    </div>`);
   });
-  document.getElementById('left-catalog').innerHTML = h;
+
+  // ADR 0004: internal/test subjects get their OWN sidebar chapter, separate
+  // from the real category structure. Grouped generically via is_test, so all
+  // current and future test subjects land here. Shown only when the dev toggle
+  // is on (hidden by default).
+  if (showTestSubjects()) {
+    const testSubjects = allSubjs().filter(s => s.is_test);
+    if (testSubjects.length) {
+      groups.push(`<div class="cat-group">
+        <div class="cat-hdr cat-hdr-test">
+          <span class="cat-label">Test subjects</span>
+        </div>
+        <div class="cat-body" style="max-height:2000px">${testSubjects.map(_subjRow).join('')}</div>
+      </div>`);
+    }
+  }
+
+  document.getElementById('left-catalog').innerHTML = groups.join('<div class="cat-div"></div>');
 }
 
 function toggleCat(id) {
