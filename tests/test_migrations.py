@@ -106,6 +106,36 @@ def test_subjects_table_seeded_after_migration(fresh_db: Path) -> None:
     }
 
 
+def test_migration_0012_allows_card_section_type(fresh_db: Path) -> None:
+    """After 0012, subject_sections.section_type accepts 'card' (and still
+    rejects an unknown type), and existing rows survived the table rebuild."""
+    import sqlite3
+
+    conn = sqlite3.connect(str(fresh_db))
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        # Existing rows preserved through the rebuild.
+        existing = conn.execute("SELECT COUNT(*) FROM subject_sections").fetchone()[0]
+        assert existing > 0
+
+        # A card section now inserts cleanly (FK satisfied by a real subject).
+        conn.execute(
+            "INSERT INTO subject_sections (subject_id, subject_version, section_id,"
+            " title, section_type) VALUES ('environment', 1, 'environment.card_probe',"
+            " 'Probe', 'card')"
+        )
+        # An unknown type is still rejected by the widened CHECK.
+        import pytest as _pytest
+        with _pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "INSERT INTO subject_sections (subject_id, subject_version, section_id,"
+                " title, section_type) VALUES ('environment', 1, 'environment.bad_probe',"
+                " 'Probe', 'bogus')"
+            )
+    finally:
+        conn.close()
+
+
 def test_all_seeded_subjects_are_active(fresh_db: Path) -> None:
     import sqlite3
 
@@ -123,7 +153,7 @@ def test_all_seeded_subjects_are_active(fresh_db: Path) -> None:
 
 def test_migration_status_reports_all_applied(fresh_db: Path) -> None:
     statuses = migration_status(db_path=fresh_db)
-    assert len(statuses) == 11
+    assert len(statuses) == 12
     assert all(s["status"] == "applied" for s in statuses)
     migration_ids = [s["migration_id"] for s in statuses]
     assert migration_ids == sorted(migration_ids)
