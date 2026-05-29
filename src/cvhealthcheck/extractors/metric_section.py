@@ -39,7 +39,14 @@ def build_metric_section(
     spec: dict[str, Any],
     rows: list[dict[str, Any]],
 ) -> MetricSection:
-    """Build a rich MetricSection (render_mode="metric") from rows + spec."""
+    """Build a MetricSection from rows + spec.
+
+    render_mode comes from the spec (default "metric" — the rich evaluative
+    renderer with per-item value/derived/severity badges). A spec may set
+    render_mode "meta" for an INFORMATIONAL metric (e.g. client_growth's
+    latest-Total headline): plain key/value, no verdict — declare no
+    evaluative.rules and the section carries no severity. This is declared
+    intent, not inferred from whether a rule happens to be present."""
     semantic = spec.get("semantic") or {}
     sentinel = semantic.get("sentinel")
     item_specs = spec.get("items") or []
@@ -86,7 +93,7 @@ def build_metric_section(
         id=section_id,
         title=title,
         items=items,
-        render_mode="metric",
+        render_mode=spec.get("render_mode", "metric"),
     )
 
 

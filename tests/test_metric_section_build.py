@@ -55,6 +55,36 @@ def test_multi_field_and_cel_derivation():
     assert section.render_mode == "metric"
 
 
+def test_evaluative_metric_default_render_mode_unchanged():
+    # ADR 0004 phase 6 rider: the render_mode change must NOT alter the default
+    # evaluative path. A spec with no render_mode -> "metric", with the verdict
+    # intact (the capacity_license / _metric_test shape, byte-for-byte).
+    assert "render_mode" not in SPEC  # the evaluative spec declares none
+    section = build_metric_section("_metric_test.metric", "Capacity", SPEC, ROWS)
+    assert section.render_mode == "metric"
+    util = _items(section)["utilisation_pct"]
+    assert util.severity == FindingSeverity.warning
+    assert len(util.verdict_chain) == 1 and util.verdict_chain[0].layer == "template_default"
+
+
+def test_meta_mode_informational_metric_has_no_verdict():
+    # client_growth's non-evaluative metric: render_mode "meta", no rules ->
+    # plain values, no severity, no verdict_chain.
+    spec = {
+        "render_mode": "meta",
+        "items": [
+            {"id": "total", "label": "Total Clients", "source": "field", "field": "total_clients", "agg": "latest"},
+        ],
+    }
+    rows = [{"total_clients": 5}]
+    section = build_metric_section("client_growth.summary", "Summary", spec, rows)
+    assert section.render_mode == "meta"
+    item = section.items[0]
+    assert item.value == 5
+    assert item.severity is None
+    assert item.verdict_chain == []
+
+
 def test_sentinel_field_becomes_none():
     section = build_metric_section("_metric_test.metric", "Capacity", SPEC, ROWS)
     # Latest prev_active_capacity is -1 (sentinel) -> n/a, NOT a real 0.
