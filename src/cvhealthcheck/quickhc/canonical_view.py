@@ -124,15 +124,23 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
                 "rows": rows,
             })
         elif isinstance(sec, MetricSection):
-            meta_rows = [{"k": item.label.upper(), "v": str(item.value)} for item in sec.items]
-            sections.append({
-                "id": sec_id,
-                "title": sec.title,
-                "meta": "",
-                "included": True,
-                "type": "meta",
-                "rows": meta_rows,
-            })
+            # ADR 0004 presentational face: render_mode is the *declared*
+            # discriminator (not inferred from severity presence). "metric"
+            # selects the rich renderer; anything else (License Summary's
+            # commcell_info, which predates the concept) stays the plain
+            # key/value "meta" block — byte-for-byte unchanged.
+            if sec.render_mode == "metric":
+                sections.append(_metric_section_view(sec, sec_id))
+            else:
+                meta_rows = [{"k": item.label.upper(), "v": str(item.value)} for item in sec.items]
+                sections.append({
+                    "id": sec_id,
+                    "title": sec.title,
+                    "meta": "",
+                    "included": True,
+                    "type": "meta",
+                    "rows": meta_rows,
+                })
 
     return {
         "id": subject_id,
@@ -392,6 +400,55 @@ def _artifact_state(artifact: CanonicalArtifact) -> str:
     if not artifact.sections:
         return "nodata"
     return _ARTIFACT_STATUS_TO_STATE.get(artifact.summary.status, "nodata")
+
+
+_METRIC_SEV_CODE: dict[str, str] = {
+    FindingSeverity.critical: "crit",
+    FindingSeverity.warning:  "warn",
+    FindingSeverity.good:     "good",
+    FindingSeverity.info:     "info",
+    FindingSeverity.muted:    "muted",
+}
+
+
+def _metric_section_view(sec: MetricSection, sec_id: str) -> dict[str, Any]:
+    """Render a rich (render_mode="metric") MetricSection for the workspace.
+
+    Each item carries a display value ("n/a" for a None/sentinel value, kept
+    distinct from a real 0), the derived flag, and a severity badge code +
+    verdict reason (the auditable tooltip).
+    """
+    items = []
+    for item in sec.items:
+        sev = item.severity.value if item.severity is not None else None
+        reason = item.verdict_chain[-1].reason if item.verdict_chain else ""
+        items.append({
+            "id": item.id,
+            "label": item.label,
+            "value": _fmt_metric_value(item.value),
+            "unit": item.unit or "",
+            "derived": bool(item.derived),
+            "sev": _METRIC_SEV_CODE.get(sev) if sev else None,
+            "reason": reason,
+        })
+    return {
+        "id": sec_id,
+        "title": sec.title,
+        "meta": "",
+        "included": True,
+        "type": "metric",
+        "items": items,
+    }
+
+
+def _fmt_metric_value(value: Any) -> str:
+    """Display string for a metric value. None (sentinel) -> 'n/a'."""
+    if value is None:
+        return "n/a"
+    if isinstance(value, float):
+        # Trim trailing .0 for whole numbers; keep one decimal otherwise.
+        return str(int(value)) if value.is_integer() else f"{value:.1f}"
+    return str(value)
 
 
 def _finding_view(f: Finding) -> dict[str, str]:
