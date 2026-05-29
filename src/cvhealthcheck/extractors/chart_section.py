@@ -51,10 +51,14 @@ def build_chart_section(
     label_col = labels_spec.get("column")
     labels = [_label(row.get(label_col)) for row in rows] if label_col else []
 
+    # Values equal to a declared gap value (e.g. capacity_license's -1 inactive
+    # month) — and null — become None: a gap in the line, NOT a plotted zero or
+    # a literal negative. 0 stays a real value.
+    gap_values = spec.get("gap_values") or []
     series: list[ChartSeries] = []
     for s in spec.get("series") or []:
         col = s.get("column", s.get("id"))
-        data = [_number(row.get(col)) for row in rows]
+        data = [_number(row.get(col), gap_values) for row in rows]
         series.append(ChartSeries(id=s["id"], label=s.get("label", s["id"]), data=data))
 
     return ChartSection(
@@ -79,15 +83,15 @@ def _label(value: Any) -> str:
     return "" if value is None else str(value)
 
 
-def _number(value: Any) -> float:
-    """Coerce a cell to float for a chart series. Missing/None -> 0.0.
-
-    Conformance (declared required fields) is the right place to catch genuinely
-    missing data; here a None cell becomes 0.0 so the series stays aligned to
-    the labels (the model validator requires equal lengths)."""
-    if value is None:
-        return 0.0
+def _number(value: Any, gap_values: list[Any] | None = None) -> float | None:
+    """Coerce a cell to float for a chart series. None / a declared gap value
+    (e.g. -1) -> None (a gap in the line, kept distinct from a real 0); an
+    unparseable value -> None (gap). The series stays aligned to the labels
+    (a None still occupies its position; the model validator requires equal
+    lengths)."""
+    if value is None or (gap_values and value in gap_values):
+        return None
     try:
         return float(value)
     except (TypeError, ValueError):
-        return 0.0
+        return None

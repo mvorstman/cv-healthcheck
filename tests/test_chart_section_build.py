@@ -55,12 +55,29 @@ def test_pie_shape_single_series():
     assert sec.series[0].data == [45.0, 3.0, 2.0]
 
 
-def test_missing_cell_becomes_zero_keeping_alignment():
+def test_missing_cell_becomes_gap_keeping_alignment():
     rows = [{"month": "2024-06", "added": 10}, {"month": "2024-07"}]  # 2nd row missing 'added'
     sec = build_chart_section("s", "S", LINE_SPEC, rows)
     added = next(s for s in sec.series if s.id == "added")
-    assert added.data == [10.0, 0.0]
-    assert len(added.data) == len(sec.labels)  # validator-safe
+    assert added.data == [10.0, None]            # None = gap, not 0
+    assert len(added.data) == len(sec.labels)    # validator-safe
+
+
+def test_gap_values_and_null_become_gaps_zero_stays_real():
+    # capacity_license shape: -1 (inactive) and null -> gap; 0 -> real value.
+    rows = [
+        {"month": "2025-05", "used": -1},
+        {"month": "2026-04", "used": 0},
+        {"month": "2026-05", "used": None},
+    ]
+    spec = {
+        "chart_type": "line",
+        "labels": {"source": "column", "column": "month"},
+        "series": [{"id": "used", "label": "Used", "column": "used"}],
+        "gap_values": [-1],
+    }
+    sec = build_chart_section("cl.chart", "Used", spec, rows)
+    assert sec.series[0].data == [None, 0.0, None]   # -1->gap, 0->real, null->gap
 
 
 # ── result_to_artifact emission ──

@@ -80,7 +80,10 @@ class ChartAxis(BaseModel):
 class ChartSeries(BaseModel):
     id:    str
     label: str
-    data:  list[float]
+    # None entries are gaps (no data for that label) — e.g. capacity_license's
+    # inactive months (-1 / null in the source). The chart renderer draws them
+    # as breaks in the line (spanGaps:false), distinct from a real 0.
+    data:  list[float | None]
 
 
 class VerdictEntry(BaseModel):

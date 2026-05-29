@@ -655,6 +655,9 @@ function buildChartJsConfig(cd) {
       fill: false,
       tension: 0.25,
       pointRadius: 2,
+      // null data points are gaps (e.g. capacity_license inactive months),
+      // not connected across and not plotted at zero.
+      spanGaps: false,
     }));
   }
 
