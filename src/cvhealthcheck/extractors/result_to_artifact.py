@@ -11,6 +11,7 @@ from cvhealthcheck.artifacts.models import (
     ArtifactSubject,
     ArtifactSummary,
     CanonicalArtifact,
+    ChartSection,
     Finding,
     FindingsSection,
     MetricSection,
@@ -18,6 +19,7 @@ from cvhealthcheck.artifacts.models import (
     TableColumn,
     TableSection,
 )
+from cvhealthcheck.extractors.chart_section import build_chart_section
 from cvhealthcheck.extractors.html import ExtractionResult
 from cvhealthcheck.extractors.metric_section import build_metric_section, worst_metric_severity
 
@@ -93,6 +95,10 @@ def result_to_artifact(
             metric_section = build_metric_section(section_id, title, spec, rows)
             sections.append(metric_section)
             metric_sections.append(metric_section)
+        elif output_as == "chart":
+            # ADR 0004 phase 3: map table columns to a chart view (line/pie/…).
+            spec = result.section_chart_specs.get(section_id, {})
+            sections.append(build_chart_section(section_id, title, spec, rows))
         else:
             columns = _derive_columns(rows)
             sections.append(TableSection(
@@ -110,11 +116,13 @@ def result_to_artifact(
         if metric_status is not None:
             summary = ArtifactSummary(status=metric_status)
         else:
-            has_table_data = any(
-                isinstance(s, TableSection) and len(s.items) > 0 for s in sections
+            has_data = any(
+                (isinstance(s, TableSection) and len(s.items) > 0)
+                or (isinstance(s, ChartSection) and len(s.series) > 0)
+                for s in sections
             )
             summary = ArtifactSummary(
-                status=ArtifactStatus.good if has_table_data else ArtifactStatus.unknown
+                status=ArtifactStatus.good if has_data else ArtifactStatus.unknown
             )
     else:
         metrics = [

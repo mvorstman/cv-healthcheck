@@ -67,6 +67,11 @@ class ExtractionResult:
     # derived values and verdicts at collection time. Present only for
     # sections whose output_as == "metric".
     section_metric_specs: dict[str, dict] = field(default_factory=dict)
+    # ADR 0004 chart sections: maps section_id → the catalog `chart`
+    # declaration (chart_type, labels/series column mapping, axes). Carried to
+    # result_to_artifact, which calls build_chart_section. Present only for
+    # sections whose output_as == "chart".
+    section_chart_specs: dict[str, dict] = field(default_factory=dict)
 
 
 class HTMLExtractor:
