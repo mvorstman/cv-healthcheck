@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-29 (ADR 0004 phase 4 — card section type, browser-verified)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** see the pointer commit at the end of this session (CHANGELOG + HANDOVER for phase 4).
+**Last commit:** `117a16d` — CHANGELOG + HANDOVER: ADR 0004 phase 4 (card section type) complete
 **Test status:** **691 passing** under both `pytest` and `python -m pytest` (was 673).
 
 ---
