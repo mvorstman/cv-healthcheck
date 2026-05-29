@@ -35,14 +35,8 @@ except ImportError:  # pragma: no cover - fallback for environments without the 
 
 from pydantic import ValidationError
 
-from cvhealthcheck.artifacts.enums import (
-    ArtifactStatus,
-    ChartType,
-    FindingSeverity,
-    FindingStatus,
-    SourceType,
-)
 from cvhealthcheck.artifacts.models import CanonicalArtifact
+from cvhealthcheck.db.section_types import SUPPORTED_SECTION_TYPES
 from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.db import get_db
 from cvhealthcheck.db.migrations import run_migrations
@@ -62,111 +56,24 @@ mcp = FastMCP("cv-healthcheck")
 
 
 def _canonical_schema() -> dict[str, Any]:
-    return {
-        "artifact_type": {"type": "string", "description": "Canonical artifact subject type."},
-        "schema_version": {"type": "integer", "default": 1},
-        "generated_at": {"type": "datetime"},
-        "source": {
-            "type": "object",
-            "fields": {
-                "type": {"type": "enum", "values": [item.value for item in SourceType]},
-                "report_id": {"type": "integer|null"},
-                "report_name": {"type": "string|null"},
-                "endpoint": {"type": "string|null"},
-                "collected_at": {"type": "datetime|null"},
-                "imported_at": {"type": "datetime|null"},
-            },
-        },
-        "subject": {
-            "type": "object",
-            "fields": {
-                "id": {"type": "string"},
-                "title": {"type": "string"},
-            },
-        },
-        "summary": {
-            "type": "object",
-            "fields": {
-                "status": {"type": "enum", "values": [item.value for item in ArtifactStatus]},
-                "metrics": {
-                    "type": "list",
-                    "items": {
-                        "id": "string",
-                        "label": "string",
-                        "value": "number",
-                        "unit": "string|null",
-                    },
-                },
-            },
-        },
-        "sections": {
-            "type": "list",
-            "description": "One or more report content sections.",
-            "valid_section_types": ["findings", "table", "metric", "chart"],
-            "section_definitions": {
-                "findings": {
-                    "type": "findings",
-                    "fields": {
-                        "id": "string",
-                        "title": "string",
-                        "items": {
-                            "type": "list",
-                            "item_fields": {
-                                "id": "string",
-                                "severity": {
-                                    "type": "enum",
-                                    "values": [item.value for item in FindingSeverity],
-                                },
-                                "status": {
-                                    "type": "enum",
-                                    "values": [item.value for item in FindingStatus],
-                                },
-                                "category": "string",
-                                "title": "string",
-                                "description": "string|null",
-                                "recommendation": "string|null",
-                                "references": "list",
-                                "raw_ref": "any|null",
-                            },
-                        },
-                    },
-                },
-                "table": {
-                    "type": "table",
-                    "fields": {
-                        "id": "string",
-                        "title": "string",
-                        "columns": "list",
-                        "items": "list",
-                    },
-                },
-                "metric": {
-                    "type": "metric",
-                    "fields": {
-                        "id": "string",
-                        "title": "string",
-                        "items": "list",
-                    },
-                },
-                "chart": {
-                    "type": "chart",
-                    "fields": {
-                        "id": "string",
-                        "title": "string",
-                        "chart_type": {
-                            "type": "enum",
-                            "values": [item.value for item in ChartType],
-                        },
-                        "x_axis": "object|null",
-                        "y_axis": "object|null",
-                        "labels": "list[string]",
-                        "series": "list",
-                    },
-                },
-            },
-        },
-        "metadata": {"type": "object", "additional_properties": True},
-    }
+    """Derive the canonical artifact schema from the live Pydantic models.
+
+    ADR 0004 backlog #30: previously this was a hand-maintained dict that
+    drifted two phases behind the models (missing template_version, the rich
+    MetricItem surface, render_mode, VerdictEntry, …) while save_staged_artifact
+    validated against the live model — so the schema advertised shapes the
+    validator then rejected. Deriving from ``model_json_schema()`` makes drift
+    structurally impossible: any model change is reflected automatically.
+
+    ``supported_section_types`` is sourced from the runtime's
+    SUPPORTED_SECTION_TYPES (backlog #31) — the schema's ``$defs`` describe what
+    the model can *express*, this lists what the runtime currently *accepts*.
+    The two coincide today but the split stays honest when a section type is
+    modelled before its renderer lands (e.g. card / multi_section).
+    """
+    schema = CanonicalArtifact.model_json_schema()
+    schema["supported_section_types"] = sorted(SUPPORTED_SECTION_TYPES)
+    return schema
 
 
 def _load_pending_staged_record(db: sqlite3.Connection, stage_id: str) -> dict[str, Any]:

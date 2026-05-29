@@ -81,16 +81,53 @@ def test_get_canonical_schema_returns_dict() -> None:
     assert isinstance(schema, dict)
 
 
-def test_get_canonical_schema_describes_sections() -> None:
+def test_get_canonical_schema_is_derived_json_schema() -> None:
+    # ADR 0004 #30: the schema is now derived from CanonicalArtifact, so it's a
+    # standard JSON Schema ($defs / properties), not the old curated dict.
     schema = server.get_canonical_schema()
-    assert "sections" in schema
-    assert schema["sections"]["valid_section_types"] == ["findings", "table", "metric", "chart"]
+    assert "$defs" in schema and "properties" in schema
+    assert "artifact_type" in schema["properties"]
+    assert "schema_version" in schema["properties"]
+    assert "sections" in schema["properties"]
 
 
-def test_get_canonical_schema_contains_top_level_keys() -> None:
+def test_get_canonical_schema_supported_section_types_matches_runtime() -> None:
+    # ADR 0004 #31: advertised supported types are sourced from the runtime
+    # SUPPORTED_SECTION_TYPES — they cannot diverge.
+    from cvhealthcheck.db.section_types import SUPPORTED_SECTION_TYPES
     schema = server.get_canonical_schema()
-    assert "artifact_type" in schema
-    assert "schema_version" in schema
+    assert schema["supported_section_types"] == sorted(SUPPORTED_SECTION_TYPES)
+    assert "chart" in schema["supported_section_types"]
+
+
+def test_get_canonical_schema_drift_guard() -> None:
+    """NON-NEGOTIABLE drift guard (ADR 0004 #30): the schema must describe the
+    live model. Because it's derived, this passes by construction — and would
+    fail loudly if anyone reverted get_canonical_schema to a hand-maintained
+    snapshot that omits a live field, or broke the derivation."""
+    import json
+
+    from cvhealthcheck.artifacts.models import CanonicalArtifact
+    from cvhealthcheck.db.section_types import SUPPORTED_SECTION_TYPES
+
+    schema = server.get_canonical_schema()
+    blob = json.dumps(schema)
+
+    # Load-bearing fields the hand-maintained schema had drifted past.
+    for field in ("template_version", "render_mode", "verdict_chain", "derived"):
+        assert field in blob, f"derived schema must describe {field!r}"
+
+    # The derived schema must equal the live model's schema (plus our one
+    # annotation key) — i.e. nobody slipped a hand-curated shape back in.
+    expected = CanonicalArtifact.model_json_schema()
+    expected["supported_section_types"] = sorted(SUPPORTED_SECTION_TYPES)
+    assert schema == expected
+
+    # The section discriminator enumerates the modelled section types; the
+    # runtime-supported set must be a subset (never advertise a type the model
+    # can't express).
+    mapping = schema["properties"]["sections"]["items"]["discriminator"]["mapping"]
+    assert SUPPORTED_SECTION_TYPES <= set(mapping.keys())
 
 
 def test_list_subjects_returns_list(patch_db: None) -> None:
