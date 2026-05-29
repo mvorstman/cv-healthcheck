@@ -148,6 +148,35 @@ class ChartSection(BaseModel):
         return self
 
 
+class CardItem(BaseModel):
+    label: str
+    value: str | int | float | None = None   # None renders as "—"
+    unit:  str | None = None
+
+
+class CardSection(BaseModel):
+    """ADR 0004 card section — a flat, labeled key-value identity block
+    ("typically one row"). Distinct from a metric (emphasized/derived values):
+    a card is a labeled grid of fields.
+
+    Per the phase-4 steering decision, a card DOES carry a section-level verdict
+    (the compliance engine judges every card), reusing the EXACT severity +
+    verdict_chain shape MetricItem carries — so card and metric verdicts are
+    structurally identical. This duplication of the evaluative shape across
+    MetricItem and CardSection is intentional and temporary; phase 8 unifies the
+    evaluative face into one shared section-level concern.
+    """
+    type:          Literal["card"]
+    id:            str
+    title:         str
+    items:         list[CardItem] = Field(default_factory=list)
+    # Presentational grid hint; None = auto (renderer picks columns by count).
+    columns:       int | None = None
+    # Evaluative face (reused from the metric machinery — same enum / VerdictEntry).
+    severity:      FindingSeverity | None = None
+    verdict_chain: list[VerdictEntry]     = Field(default_factory=list)
+
+
 class MetricSection(BaseModel):
     type:  Literal["metric"]
     id:    str
@@ -163,7 +192,7 @@ class MetricSection(BaseModel):
 
 
 Section = Annotated[
-    Union[FindingsSection, TableSection, ChartSection, MetricSection],
+    Union[FindingsSection, TableSection, ChartSection, MetricSection, CardSection],
     Field(discriminator="type"),
 ]
 
