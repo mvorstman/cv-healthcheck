@@ -80,7 +80,16 @@ def _axis(value: dict[str, Any] | None) -> ChartAxis | None:
 
 
 def _label(value: Any) -> str:
-    return "" if value is None else str(value)
+    """Chart axis label. An ISO datetime string (e.g. a unix_seconds timestamp
+    field converted to "2025-05-01T00:00:00+00:00") is truncated to its date
+    part for a readable axis; non-ISO labels (e.g. "May 1, 2025") pass through
+    unchanged."""
+    if value is None:
+        return ""
+    s = str(value)
+    if len(s) >= 11 and s[10] == "T" and s[:10].replace("-", "").isdigit():
+        return s[:10]
+    return s
 
 
 def _number(value: Any, gap_values: list[Any] | None = None) -> float | None:

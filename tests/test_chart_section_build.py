@@ -63,6 +63,23 @@ def test_missing_cell_becomes_gap_keeping_alignment():
     assert len(added.data) == len(sec.labels)    # validator-safe
 
 
+def test_iso_datetime_labels_truncated_to_date():
+    # client_growth: MonthStart converts (unix_seconds) to an ISO datetime;
+    # the chart axis shows the date part. Non-ISO labels pass through.
+    rows = [
+        {"month": "2025-05-01T00:00:00+00:00", "total": 0},
+        {"month": "2026-04-01T00:00:00+00:00", "total": 5},
+        {"month": "May 1, 2025", "total": 1},  # non-ISO -> unchanged
+    ]
+    spec = {
+        "chart_type": "line",
+        "labels": {"source": "column", "column": "month"},
+        "series": [{"id": "total", "label": "Total", "column": "total"}],
+    }
+    sec = build_chart_section("cg.chart", "Total", spec, rows)
+    assert sec.labels == ["2025-05-01", "2026-04-01", "May 1, 2025"]
+
+
 def test_gap_values_and_null_become_gaps_zero_stays_real():
     # capacity_license shape: -1 (inactive) and null -> gap; 0 -> real value.
     rows = [
