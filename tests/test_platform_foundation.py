@@ -43,9 +43,6 @@ def test_development_routes_require_login() -> None:
     client = app.test_client()
 
     for path in (
-        "/metrics/client-count",
-        "/metrics/client-growth",
-        "/metrics/capacity-license",
         "/reportsplus/health-candidates",
         "/reportsplus/execution-validation",
     ):
@@ -61,9 +58,6 @@ def test_development_routes_render_after_login() -> None:
         session[SESSION_TOKEN_KEY] = "test-token"
 
     for path in (
-        "/metrics/client-count",
-        "/metrics/client-growth",
-        "/metrics/capacity-license",
         "/reportsplus/health-candidates",
         "/reportsplus/execution-validation",
     ):

@@ -456,8 +456,11 @@ def test_quick_hc_report_service_uses_registry_detail_urls_and_client_growth_has
 
     assert report["security_assessment"]["detail_url"] == "/quick-hc"
     assert report["license_summary"]["detail_url"] == "/quick-hc"
-    assert report["client_growth"]["detail_url"] == "/metrics/client-growth"
-    assert report["capacity_license"]["detail_url"] == "/metrics/capacity-license"
+    # ADR 0004 #25 / phase 6.5: client_growth & capacity_license render
+    # canonically in the workspace now, so their detail link opens /quick-hc
+    # (like SA/LS) — the dev /metrics/* pages were retired.
+    assert report["client_growth"]["detail_url"] == "/quick-hc"
+    assert report["capacity_license"]["detail_url"] == "/quick-hc"
     assert report["backup_job_summary"]["detail_url"] == "/quick-hc/backup-job-summary"
     assert "message" not in report["client_growth"]
 
