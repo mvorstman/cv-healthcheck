@@ -10,6 +10,24 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-29 (ADR 0004 phase plan committed)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `fa6328a` (phase plan), plus the wrap-up commit publishing this entry.
+
+ADR 0004 phase plan committed: nine phases, dev tools retirement at 6.5, `multi_section` deferred to LS-handling ADR. Next: phase 1 implementation.
+
+### Added
+
+- **`docs/adr/0004-phase-plan.md`** — companion to `docs/adr/0004-three-face-metadata-vocabulary.md`. The ADR explicitly defers phase planning; this is that follow-on. Nine phases (1 Foundation → 2 metric → 3 chart → 4 card → 5 capacity_license migration → 6 client_growth migration → 6.5 dev tools retirement → 7 backup_job_summary migration → 8 evaluative face). Two scope adjustments: `multi_section` deferred to whatever ADR addresses License Summary, dev tools retirement (HANDOVER backlog #24/#25) folded into the sequence as phase 6.5.
+
+### Notes
+
+- **Phase 6.5 placement.** HANDOVER backlog #24 specified dev tools retirement as natural cleanup post-ADR-0004. Phase planning placed it explicitly between phase 6 (client_growth) and phase 7 (BJS), at the first moment LB-1 (production tile detail_endpoints depending on dev routes) is cleanly resolvable. Tile detail_endpoint decision (backlog #25) lands as part of phase 6.5.
+- **Vocabulary documentation vs implementation.** ADR 0004 documents six section types (table / findings / metric / chart / card / multi_section). The implementation ships five. The ADR's vocabulary documentation stands at six; the LS-handling ADR brings `multi_section` with it. This is a deliberate documentation/implementation gap, not a regression of the ADR text.
+
+---
+
 ## 2026-05-28 (WORKFLOW.md committed: living workflow document)
 
 **Branch:** `feature/basic-healthcheck-report-output`

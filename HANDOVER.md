@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-28 (WORKFLOW.md committed)
+**Last updated:** 2026-05-29 (ADR 0004 phase plan committed)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `7b839ea` — CHANGELOG + HANDOVER: WORKFLOW.md committed
+**Last commit:** (this session's phase plan commit; CHANGELOG + HANDOVER pointer commit follows)
 **Test status:** **575 passing** under both `pytest` and `python -m pytest` (unchanged from prior session — this session is docs-only).
 
 ---
@@ -23,6 +23,10 @@ If you are a new chat / new session, read these files in order before doing anyt
 ---
 
 ## What was just completed
+
+**ADR 0004 phase plan committed at `docs/adr/0004-phase-plan.md`.** Nine phases: 1 Foundation (CEL plumbing, `template_version`, version dropdown, source tile cleanup, conformance mechanism) → 2 `metric` section type → 3 `chart` section type → 4 `card` section type → 5 capacity_license migration → 6 client_growth migration → 6.5 dev tools retirement (HANDOVER backlog #24/#25 land here) → 7 backup_job_summary migration → 8 evaluative face. Two scope adjustments from the ADR: `multi_section` deferred to whatever ADR addresses License Summary as a whole (no in-scope consumer; one open design question), and dev tools retirement explicitly folded into the sequence as phase 6.5 rather than left as post-ADR cleanup. The ADR's vocabulary documentation still stands at six section types; the implementation ships five.
+
+### Prior session: ADR 0004 drafted
 
 **ADR 0004 (three-face metadata vocabulary) drafted and committed at `docs/adr/0004-three-face-metadata-vocabulary.md`.** Status: Proposed. The ADR defines a three-face metadata vocabulary (semantic / presentational / evaluative), six section types (table / findings / metric / chart / card / multi_section), CEL as the formula language with a defined primitive set and STOP-and-steer rule for extensions, the three vendor-compliance shapes (per-row severity codes / StatusRow / inline threshold), the vendor → template → override rules layering with a `muted` severity for explicit suppression, section-grained conformance failures with a structured rebuild-bridge record, subject versioning via `_vN` suffix subjects (not a version field), and migration of the three regressed subjects (Capacity Licenses, Client Growth, Backup Job Summary) as the ADR's end-to-end validation. The survey at `docs/adr/0004-survey.md` is the evidence base. Explicitly out of scope: License Summary migration, the AI authoring loop, recommendations / predictive face, cross-CommCell report identification (HANDOVER backlog #23), and implementation phase planning.
 
@@ -68,27 +72,18 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## Single recommended next action
 
-**ADR 0004 phase planning — slice the implementation into phases.**
+**ADR 0004 phase 1 implementation — Foundation: CEL plumbing, `template_version`, version dropdown, source tile cleanup, conformance mechanism.**
 
-The ADR explicitly leaves phase slicing to a follow-on decision; a planning session should produce the phase list before any code work starts. The ADR itself suggests "six to eight phases" with the implied shape: vocabulary plumbing, section types one by one, the three regressions, evaluative face, conformance — but the slicing is deliberately deferred. Inputs the phase-planning conversation needs:
+Phase planning is complete. The plan document lives at `docs/adr/0004-phase-plan.md` and pins nine phases (1 Foundation → 2 metric → 3 chart → 4 card → 5 capacity_license → 6 client_growth → 6.5 dev tools retirement → 7 backup_job_summary → 8 evaluative face). Phase 1 is the foundation that subsequent phases build on; everything from CEL evaluation through subject versioning through the conformance-failure record shape lands here.
 
-- **`docs/adr/0004-three-face-metadata-vocabulary.md`** — the proposed decision; phase planning encodes the implementation order.
-- **`docs/adr/0004-survey.md`** — the evidence base; phase boundaries should be chosen so each phase can be validated against survey findings.
-- **Pre-cleanup commits** (`b871c46` vendor-key preservation, `4589409` loud-failure validation) — already in place; phase 1 doesn't redo them.
-- **ADR's "Pointers for implementation"** section — names the specific files each phase will touch.
+Inputs the phase 1 session needs:
 
-Recommended phase-planning prompts to consider:
-- Which phase introduces CEL? The first or somewhere in the middle? (Implication: derived values can't be catalog-expressed until CEL is in place.)
-- Which of the six section types come first? Likely `metric` and `chart` (because they unlock the three regressions) before `card` and `multi_section`.
-- Do conformance + structured-failure records ship as their own phase, or threaded through every section-type phase?
-- Does each regressed subject get its own phase, or do all three migrate together once the vocabulary is in place?
-- Where does subject versioning land — early (foundational schema work) or late (after the first AI-rebuild forcing function)?
+- **`docs/adr/0004-phase-plan.md`** — the phase 1 scope, validation gate, and STOP triggers.
+- **`docs/adr/0004-three-face-metadata-vocabulary.md`** — the ADR itself; phase 1 implements the foundational pieces of the Decision section.
+- **`docs/adr/0004-survey.md`** — the evidence base; gap D1 (formula language) is the foundational CEL decision phase 1 makes concrete.
+- **Pre-cleanup commits** (`b871c46` vendor-key preservation, `4589409` loud-failure validation) — already in place; phase 1 builds on them, doesn't redo them.
 
-Claude.ai is the right venue (prose work). The flow:
-1. Open a fresh Claude.ai conversation with the ADR and survey as context.
-2. Produce a phase-by-phase plan with names, scope, success criteria, and dependencies.
-3. Land the phase plan in `docs/adr/` or `docs/` alongside the ADR.
-4. Implementation comes back to Claude Code, one phase per session, per the ADR-0002/0003 precedent.
+The phase ends with a clean working tree, all tests passing under both `pytest` invocations, and HANDOVER updated to point at phase 2. Phase succession is documented in the phase plan's last section.
 
 ### Methodology retrospective for ADR 0003 — deferred
 
