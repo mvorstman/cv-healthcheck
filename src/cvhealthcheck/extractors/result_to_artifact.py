@@ -47,11 +47,17 @@ def result_to_artifact(
     artifact_source_type = _SOURCE_TYPE_MAP.get(
         result.source_type, SourceType.html_import
     )
+    # ADR 0004: live REST collection records collected_at; file imports record
+    # only imported_at (the file may have been generated earlier elsewhere).
+    collected_at = now if artifact_source_type == SourceType.rest else None
     source = ArtifactSource(
         type=artifact_source_type,
+        collected_at=collected_at,
         imported_at=now,
         commcell_id=commcell_id,
         commcell_name=commcell_name,
+        # The version-bearing subject_id this collection ran under.
+        template_version=subject_id,
     )
     subject = ArtifactSubject(id=subject_id, title=subject_title)
 

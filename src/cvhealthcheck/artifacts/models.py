@@ -17,6 +17,11 @@ class ArtifactSource(BaseModel):
     imported_at:   datetime | None = None
     commcell_id:   str | None      = None
     commcell_name: str | None      = None
+    # ADR 0004: the subject_id (and therefore the template version) under
+    # which this artifact was collected — e.g. "capacity_license" or
+    # "capacity_license_v2". Optional on read so artifacts predating ADR 0004
+    # phase 1 load cleanly; set on every write through result_to_artifact.
+    template_version: str | None   = None
 
 
 class ArtifactSubject(BaseModel):

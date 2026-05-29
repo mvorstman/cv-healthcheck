@@ -471,6 +471,54 @@ def test_result_to_artifact_mixed(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Test 8b — result_to_artifact: ADR 0004 template_version provenance
+# ---------------------------------------------------------------------------
+
+def test_result_to_artifact_records_template_version(tmp_path: Path) -> None:
+    """Every artifact records the subject_id it was collected under."""
+    result = _findings_result()
+    artifact = result_to_artifact(
+        result, "capacity_license", "Capacity Licenses", tmp_path / "t.html"
+    )
+    CanonicalArtifact.model_validate(artifact.model_dump())
+    assert artifact.source.template_version == "capacity_license"
+
+
+def test_result_to_artifact_rest_sets_collected_at(tmp_path: Path) -> None:
+    """REST collection records collected_at; file imports leave it None."""
+    rest_result = ExtractionResult(subject_id="capacity_license", source_type="rest")
+    rest_result.sections["capacity_license.table"] = [{"month": "2024-08", "clients": 5}]
+    rest_result.section_output_types["capacity_license.table"] = "table"
+    rest_result.section_titles["capacity_license.table"] = "Monthly"
+    rest_artifact = result_to_artifact(rest_result, "capacity_license_v2", "Capacity Licenses")
+    assert rest_artifact.source.collected_at is not None
+    assert rest_artifact.source.imported_at is not None
+    # The version-bearing subject_id flows through verbatim.
+    assert rest_artifact.source.template_version == "capacity_license_v2"
+
+    html_result = _findings_result()
+    html_artifact = result_to_artifact(
+        html_result, "security_assessment", "Security Assessment", tmp_path / "t.html"
+    )
+    assert html_artifact.source.collected_at is None
+    assert html_artifact.source.imported_at is not None
+
+
+def test_artifact_without_template_version_loads_cleanly() -> None:
+    """Artifacts predating ADR 0004 (no template_version) must still validate."""
+    legacy = {
+        "artifact_type": "capacity_license",
+        "generated_at": "2026-01-01T00:00:00Z",
+        "source": {"type": "html_import"},
+        "subject": {"id": "capacity_license", "title": "Capacity Licenses"},
+        "summary": {"status": "good"},
+        "sections": [],
+    }
+    artifact = CanonicalArtifact.model_validate(legacy)
+    assert artifact.source.template_version is None
+
+
+# ---------------------------------------------------------------------------
 # Test 9 — unknown column header → warning, other columns extracted
 # ---------------------------------------------------------------------------
 
