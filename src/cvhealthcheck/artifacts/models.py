@@ -83,11 +83,34 @@ class ChartSeries(BaseModel):
     data:  list[float]
 
 
+class VerdictEntry(BaseModel):
+    """One layer of an evaluative verdict chain (ADR 0004 §"Rules layering").
+
+    Phase 2 emits a single ``template_default`` entry per evaluated metric.
+    Phase 8 prepends a ``vendor`` layer and appends ``override`` layers to the
+    same structure, and resolves rules by ``rule_id`` against a rules registry.
+    """
+    layer:    str                       # vendor | template_default | override
+    severity: FindingSeverity
+    rule_id:  str | None = None
+    reason:   str                       # human-readable, populated — makes the verdict auditable
+
+
 class MetricItem(BaseModel):
     id:    str
     label: str
-    value: str | int | float
+    # None means "not applicable / no data" — a sentinel-resolved value
+    # (e.g. capacity_license's -1 = "license not active that month"), kept
+    # distinct from a real zero. The renderer shows it as "n/a".
+    value: str | int | float | None = None
     unit:  str | None = None
+    # True when this value was computed at collection time via a CEL
+    # expression (ADR 0004 derived value) rather than read from a raw field.
+    derived: bool = False
+    # ADR 0004 evaluative face: the resolved severity for this metric and the
+    # verdict chain that produced it. Empty/None for metrics with no rule.
+    severity:      FindingSeverity | None = None
+    verdict_chain: list[VerdictEntry]     = Field(default_factory=list)
 
 
 class FindingsSection(BaseModel):
@@ -130,6 +153,13 @@ class MetricSection(BaseModel):
     id:    str
     title: str
     items: list[MetricItem] = Field(default_factory=list)
+    # ADR 0004 presentational face — declared render intent, NOT inferred from
+    # whether items carry a severity. "metric" = the rich phase-2 renderer
+    # (values, derived values, severity badges); "meta" = the plain key/value
+    # block (License Summary's commcell_info predates the metric renderer and
+    # defaults here, so its rendering is unchanged). Set to "metric" by
+    # build_metric_section when the catalog declares output_as == "metric".
+    render_mode: Literal["meta", "metric"] = "meta"
 
 
 Section = Annotated[
