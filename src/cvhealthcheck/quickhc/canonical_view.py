@@ -141,6 +141,8 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
                     "type": "meta",
                     "rows": meta_rows,
                 })
+        elif isinstance(sec, ChartSection):
+            sections.append(_chart_section_view(sec, sec_id))
 
     return {
         "id": subject_id,
@@ -438,6 +440,26 @@ def _metric_section_view(sec: MetricSection, sec_id: str) -> dict[str, Any]:
         "included": True,
         "type": "metric",
         "items": items,
+    }
+
+
+def _chart_section_view(sec: ChartSection, sec_id: str) -> dict[str, Any]:
+    """Render a chart section to the canonical chart-data structure the JS
+    Chart.js renderer consumes. One structure for all chart_types; the JS
+    `chart_type` discriminator decides how to draw it."""
+    return {
+        "id": sec_id,
+        "title": sec.title,
+        "meta": "",
+        "included": True,
+        "type": "chart",
+        "chart": {
+            "chart_type": sec.chart_type.value if hasattr(sec.chart_type, "value") else str(sec.chart_type),
+            "labels": list(sec.labels),
+            "series": [{"id": s.id, "label": s.label, "data": list(s.data)} for s in sec.series],
+            "x_axis": sec.x_axis.label if sec.x_axis else None,
+            "y_axis": sec.y_axis.label if sec.y_axis else None,
+        },
     }
 
 
