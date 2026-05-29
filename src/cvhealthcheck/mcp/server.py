@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import functools
 import json
+import logging
 import sqlite3
 from typing import Any
 from uuid import uuid4
@@ -381,7 +382,20 @@ for _tool in (
     mcp.tool()(_run_in_thread(_tool))
 
 
+def _quiet_sdk_logging() -> None:
+    """ADR 0004 #35 hardening: the mcp SDK logs one INFO line per request
+    ("Processing request of type ...") to stderr. Over stdio, if the client
+    does not drain the server's stderr, the OS pipe buffer can fill and a sync
+    stderr write then blocks the event loop — a backpressure path to the same
+    transport freeze. Raise the SDK logger to WARNING so routine per-request
+    chatter can't accumulate. Targeted at the `mcp` logger only — root logging
+    and the project's own loggers are untouched. (Hardening, not the client-hang
+    fix.)"""
+    logging.getLogger("mcp").setLevel(logging.WARNING)
+
+
 def main() -> None:
+    _quiet_sdk_logging()
     mcp.run()
 
 

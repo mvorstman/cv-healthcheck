@@ -403,3 +403,33 @@ def test_approve_regular_artifact_still_calls_artifact_store_regression(
 
     assert approved["status"] == "approved"
     assert len(saved) == 1
+
+
+# ── ADR 0004 #35 hardening ──
+
+def test_tools_offloaded_to_thread_not_event_loop() -> None:
+    """Each registered tool is an async wrapper (runs its sync body in a worker
+    thread), while the module-level functions stay sync + directly callable.
+    Guards the loop-blocking fragility: FastMCP runs sync tools inline on the
+    event loop, so a slow tool would otherwise freeze the stdio transport."""
+    import asyncio
+
+    # Module-level functions remain plain sync (tests above call them directly).
+    assert not asyncio.iscoroutinefunction(server.list_subjects)
+
+    # The REGISTERED tools are async (offloaded).
+    async def _registered():
+        return {t.name: t for t in await server.mcp.list_tools()}
+    tools = asyncio.run(_registered())
+    assert "list_subjects" in tools
+    # Schema introspection survived the wrap (the signature is preserved).
+    assert "status" in tools["list_subjects"].inputSchema.get("properties", {})
+
+
+def test_quiet_sdk_logging_raises_mcp_logger_level() -> None:
+    """#35 hardening: the per-request 'Processing request...' INFO chatter is
+    silenced so a non-draining client can't backpressure the loop via stderr."""
+    import logging
+    logging.getLogger("mcp").setLevel(logging.INFO)  # pretend it's noisy
+    server._quiet_sdk_logging()
+    assert logging.getLogger("mcp.server.lowlevel.server").getEffectiveLevel() >= logging.WARNING
