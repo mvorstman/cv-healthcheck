@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-29 (ADR 0004 phase 5 — capacity_license migrated, browser-verified)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `b9d2ff2` — CHANGELOG + HANDOVER: ADR 0004 phase 5 (capacity_license migrated) complete
+**Last commit:** `c092998` — HANDOVER #34: attach phase-5 concrete evidence to report-discovery item
 **Test status:** **697 passing** under both `pytest` and `python -m pytest` (was 691).
 
 ---
