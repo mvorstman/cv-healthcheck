@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-29 (ADR 0004 phase 1 — Foundation implemented)
+**Last updated:** 2026-05-29 (ADR 0004 phase 2 — metric section type implemented + browser-verified)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `54976d4` — HANDOVER backlog #27/#28: source-tile contract + legacy workspace pages
-**Test status:** **625 passing** under both `pytest` and `python -m pytest` (was 575).
+**Last commit:** see the pointer commit at the end of this session (CHANGELOG + HANDOVER for phase 2).
+**Test status:** **658 passing** under both `pytest` and `python -m pytest` (was 625).
 
 ---
 
@@ -24,7 +24,21 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## What was just completed
 
-**ADR 0004 phase 1 (Foundation) implemented.** Five deliverables, each its own commit(s) with tests, all infrastructure with **no user-visible change to existing subjects' content** (the three regressed subjects stay degraded — phases 5–7 fix them):
+**ADR 0004 phase 2 (metric section type) implemented and browser-verified PASS.** The `metric` section type lands end-to-end — the first canonical metric rendering through the full three-face vocabulary. Eight deliverables, each its own commit(s) with tests:
+
+- **2a model** (`f78ab9d`) — MetricItem `value`→optional (None = sentinel "n/a"), `+derived/+severity/+verdict_chain`; new `VerdictEntry`; `MetricSection.render_mode` (default `"meta"`); `muted` added to `FindingSeverity`.
+- **2c evaluator** (`bd811c8`) — `cvhealthcheck.evaluative.threshold.evaluate_threshold_rule` → severity + a one-entry `template_default` verdict chain with a populated reason; mute-on-sentinel.
+- **2b build + CEL** (`2687062`) — reusable `build_metric_section(spec, rows)` (phase 5 reuses it); `ExtractionResult.section_metric_specs`; `result_to_artifact` emits MetricSection on `output_as=="metric"` and derives status from the worst verdict.
+- **2e Python renderer** (`1626fa0`) — `artifact_to_view` dispatches the MetricSection branch on `render_mode` (`"metric"` rich / `"meta"` plain — LS unchanged).
+- **2f JS renderer** (`18170f8`, +`b9a5cfe` sentinel-unit fix) — `secBody` metric branch + CSS.
+- **2g+2d test subject** (`d85b5d0`) — `FixtureExtractor` (sandboxed to `data/test_fixtures/`), `data/test_fixtures/metric_test.json`, migration 0010 seeding `_metric_test`, `POST /quick-hc/<id>/collect-fixture`, phase-1 conformance on the metric path.
+- **2h visibility toggle** (`5a2a817`) — `is_test` flag (prefix `"_"`), settings-page localStorage toggle, `renderLeft` filter; hidden by default.
+
+658 passing under both invocations (was 625). **Browser verification PASS** (steering side): test subject renders correctly (Used 35 TB / Purchased 50 TB / Prev Active n/a / Utilisation 70% derived ƒ + Warning badge); toggle works both directions; SA, LS, and the three regressed subjects render exactly as at end of phase 1 (LS's `commcell_info` stayed on the `meta` path — the explicit `render_mode` discriminator did its job). No regression.
+
+### Prior: ADR 0004 phase 1 (Foundation) — implemented + browser-verified PASS
+
+**ADR 0004 phase 1 (Foundation) implemented.** Five deliverables, all infrastructure with **no user-visible change to existing subjects' content**:
 
 - **2a CEL plumbing** (`2956afc`) — `cvhealthcheck.cel` evaluator wrapper over `cel-python` (`celpy`). `evaluate(expression, context)`, loud-fail, registers the ADR's `sum/count/avg/min/max/latest` aggregation primitives. ADR example #2 was shorthand (`.used_capacity` field-projection on a list isn't valid CEL; the working form is `.map(r, r.used_capacity)`).
 - **2b `template_version`** (`d3b6da6`) — `ArtifactSource.template_version` (optional read, set on write); REST also sets `collected_at`.
@@ -32,9 +46,7 @@ If you are a new chat / new session, read these files in order before doing anyt
 - **2d source-tile cleanup + version pinning** (`7e1e611` backend, `4852c93` UI) — migration 0009 `customer_subject_pin`; resolution helpers; collect route resolves the active version; environment source tile drops CommCell version (kept in identity card); "Last collected" + version dropdown in the Data Source section; `/quick-hc/<id>/pin-version` route.
 - **2e conformance** (`5951750`) — `extractors/conformance.check_conformance`; `conformance` block in `extraction_instructions` JSON; verbatim ADR failure-record shape; section-grained in `RESTExtractor.extract`, emitted onto `artifact.metadata["conformance_failures"]`. Plumbing-only.
 
-625 passing under both invocations (was 575).
-
-**⚠️ Remaining gate for phase-1 sign-off: human browser verification.** Programmatic + app-level checks pass (`/quick-hc` renders 200, no template error; assembled data shows the cleaned environment source tile, `version_info`/`last_collected` per subject, old artifacts loading without `template_version`). The *visual* gate — open the workspace against the lab and confirm SA + LS still render correctly and capacity_license / client_growth / backup_job_summary remain in their **current degraded state** (NOT fixed yet — that's phases 5–7), and the source tile shows no CommCell version + a Last-collected timestamp + the (single-option) version dropdown — is the chart-regression lesson's mandatory step and needs a human at the browser. If anything other than the source-tile cleanup looks different on an existing subject, STOP (that would mean phase 1 accidentally changed rendering).
+625 passing. Browser-verified PASS (no CommCell version on source tiles; Last-collected + single-option version dropdown present; existing subjects unchanged). CEL plumbing (`cvhealthcheck.cel`), `template_version` provenance, `subject_family`, per-customer version pinning (migration 0009), source-tile cleanup, and the conformance mechanism (`extractors/conformance.check_conformance`, section-grained) all landed here. Commits: `2956afc` 2a, `d3b6da6` 2b, `aaeca6b` 2c, `7e1e611`/`4852c93` 2d, `5951750` 2e.
 
 ### Prior: ADR 0004 phase plan committed at `docs/adr/0004-phase-plan.md`
 
@@ -86,17 +98,17 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## Single recommended next action
 
-**ADR 0004 phase 2 — `metric` section type. See `docs/adr/0004-phase-plan.md` §Phase 2 for scope.**
+**ADR 0004 phase 3 — `chart` section type, Chart.js renderer. See `docs/adr/0004-phase-plan.md` §Phase 3 for scope.**
 
-Phase 1 (Foundation) is implemented and committed; phase 2 is the first section-type phase and the first to *exercise* phase 1's machinery (CEL derivations stored at collection time, the conformance mechanism per section). Scope per the phase plan: catalog declaration for metric sections (semantic + presentational + evaluative metadata), canonical model extension, CEL-driven derivations, Python + JS renderers, conformance applied. Validation gate: a test subject (or partial migration of a regressed subject) exercises a metric section end-to-end, **browser-verified against real data**.
+Phases 1 (Foundation) and 2 (metric) are implemented and browser-verified PASS. Phase 3 adds the `chart` section type: catalog declaration (axis, series, render mode), canonical model extension, Python renderer, JS renderer using **Chart.js** (the chosen library; `metric_detail.html` and `quick_hc_report.html` already load it from CDN), conformance applied. Validation gate: a test subject exercises a chart section end-to-end, **browser-verified against real data**.
 
-**Before phase 2 starts**, close phase 1's open gate: a human browser-verification pass against the lab (see "What was just completed" above). If that pass surfaces any unexpected rendering change to an existing subject, that's a phase-1 STOP, not a phase-2 concern.
+Phase 3 should reuse phase 2's machinery directly: it can add a second internal test subject (or a chart section on the existing `_metric_test`) collecting from a fixture via `FixtureExtractor`, governed by the same `is_test` visibility toggle. The `ChartSection` model already exists in `models.py` (type/chart_type/axes/labels/series) but, like MetricSection before phase 2, is **not emitted by `result_to_artifact`** — phase 3 makes it real and adds the renderers. Note `section_types.SUPPORTED_SECTION_TYPES` currently pins `{findings, table, metric}`; phase 3 adds `chart`.
 
-Inputs phase 2 needs:
+Inputs phase 3 needs:
 
-- **`docs/adr/0004-phase-plan.md`** §Phase 2 — scope, validation gate.
-- **`docs/adr/0004-three-face-metadata-vocabulary.md`** §"Section types", §"The three faces".
-- Phase 1 surfaces it builds on: `cvhealthcheck.cel.evaluate`, `extractors/conformance.check_conformance`, `db/subjects.subject_family` + version pinning, `ArtifactSource.template_version`.
+- **`docs/adr/0004-phase-plan.md`** §Phase 3 — scope, validation gate, the Chart.js / mini-chart distinction.
+- **`docs/adr/0004-three-face-metadata-vocabulary.md`** §"Section types".
+- Phase 2 surfaces it builds on: `extractors/metric_section.build_metric_section` (pattern for a `build_chart_section`), `FixtureExtractor`, the `render_mode`/`output_as` discriminator pattern, the `is_test` toggle, `cvhealthcheck.cel.evaluate`.
 
 ### Methodology retrospective for ADR 0003 — deferred
 
@@ -140,6 +152,12 @@ Whatever surfaces. The current backlog is healthy (no urgent next code action); 
     - **CEL example expression #2.** §"Formula language" example #2 uses field-projection on a filter result (`.filter(...).used_capacity`) which is not valid CEL. Working form is `.filter(...).map(r, r.used_capacity)`. Implementation tested with the working form per phase 1 finding #2; fix the ADR example at the Proposed→Accepted transition.
 27. **Source tile contract unification.** Define the target contract: every subject's source tile shows (a) a data-acquisition timestamp, (b) a source identifier (Endpoint + Host for REST, filename for file imports), consistently formatted and labeled. Current implementation violates this across LS Reports Plus, LS file-import paths, BJS Reports Plus, the environment subject, and possibly others — different field labels, field combinations, and empty states. The label naming inconsistency ("Last collected" / "Last Imported" / "Last Generated") falls under this entry — pick one term and apply consistently. Phases 5–7 fix this for the three regressed subjects as they migrate to canonical; the LS bespoke path and the file-import paths each need their own pass. Surfaced during phase 1 browser verification — phase 1 didn't cause it and didn't fix it.
 28. **Legacy workspace pages investigation and retirement.** `/quick-hc/commcell` duplicates what `/quick-hc#subject=environment` shows on the canonical workspace; `/quick-hc/report` was flagged as needing "major rework" — possibly the same legacy-duplicate pattern; other legacy workspace pages may exist. Investigation needed before retirement: confirm which pages are genuine legacy duplicates of canonical surfaces; confirm what links to each (navigation entries, hardcoded URLs, redirects); identify any tile `detail_endpoint`s pointing at them (LB-1-style dependency). Natural retirement window: alongside or shortly after phase 6.5 (dev tools retirement), since the legacy pages share a navigation cluster with dev tools and the same architectural pattern — possibly fold into 6.5 if the work is small, or its own phase 6.6. A first read-only enumeration was run at the close of phase 1 (see the phase-1 closing session report / chat); it does not change phase 2.
+29. **Active customer/project selector placement.** The `ACTIVE <customer>/<project>` selector floats top-right and crowds adjacent controls. Integrate it into the left-hand nav structure rather than floating in the content area's top-right corner. Pre-existing chrome issue, not tied to any phase. Part of the broader workspace navigation/chrome consolidation theme (cf. backlog #28 legacy pages). Address as a focused UI task when convenient; not blocking any ADR 0004 phase. Surfaced during phase 2 browser verification.
+
+### ADR 0004 implementation notes carried forward
+
+- **`extraction_instructions` is accumulating concepts — watch for catch-all drift.** It now holds three things layered in by ADR 0004: the original extraction keys (report_id, column_map, …), phase 1's `conformance` block, and phase 2's `metric` three-face block (+ `fixture_path`). This is fine for now, but if a third/fourth ADR-0004 concept lands there in later phases, flag whether `extraction_instructions` wants decomposing into first-class columns/tables. A visibility note for the eventual catalog-vs-code boundary review, not an action now.
+- **Phase 6 (Client Growth migration): verify the all-zero monthly data.** Client Growth's legacy table renders 13 months all showing Added 0 / Removed 0 / Total 0. When phase 6 migrates this subject, confirm whether these zeros are real (a quiet lab environment) or a legacy extraction artifact. If the latter, the migration is the natural place to fix it. Observed during phase 2 browser verification; not a phase 2 issue.
 
 Smaller cleanups:
 
@@ -362,7 +380,7 @@ than attempting the work.
 cd /home/michiel/dev/cv-healthcheck
 source venv/bin/activate
 python -m compileall -q src
-python -m pytest -q                                # expect 625 passing
+python -m pytest -q                                # expect 658 passing
 git status --short                                 # expect clean
 sqlite3 data/app.db "SELECT customer_id,customer_name FROM customers;"
 sqlite3 data/app.db "SELECT project_id,customer_id,project_number FROM projects;"

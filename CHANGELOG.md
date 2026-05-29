@@ -10,6 +10,36 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-29 (ADR 0004 phase 2 — metric section type)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `f78ab9d` (2a model), `bd811c8` (2c evaluator), `2687062` (2b build+CEL), `1626fa0` (2e Python renderer), `18170f8` (2f JS renderer), `d85b5d0` (2g+2d test subject + fixture + conformance), `5a2a817` (2h visibility toggle), `b9a5cfe` (sentinel-unit fix), plus the wrap-up + pointer commits.
+
+The `metric` section type, end-to-end, browser-verified against a contrived internal test subject. The first canonical metric rendering through the full three-face vocabulary: catalog declaration → FixtureExtractor → CEL derivation → sentinel handling → threshold rule → severity verdict → Python + JS renderers. 658 passing under both `pytest` and `python -m pytest` (was 625).
+
+### Added
+
+- **MetricSection / MetricItem extensions** — `MetricItem.value` is now optional (None = sentinel "n/a", distinct from a real 0); `+derived`, `+severity`, `+verdict_chain`. New `VerdictEntry` model = one layer of the ADR verdict chain (layer / severity / rule_id / required `reason`). `MetricSection.render_mode` (default `"meta"`) — the explicit presentational discriminator. Added `muted` to `FindingSeverity`.
+- **`cvhealthcheck.evaluative.threshold`** — minimum evaluative machinery: `evaluate_threshold_rule(rule, value, *, label, unit)` picks the highest-severity satisfied band (or `default_severity`), mutes on a sentinel value, and returns a single `template_default` `VerdictEntry` with a populated, auditable `reason`. Phase 8 prepends vendor / appends override on the same chain + adds the rules registry.
+- **`build_metric_section(section_id, title, spec, rows)`** (`extractors/metric_section.py`) — reusable (phase 5 capacity_license uses the same helper + spec shape): field-source aggregation (latest/first/sum/min/max/avg), CEL-derived items (context = records + prior item ids), sentinel → None, and rule application. Derivations run once at collection time and are stored. `result_to_artifact` emits a MetricSection when `output_as == "metric"` and derives overall status from the worst metric verdict.
+- **`FixtureExtractor`** + `data/test_fixtures/metric_test.json` + migration 0010 — the internal `_metric_test` subject collects from a shipped JSON fixture (no lab). `fixture_path` is sandboxed to `data/test_fixtures/` in code (rejects absolute paths and `../`). `POST /quick-hc/<id>/collect-fixture` runs it; the `json` source surfaces a Collect button. Phase-1 conformance fires per section on this path (2d).
+- **Renderers** — `canonical_view.artifact_to_view` renders a `render_mode=="metric"` section richly (values, derived ƒ marker, severity badge + verdict tooltip, "n/a" for sentinels); `quick_hc.js` gains a `metric` branch + CSS.
+- **Test-subject visibility toggle** — `is_test` flag (subject_id prefix `"_"`), a settings-page localStorage toggle (`quickhc-show-test-subjects-v1`), and a `renderLeft` filter. Hidden by default; class-level (governs all future test subjects).
+
+### Changed
+
+- `canonical_view`'s MetricSection branch now dispatches on the declared `render_mode`. License Summary's `commcell_info` defaults to `"meta"` and renders byte-for-byte as before (verified in the browser).
+
+### Notes
+
+- **Explicit `render_mode` over severity-inference (steering decision 4 amendment).** The rendering vocabulary is *declared intent* (`output_as=="metric"` → `render_mode="metric"`), not an emergent property of whether a field is populated. Gating on severity-presence would mean the day someone adds a severity to a currently-meta metric, its rendering silently flips — the exact latent coupling that caused the original chart regression. The explicit discriminator removes it. Verified LS's `commcell_info` is unaffected.
+- **ADR example #2 shorthand confirmed in practice** — `build_metric_section`'s CEL items use the valid `.map`-style projection / direct field references; `sum`/etc. remain the registered aggregation primitives from phase 1. (HANDOVER backlog #26 queues the ADR-text fix for Proposed→Accepted.)
+- **`extraction_instructions` now carries a second concept.** Phase 1 put `conformance` there; phase 2 adds the `metric` three-face block (and `fixture_path`). Flagged for the eventual catalog-vs-code boundary review: if a third/fourth concept lands there in later phases, consider decomposing `extraction_instructions` into first-class columns. Not now — visibility note only (HANDOVER backlog).
+- **Threshold boundary is inclusive** as declared (`>=`): utilisation exactly 70 → warning. The test subject pins this.
+- **Browser verification PASS.** Test subject renders correctly (multi-field, derived, sentinel n/a, warn badge); toggle works both directions; SA / LS / the three regressed subjects all render exactly as at end of phase 1 (no regression). Client Growth's degraded 13-row table is the expected unfixed regression (phases 3 + 6).
+
+---
+
 ## 2026-05-29 (ADR 0004 phase 1 — Foundation)
 
 **Branch:** `feature/basic-healthcheck-report-output`
