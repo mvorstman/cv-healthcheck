@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-30 (ADR 0004 phase 7 complete — backup_job_summary migrated; regression-recovery arc complete)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** see the pointer commit at the end of this session (CHANGELOG + HANDOVER for phase 7)
+**Last commit:** `b003681` — CHANGELOG + HANDOVER: ADR 0004 phase 7 — backup_job_summary migrated
 **Test status:** **727 passing** under both `pytest` and `python -m pytest` (was 713; +5 card-builder, +3 table-empty-message, +6 BJS e2e this session).
 
 ---
