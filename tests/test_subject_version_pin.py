@@ -191,5 +191,21 @@ def test_build_subject_initial_data_injects_version_info(migrated_db_path: Path)
             assert "version_info" in subj
             assert subj["version_info"]["active"] in subj["version_info"]["versions"]
             assert "last_collected" in subj
+            assert "is_test" in subj
+    finally:
+        conn.close()
+
+
+def test_is_test_flag_marks_underscore_subjects(migrated_db_path: Path):
+    from cvhealthcheck.quickhc.subject_data_service import build_subject_initial_data
+
+    conn = _conn(migrated_db_path)
+    try:
+        data = build_subject_initial_data(conn, customer_id="default")
+        by_id = {s["id"]: s for cat in data["cats"] for s in cat["subjects"]}
+        # The seeded internal subject is flagged; the real subjects are not.
+        assert by_id["_metric_test"]["is_test"] is True
+        assert by_id["capacity_license"]["is_test"] is False
+        assert by_id["security_assessment"]["is_test"] is False
     finally:
         conn.close()

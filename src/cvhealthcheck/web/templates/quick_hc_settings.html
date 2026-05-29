@@ -139,6 +139,20 @@
       <span class="settings-reset-msg" id="settings-reset-msg" hidden>Cleared.</span>
     </div>
   </div>
+
+  <div class="settings-section">
+    <div class="settings-section-title">Developer</div>
+    <div class="settings-row">
+      <span class="settings-label">
+        Show internal / test subjects
+        <br><span style="font-size:11px;color:var(--text-3)">Reveals contrived subjects used to validate new section types. Off for consultants.</span>
+      </span>
+      <label class="toggle-wrap">
+        <input type="checkbox" class="toggle-cb" id="toggle-test-subjects" onchange="setShowTestSubjects(this.checked)">
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+      </label>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -151,6 +165,14 @@
   // If a future change introduces a new key, add it here too.
   var THEME_KEY = 'quickhc-theme-v1';
   var STATE_KEY = 'quickhc-state-v1';
+  // ADR 0004 phase 2: developer toggle for internal/test subjects. Read by
+  // showTestSubjects() in quick_hc.js. Reset below clears it too.
+  var TEST_SUBJECTS_KEY = 'quickhc-show-test-subjects-v1';
+
+  function setShowTestSubjects(on) {
+    if (on) localStorage.setItem(TEST_SUBJECTS_KEY, '1');
+    else localStorage.removeItem(TEST_SUBJECTS_KEY);
+  }
 
   function readState() {
     try { return JSON.parse(localStorage.getItem(STATE_KEY) || '{}'); }
@@ -180,13 +202,20 @@
   function resetLocalPreferences() {
     localStorage.removeItem(THEME_KEY);
     localStorage.removeItem(STATE_KEY);
+    localStorage.removeItem(TEST_SUBJECTS_KEY);
     var msg = document.getElementById('settings-reset-msg');
     if (msg) msg.hidden = false;
     // Brief delay so the user sees the confirmation before the reload.
     setTimeout(function () { window.location.reload(); }, 350);
   }
 
+  function initToggles() {
+    var cb = document.getElementById('toggle-test-subjects');
+    if (cb) cb.checked = localStorage.getItem(TEST_SUBJECTS_KEY) === '1';
+  }
+
   renderSummary();
+  initToggles();
 </script>
 </body>
 </html>

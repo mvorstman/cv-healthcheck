@@ -9,6 +9,13 @@ let descriptionSaveState = { status: 'idle', message: '' };
 
 // ── LOCAL STORAGE ──
 const STATE_KEY = 'quickhc-state-v1';
+// ADR 0004 phase 2: per-browser developer toggle for internal/test subjects
+// (subject_id prefix "_"). Off by default — consultants never see them.
+const TEST_SUBJECTS_KEY = 'quickhc-show-test-subjects-v1';
+
+function showTestSubjects() {
+  return localStorage.getItem(TEST_SUBJECTS_KEY) === '1';
+}
 
 function _loadState() {
   try { return JSON.parse(localStorage.getItem(STATE_KEY) || '{}'); } catch { return {}; }
@@ -143,6 +150,8 @@ function renderLeft() {
       </div>
       <div class="cat-body" id="cb-${cat.id}" style="max-height:${cat.open ? '2000px' : '0'}">`;
     cat.subjects.forEach(s => {
+      // Internal/test subjects are hidden unless the dev toggle is on.
+      if (s.is_test && !showTestSubjects()) return;
       const isActive = s.id === activeId && mode === 'config';
       const hasData = s.state !== 'nodata';
       const isDraft = s.status && s.status !== 'active';

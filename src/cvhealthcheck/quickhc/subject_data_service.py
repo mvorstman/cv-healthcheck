@@ -139,6 +139,10 @@ def build_subject_initial_data(
         # ADR 0004 source-tile cleanup: version dropdown + last-collected.
         built["version_info"] = _version_info(db, customer_id, subject_id)
         built["last_collected"] = _last_collected(artifact)
+        # ADR 0004 phase 2: internal/test subjects (subject_id prefix "_") are
+        # hidden in the sidebar by default; the settings-page toggle reveals
+        # them. Class-level flag so future test subjects inherit the behavior.
+        built["is_test"] = subject_id.startswith("_")
         category_groups[cat_id]["subjects"].append(built)
 
     cats = list(category_groups.values())
