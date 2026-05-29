@@ -529,8 +529,23 @@ Practices repeatedly used successfully:
 - browser validation,
 - real-data validation,
 - commit + HANDOVER discipline,
+- push-and-confirm at every phase close,
 - methodology marker capture,
 - and multi-chat workflow separation.
+
+**Push and confirm at every phase close.**
+
+A phase is not "closed" until it is pushed to origin *and the push is confirmed*.
+
+The closing sequence is fixed:
+
+per-deliverable commits → CHANGELOG/HANDOVER commit → pointer commit → push to origin → confirm the push landed.
+
+Confirmation means verifying the local branch HEAD matches `origin/<branch>` — `git status` clean and ahead-by-0, or `git rev-parse HEAD` equal to `git rev-parse origin/<branch>` — not merely that the push command returned without error.
+
+"Pushed" is verified, not asserted. This is the same reality-over-report discipline as browser verification: don't trust that it rendered, look; don't trust that it pushed, confirm the remote moved.
+
+The remote is the durable record of verified work. It must never sit behind the verified local state at a phase boundary.
 
 ### 10.2 Emerging Practices
 
