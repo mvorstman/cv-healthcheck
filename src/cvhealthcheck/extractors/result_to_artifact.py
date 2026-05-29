@@ -13,11 +13,13 @@ from cvhealthcheck.artifacts.models import (
     CanonicalArtifact,
     Finding,
     FindingsSection,
+    MetricSection,
     SummaryMetric,
     TableColumn,
     TableSection,
 )
 from cvhealthcheck.extractors.html import ExtractionResult
+from cvhealthcheck.extractors.metric_section import build_metric_section, worst_metric_severity
 
 
 _SEVERITY_MAP: dict[str, FindingSeverity] = {
@@ -64,6 +66,7 @@ def result_to_artifact(
     sections = []
     severity_counts: dict[str, int] = {"critical": 0, "warning": 0, "good": 0, "info": 0}
     has_findings_section = False
+    metric_sections: list[MetricSection] = []
 
     for section_id, rows in result.sections.items():
         output_as = result.section_output_types.get(section_id, "table")
@@ -83,6 +86,13 @@ def result_to_artifact(
                 title=title,
                 items=findings,
             ))
+        elif output_as == "metric":
+            # ADR 0004 phase 2: compute derived values + verdicts at collection
+            # time from the catalog metric declaration.
+            spec = result.section_metric_specs.get(section_id, {})
+            metric_section = build_metric_section(section_id, title, spec, rows)
+            sections.append(metric_section)
+            metric_sections.append(metric_section)
         else:
             columns = _derive_columns(rows)
             sections.append(TableSection(
@@ -94,12 +104,18 @@ def result_to_artifact(
             ))
 
     if not has_findings_section:
-        has_table_data = any(
-            isinstance(s, TableSection) and len(s.items) > 0 for s in sections
-        )
-        summary = ArtifactSummary(
-            status=ArtifactStatus.good if has_table_data else ArtifactStatus.unknown
-        )
+        # A metric section's verdict drives overall status when there are no
+        # findings (e.g. the phase-2 test subject, and phase-5 capacity_license).
+        metric_status = _metric_overall_status(metric_sections)
+        if metric_status is not None:
+            summary = ArtifactSummary(status=metric_status)
+        else:
+            has_table_data = any(
+                isinstance(s, TableSection) and len(s.items) > 0 for s in sections
+            )
+            summary = ArtifactSummary(
+                status=ArtifactStatus.good if has_table_data else ArtifactStatus.unknown
+            )
     else:
         metrics = [
             SummaryMetric(id="critical_count", label="Critical", value=severity_counts["critical"]),
@@ -179,3 +195,28 @@ def _overall_status(counts: dict[str, int]) -> ArtifactStatus:
     if counts.get("warning", 0) > 0:
         return ArtifactStatus.warning
     return ArtifactStatus.good
+
+
+_METRIC_SEV_TO_STATUS: dict[FindingSeverity, ArtifactStatus] = {
+    FindingSeverity.critical: ArtifactStatus.critical,
+    FindingSeverity.warning:  ArtifactStatus.warning,
+    FindingSeverity.good:     ArtifactStatus.good,
+    FindingSeverity.info:     ArtifactStatus.good,
+}
+
+
+def _metric_overall_status(
+    metric_sections: list[MetricSection],
+) -> ArtifactStatus | None:
+    """Overall status from the worst metric verdict, or None if no metric
+    section carries a (non-muted) severity."""
+    rank = {ArtifactStatus.good: 0, ArtifactStatus.warning: 1, ArtifactStatus.critical: 2}
+    worst: ArtifactStatus | None = None
+    for section in metric_sections:
+        sev = worst_metric_severity(section)
+        if sev is None:
+            continue
+        status = _METRIC_SEV_TO_STATUS.get(sev, ArtifactStatus.good)
+        if worst is None or rank.get(status, 0) > rank.get(worst, 0):
+            worst = status
+    return worst

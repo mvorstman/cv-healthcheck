@@ -61,6 +61,12 @@ class ExtractionResult:
     # section is recorded here instead of in `sections`; sibling sections
     # continue to collect. result_to_artifact emits these onto the artifact.
     section_failures: dict[str, dict] = field(default_factory=dict)
+    # ADR 0004 metric sections: maps section_id → the catalog `metric`
+    # declaration (semantic / items / evaluative). Carried from the extractor
+    # to result_to_artifact, which calls build_metric_section to compute
+    # derived values and verdicts at collection time. Present only for
+    # sections whose output_as == "metric".
+    section_metric_specs: dict[str, dict] = field(default_factory=dict)
 
 
 class HTMLExtractor:
