@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-29 (ADR 0004 phase 6.5 part 1 complete — dev tools (a)+(b) retired; SA cluster held)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** see the pointer commit at the end of this session (CHANGELOG + HANDOVER for phase 6.5)
+**Last commit:** `40200f2` — CHANGELOG + HANDOVER: ADR 0004 phase 6.5 part 1 — dev tools (a)+(b) retired
 **Test status:** **713 passing** under both `pytest` and `python -m pytest` (was 708; +3 repoint guards, +2 staging-preservation guards this session).
 
 ---
