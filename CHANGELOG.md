@@ -10,6 +10,37 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-29 (ADR 0004 phase 4 — card section type)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `1028265` (4a model), `a443043` (4b CHECK migration), `4c244e1` (4c build/emit/disambiguation), `d7b41eb` (4e Python renderer), `3301b83` (4f JS renderer), `5d18ade` (4g SUPPORTED += card), `92b0c7b` (4h+4d test subject + conformance), `60c391c` (FIX 1 header badge), `1b822ed` (FIX 2 test-subject sidebar chapter), plus wrap-up + pointer.
+
+The `card` section type — the last new section type in ADR 0004 (`multi_section` deferred to a future LS ADR). A card is a flat labeled key-value identity block that **also carries a section-level verdict** (the steering decision: every card is judged), reusing the metric severity + verdict_chain machinery. Browser-verified. 691 passing under both `pytest` and `python -m pytest` (was 673).
+
+### Added
+
+- **New `CardItem` + `CardSection` models** (own `type` literal, in the Section discriminated union). `CardSection` carries `items`, an optional `columns` grid hint, and — reusing the EXACT `severity` + `verdict_chain` (`VerdictEntry`) shape `MetricItem` carries — a section-level verdict. This evaluative-shape duplication across metric and card is intentional and temporary; **phase 8 unifies the evaluative face**.
+- **Migration 0012** — table-rebuild widening `subject_sections.section_type` CHECK to allow `'card'` (SQLite can't alter a CHECK in place; follows migration 0004's pattern; safe — nothing references the table incoming).
+- **`build_card_section(spec, rows)`** — reusable: maps declared `{label, field}` items off one row, and applies an optional template-default verdict via the **same phase-2 threshold evaluator** a metric uses.
+- **Python + JS renderers** — `canonical_view` emits a `type:"card"` labeled-value view; `quick_hc.js` renders a grid (reusing `.meta-card` styling).
+- **`card` added to `SUPPORTED_SECTION_TYPES`** — CHECK (0012) and SUPPORTED now agree; the loud-failure guard re-points at `multi_section`.
+- **`_card_test` subject** (migration 0013) — a field-mapped identity card carrying a status verdict (free space 8% ≤ 15% → warning), from a fixture; rides the `is_test` toggle (one test subject per type).
+
+### Changed
+
+- **`output_as:"card"` disambiguation.** It was a declared-but-unused stub whose only behavior was `rows[:1]` in the REST extractor (no production row used it). It now means exactly one thing — "emit a CardSection" — and the obsolete `rows[:1]` trim was removed from the extractor (row selection is the card builder's concern). The token does one job.
+- **FIX 1 — section status badge moved to the section header** for *both* card and metric, right-aligned next to the inclusion control (`[title … badge ☑]`). Finding: metric badges render per-item (attached to the judged value — sensible, kept as detail); the card badge was section-level above the grid. Both now also show a section-level summary badge in the header (card = its severity; metric = worst item severity). Renderer-only.
+- **FIX 2 — test subjects render in their own "Test subjects" sidebar chapter** (grouped via `is_test`), separate from the real category structure, instead of mixed under Operations. Sidebar-rendering only.
+
+### Notes
+
+- **Cards are judged (overrides ADR line 31).** The ADR says "an identity card carries only semantic and presentational"; the steering decision is that the compliance engine judges every card, so cards carry an evaluative face too. The ADR text fix is queued (HANDOVER backlog), not edited mid-phase.
+- **The three-layer model** (catalog = durable definition / engagement = per-run consultant state / render = dumb) is the framing several phase-4 decisions hinged on: a card's config IS its catalog declaration (no per-card runtime settings UI); report-inclusion stays engagement state (the existing per-section checkbox, not a card feature); the card status is catalog/evaluative. Queued to be stated explicitly in the ADR/docs (HANDOVER backlog).
+- **Severity enum is fixed at five values** — `critical` (breached hard limit) / `warning` (approaching threshold) / `info` (neutral notation) / `good` (active positive judgment) / `muted` (suppressed / n-a). Section-level header badge = the worst item by `critical > warning > info > good` (muted outside the ordering). "Healthy" etc. are display labels for `good`, not new codes — one enum across the evaluative face; phase 8 uses these same five.
+- **No existing subject changed** (browser-verified): the environment identity block still renders as the plain `meta` key-value block (the card type did **not** displace it); SA, LS, the three regressed subjects, `_metric_test`, `_chart_test` unchanged.
+
+---
+
 ## 2026-05-29 (ADR 0004 phase 3 — chart section type + MCP schema reconciliation)
 
 **Branch:** `feature/basic-healthcheck-report-output`
