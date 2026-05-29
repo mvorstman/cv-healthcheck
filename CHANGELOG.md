@@ -10,6 +10,27 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-29 (MCP server #35 — root-caused + defense-in-depth hardening)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `62a5658` (offload), `483b36b` (quiet stderr), `fd522a5` (smoke test), plus pointer.
+
+**#35 root cause (resolved, NOT a code change): SSH idle-timeout disconnect.** The client log showed the SSH session reaped on a ~2-hour idle timeout — last successful tool response at 15:56:45, then `Connection to dev closed by remote host` / `client_loop: send disconnect: Broken pipe`, "transport closed" at exactly 17:56:45 (two hours later to the second). The earlier symptoms were separate, already-resolved issues: a PTY problem (gone once the launch used `ssh -T`; every tool call — readers and writers — then returned) and pre-existing `Permission denied` / `unable to open database file` DB-path errors. **The fix is an SSH keepalive config change (`ServerAliveInterval`/`ClientAliveCountMax`), client/server side — outside the repo.** Investigation confirmed the server itself answers tool calls correctly over stdio.
+
+### Added (server hardening — defense-in-depth, NOT the disconnect fix)
+
+The STEP-1 investigation *did* surface one real server-side fragility, hardened here proactively:
+
+- **Tool work offloaded off the event loop.** FastMCP (mcp 1.27.1) runs a sync tool **inline on the asyncio event loop** that also drives the stdio transport (no thread offload). A slow/blocking tool — a future live REST/CommCell call, or DB lock contention — would freeze the transport. Each tool is now registered wrapped in `anyio.to_thread.run_sync`; the module-level functions stay sync (directly callable + unit-tested), tool LOGIC unchanged (writers included — only execution context moves off the loop), schemas preserved via `functools.wraps`.
+- **Per-request SDK stderr chatter quieted** — `main()` raises the `mcp` logger to WARNING so the SDK's `Processing request of type …` INFO lines can't accumulate and backpressure the loop if a client doesn't drain stderr. Targeted at the `mcp` logger only.
+- **Live-execution smoke test** — spawns the real server, `initialize` → `call_tool("list_subjects")`, asserts a returned payload (a tool can advertise correctly and still hang on execution — the schema/drift test can't catch that); plus a concurrent-writer variant guarding the loop-blocking path. Wrapped in `anyio.fail_after` so a regression fails loudly. 708 passing both invocations.
+
+### Notes
+
+- **The hardening is NOT claimed to fix the disconnect.** #35's resolution is the SSH keepalive config. The smoke test does not traverse the client→SSH→transport path, so a green run here doesn't prove the disconnect is fixed. The offload + stderr-quieting are independent robustness improvements (and would matter the moment a tool does real blocking I/O).
+
+---
+
 ## 2026-05-29 (ADR 0004 phase 6 — migrate client_growth)
 
 **Branch:** `feature/basic-healthcheck-report-output`

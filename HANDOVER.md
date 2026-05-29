@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-29 (ADR 0004 phase 6 — client_growth migrated, browser-verified)
+**Last updated:** 2026-05-29 (MCP #35 resolved + hardened; phase 6 complete)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `6219ff6` — CHANGELOG + HANDOVER: ADR 0004 phase 6 (client_growth migrated) complete
-**Test status:** **704 passing** under both `pytest` and `python -m pytest` (was 697).
+**Last commit:** see the pointer commit at the end of this session.
+**Test status:** **708 passing** under both `pytest` and `python -m pytest` (was 704; +3 MCP hardening commits this session).
 
 ---
 
@@ -240,7 +240,7 @@ Whatever surfaces. The current backlog is healthy (no urgent next code action); 
 33. **MCP `list_subjects` exposes the `_test` subjects (decision, minor).** MCP `list_subjects` has no `is_test` filter, so it returns the internal `_metric_test` / `_chart_test` / `_card_test` subjects, while the web sidebar hides them behind the client-side toggle (and now groups them in their own chapter). Decide: expose-but-flag (mark `is_test` in the MCP output so an AI consumer knows they're internal), or filter them out like the web app. Lean expose-but-flag since the MCP is a dev/AI tool, but make the divergence intentional rather than accidental. Resolve whenever convenient.
 34. **Report discovery for the REST path (resolves #23; surfaced in phase 5).** `report_id` (318 here) and dataset GUIDs vary per CommCell deployment — so a catalog row that pins a numeric `report_id` is implicitly single-deployment-scoped (phase 5's capacity_license bindings are scoped to the one configured lab). The fix is a **report collector that scans the deployment's available Reports / Reports Plus reports and resolves them by NAME** (report name → that CommCell's numeric ID and dataset GUIDs) at collection time, so catalog rows identify their source semantically rather than by a per-deployment number. Scope notes: REST-only (HTML/CSV imports carry no meaningful report ID); overlaps the CommCell-discovery flow (backlog #2) and subsumes #23; likely its own design pass / mini-ADR (it changes how catalog rows bind to a source). **Sequence AFTER the three regressed-subject migrations (5/6/7)** — they collect against a single configured deployment and don't need portability to land.
     - **Concrete evidence / test cases captured in phase 5** (use these when designing the mechanism — they're real, not hypothetical): in report 318 on the dev box, the same report exposes datasets that behave very differently at collection time — (a) `Capacity License Usage Details` **errors** with `CacheDB: "Bad Request. Please check the parameters."` when sent its declared `default_parameters {parameter.type: 2}` (a parameter the dataset advertises but rejects); (b) `Capacity License Usage Summary Chart` returns **HTTP 200 with 0 rows** (genuinely empty, not an error); (c) `Capacity License Usage` returns the real 13-row data with no params. A discovery/binding mechanism must distinguish "errored" from "empty" from "populated" and not assume a dataset that exists-and-advertises-params will accept them. The phase-5 captures live at `data/catalog/reportsplus/report_318_*` (dataset map + per-GUID raw responses) as a fixture corpus for this.
-35. **MCP server not serving (runtime/serving issue, parked).** The cv-healthcheck MCP server is currently not serving — a runtime/serving problem, NOT a schema one (the phase-3 drift guard made the schema side sound). Nothing in ADR 0004 phases 5–7 depends on it (the MCP path is the ADR 0005 AI-authoring loop). When it's fixed (a later phase), the fix must confirm the server returns a **live** response, not merely that the schema test passes — those are different failure modes (cf. the auth-401 regression phase 5 hit on `get_report`, which a schema test would not have caught).
+35. **[RESOLVED] MCP server hang — root cause was an SSH idle-timeout disconnect; fixed via SSH keepalive config (NOT a code change).** Investigation (this session) proved the server answers tool calls correctly over stdio (discovery + execution, readers + writers). The hang was the **SSH session being reaped on a ~2-hour idle timeout** (last response 15:56:45 → `client_loop: send disconnect: Broken pipe` at exactly 17:56:45). Two earlier symptoms were separate and already resolved: a **PTY** problem (gone once the launch used `ssh -T`) and pre-existing `Permission denied` / `unable to open database file` DB-path errors. **Resolution: SSH keepalive config (`ServerAliveInterval`/`ClientAliveCountMax`) on the client/server — outside the repo.** Separately, the investigation surfaced and **hardened** one real server-side fragility (defense-in-depth, NOT the disconnect fix): FastMCP runs sync tools inline on the event loop, so tool work is now thread-offloaded (`62a5658`), per-request stderr chatter is quieted (`483b36b`), and a live-execution smoke test was added (`fd522a5`). The hardening is explicitly **not** claimed to fix the disconnect. (Backlog #32 — the latent import-time `run_migrations` wrong-path-on-non-editable-install guard — remains open, unrelated.)
 
 ### ADR 0004 implementation notes carried forward
 
@@ -470,7 +470,7 @@ than attempting the work.
 cd /home/michiel/dev/cv-healthcheck
 source venv/bin/activate
 python -m compileall -q src
-python -m pytest -q                                # expect 704 passing
+python -m pytest -q                                # expect 708 passing
 git status --short                                 # expect clean
 sqlite3 data/app.db "SELECT customer_id,customer_name FROM customers;"
 sqlite3 data/app.db "SELECT project_id,customer_id,project_number FROM projects;"
