@@ -10,6 +10,30 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-30 (ADR 0004 phase 7 — migrate backup_job_summary)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `2dce378` (2a card agg+CEL), `bb95a54` (2b table empty_message), `aad74f1` (2c migration 0016 + e2e), plus wrap-up + pointer.
+
+The **third and last regressed-subject migration — ADR 0004's regression-recovery arc is complete** (capacity_license, client_growth, backup_job_summary all now render canonically). The **first real `build_card_section` consumer** (as phase 5 was first for chart, phase 6 first for the informational meta-metric). Browser-verified PASS. **727 passing** under both `pytest` and `python -m pytest` (was 713).
+
+backup_job_summary now collects four canonical faces from the "Job details" dataset: a `metric` (Total Jobs, informational), a `card` (the six classify_job_status buckets), `findings` (recent failures), and a `table` (recent jobs). The lab returns **0 rows by design**, so the phase's deliverable was **"empty renders cleanly and informatively"** (empty-state A) — not populated jobs.
+
+### Added
+
+- **`build_card_section` aggregated / CEL item sources** (`2dce378`) — items can now be `source:"field"` (with optional `agg`: sum/count/avg/min/max/latest/first) or `source:"cel"` (expr over `records`), mirroring `build_metric_section` and reusing `cvhealthcheck.cel`. The BJS status buckets bind as `count(records.filter(r, r.status == "…"))`; `count()` of an empty filter is **0**, which is the all-zero card (not blanks). The phase-4 identity-card default (no source/agg → first row's field) is unchanged.
+- **`TableSection.empty_message`** (`bb95a54`) — a presentational, subject-specific empty-state string ("No jobs in the selected window") shown instead of the generic "No data.". Threaded declaratively: `extraction_instructions["table"]["empty_message"]` → new `ExtractionResult.section_table_specs` (carried on the REST default `output_as=="table"`) → `TableSection.empty_message` → `artifact_to_view` → `quick_hc.js`. `None` → the generic message.
+- **Migration 0016** (`aad74f1`) — flips `backup_job_summary.status_breakdown` from `table` to `card` (CHECK allows `card` since 0012) and binds all four sections. End-to-end test over a 0-row collect (all four faces build; all-zero no-verdict card; informational Total Jobs 0; empty table with the custom message; empty findings) plus a populated-rows case proving the counts are real wiring.
+
+### Notes
+
+- **No `required_fields` conformance on this subject — deliberate.** `check_conformance` fails `required_fields` on 0 rows (empty `present_fields` → every required field "missing"), which would drop every section. On an empty-by-design subject conformance is omitted; it's added when the subject collects real data (a phase-8 item).
+- **Phase-8 correctness items** (deferred, agreed at the gate): the card's six buckets use **exact-match** CEL on the freetext `status` — `classify_job_status`'s substring bucketing is Python-only and outside the fixed CEL primitive set, so real-data bucket accuracy is phase 8 (moot on the 0-row lab). `recent_failures` is bound to the whole dataset; on real data it must be filtered to failures + mapped to crit severity. The metric is Total Jobs only — `protected_clients_seen` (a DISTINCT count) isn't in the ADR's aggregation primitive set, left out rather than widen the primitives (stop-and-steer).
+- **`report_id "194"` / `dataset_name "Job details"` are per-deployment** (#34); bindings resolve by name with the `dataset_guid` as a cache-hint fallback. Raw source column names authored from the normalizer's aliases — unverifiable on a 0-row payload, confirmed at browser verification (the collect succeeds and renders empty).
+- **Pre-existing, NOT a phase-7 regression:** the License Summary HTML-import "produced no license rows" error (`license_summary/service.py:186`) is in the bespoke LS import path, which phase 7 did not touch (verified: no LS/import file changed; the only `license_summary`-mentioning changed file, `canonical_view.py`, got a single generic-table `empty_message` line). Filed as a separate backlog item.
+
+---
+
 ## 2026-05-29 (ADR 0004 phase 6.5 — dev tools retirement, part 1)
 
 **Branch:** `feature/basic-healthcheck-report-output`

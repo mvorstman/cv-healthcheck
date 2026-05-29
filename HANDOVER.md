@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-29 (ADR 0004 phase 6.5 part 1 complete — dev tools (a)+(b) retired; SA cluster held)
+**Last updated:** 2026-05-30 (ADR 0004 phase 7 complete — backup_job_summary migrated; regression-recovery arc complete)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `40200f2` — CHANGELOG + HANDOVER: ADR 0004 phase 6.5 part 1 — dev tools (a)+(b) retired
-**Test status:** **713 passing** under both `pytest` and `python -m pytest` (was 708; +3 repoint guards, +2 staging-preservation guards this session).
+**Last commit:** see the pointer commit at the end of this session (CHANGELOG + HANDOVER for phase 7)
+**Test status:** **727 passing** under both `pytest` and `python -m pytest` (was 713; +5 card-builder, +3 table-empty-message, +6 BJS e2e this session).
 
 ---
 
@@ -23,6 +23,21 @@ If you are a new chat / new session, read these files in order before doing anyt
 ---
 
 ## What was just completed
+
+**ADR 0004 phase 7 (migrate backup_job_summary) implemented and browser-verified PASS.** The **third and last regressed-subject migration — ADR 0004's regression-recovery arc is COMPLETE** (capacity_license, client_growth, backup_job_summary all render canonically). The **first real `build_card_section` consumer**. 727 passing both invocations (was 713).
+
+- **7-2a** (`2dce378`) — `build_card_section` gains aggregated/CEL item sources (`source:"field"+agg` / `source:"cel"+expr`), mirroring `build_metric_section`, reusing `cvhealthcheck.cel`. The status buckets bind as `count(records.filter(...))`; `count()` of empty → **0** (the all-zero card, not blanks). Identity-card default unchanged.
+- **7-2b** (`bb95a54`) — `TableSection.empty_message` (presentational): catalog `table.empty_message` → `section_table_specs` → model → `artifact_to_view` → `quick_hc.js`. BJS shows "No jobs in the selected window" instead of "No data."; `None` → generic.
+- **7-2c** (`aad74f1`) — migration 0016: flip `status_breakdown` table→card + bind all four faces to the "Job details" dataset (metric=Total Jobs informational, card=6 buckets, findings, table). 0-row e2e test (empty-state A) + a populated-rows case proving the counts are real.
+
+Browser-verified: four faces render the empty state cleanly — all-zero card (no badge), Total Jobs 0, "No jobs in the selected window" table, empty findings; no existing subject changed.
+
+**Key points recorded this phase:**
+- **No `required_fields` conformance on BJS** — it fails on 0 rows (empty `present_fields` → every field "missing" → section dropped). Omitted deliberately; conformance returns when the subject collects real data (phase 8).
+- **Phase-8 correctness items** (deferred, agreed at the gate): card buckets use exact-match CEL on freetext `status` (classify_job_status's substring bucketing is Python-only / outside the CEL primitive set — moot on 0 rows); `recent_failures` is bound to the whole dataset and needs failure-filtering + crit severity on real data; metric is Total Jobs only (DISTINCT `protected_clients_seen` isn't an ADR primitive — left out, not a primitive widening).
+- **LS-import-empty is pre-existing, NOT a phase-7 regression** (verified: no LS/import file touched). New backlog item #37.
+
+### Prior: ADR 0004 phase 6.5 part 1 (dev tools retirement) — PASS
 
 **ADR 0004 phase 6.5 part 1 (dev tools retirement) implemented and browser-verified PASS.** STEP 1 was a **classification gate** (every Development surface → (a) auto-obviated / (b) disposable / (c) load-bearing, approved before any deletion). 713 passing both invocations (was 708).
 
@@ -170,13 +185,16 @@ Browser-verified: dev hub slimmed; retired routes 404; the two detail-link repoi
 
 ## Single recommended next action
 
-**ADR 0004 phase 7 — migrate backup_job_summary. See `docs/adr/0004-phase-plan.md` §Phase 7.**
+**ADR 0004 phase 8 — full evaluative face. See `docs/adr/0004-phase-plan.md` §Phase 8.**
 
-The **third/last regressed subject**: metric totals + a `card` status + `findings` recent failures + `table` recent jobs. Reuse `build_card_section` (phase 4) for the status card. **Caveat: it collects 0 rows on this lab** — the "Job details" dataset on report 194 returns `totalRecordCount: 0` — so phase-7 verification is "wiring connects, empty renders cleanly," the same zero-data-is-PASS posture as capacity_license. Apply the **capture-vs-live discipline** (collect against the configured dev box, verify shape/sentinels before authoring bindings — the phase-5/6 lesson; gw02 captures misled).
+The regression-recovery arc is complete (all three regressed subjects migrated). Phase 8 generalizes the **evaluative face**: unify the verdict machinery that metric and card currently duplicate (the phase-4 note flagged this as temporary), and add the remaining vendor-compliance shapes. **This phase also collects the phase-7 deferrals**, which are now real evaluative work on real data:
+- **BJS status-bucket accuracy on freetext** — the card's six buckets use exact-match CEL on `status`; `classify_job_status`'s substring bucketing (e.g. "Completed w/ one or more errors" → "Completed with errors/warnings") is Python-only and outside the fixed CEL primitive set. Decide: stamp a `status_bucket` field at extraction time, or widen the primitives via the ADR's stop-and-steer.
+- **BJS recent_failures filtering + severity** — currently bound to the whole "Job details" dataset (empty on the lab); on real data it must filter to failures and map to crit severity.
+- **BJS metric `protected_clients_seen`** — a DISTINCT count; not an ADR aggregation primitive. Add a distinct primitive (stop-and-steer) or leave the metric at Total Jobs.
 
-Phase 6.5 part 1 already landed (this session): #25 repoint resolved, (a)+(b) dev surfaces retired, (c) review loop guarded. The **dev tools SA cluster is held** — see backlog #24 (now mostly done) and the new SA-cluster-pass note (#36).
+**Capture-vs-live discipline still applies** — BJS, capacity_license, and client_growth bindings were authored against single-deployment shapes; real evaluative rules want real populated data to tune against (BJS is 0 rows on this lab).
 
-**Then: ADR 0004 phase 8 — full evaluative face.** And whenever convenient, the **SA dev cluster's dedicated retirement pass** (backlog #36) — it's the last piece of the dev blueprint, and finishing it lets the whole `development.py` + its `shared.py` orphan helpers go.
+**Whenever convenient: the SA dev cluster's dedicated retirement pass** (backlog #36) — the last piece of the dev blueprint; finishing it lets the whole `development.py` + its `shared.py` orphan helpers go.
 
 ### Carried forward for later phases
 
@@ -248,6 +266,7 @@ Whatever surfaces. The current backlog is healthy (no urgent next code action); 
     - **Concrete evidence / test cases captured in phase 5** (use these when designing the mechanism — they're real, not hypothetical): in report 318 on the dev box, the same report exposes datasets that behave very differently at collection time — (a) `Capacity License Usage Details` **errors** with `CacheDB: "Bad Request. Please check the parameters."` when sent its declared `default_parameters {parameter.type: 2}` (a parameter the dataset advertises but rejects); (b) `Capacity License Usage Summary Chart` returns **HTTP 200 with 0 rows** (genuinely empty, not an error); (c) `Capacity License Usage` returns the real 13-row data with no params. A discovery/binding mechanism must distinguish "errored" from "empty" from "populated" and not assume a dataset that exists-and-advertises-params will accept them. The phase-5 captures live at `data/catalog/reportsplus/report_318_*` (dataset map + per-GUID raw responses) as a fixture corpus for this.
 35. **[RESOLVED] MCP server hang — root cause was an SSH idle-timeout disconnect; fixed via SSH keepalive config (NOT a code change).** Investigation (this session) proved the server answers tool calls correctly over stdio (discovery + execution, readers + writers). The hang was the **SSH session being reaped on a ~2-hour idle timeout** (last response 15:56:45 → `client_loop: send disconnect: Broken pipe` at exactly 17:56:45). Two earlier symptoms were separate and already resolved: a **PTY** problem (gone once the launch used `ssh -T`) and pre-existing `Permission denied` / `unable to open database file` DB-path errors. **Resolution: SSH keepalive config (`ServerAliveInterval`/`ClientAliveCountMax`) on the client/server — outside the repo.** Separately, the investigation surfaced and **hardened** one real server-side fragility (defense-in-depth, NOT the disconnect fix): FastMCP runs sync tools inline on the event loop, so tool work is now thread-offloaded (`62a5658`), per-request stderr chatter is quieted (`483b36b`), and a live-execution smoke test was added (`fd522a5`). The hardening is explicitly **not** claimed to fix the disconnect. (Backlog #32 — the latent import-time `run_migrations` wrong-path-on-non-editable-install guard — remains open, unrelated.)
 36. **Dev tools SA cluster — dedicated retirement pass (the last piece of `development.py`).** Phase 6.5 part 1 held this cluster (steering decision): `reportsplus_security_assessment` (`/security-assessment`), `reportsplus_security_assessment_legacy` (redirect), `security_assessment_import` (POST), `security_assessment_history`, `security_assessment_registry_export`, `security_assessment_registry_view` (`/development/security-assessment-registry`) — plus their templates (`security_assessment.html`, `security_assessment_registry_history.html`) and the dev landing. **Before deleting: verify canonical-SA coverage parity** — that the workspace SA subject + the unified upload route (`/quick-hc/security_assessment/import`) fully cover collect / import / history, and that `SecurityAssessmentService` itself is RETAINED (only its dev *routes/templates* go; the service is used by the canonical path). Overlaps backlog #14 (legacy SA/LS store retirement). When this lands, also reap the now-orphan `shared.py` helpers the rest of the blueprint left behind (the 7 orphan helpers in #24's note) and the `data/catalog/metrics/` stale files, finishing `development.py`'s retirement. Biggest blast radius of the dev-tools work — its own pass on purpose.
+37. **License Summary HTML/CSV import "produced no license rows" (pre-existing).** Surfaced during phase-7 browser verification; confirmed NOT a phase-7 regression (no LS/import file was touched — verified against the phase-7 diff). The bespoke LS import path raises `LicenseSummaryImportError("{TYPE} import produced no license rows.")` at `license_summary/service.py:186` when the parser extracts zero rows from an upload (and the REST collect raises the sibling "REST collection produced no License Summary rows." at :125). Investigate whether it's a parser/markup-detection gap (cf. the 2026-05-28 `1abc097` LS HTML workload-section detection fix), a genuinely empty upload, or an over-strict guard. LS remains bespoke (ADR 0003 LS caveat; would-be migration is backlog #8), so this is in the bespoke path, not the catalog/REST path. Independent of ADR 0004 phases.
 
 ### ADR 0004 implementation notes carried forward
 
