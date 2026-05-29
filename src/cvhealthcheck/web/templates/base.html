@@ -44,7 +44,7 @@
             <button type="submit" class="sidebar-logout">Sign out</button>
           </form>
           <a href="{{ url_for('main.development') }}"
-             class="sidebar-dev-link{% if ep in ('main.lab_readiness', 'main.api_test') or 'development' in ep or 'security_assessment_registry' in ep %} is-active{% endif %}">
+             class="sidebar-dev-link{% if 'development' in ep or 'security_assessment_registry' in ep %} is-active{% endif %}">
             Dev tools
           </a>
         </div>
