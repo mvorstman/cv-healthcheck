@@ -271,3 +271,35 @@ def test_approve_regular_artifact_still_works_after_proposal_changes(
     )
     assert response.status_code == 200
     assert "Approved staged artifact" in response.get_data(as_text=True)
+
+
+def test_staging_review_loop_survives_dev_tools_retirement() -> None:
+    """ADR 0004 phase 6.5 (c)-preservation guard.
+
+    Retiring the Development-page dev tools must NOT touch the AI-authoring
+    review loop. That loop is the top-level Staging page (this blueprint), not
+    any dev surface: the gate confirmed the dev "Security Assessment Registry
+    (internal)" view is a separate SA-history debug view. This guard asserts the
+    three review-loop endpoints stay registered (reachable) so a future cleanup
+    can't silently delete them.
+    """
+    app = create_app()
+    endpoints = {rule.endpoint for rule in app.url_map.iter_rules()}
+    for endpoint in (
+        "main.quick_hc_staging",
+        "main.quick_hc_staging_approve",
+        "main.quick_hc_staging_reject",
+    ):
+        assert endpoint in endpoints, f"review-loop endpoint missing: {endpoint}"
+
+
+def test_staging_review_loop_shares_db_backend_with_mcp() -> None:
+    """The web Staging page and the MCP staging tools are the SAME review loop:
+    both drive cvhealthcheck.db.staging (the staged_artifacts table). This pins
+    the gate's disambiguation so the two can't drift onto different backends.
+    """
+    import cvhealthcheck.mcp.server as mcp_server
+
+    assert staging_routes.staging_db is staging_db_mod
+    assert mcp_server.execute_approval is staging_db_mod.execute_approval
+    assert mcp_server.db_list_staged_artifacts is staging_db_mod.list_staged_artifacts
