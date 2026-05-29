@@ -147,7 +147,9 @@ Inputs phase 5 needs:
 
 - **Environment identity → card (candidate follow-up).** The card type now exists and is the canonical successor to the `meta`-rendered identity displays (the environment identity block, LS `commcell_info`). Moving the environment identity display onto a `CardSection` is a clean candidate follow-up — NOT necessarily phase 5 (phase 5 is capacity_license), but the natural first real consumer of the card type beyond the test subject. Decide when convenient.
 - **Chart types deferred (architecture allows, not built).** Phase 3 built only `line` + `pie`. `bar`/`area`/`doughnut`/`bubble`/`radar`/`polar`/`scatter` are "a `chart_type` string + confirming the data-shaping" away. Add when a real subject needs one.
-- **Cosmetic styling pass (low priority).** Per-item metric badge placement inside metric cells (the Warning badge under the value) and the card's per-value badge placement could be refined — same family of cosmetic refinement, batch into a future styling pass.
+- **Cosmetic styling pass (low priority — batch these together).** Renderer-only refinements, no model changes:
+  - Per-item metric badge placement inside metric cells (the Warning badge under the value) and the card's per-value badge placement.
+  - **Card status border treatment.** Propagate a section's severity to the card's border so verdicts are scannable at a glance. Recommended: a **left accent bar** (not a full colored border — full borders turn a multi-card report into a wall of color and stop signalling). Tint only attention-worthy statuses (warning = amber, critical = red; info optional); leave `good`/`muted` with the normal neutral border, so a colored edge always means "look here" and its absence means "fine." **Keep the header status badge in all cases** — the border is reinforcement, not the sole signal (accessibility: don't rely on color alone). Applies the severity already on the section.
 
 ### Methodology retrospective for ADR 0003 — deferred
 
