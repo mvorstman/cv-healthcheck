@@ -111,12 +111,14 @@ def result_to_artifact(
             card_sections.append(card_section)
         else:
             columns = _derive_columns(rows)
+            spec = result.section_table_specs.get(section_id, {})
             sections.append(TableSection(
                 type="table",
                 id=section_id,
                 title=title,
                 columns=columns,
                 items=rows,
+                empty_message=spec.get("empty_message"),
             ))
 
     if not has_findings_section:

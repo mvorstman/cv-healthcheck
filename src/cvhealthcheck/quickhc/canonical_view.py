@@ -123,6 +123,7 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
                 "type": "table",
                 "columns": columns,
                 "rows": rows,
+                "empty_message": sec.empty_message,
             })
         elif isinstance(sec, MetricSection):
             # ADR 0004 presentational face: render_mode is the *declared*

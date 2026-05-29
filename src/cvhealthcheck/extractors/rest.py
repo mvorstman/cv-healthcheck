@@ -154,6 +154,8 @@ class RESTExtractor:
                 result.section_chart_specs[section_id] = extraction.get("chart", {})
             elif output_as == "card":
                 result.section_card_specs[section_id] = extraction.get("card", {})
+            elif output_as == "table":
+                result.section_table_specs[section_id] = extraction.get("table", {})
 
             result.sections[section_id] = rows
             result.section_output_types[section_id] = output_as

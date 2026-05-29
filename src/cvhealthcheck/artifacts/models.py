@@ -129,6 +129,10 @@ class TableSection(BaseModel):
     title:   str
     columns: list[TableColumn]         = Field(default_factory=list)
     items:   list[dict[str, Any]]      = Field(default_factory=list)
+    # ADR 0004 phase 7 (presentational): a subject-specific empty-state message
+    # shown when there are no rows (e.g. backup_job_summary's "No jobs in the
+    # selected window") instead of the generic "No data.". None -> generic.
+    empty_message: str | None          = None
 
 
 class ChartSection(BaseModel):

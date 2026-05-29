@@ -300,7 +300,7 @@ function secBody(sec) {
   }
 
   if (sec.type === 'table') {
-    if (!sec.rows || !sec.rows.length) return `<div style="font-size:12px;color:var(--text-3)">No data.</div>`;
+    if (!sec.rows || !sec.rows.length) return `<div style="font-size:12px;color:var(--text-3)">${esc(sec.empty_message || 'No data.')}</div>`;
     const hdrs = (sec.columns || []).map(c => `<th>${esc(c)}</th>`).join('');
     const body = sec.rows.map(r =>
       `<tr>${r.map(v => `<td style="font-family:var(--mono);font-size:11px">${esc(v != null ? v : '—')}</td>`).join('')}</tr>`
