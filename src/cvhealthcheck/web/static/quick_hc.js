@@ -17,6 +17,12 @@ function showTestSubjects() {
   return localStorage.getItem(TEST_SUBJECTS_KEY) === '1';
 }
 
+// Shared severity vocabulary (used by section bodies AND the section-header
+// status badge). ADR 0004: card + metric carry verdicts via the same machinery,
+// so they share the same badge labels/classes and the same header placement.
+const SEV_LABEL = {crit:'Critical', warn:'Warning', info:'Info', good:'Good', muted:'Muted'};
+const SEV_BADGE = {crit:'b-crit', warn:'b-warn', info:'b-info', good:'b-good', muted:'b-muted'};
+
 function _loadState() {
   try { return JSON.parse(localStorage.getItem(STATE_KEY) || '{}'); } catch { return {}; }
 }
@@ -183,8 +189,8 @@ function toggleInclude(id, val) {
 
 // ── SECTION BODY RENDERER ──
 function secBody(sec) {
-  const lm = {crit:'Critical',warn:'Warning',info:'Info',good:'Good',muted:'Muted'};
-  const bm = {crit:'b-crit',warn:'b-warn',info:'b-info',good:'b-good',muted:'b-muted'};
+  const lm = SEV_LABEL;
+  const bm = SEV_BADGE;
   const cm = {crit:'fc-crit',warn:'fc-warn',info:'fc-info',good:'fc-good'};
 
   if (sec.type === 'meta') {
@@ -216,21 +222,18 @@ function secBody(sec) {
 
   if (sec.type === 'card') {
     // ADR 0004 card section: a labeled-value identity grid (reuses meta-card
-    // styling) plus a section-level status badge when the card carries a
-    // verdict (mirrors how a metric shows its badge).
+    // styling). The section's status badge lives in the section header (see
+    // secTile), not in the body — consistent with metric sections.
     const items = sec.items || [];
     if (!items.length) return `<div style="font-size:12px;color:var(--text-3)">No card data.</div>`;
     const cols = sec.columns === 3 ? 'meta-grid-3'
                : sec.columns === 4 ? 'meta-grid-4'
                : (items.length > 4 ? 'meta-grid-3' : 'meta-grid-4');
-    const badge = sec.sev
-      ? `<div class="card-status"><span class="m-badge ${bm[sec.sev] || ''}" title="${esc(sec.reason || '')}">${lm[sec.sev] || esc(sec.sev)}</span></div>`
-      : '';
     const cells = items.map(it => {
       const unit = (it.unit && it.value !== '—') ? `<span class="m-unit">${esc(it.unit)}</span>` : '';
       return `<div class="meta-card"><div class="meta-lbl">${esc(it.label)}</div><div class="meta-val">${esc(it.value)}${unit}</div></div>`;
     }).join('');
-    return `${badge}<div class="meta-grid ${cols}">${cells}</div>`;
+    return `<div class="meta-grid ${cols}">${cells}</div>`;
   }
 
   if (sec.type === 'chart') {
@@ -322,10 +325,18 @@ function secTile(subjId, sec, showCheckbox) {
   const right = showCheckbox
     ? `<label class="sec-inc-label"><input type="checkbox" class="sec-inc-cb" ${sec.included ? 'checked' : ''} onchange="toggleSec('${subjId}','${sec.id}',this.checked)" title="Select section" aria-label="Select ${esc(sec.title)} section for report generation"></label>`
     : (sec.included ? `<span class="inc-pill-yes">Included</span>` : `<span class="inc-pill-no">Not included</span>`);
+  // ADR 0004: section-level status badge in the header, right-aligned next to
+  // the inclusion control. Shown only when the section carries a verdict
+  // (card severity / metric worst-item severity); plain table/meta/findings
+  // sections have no sec.sev and show just the control — no empty slot.
+  const hdrBadge = sec.sev
+    ? `<span class="sec-badge m-badge ${SEV_BADGE[sec.sev] || ''}" title="${esc(sec.reason || '')}">${SEV_LABEL[sec.sev] || esc(sec.sev)}</span>`
+    : '';
   return `<div class="sec-tile${sec.included ? '' : ' excluded'}">
     <div class="sec-tile-hdr${body ? ' sec-tile-hdr-border' : ''}">
       <span class="sec-title">${esc(sec.title)}</span>
       <span class="sec-meta">${esc(sec.meta || '')}</span>
+      ${hdrBadge}
       ${right}
     </div>
     ${body ? `<div class="sec-tile-body">${body}</div>` : ''}

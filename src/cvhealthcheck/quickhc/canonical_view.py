@@ -436,6 +436,10 @@ def _metric_section_view(sec: MetricSection, sec_id: str) -> dict[str, Any]:
             "sev": _METRIC_SEV_CODE.get(sev) if sev else None,
             "reason": reason,
         })
+    # Section-level summary verdict for the header badge (consistent with card):
+    # the worst item severity (skipping None/muted). Per-item badges remain the
+    # detail; this is the section's overall status next to the checkbox.
+    section_sev, section_reason = _worst_item_verdict(sec)
     return {
         "id": sec_id,
         "title": sec.title,
@@ -443,7 +447,26 @@ def _metric_section_view(sec: MetricSection, sec_id: str) -> dict[str, Any]:
         "included": True,
         "type": "metric",
         "items": items,
+        "sev": _METRIC_SEV_CODE.get(section_sev) if section_sev else None,
+        "reason": section_reason,
     }
+
+
+def _worst_item_verdict(sec: MetricSection) -> tuple[str | None, str]:
+    """Worst (highest-rank) item severity + its reason, skipping None/muted."""
+    rank = {"good": 0, "info": 1, "warning": 2, "critical": 3}
+    worst_item = None
+    worst_rank = -1
+    for item in sec.items:
+        if item.severity is None or item.severity == FindingSeverity.muted:
+            continue
+        r = rank.get(item.severity.value, -1)
+        if r > worst_rank:
+            worst_rank, worst_item = r, item
+    if worst_item is None:
+        return None, ""
+    reason = worst_item.verdict_chain[-1].reason if worst_item.verdict_chain else ""
+    return worst_item.severity.value, reason
 
 
 def _card_section_view(sec: CardSection, sec_id: str) -> dict[str, Any]:

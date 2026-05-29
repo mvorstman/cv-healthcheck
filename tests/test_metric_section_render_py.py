@@ -59,6 +59,10 @@ def test_rich_metric_section_renders_as_metric_type():
     assert items["utilisation_pct"]["sev"] == "warn"
     assert "70%" in items["utilisation_pct"]["reason"]
     assert items["used"]["sev"] is None             # non-judged item has no badge
+    # ADR 0004 phase 4 (FIX 1): the metric section also exposes a section-level
+    # summary verdict for the header badge — the worst item severity.
+    assert sec["sev"] == "warn"
+    assert "70%" in sec["reason"]
 
 
 def test_meta_mode_metricsection_unchanged():
