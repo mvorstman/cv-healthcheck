@@ -10,6 +10,31 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-29 (ADR 0004 phase 5 — migrate capacity_license)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `192e65c` (5a REST spec-carrying), `caba06e` (5c chart gaps), `2808518` (5b catalog migration + e2e test), plus the wrap-up + pointer.
+
+The **first real subject migrated** onto the three-face vocabulary — and the start of the user-visible regression recovery. capacity_license now collects a `metric` (utilisation), a `table` (monthly detail), and a real `ChartSection` line (Used Capacity trend) from the live lab. Browser-verified PASS (live authenticated collect). 697 passing under both `pytest` and `python -m pytest` (was 691).
+
+### Added
+
+- **REST-path spec-carrying** — `RESTExtractor` now populates `section_metric_specs` / `section_chart_specs` / `section_card_specs` from each section's `extraction_instructions` (phases 2–4 only did this in `FixtureExtractor`). This is the mechanism that lets a *real* subject build metric/chart/card sections on a live collect.
+- **Chart gap handling** — `ChartSeries.data` widened to `list[float | None]`; `build_chart_section` maps `null` and any declared `gap_value` (capacity_license's `-1`) to `None` (a break in the line), while `0` stays a real plotted value; the Chart.js line dataset sets `spanGaps:false`.
+- **Migration 0014 — capacity_license three-face bindings** (all to `Capacity License Usage`, report 318): metric (latest-month `utilisation_pct` via CEL, sentinel→muted n/a, warn≥70/critical≥90), table (clean columns via `column_map` + conformance), and a NEW chart section (Used Capacity line, `gap_values [-1]`).
+- End-to-end test driving the **real dev-box capture shape** (13 monthly rows, `-1` inactive / `0` active) through the migrated catalog + extractor: metric muted n/a, chart gaps at the eleven `-1` months with `0` at the active months, table 13 clean rows.
+
+### Notes
+
+- **Sentinel correction: guard `-1` AND `null`.** The migration-0003 comment and the gw02 captures said inactive months are `null` in REST, but the **live dev-box collect returns `-1`** (verified this session). The canonical path treats both `-1` and `null` as the inactive sentinel (→ muted n/a in the metric, gap in the line); `0` is a real value. A `null`-only guard would have rendered `-1` as a literal negative — the regression class the legacy `max(... or 0, 0.0)` clamp hid, flipped to `-1`. Load-bearing, and only visible from the live collect.
+- **Decision #2 (cardinality) superseded by the live single-CommCell shape.** The brief's design read the headline utilisation off a report-provided **"Total" aggregate row** and rendered per-CommCell detail rows — derived from the multi-CommCell gw02 captures. The configured dev box is **single-CommCell**, and the dataset carrying a Total row (`...Details`) errors on CacheDB params here while `...Summary Chart` is empty; the only populated dataset is `Capacity License Usage` (a single-entity monthly series). So (Option A) all three faces bind to it: the **metric reads the latest month** (no Total row exists), and "per-CommCell detail rows" collapse to the **monthly series**.
+- **Zero-data lab is the correct PASS.** Purchased = 0 / Used = −1 everywhere on this lab, so n/a utilisation + a near-empty (gapped) trend is the right result — not a 70% warning. Warn/critical firing is proven by `_metric_test`. No non-zero fixture was seeded into the real subject.
+- **`report_id` is per-deployment** (318 here; varies per CommCell — backlog #23). Bindings resolve by `dataset_name`; the `dataset_guid` is a cache hint only. Cross-deployment report discovery is a new deferred backlog item.
+- **Usage-bar table column deferred.** The per-row utilisation bar is genuinely new rendering (derived table column + bar renderer) and shows n/a on this lab; the table renders clean column-mapped rows. Folded into the cosmetic styling pass / a follow-up.
+- **No existing subject changed** (browser-verified): SA, LS, the three `_test` subjects, client_growth, backup_job_summary unchanged.
+
+---
+
 ## 2026-05-29 (ADR 0004 phase 4 — card section type)
 
 **Branch:** `feature/basic-healthcheck-report-output`

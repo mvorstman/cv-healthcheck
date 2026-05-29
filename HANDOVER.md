@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-29 (ADR 0004 phase 4 — card section type, browser-verified)
+**Last updated:** 2026-05-29 (ADR 0004 phase 5 — capacity_license migrated, browser-verified)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `4a847ce` — HANDOVER #24: three-category classification for dev-tools retirement
-**Test status:** **691 passing** under both `pytest` and `python -m pytest` (was 673).
+**Last commit:** see the pointer commit at the end of this session (CHANGELOG + HANDOVER for phase 5).
+**Test status:** **697 passing** under both `pytest` and `python -m pytest` (was 691).
 
 ---
 
@@ -23,6 +23,20 @@ If you are a new chat / new session, read these files in order before doing anyt
 ---
 
 ## What was just completed
+
+**ADR 0004 phase 5 (migrate capacity_license) implemented and browser-verified PASS** (live authenticated collect). The **first real subject migrated** onto the three-face vocabulary — regression recovery begins.
+
+- **5a** (`192e65c`) — `RESTExtractor` carries `section_metric_specs`/`section_chart_specs`/`section_card_specs` from `extraction_instructions` (the live-collect equivalent of the FixtureExtractor wiring; the principal new mechanism).
+- **5c** (`caba06e`) — chart gaps: `ChartSeries.data` → `list[float|None]`; `build_chart_section` maps `null`/declared `gap_value` (`-1`) → `None`; Chart.js `spanGaps:false`.
+- **5b** (`2808518`) — migration 0014: capacity_license three faces all bound to `Capacity License Usage` (report 318) — metric (latest-month utilisation, sentinel→muted n/a, warn≥70/crit90), table (column_map + conformance), NEW chart section (Used line, `gap_values [-1]`). End-to-end test over the real 13-row capture shape.
+
+697 passing both invocations (was 691). Browser-verified: metric shows **n/a** (correct on the 0/0 lab) with a muted/absent badge; table shows the monthly rows with clean columns; chart shows the Used line with **gaps** at the eleven `-1` months and `0` at the active months; no existing subject changed.
+
+**Key corrections recorded this phase:**
+- **Sentinel is `-1` AND `null`** — the live dev-box collect returns `-1` for inactive months (not `null` as 0003's comment / the gw02 captures implied). A `null`-only guard would render `-1` as a literal negative. Only visible from the live collect.
+- **Decision #2 (cardinality) superseded by the live single-CommCell shape.** The brief's design read utilisation off a report-provided **"Total" aggregate row** and rendered **per-CommCell detail rows** — from the multi-CommCell gw02 captures. The dev box is **single-CommCell**; the dataset with a Total row (`...Details`) errors on CacheDB params here and `...Summary Chart` is empty, so all three faces bind to `Capacity License Usage` (a single-entity monthly series). Consequence: the **metric reads the latest month** (no Total row exists), and "per-CommCell detail rows" **collapse to the monthly series**. If/when capacity_license collects against a real multi-CommCell deployment, the Total-row metric + per-CommCell table become available and the bindings may want revisiting.
+
+### Prior: ADR 0004 phase 4 (card section type) — PASS
 
 **ADR 0004 phase 4 (card section type) implemented and browser-verified PASS.** The `card` section type — the last new section type in ADR 0004 (`multi_section` deferred). A card is a flat labeled key-value identity block that **also carries a section-level verdict** (steering decision: every card is judged), reusing the metric severity + verdict_chain machinery.
 
@@ -126,29 +140,32 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## Single recommended next action
 
-**ADR 0004 phase 5 — migrate capacity_license (the first REAL subject migration). See `docs/adr/0004-phase-plan.md` §Phase 5 for scope.**
+**ADR 0004 phase 6 — migrate client_growth. See `docs/adr/0004-phase-plan.md` §Phase 6 for scope.**
 
-Phases 1–4 built the foundation + all four new section types (metric/chart/card; `multi_section` deferred), each validated against an internal test subject. Phase 5 is the inflection point: the **first migration of a real, user-facing subject** to the new vocabulary — capacity_license — which is also one of the three regressed subjects, so this is where the user-visible regression recovery begins.
+Phase 5 migrated the first real subject (capacity_license) and built the REST-path spec-carrying that all remaining migrations reuse. Phase 6 is the **second** regressed-subject migration — client_growth — and now follows a well-worn path: per the phase plan §Phase 6, it gets a **`metric`** section (`total_clients`, `latest_added`, `yoy_pct` via CEL), a **`chart`** section (12-month trend), and a **`table`** (clean column names), with template-default rules warning on year-over-year decline.
 
-Per the phase plan §Phase 5, capacity_license gets: a **`metric`** section computing `utilisation_pct` via CEL with **sentinel handling for -1** ("license not active that month"), template-default rules **warn at 70% / critical at 90%**; the **`table`** section restored with clean column names via `column_map`; and the **`chart`** (the trend the legacy builder computed and never emitted). Minimum evaluative-face machinery to fire the rules (phase 2's threshold evaluator already does this).
+Phase 6 inherits everything phase 5 hardened: `build_metric_section`/`build_chart_section`, the **REST-path spec-carrying** (now built — `RESTExtractor` populates the section specs from `extraction_instructions`), chart gap handling, conformance, the section-header badge. It is a real subject (no `is_test`), collects from the live lab, and — like phase 5 — its step 1 must **collect against the dev box and verify the live dataset shape** rather than trust the captures (phase 5's lesson: the live `-1` sentinel and single-CommCell shape only showed up on the real collect; the gw02 captures misled).
 
-Phase 5 inherits everything: `build_metric_section` (sentinel + CEL + threshold verdict — capacity_license is the exact shape `_metric_test` was modelled on), `build_chart_section`, `build_card_section`, conformance, the renderers, the section-header badge. Unlike phases 2–4 it touches a **real subject** (not a `_test` one) — so it's the first to **not** ride the `is_test` toggle, must collect from the **live lab** (or the existing capacity_license REST catalog row), and the REST extractor will need to populate `section_metric_specs`/`section_chart_specs` from the catalog `extraction_instructions` (phases 2–4 only populated those in `FixtureExtractor`; the REST path doesn't yet). **That REST-path spec-carrying is the main new wiring phase 5 needs** — investigate it in step 1.
+client_growth specifics to check in step 1:
+- The legacy builder `_build_client_growth_subject` (`subject_data_service.py`) — its YoY / added / total derivations to reimplement in CEL, and how it treats sparse/missing months.
+- **The all-zero monthly data flag** (carried from phase 2): client_growth's legacy table renders 13 months all Added 0 / Removed 0 / Total 0. Confirm against the live collect whether these zeros are real (quiet lab) or a legacy extraction artifact — if the latter, the migration is the place to fix it.
+- The existing client_growth REST binding (`client_growth.monthly_table`, report 318, dataset "Client Count" / "Commcell Growth"?) — confirm the live dataset + fields, and apply the same sentinel/gap discipline phase 5 established.
 
-Two capacity_license-specific decisions for phase 5:
-- **TWO chart-ish surfaces, neither built as a chart in phase 3.** (1) Per-row utilisation **bars** (`usage-fill`, the `workload` JS type) = a **table-with-bar-column** presentation. (2) A legacy inline monthly-trend **mini-chart** (raw-div `chart_capacity`). Phase 5 decides whether the trend becomes a real `ChartSection` (line — now possible) or stays a mini-chart; the per-row bars are a table-column presentation, not a chart.
-- **`backup_job_summary` collects 0 rows** in the lab (noted in earlier handovers) — not phase 5, but relevant context for phase 7.
+Inputs phase 6 needs:
+- **`docs/adr/0004-phase-plan.md`** §Phase 6; **ADR** §"Migration of the three regressed subjects" (client_growth: metric total/added/yoy, chart 12-month trend, table, YoY-decline rule).
+- Phase 5 surfaces it reuses: REST-path spec-carrying (`extractors/rest.py`), `build_metric_section`/`build_chart_section`, `evaluative.threshold`, chart `gap_values`/`spanGaps`, conformance, migration pattern (0014 is the template).
+- **Capture vs. live discipline:** phase 5 proved the live collect can contradict the captures (sentinel, cardinality). Step 1 must collect live and verify before authoring bindings.
 
-Inputs phase 5 needs:
-- **`docs/adr/0004-phase-plan.md`** §Phase 5; **ADR** §"Migration of the three regressed subjects" (capacity_license: metric utilisation_pct, chart trend, table column_map, warn/critical rules).
-- The legacy builder `_build_capacity_license_subject` (`subject_data_service.py`) — the derivation logic to reimplement in CEL.
-- Phase 1–4 surfaces: `build_metric_section`/`build_chart_section`, `evaluative.threshold`, `cvhealthcheck.cel`, conformance, the REST extractor (`extractors/rest.py`) which needs the spec-carrying wiring.
+After phase 6 is **phase 6.5** (dev tools retirement — see backlog #24's three-category classification) then **phase 7** (backup_job_summary; note: it collects 0 rows on this lab).
 
 ### Carried forward for later phases
 
 - **Environment identity → card (candidate follow-up).** The card type now exists and is the canonical successor to the `meta`-rendered identity displays (the environment identity block, LS `commcell_info`). Moving the environment identity display onto a `CardSection` is a clean candidate follow-up — NOT necessarily phase 5 (phase 5 is capacity_license), but the natural first real consumer of the card type beyond the test subject. Decide when convenient.
 - **Chart types deferred (architecture allows, not built).** Phase 3 built only `line` + `pie`. `bar`/`area`/`doughnut`/`bubble`/`radar`/`polar`/`scatter` are "a `chart_type` string + confirming the data-shaping" away. Add when a real subject needs one.
+- **`capacity_license` chart-ish surfaces (resolved in phase 5; one follow-up).** The monthly trend is now a real `ChartSection` line (Used Capacity), and the legacy `chart_capacity` mini-chart is superseded. The **per-row utilisation usage-bar** (the `usage-fill` table-column presentation) was **deferred** — it's genuinely new rendering (a derived table column + a bar renderer) and shows n/a on the zero-data lab. Build it as a table-column-as-bar feature when a subject has real per-row utilisation to show (client_growth/BJS may surface the same need), or fold into the styling pass.
 - **Cosmetic styling pass (low priority — batch these together).** Renderer-only refinements, no model changes:
   - Per-item metric badge placement inside metric cells (the Warning badge under the value) and the card's per-value badge placement.
+  - **The capacity_license usage-bar table column** (deferred from phase 5; see above) — if treated as cosmetic rather than a feature.
   - **Card status border treatment.** Propagate a section's severity to the card's border so verdicts are scannable at a glance. Recommended: a **left accent bar** (not a full colored border — full borders turn a multi-card report into a wall of color and stop signalling). Tint only attention-worthy statuses (warning = amber, critical = red; info optional); leave `good`/`muted` with the normal neutral border, so a colored edge always means "look here" and its absence means "fine." **Keep the header status badge in all cases** — the border is reinforcement, not the sole signal (accessibility: don't rely on color alone). Applies the severity already on the section.
 
 ### Methodology retrospective for ADR 0003 — deferred
@@ -206,6 +223,8 @@ Whatever surfaces. The current backlog is healthy (no urgent next code action); 
 31. **[CLOSED — phase 3, commit `ce88cac`] `valid_section_types` vs `SUPPORTED_SECTION_TYPES` reconciliation.** Done: the MCP schema's `supported_section_types` is now sourced from the runtime `SUPPORTED_SECTION_TYPES` (which now includes `chart`), so they can't diverge; the drift guard asserts `SUPPORTED_SECTION_TYPES ⊆` the modelled section types. Original finding: the hand-schema advertised `chart` while the runtime rejected it — over-promising until phase 3 landed `chart`.
 32. **MCP import-time `run_migrations()` silent DB creation (latent, low priority).** `get_db` resolves `app.db` via `parents[3]`/`parents[4]` from source location — correct under the current editable install. But `run_migrations()` runs at import (`mcp/server.py:59`), so under a NON-editable install (e.g. if the MCP is ever packaged for distribution), `parents[3]` would point into site-packages and silently create an empty `app.db` at the wrong path rather than failing loudly — serving an empty catalog. Not active today. Add a loud-fail guard (assert the resolved DB path is the expected project `data/` dir, or refuse to auto-create) IF the MCP is ever packaged. Revisit only at packaging time.
 33. **MCP `list_subjects` exposes the `_test` subjects (decision, minor).** MCP `list_subjects` has no `is_test` filter, so it returns the internal `_metric_test` / `_chart_test` / `_card_test` subjects, while the web sidebar hides them behind the client-side toggle (and now groups them in their own chapter). Decide: expose-but-flag (mark `is_test` in the MCP output so an AI consumer knows they're internal), or filter them out like the web app. Lean expose-but-flag since the MCP is a dev/AI tool, but make the divergence intentional rather than accidental. Resolve whenever convenient.
+34. **Report discovery for the REST path (resolves #23; surfaced in phase 5).** `report_id` (318 here) and dataset GUIDs vary per CommCell deployment — so a catalog row that pins a numeric `report_id` is implicitly single-deployment-scoped (phase 5's capacity_license bindings are scoped to the one configured lab). The fix is a **report collector that scans the deployment's available Reports / Reports Plus reports and resolves them by NAME** (report name → that CommCell's numeric ID and dataset GUIDs) at collection time, so catalog rows identify their source semantically rather than by a per-deployment number. Scope notes: REST-only (HTML/CSV imports carry no meaningful report ID); overlaps the CommCell-discovery flow (backlog #2) and subsumes #23; likely its own design pass / mini-ADR (it changes how catalog rows bind to a source). **Sequence AFTER the three regressed-subject migrations (5/6/7)** — they collect against a single configured deployment and don't need portability to land.
+35. **MCP server not serving (runtime/serving issue, parked).** The cv-healthcheck MCP server is currently not serving — a runtime/serving problem, NOT a schema one (the phase-3 drift guard made the schema side sound). Nothing in ADR 0004 phases 5–7 depends on it (the MCP path is the ADR 0005 AI-authoring loop). When it's fixed (a later phase), the fix must confirm the server returns a **live** response, not merely that the schema test passes — those are different failure modes (cf. the auth-401 regression phase 5 hit on `get_report`, which a schema test would not have caught).
 
 ### ADR 0004 implementation notes carried forward
 
@@ -435,7 +454,7 @@ than attempting the work.
 cd /home/michiel/dev/cv-healthcheck
 source venv/bin/activate
 python -m compileall -q src
-python -m pytest -q                                # expect 691 passing
+python -m pytest -q                                # expect 697 passing
 git status --short                                 # expect clean
 sqlite3 data/app.db "SELECT customer_id,customer_name FROM customers;"
 sqlite3 data/app.db "SELECT project_id,customer_id,project_number FROM projects;"
