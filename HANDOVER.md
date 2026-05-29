@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-29 (ADR 0004 phase 5 — capacity_license migrated, browser-verified)
+**Last updated:** 2026-05-29 (ADR 0004 phase 6 — client_growth migrated, browser-verified)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `c092998` — HANDOVER #34: attach phase-5 concrete evidence to report-discovery item
-**Test status:** **697 passing** under both `pytest` and `python -m pytest` (was 691).
+**Last commit:** see the pointer commit at the end of this session (CHANGELOG + HANDOVER for phase 6).
+**Test status:** **704 passing** under both `pytest` and `python -m pytest` (was 697).
 
 ---
 
@@ -23,6 +23,21 @@ If you are a new chat / new session, read these files in order before doing anyt
 ---
 
 ## What was just completed
+
+**ADR 0004 phase 6 (migrate client_growth) implemented and browser-verified PASS** (live authenticated collect). The **second regressed-subject migration**, and the first **informational (non-evaluative) metric** on a real subject.
+
+- **6a** (`4c22720`) — `build_metric_section` honors a spec `render_mode` (default `"metric"`); a `meta`-mode spec with no rules → an informational metric (no verdict). Regression test pins the default evaluative path **unchanged byte-for-byte**.
+- **6b** (`35d8480`) — chart label truncation: ISO-datetime labels (client_growth's converted `MonthStart`) → date part; non-ISO (capacity_license) untouched.
+- **6c** (`9696b38`) — migration 0015: client_growth three faces bound to `Client Count` (report 318) — metric (`Total` + net change, `meta`, no rule), chart (`Total` line, no gaps), table (clean columns + conformance). End-to-end test over the real 13-row capture.
+
+704 passing both invocations (was 697). Browser-verified: metric shows **Total = 5 / Net Change = 0 with NO badge** (informational — the deliberate contrast with capacity_license's evaluative metric); table 13 clean rows; chart a continuous `Total` line (genuine zeros plotted, no gaps) with date labels; no existing subject changed.
+
+**Key points recorded this phase:**
+- **YoY-decline rule deliberately dropped** — the phase-plan said client_growth gets a YoY-decline warning, but phase 6 supersedes it: client growth has no meaningful threshold ("is N% growth good?" is customer-dependent), so the metric is informational (Total + net change, no verdict). Same metric face, two render modes (`metric` evaluative for capacity_license, `meta` informational for client_growth).
+- **No sentinel** — `Client Count` returns fully-populated rows; the eleven leading zeros are genuine, not inactive-month sentinels. No gap/n-a handling (confirmed absent, not guarded). The capture-vs-live discipline again: authored against the live collect, not the captures.
+- **ClientGrowthDetails (pivoted) deferred** — months-as-columns; needs an un-pivot/transpose the catalog can't express. Follow-up + transpose-primitive test case (see carried-forward).
+
+### Prior: ADR 0004 phase 5 (migrate capacity_license) — PASS
 
 **ADR 0004 phase 5 (migrate capacity_license) implemented and browser-verified PASS** (live authenticated collect). The **first real subject migrated** onto the three-face vocabulary — regression recovery begins.
 
@@ -140,28 +155,28 @@ If you are a new chat / new session, read these files in order before doing anyt
 
 ## Single recommended next action
 
-**ADR 0004 phase 6 — migrate client_growth. See `docs/adr/0004-phase-plan.md` §Phase 6 for scope.**
+**ADR 0004 phase 6.5 — dev tools retirement. See `docs/adr/0004-phase-plan.md` §Phase 6.5 and backlog #24.**
 
-Phase 5 migrated the first real subject (capacity_license) and built the REST-path spec-carrying that all remaining migrations reuse. Phase 6 is the **second** regressed-subject migration — client_growth — and now follows a well-worn path: per the phase plan §Phase 6, it gets a **`metric`** section (`total_clients`, `latest_added`, `yoy_pct` via CEL), a **`chart`** section (12-month trend), and a **`table`** (clean column names), with template-default rules warning on year-over-year decline.
+Phases 5 and 6 migrated capacity_license and client_growth (the two chart-using regressed subjects), so the workspace now has its own canonical chart-rendering surface that tile `detail_endpoint`s can point at — the condition the phase plan set for retiring the dev tools cleanly. Phase 6.5 sits here (between 6 and 7) for exactly that reason.
 
-Phase 6 inherits everything phase 5 hardened: `build_metric_section`/`build_chart_section`, the **REST-path spec-carrying** (now built — `RESTExtractor` populates the section specs from `extraction_instructions`), chart gap handling, conformance, the section-header badge. It is a real subject (no `is_test`), collects from the live lab, and — like phase 5 — its step 1 must **collect against the dev box and verify the live dataset shape** rather than trust the captures (phase 5's lesson: the live `-1` sentinel and single-CommCell shape only showed up on the real collect; the gw02 captures misled).
+**Phase 6.5's STEP 1 must apply backlog #24's three-category classification BEFORE deleting anything** — the Development page is a mixed bag and wholesale deletion risks an LB-1-class mistake:
+- **(a) auto-obviated by migration** — Capacity License (phase 5 ✓), Client Growth / Client Count (phase 6 ✓), legacy detail pages duplicating canonical. Confirm each is truly redundant now, then remove.
+- **(b) disposable scaffolding** — API Test, Execution Validation, Health Candidates, Datasets, Lab Readiness. Retire after the LB-1 detail_endpoint repoint (backlog #25).
+- **(c) LOAD-BEARING — KEEP/RELOCATE, do NOT delete** — the Security Assessment Registry (internal) is the human-review side of the MCP staging registry (ADR 0005 AI-authoring loop). Don't conflate "remove the dev page" with "remove the staging registry."
 
-client_growth specifics to check in step 1:
-- The legacy builder `_build_client_growth_subject` (`subject_data_service.py`) — its YoY / added / total derivations to reimplement in CEL, and how it treats sparse/missing months.
-- **The all-zero monthly data flag** (carried from phase 2): client_growth's legacy table renders 13 months all Added 0 / Removed 0 / Total 0. Confirm against the live collect whether these zeros are real (quiet lab) or a legacy extraction artifact — if the latter, the migration is the place to fix it.
-- The existing client_growth REST binding (`client_growth.monthly_table`, report 318, dataset "Client Count" / "Commcell Growth"?) — confirm the live dataset + fields, and apply the same sentinel/gap discipline phase 5 established.
+Also resolve backlog #25 (tile `detail_endpoint`s for client_growth/capacity_license currently point at dev routes → repoint at the in-workspace canonical views that now exist, or drop). Chart.js stays a workspace dependency (phase-3 renderer); the dev tools' use of it goes away.
 
-Inputs phase 6 needs:
-- **`docs/adr/0004-phase-plan.md`** §Phase 6; **ADR** §"Migration of the three regressed subjects" (client_growth: metric total/added/yoy, chart 12-month trend, table, YoY-decline rule).
-- Phase 5 surfaces it reuses: REST-path spec-carrying (`extractors/rest.py`), `build_metric_section`/`build_chart_section`, `evaluative.threshold`, chart `gap_values`/`spanGaps`, conformance, migration pattern (0014 is the template).
-- **Capture vs. live discipline:** phase 5 proved the live collect can contradict the captures (sentinel, cardinality). Step 1 must collect live and verify before authoring bindings.
+Inputs: **`docs/adr/0004-phase-plan.md`** §Phase 6.5; **backlog #24** (three-category classification, the load-bearing warning) and **#25** (detail_endpoint resolution); the dev blueprint `src/cvhealthcheck/web/routes/development.py` (+ its templates / `shared.py` orphan helpers / `data/catalog/metrics/` stale files).
 
-After phase 6 is **phase 6.5** (dev tools retirement — see backlog #24's three-category classification) then **phase 7** (backup_job_summary; note: it collects 0 rows on this lab).
+**Then phase 7 — migrate backup_job_summary** (the third/last regressed subject; metric totals + a `card` status + `findings` recent failures + `table` recent jobs). **Caveat: it collects 0 rows on this lab** (the "Job details" dataset on report 194 returns `totalRecordCount: 0`), so phase-7 verification is "wiring connects, empty renders cleanly" — the same zero-data-is-PASS posture as capacity_license. Apply the capture-vs-live discipline (collect live, verify shape) and reuse `build_card_section` for the status card.
+
+(If the steering side prefers to keep the regressed-subject momentum, phase 7 could run before 6.5 — but the phase plan sequences 6.5 here because the detail_endpoint repoint is now cleanly resolvable and earlier risked broken URLs. Either order works; 6.5-then-7 is the planned one.)
 
 ### Carried forward for later phases
 
 - **Environment identity → card (candidate follow-up).** The card type now exists and is the canonical successor to the `meta`-rendered identity displays (the environment identity block, LS `commcell_info`). Moving the environment identity display onto a `CardSection` is a clean candidate follow-up — NOT necessarily phase 5 (phase 5 is capacity_license), but the natural first real consumer of the card type beyond the test subject. Decide when convenient.
 - **Chart types deferred (architecture allows, not built).** Phase 3 built only `line` + `pie`. `bar`/`area`/`doughnut`/`bubble`/`radar`/`polar`/`scatter` are "a `chart_type` string + confirming the data-shaping" away. Add when a real subject needs one.
+- **Pivoted-dataset support / transpose primitive (deferred from phase 6).** report 318's `ClientGrowthDetails` (and the analogous `...Details` datasets) return a **pivoted single row with months-as-columns** (e.g. `Apr 2020`, `May 2020`, … as fields) rather than a tidy row-per-month series. The current catalog model + extractor can't un-pivot/transpose that into rows. Phase 6 bound client_growth to the tidy `Client Count` series instead and left this OUT. If a subject ever *only* exposes the pivoted shape, the catalog needs a **transpose primitive** (columns→rows). This is the concrete test case for whether that primitive is worth adding — a sibling to backlog #34's catalog-vs-code expressiveness questions.
 - **`capacity_license` chart-ish surfaces (resolved in phase 5; one follow-up).** The monthly trend is now a real `ChartSection` line (Used Capacity), and the legacy `chart_capacity` mini-chart is superseded. The **per-row utilisation usage-bar** (the `usage-fill` table-column presentation) was **deferred** — it's genuinely new rendering (a derived table column + a bar renderer) and shows n/a on the zero-data lab. Build it as a table-column-as-bar feature when a subject has real per-row utilisation to show (client_growth/BJS may surface the same need), or fold into the styling pass.
 - **Cosmetic styling pass (low priority — batch these together).** Renderer-only refinements, no model changes:
   - Per-item metric badge placement inside metric cells (the Warning badge under the value) and the card's per-value badge placement.
@@ -455,7 +470,7 @@ than attempting the work.
 cd /home/michiel/dev/cv-healthcheck
 source venv/bin/activate
 python -m compileall -q src
-python -m pytest -q                                # expect 697 passing
+python -m pytest -q                                # expect 704 passing
 git status --short                                 # expect clean
 sqlite3 data/app.db "SELECT customer_id,customer_name FROM customers;"
 sqlite3 data/app.db "SELECT project_id,customer_id,project_number FROM projects;"

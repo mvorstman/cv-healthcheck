@@ -10,6 +10,30 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-29 (ADR 0004 phase 6 — migrate client_growth)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `4c22720` (6a render_mode), `35d8480` (6b chart labels), `9696b38` (6c catalog migration + e2e test), plus wrap-up + pointer.
+
+The **second regressed-subject migration**, and the first **informational (non-evaluative) metric** on a real subject — the deliberate contrast with phase 5's evaluative one. client_growth now collects a `metric` (latest Total, plain key/value, no verdict), a `table` (monthly detail), and a real `ChartSection` line (Total clients over months) from the live lab. Browser-verified PASS. 704 passing under both `pytest` and `python -m pytest` (was 697).
+
+### Added
+
+- **`build_metric_section` honors a spec `render_mode`** (default `"metric"`). A spec may declare `render_mode "meta"` + no `evaluative.rules` for an **informational** metric: plain key/value, no severity/badge/verdict (the LS `commcell_info` render path). Declared intent, not inferred from rule presence. A regression test pins that the **default evaluative path is unchanged byte-for-byte** (capacity_license / `_metric_test` still `render_mode "metric"` with the verdict intact).
+- **Chart label truncation** — `build_chart_section` truncates an ISO-datetime label (e.g. `client_growth`'s `MonthStart` converted via `unix_seconds`) to its date part (`2025-05-01`); non-ISO labels (`capacity_license`'s `"May 1, 2025"`) pass through unchanged.
+- **Migration 0015 — client_growth three-face bindings** (all to `Client Count`, report 318): metric (`Total` latest + net change, `render_mode "meta"`, **no rule**), chart (`Total` line, no gap handling), table (`column_map` clean columns + conformance, keeping the unix→ISO conversion). The three sections already existed (0003); this re-binds their REST source.
+- End-to-end test over the **real dev-box capture shape** (13 fully-populated rows, no sentinel): three faces; metric meta-mode with no verdict and `net_change` reading the same latest month as `Total`; chart continuous (genuine zeros plotted, no gaps) with date-truncated labels; table 13 clean rows.
+
+### Notes
+
+- **The metric is informational — no verdict (deliberate).** Unlike capacity_license (a ratio with a natural ceiling → warn/critical), client growth has no meaningful threshold ("is N% growth good?" is customer-dependent). The metric is the latest-month `Total` (+ net change) in `meta` mode. **The phase-plan's YoY-decline rule is intentionally dropped — phase 6 supersedes it.** capacity_license proved the evaluative metric path; client_growth proves the informational one. Same metric face, two render modes.
+- **No sentinel (verified on the live collect).** `Client Count` returns 13 fully-populated rows with real integers — the eleven leading `0/0/0` months are *genuine* zeros (plotted on the line), not inactive-month sentinels. So no `spanGaps`/gap handling and no n/a treatment — confirmed absent rather than guarded. (Contrast capacity_license's `-1`.) This is the **capture-vs-live discipline** paying off again: the binding was authored against the live data, not the captures.
+- **ClientGrowthDetails (pivoted) deferred.** report 318 also exposes a `ClientGrowthDetails` dataset with months-as-columns (a pivoted single row). Consuming it needs an un-pivot/transpose the catalog model can't express; out of phase 6, recorded as a follow-up + a future test case for whether the catalog needs a transpose primitive.
+- **`report_id` 318 is per-deployment** (backlog #23 / #34); bindings resolve by `dataset_name`, the GUID is a cache hint.
+- **No existing subject changed** (browser-verified): SA, LS, the three `_test` subjects, capacity_license (its evaluative metric n/a + chart-with-gaps), backup_job_summary unchanged.
+
+---
+
 ## 2026-05-29 (ADR 0004 phase 5 — migrate capacity_license)
 
 **Branch:** `feature/basic-healthcheck-report-output`
