@@ -4,7 +4,7 @@
 
 **Last updated:** 2026-05-29 (ADR 0004 phase 2 — metric section type implemented + browser-verified)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** see the pointer commit at the end of this session (CHANGELOG + HANDOVER for phase 2).
+**Last commit:** `8a34b36` — CHANGELOG + HANDOVER: ADR 0004 phase 2 (metric section type) complete
 **Test status:** **658 passing** under both `pytest` and `python -m pytest` (was 625).
 
 ---
