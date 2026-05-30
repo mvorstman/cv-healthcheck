@@ -30,7 +30,7 @@ from typing import Any
 from cvhealthcheck.artifacts.enums import FindingSeverity
 from cvhealthcheck.artifacts.models import MetricItem, MetricSection
 from cvhealthcheck.cel import evaluate as cel_evaluate
-from cvhealthcheck.evaluative.threshold import evaluate_threshold_rule
+from cvhealthcheck.evaluative import engine
 
 
 def build_metric_section(
@@ -82,11 +82,9 @@ def build_metric_section(
         target = items_by_id.get(target_id)
         if target is None:
             raise ValueError(f"Threshold rule targets unknown metric item {target_id!r}")
-        verdict = evaluate_threshold_rule(
-            rule, computed.get(target_id), label=target.label, unit=target.unit
+        target.severity, target.verdict_chain = engine.evaluate(
+            computed.get(target_id), rule, label=target.label, unit=target.unit
         )
-        target.severity = verdict.severity
-        target.verdict_chain = [verdict]
 
     return MetricSection(
         type="metric",

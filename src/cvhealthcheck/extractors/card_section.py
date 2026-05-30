@@ -54,7 +54,7 @@ from typing import Any
 
 from cvhealthcheck.artifacts.models import CardItem, CardSection
 from cvhealthcheck.cel import evaluate as cel_evaluate
-from cvhealthcheck.evaluative.threshold import evaluate_threshold_rule
+from cvhealthcheck.evaluative import engine
 from cvhealthcheck.extractors.metric_section import _aggregate
 
 
@@ -98,11 +98,9 @@ def build_card_section(
     rule = (spec.get("evaluative") or {}).get("rule")
     if rule:
         value = _coerce_number(row.get(rule.get("target_field")))
-        verdict = evaluate_threshold_rule(
-            rule, value, label=title, unit=rule.get("unit")
+        section.severity, section.verdict_chain = engine.evaluate(
+            value, rule, label=title, unit=rule.get("unit")
         )
-        section.severity = verdict.severity
-        section.verdict_chain = [verdict]
 
     return section
 
