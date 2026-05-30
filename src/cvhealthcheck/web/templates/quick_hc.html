@@ -29,8 +29,6 @@
 </head>
 <body>
 
-{% include "partials/active_project_selector.html" %}
-
 <div class="body">
 
   <!-- ── SIDEBAR ── -->
@@ -51,6 +49,9 @@
         <span id="conn-label">–</span>
       </button>
     </div>
+
+    <!-- 1b. Active-project selector (highest-level context) -->
+    {% include "partials/active_project_selector.html" %}
 
     <!-- 2. Primary navigation -->
     <nav class="left-primary-nav">

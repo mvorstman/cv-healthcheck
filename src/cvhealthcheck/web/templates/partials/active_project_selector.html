@@ -1,53 +1,62 @@
 {# Active-project selector — included on every workspace page.
-   Renders a clickable indicator showing the current (customer, project)
-   pinned to the top-right of the viewport. Click opens a dropdown of
-   customers; clicking a project posts to /api/active-project with a
+   Lives at the top of the left nav (sidebar), above the primary nav and
+   subject list, since it's the highest-level context. Renders a clickable
+   indicator showing the current (customer, project); click opens a dropdown
+   of customers; clicking a project posts to /api/active-project with a
    redirect_to back to the current URL.
 #}
 <style>
   .apsel-root {
-    position: fixed;
-    top: 12px;
-    right: 16px;
-    z-index: 1000;
+    position: relative;
+    margin: 10px 8px 4px;
     font-family: var(--font);
     color: var(--text-1);
+    z-index: 50;
   }
   .apsel-button {
-    background: var(--bg-panel);
+    background: var(--bg-card);
     border: 1px solid var(--border);
-    border-radius: 5px;
-    padding: 6px 12px;
+    border-radius: 6px;
+    padding: 7px 10px;
     font-size: 12px;
     cursor: pointer;
-    display: inline-flex;
+    display: flex;
+    width: 100%;
     align-items: center;
     gap: 8px;
     color: var(--text-1);
+    text-align: left;
+    transition: border-color .12s;
   }
   .apsel-button:hover { border-color: var(--accent); }
   .apsel-button-label {
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 10px;
     color: var(--text-3);
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    flex-shrink: 0;
   }
   .apsel-button-value {
     font-weight: 500;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .apsel-caret { color: var(--text-3); font-size: 10px; }
+  .apsel-caret { color: var(--text-3); font-size: 10px; flex-shrink: 0; }
   .apsel-panel {
     position: absolute;
-    top: calc(100% + 6px);
+    top: calc(100% + 4px);
+    left: 0;
     right: 0;
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: 5px;
-    min-width: 280px;
     max-height: 60vh;
     overflow-y: auto;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    z-index: 51;
   }
   .apsel-panel[hidden] { display: none; }
   .apsel-customer-group {
