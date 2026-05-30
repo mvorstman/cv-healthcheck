@@ -358,8 +358,14 @@ def persist_security_assessment_artifact(
     else:
         persisted_payload = artifact_model.to_dict()
 
-    _import_source_types = {"html", "csv", "json"}
-    if str(persisted_payload.get("source_type") or "").lower() in _import_source_types:
+    # Write the canonical artifact for every source type — including "rest".
+    # SA migration: the production report now reads the canonical store
+    # (get_canonical), so REST-collected SA must land there too; previously the
+    # gate excluded "rest" and only the per-domain store (get_current) carried
+    # it. (PR2 replaces this bespoke canonical write entirely with the generic
+    # extractor path for all sources.)
+    _canonical_source_types = {"html", "csv", "json", "rest"}
+    if str(persisted_payload.get("source_type") or "").lower() in _canonical_source_types:
         try:
             canonical = _build_canonical_from_import(persisted_payload)
             (canonical_store or _active_project_store()).save_artifact(canonical)

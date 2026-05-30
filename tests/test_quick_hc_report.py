@@ -81,10 +81,22 @@ def _patch_security_assessment_paths(tmp_path, monkeypatch) -> None:
         "SECURITY_ASSESSMENT_CATALOG_DIR",
         tmp_path / "security_catalog",
     )
+    _sa_canonical_store = ArtifactStore(
+        "default", "default", base_dir=tmp_path / "canonical_artifacts"
+    )
     monkeypatch.setattr(
         subject_data_service_module,
         "_canonical_store",
-        ArtifactStore("default", "default", base_dir=tmp_path / "canonical_artifacts"),
+        _sa_canonical_store,
+    )
+    # SA migration: the report now reads get_canonical() ->
+    # _active_project_store(); persist writes the canonical artifact through the
+    # same call. Patch it to the tmp store so the report finds what persist wrote
+    # (previously the report read get_current() / the bespoke per-domain store).
+    monkeypatch.setattr(
+        security_assessment_service_module,
+        "_active_project_store",
+        lambda: _sa_canonical_store,
     )
 
 
@@ -300,10 +312,10 @@ def test_quick_hc_report_includes_security_assessment_summary(tmp_path, monkeypa
     assert report["security_assessment"]["total_checks"] == 2
     assert report["security_assessment"]["critical"] == 1
     assert report["security_assessment"]["info"] == 1
-    assert (
-        report["security_assessment"]["loaded_from_path"]
-        == persisted["file_path"]
-    )
+    # SA migration: the report reads the canonical artifact now, which carries no
+    # bespoke per-domain file path — loaded_from_path is no longer the legacy
+    # store path. (persist still writes that path for the held #36 registry.)
+    assert report["security_assessment"]["loaded_from_path"] is None
 
 
 def test_quick_hc_report_includes_license_summary_summary(tmp_path, monkeypatch) -> None:

@@ -8,6 +8,8 @@ from typing import Any, Callable
 
 from flask import has_app_context, url_for
 
+from cvhealthcheck.artifacts.enums import SourceType
+from cvhealthcheck.artifacts.models import CanonicalArtifact, FindingsSection
 from cvhealthcheck.license_summary.service import LicenseSummaryService
 from cvhealthcheck.metrics import (
     get_capacity_license_usage,
@@ -50,6 +52,69 @@ REPORT_SELECTION_IDS = QUICK_HC_SELECTION_IDS | {
 REPORT_OVERVIEW_DEFAULT_SELECTION_IDS = report_overview_default_selection_ids()
 REPORT_DEFAULT_SUBJECT_SELECTION_IDS = QUICK_HC_SUBJECT_IDS
 ReportTileBuilder = Callable[[TileDefinition, dict[str, dict[str, Any]]], dict[str, Any]]
+
+
+# Reverse of the extractor's source-type map: canonical SourceType -> the
+# lowercase string the bespoke report-dict (and the metadata rows) expect.
+_SOURCE_TYPE_TO_STR: dict[SourceType, str] = {
+    SourceType.html_import: "html",
+    SourceType.csv_import: "csv",
+    SourceType.json_import: "json",
+    SourceType.reportsplus_rest: "rest",
+}
+
+
+def _canonical_to_sa_report_dict(artifact: CanonicalArtifact) -> dict[str, Any]:
+    """Adapt a canonical Security Assessment artifact into the report-dict shape
+    that ``_build_security_assessment_section`` (and
+    ``summarize_security_assessment_artifact``) consume.
+
+    This lets the production report read the canonical store
+    (``get_canonical()``) with the downstream rendering logic unchanged — the
+    SA-migration repoint off the bespoke per-domain ``get_current()`` dict.
+
+    Field mapping (explicit, per the SA-migration brief):
+      - ``generated_on``  <- ``artifact.generated_at``
+      - ``source_type``   <- ``artifact.source.type`` (reverse of the extractor map)
+      - ``imported_at``   <- ``artifact.source.imported_at`` or ``.collected_at``
+      - ``source_metadata`` <- ``artifact.source`` (report_id / report_name)
+
+    The per-finding ``section`` is the section's TITLE, not ``finding.category``
+    (which becomes the namespaced ``section_id`` once SA routes through the
+    generic extractor) — the category->section.title display fix on the report
+    path. Severity is rendered back to the capitalised status label the report
+    shows ("Critical" / "Warning" / "Good" / "Info").
+    """
+    findings: list[dict[str, Any]] = []
+    section_names: list[str] = []
+    for sec in artifact.sections:
+        if not isinstance(sec, FindingsSection):
+            continue
+        section_names.append(sec.title)
+        for f in sec.items:
+            findings.append({
+                "section": sec.title,
+                "parameter": str(f.title or ""),
+                "status": f.severity.value.capitalize(),
+                "remarks": str(f.description or ""),
+                "action": str(f.recommendation or ""),
+            })
+
+    status_counts = {"Critical": 0, "Warning": 0, "Good": 0, "Info": 0}
+    for finding in findings:
+        status_counts[finding["status"]] = status_counts.get(finding["status"], 0) + 1
+
+    src = artifact.source
+    imported_at = src.imported_at or src.collected_at
+    return {
+        "source_type": _SOURCE_TYPE_TO_STR.get(src.type, str(getattr(src.type, "value", src.type))),
+        "imported_at": imported_at.isoformat() if imported_at else None,
+        "generated_on": artifact.generated_at.isoformat() if artifact.generated_at else None,
+        "source_metadata": {"report_id": src.report_id, "report_name": src.report_name},
+        "findings": findings,
+        "sections": section_names,
+        "status_counts": status_counts,
+    }
 
 
 @dataclass(frozen=True)
@@ -167,7 +232,14 @@ class QuickHcReportService:
             if section.id in SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME.values()
         )
         try:
-            artifact = self.security_assessment_service.get_current()
+            # SA migration: read the canonical store (the same artifact the
+            # workspace renders) and adapt it to the report-dict shape, instead
+            # of the bespoke per-domain get_current() dict. Downstream rendering
+            # is unchanged. get_canonical() raises FileNotFoundError when no
+            # artifact exists, same as get_current() did.
+            artifact = _canonical_to_sa_report_dict(
+                self.security_assessment_service.get_canonical()
+            )
         except FileNotFoundError:
             return {
                 "available": False,
