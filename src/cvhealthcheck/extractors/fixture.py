@@ -23,6 +23,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from cvhealthcheck.db.rules import load_rules_registry
 from cvhealthcheck.db.section_types import (
     UnsupportedSectionTypeError,
     validate_section_type,
@@ -48,6 +49,9 @@ class FixtureExtractor:
 
     def extract(self, subject_id: str, version: int = 1) -> ExtractionResult:
         result = ExtractionResult(subject_id=subject_id, source_type="json")
+        # Phase 8 step 2: carry the rules registry for ref-based rule resolution
+        # at canonicalization (catalog read, not evaluation).
+        result.rules_registry = load_rules_registry(self._db)
 
         instructions = self._load_section_instructions(subject_id, version)
         if not instructions:

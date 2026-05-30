@@ -95,7 +95,9 @@ def result_to_artifact(
             # ADR 0004 phase 2: compute derived values + verdicts at collection
             # time from the catalog metric declaration.
             spec = result.section_metric_specs.get(section_id, {})
-            metric_section = build_metric_section(section_id, title, spec, rows)
+            metric_section = build_metric_section(
+                section_id, title, spec, rows, result.rules_registry
+            )
             sections.append(metric_section)
             metric_sections.append(metric_section)
         elif output_as == "chart":
@@ -106,7 +108,9 @@ def result_to_artifact(
             # ADR 0004 phase 4: a labeled identity block; carries a section-level
             # verdict via the reused metric threshold evaluator.
             spec = result.section_card_specs.get(section_id, {})
-            card_section = build_card_section(section_id, title, spec, rows)
+            card_section = build_card_section(
+                section_id, title, spec, rows, result.rules_registry
+            )
             sections.append(card_section)
             card_sections.append(card_section)
         else:

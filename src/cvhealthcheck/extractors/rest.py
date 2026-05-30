@@ -42,6 +42,7 @@ from datetime import UTC, datetime
 from html.parser import HTMLParser
 from typing import Any
 
+from cvhealthcheck.db.rules import load_rules_registry
 from cvhealthcheck.db.section_types import (
     UnsupportedSectionTypeError,
     validate_section_type,
@@ -72,6 +73,9 @@ class RESTExtractor:
 
     def extract(self, subject_id: str, version: int = 1) -> ExtractionResult:
         result = ExtractionResult(subject_id=subject_id, source_type="rest")
+        # Phase 8 step 2: carry the rules registry so result_to_artifact can
+        # resolve `ref`-based evaluative rules (catalog read, not evaluation).
+        result.rules_registry = load_rules_registry(self._db)
 
         instructions = self._load_section_instructions(subject_id, version)
         if not instructions:

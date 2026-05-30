@@ -38,6 +38,7 @@ def build_metric_section(
     title: str,
     spec: dict[str, Any],
     rows: list[dict[str, Any]],
+    rules_registry: dict[str, dict[str, Any]] | None = None,
 ) -> MetricSection:
     """Build a MetricSection from rows + spec.
 
@@ -77,13 +78,26 @@ def build_metric_section(
 
     # Index items by id so rules can attach severities.
     items_by_id = {item.id: item for item in items}
+    seen_targets: dict[str, str] = {}  # target_id -> "ref"|"inline" (DP2 guard)
     for rule in rules:
-        target_id = rule.get("target")
+        kind = "ref" if "ref" in rule else "inline"
+        # Step 2: resolve a registry ref to its definition (inline rules pass
+        # through unchanged). Resolution is at canonicalization, here.
+        resolved = engine.resolve_rule(rule, rules_registry)
+        target_id = resolved.get("target")
         target = items_by_id.get(target_id)
         if target is None:
             raise ValueError(f"Threshold rule targets unknown metric item {target_id!r}")
+        # DP2: a target hit by BOTH an inline rule and a registry ref is a silent
+        # double-fire — reject (loud-fail at build time, the load locus).
+        if seen_targets.get(target_id, kind) != kind:
+            raise ValueError(
+                f"Metric section {section_id!r} has both an inline rule and a registry "
+                f"ref targeting {target_id!r} — define one, not both (DP2)."
+            )
+        seen_targets[target_id] = kind
         target.severity, target.verdict_chain = engine.evaluate(
-            computed.get(target_id), rule, label=target.label, unit=target.unit
+            computed.get(target_id), resolved, label=target.label, unit=target.unit
         )
 
     return MetricSection(

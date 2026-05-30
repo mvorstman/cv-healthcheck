@@ -63,6 +63,7 @@ def build_card_section(
     title: str,
     spec: dict[str, Any],
     rows: list[dict[str, Any]],
+    rules_registry: dict[str, dict[str, Any]] | None = None,
 ) -> CardSection:
     """Build a CardSection: map one row's fields to labeled items, and apply an
     optional template-default verdict (reusing the metric threshold evaluator)."""
@@ -97,6 +98,7 @@ def build_card_section(
 
     rule = (spec.get("evaluative") or {}).get("rule")
     if rule:
+        rule = engine.resolve_rule(rule, rules_registry)  # step 2: inline or ref
         value = _coerce_number(row.get(rule.get("target_field")))
         section.severity, section.verdict_chain = engine.evaluate(
             value, rule, label=title, unit=rule.get("unit")
