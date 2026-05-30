@@ -502,8 +502,13 @@ function openConfig(id) {
     // Collect action (REST)
     const collectAction = (activeSrc.actions || []).find(action => action.kind === 'collect' && action.collectUrl);
     if (collectAction) {
+      // Only REST collection is auth-gated (customer-bound CommCell session);
+      // its form is intercepted so a missing session opens the connect modal
+      // in-place instead of bouncing to /login. JSON fixture collection needs
+      // no session and submits straight through.
+      const collectOnsubmit = collectAction.requiresSession ? ' onsubmit="return collectSubmit(event, this)"' : '';
       srcPanel += `<div class="src-upload">
-        <form method="post" action="${esc(collectAction.collectUrl)}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <form method="post" action="${esc(collectAction.collectUrl)}"${collectOnsubmit} style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <button type="submit" class="btn-sm btn-sm-p">${esc(collectAction.label || 'Collect')}</button>
         </form>
       </div>`;
@@ -821,6 +826,39 @@ async function _reloadSubject(subjId) {
   }
 }
 
+// ── REST COLLECT ──
+// A Collect form held back because the active customer has no live CommCell
+// session yet. Submitted automatically once the connect modal authenticates,
+// so the user stays in the workspace instead of being bounced to /login.
+let _pendingCollectForm = null;
+
+// Intercept the Collect POST. Collection is auth-gated server-side and bound to
+// the active customer; without a matching session the /collect route 302s to
+// the standalone /login page, dropping the user out of context. Instead we
+// pre-check the customer-bound session and, when it's missing, open the
+// existing in-workspace connect modal. The native form.submit() below does NOT
+// re-fire this onsubmit handler, so the real collection POST runs unchanged.
+function collectSubmit(event, form) {
+  event.preventDefault();
+  fetch('/api/auth/status', { credentials: 'same-origin' })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      window.IS_AUTHENTICATED = !!(data && data.authenticated);
+      if (data && data.authenticated_for_active) {
+        form.submit();
+      } else {
+        _pendingCollectForm = form;
+        openConnectModal();
+      }
+    })
+    .catch(() => {
+      // Status check unreachable — fall back to the server's own handling
+      // (it will redirect to /login if a session is genuinely required).
+      form.submit();
+    });
+  return false;
+}
+
 // ── CONNECT MODAL ──
 function openConnectModal() {
   const modal = document.getElementById('connect-modal');
@@ -858,6 +896,8 @@ function openConnectModal() {
 function closeConnectModal() {
   const modal = document.getElementById('connect-modal');
   if (modal) modal.hidden = true;
+  // Dismissing the modal cancels any Collect that was waiting on a session.
+  _pendingCollectForm = null;
 }
 
 async function submitConnect() {
@@ -879,7 +919,16 @@ async function submitConnect() {
     if (data.success) {
       window.IS_AUTHENTICATED = true;
       window.CURRENT_USERNAME = username.trim() || null;
+      // Capture before closeConnectModal() clears it.
+      const pending = _pendingCollectForm;
       closeConnectModal();
+      if (pending) {
+        // Session is now bound to the active customer — run the collection
+        // the user originally clicked. This navigates (full POST), so skip
+        // the badge refresh; the reload repaints everything.
+        pending.submit();
+        return;
+      }
       _updateConnBadge();
     } else {
       if (errEl) { errEl.textContent = data.error || 'Login failed.'; errEl.hidden = false; }

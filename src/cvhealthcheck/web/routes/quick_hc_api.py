@@ -14,6 +14,7 @@ from .shared import (
     bp,
     get_current_username,
     is_authenticated,
+    is_authenticated_for,
     login_to_commvault,
     request,
     set_current_token,
@@ -72,8 +73,23 @@ def api_auth_status():
     created before SESSION_USERNAME_KEY was added.
     """
     authenticated = bool(is_authenticated())
+    # Collection is customer-bound: a token issued for one customer does not
+    # authorise collecting against the active customer's CommCell. The connect
+    # badge cares only about `authenticated`, but the Collect control needs to
+    # know whether the existing token is bound to the *active* customer so it
+    # can open the connect modal in-place instead of letting /collect bounce to
+    # the standalone /login page. Read-only; no token is issued or cleared here.
+    authenticated_for_active = False
+    if authenticated:
+        try:
+            customer = get_active_customer()
+        except ActiveProjectMissingError:
+            customer = None
+        if customer is not None:
+            authenticated_for_active = is_authenticated_for(customer["customer_id"])
     return jsonify({
         "authenticated": authenticated,
+        "authenticated_for_active": authenticated_for_active,
         "username": get_current_username() if authenticated else None,
     })
 

@@ -8,6 +8,7 @@ endpoint every 60s (and on window focus) to stay accurate.
 from __future__ import annotations
 
 from cvhealthcheck.auth.commvault_auth import (
+    SESSION_CUSTOMER_ID_KEY,
     SESSION_TOKEN_KEY,
     SESSION_USERNAME_KEY,
 )
@@ -20,10 +21,16 @@ def test_api_auth_status_unauthenticated_returns_false_and_no_username() -> None
     response = client.get("/api/auth/status")
     assert response.status_code == 200
     assert response.is_json
-    assert response.get_json() == {"authenticated": False, "username": None}
+    assert response.get_json() == {
+        "authenticated": False,
+        "authenticated_for_active": False,
+        "username": None,
+    }
 
 
 def test_api_auth_status_authenticated_returns_true_and_username() -> None:
+    # Token present but not bound to the active customer, so the Collect-gate
+    # flag authenticated_for_active stays False even though authenticated is True.
     app = create_app()
     client = app.test_client()
     with client.session_transaction() as session:
@@ -32,7 +39,11 @@ def test_api_auth_status_authenticated_returns_true_and_username() -> None:
     response = client.get("/api/auth/status")
     assert response.status_code == 200
     assert response.is_json
-    assert response.get_json() == {"authenticated": True, "username": "alice"}
+    assert response.get_json() == {
+        "authenticated": True,
+        "authenticated_for_active": False,
+        "username": "alice",
+    }
 
 
 def test_api_auth_status_authenticated_without_username_returns_null() -> None:
@@ -45,7 +56,28 @@ def test_api_auth_status_authenticated_without_username_returns_null() -> None:
         session[SESSION_TOKEN_KEY] = "test-token"
     response = client.get("/api/auth/status")
     assert response.status_code == 200
-    assert response.get_json() == {"authenticated": True, "username": None}
+    assert response.get_json() == {
+        "authenticated": True,
+        "authenticated_for_active": False,
+        "username": None,
+    }
+
+
+def test_api_auth_status_token_bound_to_active_customer_sets_for_active() -> None:
+    # When the session token is bound to the active customer, the Collect gate
+    # is satisfied — authenticated_for_active is True, so REST Collect proceeds
+    # without opening the connect modal. The default active customer is "default".
+    app = create_app()
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session[SESSION_TOKEN_KEY] = "test-token"
+        session[SESSION_USERNAME_KEY] = "alice"
+        session[SESSION_CUSTOMER_ID_KEY] = "default"
+    response = client.get("/api/auth/status")
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["authenticated"] is True
+    assert body["authenticated_for_active"] is True
 
 
 def test_api_auth_status_treats_empty_token_as_unauthenticated() -> None:
@@ -60,7 +92,11 @@ def test_api_auth_status_treats_empty_token_as_unauthenticated() -> None:
     response = client.get("/api/auth/status")
     assert response.status_code == 200
     # username is gated on the authenticated flag, so it must be None here.
-    assert response.get_json() == {"authenticated": False, "username": None}
+    assert response.get_json() == {
+        "authenticated": False,
+        "authenticated_for_active": False,
+        "username": None,
+    }
 
 
 def test_logout_post_clears_session_and_status_returns_unauthenticated() -> None:
@@ -84,7 +120,11 @@ def test_logout_post_clears_session_and_status_returns_unauthenticated() -> None
 
     status_response = client.get("/api/auth/status")
     assert status_response.status_code == 200
-    assert status_response.get_json() == {"authenticated": False, "username": None}
+    assert status_response.get_json() == {
+        "authenticated": False,
+        "authenticated_for_active": False,
+        "username": None,
+    }
 
     with client.session_transaction() as session:
         assert SESSION_TOKEN_KEY not in session

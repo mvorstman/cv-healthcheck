@@ -257,7 +257,15 @@ def _provenance_to_tile_sources(
                 _upload_action(import_url=import_url_base, import_field=import_field, accept=accept)
             ]
         elif is_rest and rest_collect_url:
-            actions = [{"kind": "collect", "label": "Collect", "collectUrl": rest_collect_url}]
+            # REST collection is auth-gated against the active customer's
+            # CommCell; requiresSession lets the frontend open the connect
+            # modal in-place instead of being bounced to the /login page.
+            actions = [{
+                "kind": "collect",
+                "label": "Collect",
+                "collectUrl": rest_collect_url,
+                "requiresSession": True,
+            }]
         else:
             actions = []
         result.append(_source_item(
@@ -303,8 +311,16 @@ def _build_generic_sources(
             status = "a"
         elif (is_rest or is_json) and collect_url:
             # REST collects from the lab; JSON (internal/test subjects) collects
-            # from a shipped fixture via the collect-fixture route.
-            actions = [{"kind": "collect", "label": "Collect", "collectUrl": collect_url}]
+            # from a shipped fixture via the collect-fixture route. Only REST is
+            # auth-gated (customer-bound CommCell session); requiresSession lets
+            # the frontend open the connect modal in-place for that case. JSON
+            # fixture collection needs no session and submits straight through.
+            actions = [{
+                "kind": "collect",
+                "label": "Collect",
+                "collectUrl": collect_url,
+                "requiresSession": is_rest,
+            }]
             status = "a"
         else:
             actions = []
