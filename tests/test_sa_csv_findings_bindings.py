@@ -20,7 +20,6 @@ from cvhealthcheck.artifacts.models import FindingsSection
 from cvhealthcheck.extractors.csv import CSVExtractor
 from cvhealthcheck.extractors.result_to_artifact import result_to_artifact
 from cvhealthcheck.security_assessment.import_csv import parse_security_assessment_csv
-from cvhealthcheck.security_assessment.service import _build_canonical_from_import
 
 
 # A synthetic SA CSV in the real export's shape: title + Generated-on, then
@@ -90,14 +89,21 @@ def test_generic_csv_matches_bespoke(migrated_db_path: Path, tmp_path: Path):
     csv_path.write_text(_SA_CSV, encoding="utf-8")
 
     generic = _generic(migrated_db_path, csv_path)
-    bespoke = _build_canonical_from_import(
-        parse_security_assessment_csv(_SA_CSV, source_file=str(csv_path))
-    )
-
-    g, b = _flat(generic), _flat(bespoke)
+    # Bespoke side: the parser's findings dict directly (no bespoke canonical
+    # exists post-cut — _build_canonical_from_import was removed). Compare the
+    # generic canonical findings against the bespoke parse output field-for-field.
+    bespoke_dict = parse_security_assessment_csv(_SA_CSV, source_file=str(csv_path))
+    _SEV = {
+        "critical": FindingSeverity.critical, "warning": FindingSeverity.warning,
+        "good": FindingSeverity.good, "info": FindingSeverity.info,
+    }
+    b = {
+        (re.sub(r"[^a-z0-9]+", "_", f["section"].lower()).strip("_"), f["parameter"]): f
+        for f in bespoke_dict["findings"]
+    }
+    g = _flat(generic)
     assert set(g) == set(b), (sorted(set(g) - set(b)), sorted(set(b) - set(g)))
     for key in g:
-        assert g[key].severity == b[key].severity, key
-        assert (g[key].description or "") == (b[key].description or ""), key
-        assert (g[key].recommendation or "") == (b[key].recommendation or ""), key
-    assert generic.summary.status == bespoke.summary.status
+        assert g[key].severity == _SEV[str(b[key]["status"]).lower()], key
+        assert (g[key].description or "") == (b[key].get("remarks") or ""), key
+        assert (g[key].recommendation or "") == (b[key].get("action") or ""), key

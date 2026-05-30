@@ -46,7 +46,7 @@ from cvhealthcheck.web.app import create_app
 # already pass. The `tests/` directory is on sys.path during pytest
 # collection (no `tests/__init__.py`), so the sibling test modules are
 # imported directly by name rather than via a `tests.` package prefix.
-from test_security_assessment_import import HTML_SAMPLE
+from test_security_assessment_import import HTML_SAMPLE, SA_PANEL_HTML
 from test_license_summary_web import CSV_SAMPLE
 
 
@@ -290,12 +290,19 @@ def test_unified_route_security_assessment_no_legacy_artifact_files(
     """
     _patch_security_assessment_paths(tmp_path, monkeypatch)
 
+    # SA migration (PR2): SA uploads route through the generic dispatcher, which
+    # writes the canonical store via make_active_project_store and uses the "file"
+    # form field. Patch that store to a tmp location to inspect it; the legacy
+    # bespoke store must remain untouched.
+    import cvhealthcheck.web.routes.quick_hc as _qhc
+    from cvhealthcheck.artifacts.store import ArtifactStore
+    _store = ArtifactStore("default", "default", base_dir=tmp_path / "data" / "catalog" / "artifacts")
+    monkeypatch.setattr(_qhc, "make_active_project_store", lambda *a, **k: _store)
+
     app = create_app()
     response = app.test_client().post(
         "/quick-hc/security_assessment/import",
-        data={
-            "assessment_file": (io.BytesIO(HTML_SAMPLE.encode("utf-8")), "assessment.html")
-        },
+        data={"file": (io.BytesIO(SA_PANEL_HTML.encode("utf-8")), "assessment.html")},
         content_type="multipart/form-data",
         follow_redirects=True,
     )
@@ -303,8 +310,7 @@ def test_unified_route_security_assessment_no_legacy_artifact_files(
 
     legacy_artifact_files = list((tmp_path / "catalog").rglob("*.json"))
     assert legacy_artifact_files == [], (
-        f"Option A violated via unified route: wrote legacy artifact files "
-        f"{legacy_artifact_files}"
+        f"generic SA upload wrote bespoke legacy artifact files {legacy_artifact_files}"
     )
     canonical_files = list((tmp_path / "data" / "catalog" / "artifacts").rglob("*.json"))
     assert canonical_files, "canonical store should have received the artifact"
@@ -510,7 +516,11 @@ def test_upload_action_field_matches_handler_form_field() -> None:
     from cvhealthcheck.quickhc.subject_data_service import _provenance_to_tile_sources
     from cvhealthcheck.web.routes.upload_dispatch import get_handler
 
-    for subject_id in ("security_assessment", "license_summary"):
+    # SA migration (PR2): security_assessment no longer has a bespoke upload
+    # handler (it routes through the generic dispatcher). Only license_summary
+    # remains handler-based, so the importField==form_field invariant applies
+    # to it alone.
+    for subject_id in ("license_summary",):
         provenance_items = [
             {"source_type": "html", "status": "available", "label": "HTML import", "description": ""},
             {"source_type": "csv",  "status": "available", "label": "CSV import",  "description": ""},

@@ -18,6 +18,27 @@ from cvhealthcheck.security_assessment.service import (
 from cvhealthcheck.web.app import create_app
 
 
+def _sa_panel_html() -> str:
+    """A Security-Assessment HTML export shaped for the GENERIC extractor's
+    catalog bindings (.panel-table-title + a Parameter/Status/Remarks/Action
+    table per section). All six catalog sections present — the dispatcher
+    fail-whole's on any missing section. Used by the post-SA-migration upload
+    tests (the generic path, unlike the bespoke parser, keys on .panel-table-title)."""
+    sections = ["Access Security", "Auditing", "Platform Security",
+                "Company and Owners Security", "Capabilities", "Hardening"]
+    blocks = "\n".join(
+        f'<div class="panel"><div class="panel-table-title">{s}</div>'
+        '<table><thead><tr><th>Parameter</th><th>Status</th><th>Remarks</th>'
+        '<th>Action</th></tr></thead><tbody><tr>'
+        f'<td>{s} check</td><td>Good</td><td>ok</td><td></td></tr></tbody></table></div>'
+        for s in sections
+    )
+    return f'<html><head><title>Security Assessment</title></head><body>{blocks}</body></html>'
+
+
+SA_PANEL_HTML = _sa_panel_html()
+
+
 HTML_SAMPLE = """\
 <html>
   <head><title>Security Assessment</title></head>
@@ -428,14 +449,12 @@ def test_quick_hc_security_assessment_upload_imports_html_and_redirects(
 def test_fresh_security_assessment_import_creates_no_legacy_artifact_files(
     tmp_path, monkeypatch
 ) -> None:
-    """Regression test for Option A (2026-05-26).
+    """Regression test for Option A, updated for the SA migration (PR2).
 
-    On a fresh Security Assessment HTML import, NO new legacy artifact JSON
-    files may be written into ``data/catalog/security_assessment/``. The
-    canonical store is the only writer. The legacy SQLite registry file
-    (``registry.sqlite3``) may still be created on first read because
-    ``ensure_schema()`` is invoked by the fallback lookup path — that is
-    metadata, not an artifact, and reads are intentionally preserved.
+    A fresh Security Assessment HTML import now goes through the generic
+    workspace route (/quick-hc/security_assessment/import, "file" field) and the
+    generic dispatcher — it writes ONLY the canonical store, never the bespoke
+    legacy artifact JSON in ``data/catalog/security_assessment/``.
 
     The contract this test pins:
         - No ``data/catalog/security_assessment/*.json`` files are produced.
@@ -443,21 +462,25 @@ def test_fresh_security_assessment_import_creates_no_legacy_artifact_files(
     """
     _patch_security_assessment_paths(tmp_path, monkeypatch)
 
+    # The generic dispatcher writes via make_active_project_store; patch it to a
+    # tmp store to inspect it.
+    import cvhealthcheck.web.routes.quick_hc as _qhc
+    from cvhealthcheck.artifacts.store import ArtifactStore
+    _store = ArtifactStore("default", "default", base_dir=tmp_path / "data" / "catalog" / "artifacts")
+    monkeypatch.setattr(_qhc, "make_active_project_store", lambda *a, **k: _store)
+
     app = create_app()
     response = app.test_client().post(
-        "/security-assessment/import",
-        data={
-            "assessment_file": (io.BytesIO(HTML_SAMPLE.encode("utf-8")), "assessment.html")
-        },
+        "/quick-hc/security_assessment/import",
+        data={"file": (io.BytesIO(SA_PANEL_HTML.encode("utf-8")), "assessment.html")},
         content_type="multipart/form-data",
         follow_redirects=True,
     )
     assert response.status_code == 200
-    assert "HTML import completed" in response.get_data(as_text=True)
 
     legacy_artifact_files = list((tmp_path / "catalog").rglob("*.json"))
     assert legacy_artifact_files == [], (
-        f"Option A violated: fresh import wrote legacy artifact files "
+        f"generic SA upload wrote bespoke legacy artifact files "
         f"{legacy_artifact_files}"
     )
 

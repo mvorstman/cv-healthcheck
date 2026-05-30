@@ -11,10 +11,6 @@ from cvhealthcheck.license_summary.service import (
     LicenseSummaryImportError,
     import_license_summary_upload,
 )
-from cvhealthcheck.security_assessment.service import (
-    SecurityAssessmentImportError,
-    import_security_assessment_upload,
-)
 from cvhealthcheck.web.routes.upload_dispatch import (
     UPLOAD_HANDLERS,
     UploadHandler,
@@ -22,24 +18,12 @@ from cvhealthcheck.web.routes.upload_dispatch import (
 )
 
 
-def test_security_assessment_handler_is_wired_correctly() -> None:
-    handler = get_handler("security_assessment")
-    assert handler is not None
-    assert isinstance(handler, UploadHandler)
-    assert handler.form_field == "assessment_file"
-    assert handler.import_fn is import_security_assessment_upload
-    assert handler.error_class is SecurityAssessmentImportError
-    assert handler.redirect_endpoint == "main.quick_hc_security_assessment"
-    # success_format is a callable that produces the flash text from
-    # the persisted artifact dict; smoke-test the shape.
-    msg = handler.success_format({
-        "source_type": "html",
-        "source_file": "/tmp/assessment.html",
-        "finding_count": 7,
-    })
-    assert "HTML import completed" in msg
-    assert "/tmp/assessment.html" in msg
-    assert "7 findings" in msg
+def test_security_assessment_routes_generically() -> None:
+    # SA migration (PR2): security_assessment no longer has a bespoke upload
+    # handler — it falls through to the generic dispatcher path like the other
+    # catalog subjects. (The bespoke importer remains for the held #36 dev
+    # Security-Assessment cluster's own import route, not the workspace upload.)
+    assert get_handler("security_assessment") is None
 
 
 def test_license_summary_handler_is_wired_correctly() -> None:
@@ -73,7 +57,8 @@ def test_unknown_subject_returns_none() -> None:
     assert get_handler("does_not_exist_anywhere") is None
 
 
-def test_upload_handlers_has_exactly_the_known_two_subjects() -> None:
-    # Pins the module's surface: any addition to UPLOAD_HANDLERS is a
-    # deliberate change that should also update tests/CHANGELOG/HANDOVER.
-    assert set(UPLOAD_HANDLERS.keys()) == {"security_assessment", "license_summary"}
+def test_upload_handlers_has_exactly_the_known_subjects() -> None:
+    # Pins the module's surface: any change to UPLOAD_HANDLERS is a deliberate
+    # change that should also update tests/CHANGELOG/HANDOVER. SA migration (PR2)
+    # removed security_assessment — only license_summary remains bespoke.
+    assert set(UPLOAD_HANDLERS.keys()) == {"license_summary"}

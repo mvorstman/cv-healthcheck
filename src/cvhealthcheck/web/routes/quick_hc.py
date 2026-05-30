@@ -20,6 +20,7 @@ from cvhealthcheck.db import staging as _staging_db
 from cvhealthcheck.db.subjects import (
     delete_subject,
     get_subject,
+    get_subject_sources,
     list_family_versions,
     resolve_active_version,
     set_pinned_subject_id,
@@ -433,9 +434,12 @@ def quick_hc_subject_import(subject_id: str):
       - Unknown subject_id (not in the db) → 404.
       - subject_id in upload_dispatch.UPLOAD_HANDLERS → run that
         handler. Today: security_assessment, license_summary.
-      - subject_id is a system subject with no handler entry → 404.
-        Today: environment, client_growth, capacity_license,
-        backup_job_summary (all REST/metrics-only, no upload path).
+      - subject_id is a system subject with no handler entry and no
+        extractable file (html/csv) bindings → 404. Today: environment,
+        client_growth, capacity_license, backup_job_summary (REST/metrics-only).
+      - System subject with no handler but WITH file bindings → generic
+        dispatcher. Today: security_assessment (SA migration PR2 — uploads
+        now route through the generic extractor like any catalog subject).
       - Anything else (AI, user, future created_by values) → generic
         dispatcher branch with X-Inline JSON-response mode, ?stage=1
         staging, and the three-way error reporting
@@ -444,6 +448,10 @@ def quick_hc_subject_import(subject_id: str):
     db = get_db()
     try:
         subject = get_subject(db, subject_id)
+        has_file_bindings = subject is not None and any(
+            src.get("source_type") in ("html", "csv") and src.get("extractable")
+            for src in get_subject_sources(db, subject_id, subject.get("version", 1))
+        )
     finally:
         db.close()
 
@@ -454,13 +462,13 @@ def quick_hc_subject_import(subject_id: str):
     if handler is not None:
         return _handle_system_upload(handler)
 
-    if (subject.get("created_by") or "ai") == "system":
-        # System subject without an upload handler entry — REST/metrics
-        # only (environment, client_growth, capacity_license,
-        # backup_job_summary).
+    if (subject.get("created_by") or "ai") == "system" and not has_file_bindings:
+        # System subject with no upload path — REST/metrics only (environment,
+        # client_growth, capacity_license, backup_job_summary).
         return ("Subject does not support uploads.", 404)
 
-    # 'ai', 'user', or any other created_by → generic dispatcher.
+    # AI/user subjects, and system subjects with file bindings
+    # (security_assessment), go through the generic dispatcher.
     return _unified_dispatcher_upload(subject_id)
 
 

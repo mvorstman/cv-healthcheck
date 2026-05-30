@@ -29,10 +29,6 @@ from cvhealthcheck.license_summary.service import (
     LicenseSummaryImportError,
     import_license_summary_upload,
 )
-from cvhealthcheck.security_assessment.service import (
-    SecurityAssessmentImportError,
-    import_security_assessment_upload,
-)
 
 
 @dataclass(frozen=True)
@@ -69,15 +65,6 @@ class UploadHandler:
     redirect_endpoint: str
 
 
-def _security_assessment_success(artifact: dict[str, Any]) -> str:
-    source_type = str(artifact.get("source_type") or "unknown").upper()
-    finding_count = int(artifact.get("finding_count") or 0)
-    return (
-        f"{source_type} import completed for {artifact.get('source_file')} "
-        f"with {finding_count} findings."
-    )
-
-
 def _license_summary_success(artifact: dict[str, Any]) -> str:
     source_type = str(artifact.get("source_type") or "unknown").upper()
     other_count = len(artifact.get("other_licenses") or [])
@@ -89,14 +76,12 @@ def _license_summary_success(artifact: dict[str, Any]) -> str:
     )
 
 
+# SA migration: security_assessment was removed here — SA uploads now fall
+# through to the generic dispatcher path (extract_file -> result_to_artifact ->
+# canonical store), like the other catalog subjects. The bespoke
+# import_security_assessment_upload + parsers remain for the held #36 dev
+# Security-Assessment cluster (its own import route), not the workspace upload.
 UPLOAD_HANDLERS: dict[str, UploadHandler] = {
-    "security_assessment": UploadHandler(
-        form_field="assessment_file",
-        import_fn=import_security_assessment_upload,
-        error_class=SecurityAssessmentImportError,
-        success_format=_security_assessment_success,
-        redirect_endpoint="main.quick_hc_security_assessment",
-    ),
     "license_summary": UploadHandler(
         form_field="license_summary_file",
         import_fn=import_license_summary_upload,
@@ -109,8 +94,9 @@ UPLOAD_HANDLERS: dict[str, UploadHandler] = {
 
 def get_handler(subject_id: str) -> UploadHandler | None:
     """Return the upload handler for subject_id, or None if the subject
-    uses the generic dispatcher path (AI subjects, plus the four system
-    subjects without upload behavior — environment, client_growth,
-    capacity_license, backup_job_summary).
+    uses the generic dispatcher path (AI subjects, plus the system subjects
+    without custom upload behavior — environment, client_growth,
+    capacity_license, backup_job_summary, and security_assessment, which now
+    routes through the generic extractor).
     """
     return UPLOAD_HANDLERS.get(subject_id)

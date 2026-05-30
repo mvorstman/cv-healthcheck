@@ -12,6 +12,33 @@ from cvhealthcheck.quickhc.subject_data_service import build_subject_initial_dat
 from cvhealthcheck.reportsplus.backup_job_summary import write_backup_job_summary_artifact
 from cvhealthcheck.security_assessment.artifact import build_security_assessment_artifact
 from cvhealthcheck.security_assessment.service import persist_security_assessment_artifact
+from cvhealthcheck.extractors.html import ExtractionResult as _SAExtractionResult
+from cvhealthcheck.extractors.result_to_artifact import result_to_artifact as _sa_result_to_artifact
+
+
+def _sa_canonical_from_findings(findings, *, source_type="html"):
+    """Build an SA canonical artifact from a findings list via the generic path
+    (result_to_artifact) — the post-cut canonical shape. Used by the SA test
+    shim below to populate the canonical store the report reads."""
+    import re as _re
+    from collections import OrderedDict as _OD
+    r = _SAExtractionResult(subject_id="security_assessment", source_type=source_type)
+    grouped = _OD()
+    for f in findings:
+        grouped.setdefault(f.get("section") or "Other", []).append(f)
+    for name, items in grouped.items():
+        sid = "security_assessment." + _re.sub(r"[^a-z0-9]+", "_", str(name).lower()).strip("_")
+        r.sections[sid] = [
+            {
+                "parameter": it.get("parameter"), "status": it.get("status"),
+                "severity": str(it.get("status") or "info").lower(),
+                "remarks": it.get("remarks", ""), "action": it.get("action", ""),
+            }
+            for it in items
+        ]
+        r.section_output_types[sid] = "findings"
+        r.section_titles[sid] = name
+    return _sa_result_to_artifact(r, "security_assessment", "Security Assessment")
 from cvhealthcheck.web.app import create_app
 
 
@@ -97,6 +124,29 @@ def _patch_security_assessment_paths(tmp_path, monkeypatch) -> None:
         security_assessment_service_module,
         "_active_project_store",
         lambda: _sa_canonical_store,
+    )
+    # SA migration (PR2): persist() no longer writes the canonical artifact —
+    # production canonical now comes from the generic extractor (upload / REST).
+    # These tests use persist() as a shortcut to populate SA, so wrap it to also
+    # write the canonical store via the generic path, mirroring what the
+    # production generic upload does.
+    import sys as _sys
+    _real_persist = persist_security_assessment_artifact
+
+    def _persist_then_canonical(artifact, **kwargs):
+        result = _real_persist(artifact, **kwargs)
+        _sa_canonical_store.save_artifact(
+            _sa_canonical_from_findings(
+                artifact.get("findings") or [],
+                source_type=str(artifact.get("source_type") or "html"),
+            )
+        )
+        return result
+
+    monkeypatch.setattr(
+        _sys.modules[__name__],
+        "persist_security_assessment_artifact",
+        _persist_then_canonical,
     )
 
 

@@ -4,23 +4,13 @@ from datetime import UTC, datetime
 import json
 import logging
 from pathlib import Path
-import re
 import secrets
 from typing import Any, BinaryIO
 from uuid import uuid4
 
 from werkzeug.utils import secure_filename
 
-from cvhealthcheck.artifacts.enums import ArtifactStatus, FindingSeverity, FindingStatus, SourceType
-from cvhealthcheck.artifacts.models import (
-    ArtifactSource,
-    ArtifactSubject,
-    ArtifactSummary,
-    CanonicalArtifact,
-    Finding,
-    FindingsSection,
-    SummaryMetric,
-)
+from cvhealthcheck.artifacts.models import CanonicalArtifact
 from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.reportsplus.catalog import collected_at
 
@@ -238,7 +228,6 @@ def persist_security_assessment_artifact(
     artifact: dict[str, Any],
     *,
     catalog_dir: Path | None = None,
-    canonical_store: ArtifactStore | None = None,
     registry_path: Path | None = None,
     customer_context: CustomerContext | None = None,
     commcell_context: CommCellContext | None = None,
@@ -358,19 +347,12 @@ def persist_security_assessment_artifact(
     else:
         persisted_payload = artifact_model.to_dict()
 
-    # Write the canonical artifact for every source type — including "rest".
-    # SA migration: the production report now reads the canonical store
-    # (get_canonical), so REST-collected SA must land there too; previously the
-    # gate excluded "rest" and only the per-domain store (get_current) carried
-    # it. (PR2 replaces this bespoke canonical write entirely with the generic
-    # extractor path for all sources.)
-    _canonical_source_types = {"html", "csv", "json", "rest"}
-    if str(persisted_payload.get("source_type") or "").lower() in _canonical_source_types:
-        try:
-            canonical = _build_canonical_from_import(persisted_payload)
-            (canonical_store or _active_project_store()).save_artifact(canonical)
-        except Exception:
-            logger.exception("Failed to write canonical artifact for security assessment import")
+    # SA migration (PR2): the bespoke path no longer emits a parallel
+    # CanonicalArtifact. Production SA now writes the canonical store ONLY
+    # through the generic extractor (workspace upload -> dispatcher, REST
+    # collect -> RESTExtractor, CLI -> dispatcher), all via result_to_artifact.
+    # persist() now writes the per-domain store + the artifact registry only —
+    # the held #36 dev Security-Assessment cluster's machinery.
     return persisted_payload
 
 
@@ -521,103 +503,6 @@ def _build_saved_filename(original_filename: str) -> str:
     timestamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
     token = secrets.token_hex(4)
     return f"{path.stem}-{timestamp}-{token}{path.suffix.lower()}"
-
-
-_SEVERITY_MAP: dict[str, FindingSeverity] = {
-    "critical": FindingSeverity.critical,
-    "warning":  FindingSeverity.warning,
-    "good":     FindingSeverity.good,
-    "info":     FindingSeverity.info,
-}
-_SOURCE_TYPE_MAP: dict[str, SourceType] = {
-    "html": SourceType.html_import,
-    "csv":  SourceType.csv_import,
-    "json": SourceType.json_import,
-}
-
-
-def _build_canonical_from_import(artifact: dict[str, Any]) -> CanonicalArtifact:
-    source_type_str = str(artifact.get("source_type") or "").lower()
-    source_type = _SOURCE_TYPE_MAP.get(source_type_str, SourceType.html_import)
-
-    imported_at_str = str(artifact.get("imported_at") or "")
-    try:
-        imported_at = datetime.fromisoformat(imported_at_str.replace("Z", "+00:00"))
-    except (ValueError, TypeError):
-        imported_at = datetime.now(UTC)
-
-    source_meta = dict(artifact.get("source_metadata") or artifact.get("source") or {})
-    report_name = str(source_meta.get("title") or "Security Assessment")
-
-    source = ArtifactSource(
-        type=source_type,
-        report_name=report_name,
-        collected_at=imported_at,
-    )
-
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for finding in artifact.get("findings") or []:
-        if not isinstance(finding, dict):
-            continue
-        section = str(finding.get("section") or "Other").strip() or "Other"
-        grouped.setdefault(section, []).append(finding)
-
-    severity_counts: dict[str, int] = {"critical": 0, "warning": 0, "good": 0, "info": 0}
-    sections: list[FindingsSection] = []
-    for section_name, raw_findings in grouped.items():
-        items: list[Finding] = []
-        for idx, rf in enumerate(raw_findings):
-            sev_label = str(rf.get("status") or "info").lower()
-            severity = _SEVERITY_MAP.get(sev_label, FindingSeverity.info)
-            finding_id = (
-                str(rf.get("parameter") or "").strip().lower().replace(" ", "_")[:60]
-                or f"{section_name.lower().replace(' ', '_')}_{idx}"
-            )
-            items.append(Finding(
-                id=finding_id,
-                severity=severity,
-                status=FindingStatus.open,
-                category=section_name,
-                title=str(rf.get("parameter") or "").strip(),
-                description=str(rf.get("remarks") or "").strip() or None,
-                recommendation=str(rf.get("action") or "").strip() or None,
-            ))
-            severity_counts[severity.value] = severity_counts.get(severity.value, 0) + 1
-        section_id = re.sub(r"[^a-z0-9]+", "_", section_name.lower()).strip("_") or f"section_{len(sections)}"
-        sections.append(FindingsSection(
-            type="findings",
-            id=section_id,
-            title=section_name,
-            items=items,
-        ))
-
-    if severity_counts.get("critical", 0) > 0:
-        overall_status = ArtifactStatus.critical
-    elif severity_counts.get("warning", 0) > 0:
-        overall_status = ArtifactStatus.warning
-    elif severity_counts.get("good", 0) > 0 or severity_counts.get("info", 0) > 0:
-        overall_status = ArtifactStatus.good
-    else:
-        overall_status = ArtifactStatus.unknown
-
-    summary = ArtifactSummary(
-        status=overall_status,
-        metrics=[
-            SummaryMetric(id="critical", label="Critical", value=severity_counts["critical"]),
-            SummaryMetric(id="warning",  label="Warning",  value=severity_counts["warning"]),
-            SummaryMetric(id="good",     label="Good",     value=severity_counts["good"]),
-            SummaryMetric(id="info",     label="Info",     value=severity_counts["info"]),
-        ],
-    )
-
-    return CanonicalArtifact(
-        artifact_type="security_assessment",
-        generated_at=imported_at,
-        source=source,
-        subject=ArtifactSubject(id="security_assessment", title="Security Assessment"),
-        summary=summary,
-        sections=sections,
-    )
 
 
 def _finding_preview(findings: Any) -> str:

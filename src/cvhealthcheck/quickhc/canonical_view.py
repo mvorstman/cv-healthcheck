@@ -186,21 +186,23 @@ def security_assessment_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
     report_name  = str(src.report_name or "")
     source_label = _SOURCE_TYPE_LABEL.get(src.type, str(src.type or "").upper())
 
+    # Carry the section TITLE with each finding so the highlight display shows
+    # "Access Security", not finding.category (the namespaced section_id post-cut).
     all_findings = [
-        f
+        (sec.title, f)
         for sec in artifact.sections
         if isinstance(sec, FindingsSection)
         for f in sec.items
     ]
 
     highlight_findings = [
-        _finding_view(f)
-        for f in all_findings
+        _finding_view(f, section_label=section_title)
+        for section_title, f in all_findings
         if f.severity in (FindingSeverity.critical, FindingSeverity.warning)
     ][:12]
     highlight_rows = [
-        [str(f.category or ""), str(f.title or ""), f.severity.value.capitalize(), str(f.description or "")]
-        for f in all_findings
+        [str(section_title or ""), str(f.title or ""), f.severity.value.capitalize(), str(f.description or "")]
+        for section_title, f in all_findings
         if f.severity in (FindingSeverity.critical, FindingSeverity.warning)
     ][:12]
 
@@ -211,7 +213,7 @@ def security_assessment_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
             "meta": f"{len(sec.items)} finding{'s' if len(sec.items) != 1 else ''}",
             "included": True,
             "type": "findings_list",
-            "findings": [_finding_view(f) for f in sec.items],
+            "findings": [_finding_view(f, section_label=sec.title) for f in sec.items],
             "rows": [
                 [
                     str(f.title or ""),
@@ -531,9 +533,12 @@ def _fmt_metric_value(value: Any) -> str:
     return str(value)
 
 
-def _finding_view(f: Finding) -> dict[str, str]:
+def _finding_view(f: Finding, section_label: str | None = None) -> dict[str, str]:
     sev = _FINDING_SEV.get(f.severity, "info")
-    section = str(f.category or "")
+    # SA migration: prefer an explicit section_label (the FindingsSection title)
+    # over f.category — post-cut, category is the namespaced section_id
+    # (e.g. "security_assessment.access_security"), not a display name.
+    section = section_label if section_label is not None else str(f.category or "")
     description = str(f.description or "")
     if section and description:
         rem = f"{section} · {description}"

@@ -22,13 +22,41 @@ from cvhealthcheck.artifacts.models import (
     FindingsSection,
     SummaryMetric,
 )
+import re
+from collections import OrderedDict
+
+from cvhealthcheck.extractors.html import ExtractionResult
+from cvhealthcheck.extractors.result_to_artifact import result_to_artifact
 from cvhealthcheck.reportsplus.security_assessment import (
     SECTION_ORDER,
     summarize_security_assessment_artifact,
 )
 from cvhealthcheck.security_assessment.artifact import build_security_assessment_artifact
-from cvhealthcheck.security_assessment.service import _build_canonical_from_import
 from cvhealthcheck.quickhc.report_service import _canonical_to_sa_report_dict
+
+
+def _sa_canonical_from_findings(findings, *, source_type="html"):
+    """Build a generic-scheme SA CanonicalArtifact from a findings list via the
+    real generic path (result_to_artifact) — the post-cut canonical shape
+    (namespaced section ids, category == section_id, severity mapped). Replaces
+    the deleted bespoke _build_canonical_from_import as a test converter."""
+    r = ExtractionResult(subject_id="security_assessment", source_type=source_type)
+    grouped = OrderedDict()
+    for f in findings:
+        grouped.setdefault(f["section"], []).append(f)
+    for name, items in grouped.items():
+        sid = "security_assessment." + re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+        r.sections[sid] = [
+            {
+                "parameter": it["parameter"], "status": it["status"],
+                "severity": str(it["status"]).lower(),
+                "remarks": it.get("remarks", ""), "action": it.get("action", ""),
+            }
+            for it in items
+        ]
+        r.section_output_types[sid] = "findings"
+        r.section_titles[sid] = name
+    return result_to_artifact(r, "security_assessment", "Security Assessment")
 
 
 _FINDINGS = [
@@ -68,7 +96,8 @@ def test_report_output_parity_canonical_vs_bespoke():
         _FINDINGS, source_type="html", generated_on="May 1, 2026 10:00 AM",
         source={"title": "Security Assessment"},
     )
-    adapted = _canonical_to_sa_report_dict(_build_canonical_from_import(bespoke))
+    # Post-cut canonical comes from the generic path (result_to_artifact).
+    adapted = _canonical_to_sa_report_dict(_sa_canonical_from_findings(_FINDINGS))
 
     rb, ra = _report_view(bespoke), _report_view(adapted)
     assert rb["counters"] == ra["counters"]
@@ -78,17 +107,13 @@ def test_report_output_parity_canonical_vs_bespoke():
 
 
 def test_adapter_field_mapping():
-    bespoke = build_security_assessment_artifact(
-        _FINDINGS, source_type="html", generated_on="May 1, 2026 10:00 AM",
-        source={"title": "Security Assessment"},
-    )
-    canonical = _build_canonical_from_import(bespoke)
+    canonical = _sa_canonical_from_findings(_FINDINGS)
     adapted = _canonical_to_sa_report_dict(canonical)
 
     assert adapted["source_type"] == "html"                       # SourceType -> "html"
-    # imported_at maps from source.imported_at or .collected_at (bespoke sets collected_at)
+    # imported_at maps from source.imported_at or .collected_at
     assert adapted["imported_at"] == (canonical.source.imported_at or canonical.source.collected_at).isoformat()
-    # generated_on maps from canonical generated_at (KNOWN GAP: not the export's date)
+    # generated_on maps from canonical generated_at
     assert adapted["generated_on"] == canonical.generated_at.isoformat()
     assert adapted["status_counts"] == {"Critical": 1, "Warning": 0, "Good": 1, "Info": 1}
 
