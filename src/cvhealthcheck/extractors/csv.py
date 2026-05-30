@@ -83,6 +83,7 @@ class CSVExtractor:
             column_map = extraction.get("column_map", [])
             null_values = extraction.get("null_values", [])
             output_as = extraction.get("output_as", "table")
+            status_to_severity = extraction.get("status_to_severity", {})
 
             if fmt == "single_table":
                 rows, warnings = self._extract_single_table(
@@ -100,6 +101,16 @@ class CSVExtractor:
 
             if not rows:
                 result.warnings.append(f"Section '{section_id}' has no data rows")
+
+            # ADR 0004 findings: map the declared status text to a canonical
+            # severity, exactly as HTMLExtractor does. status_to_severity is an
+            # existing declarative instruction (not a new transform); the CSV
+            # path simply hadn't emitted findings before. Without this every
+            # CSV finding would default to "info" in _build_finding.
+            if output_as == "findings" and status_to_severity:
+                for row in rows:
+                    status_val = str(row.get("status") or "")
+                    row["severity"] = status_to_severity.get(status_val, "info")
 
             result.sections[section_id] = rows
             result.section_output_types[section_id] = output_as

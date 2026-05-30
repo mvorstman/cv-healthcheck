@@ -154,7 +154,7 @@ def test_all_seeded_subjects_are_active(fresh_db: Path) -> None:
 
 def test_migration_status_reports_all_applied(fresh_db: Path) -> None:
     statuses = migration_status(db_path=fresh_db)
-    assert len(statuses) == 16  # ADR 0004 phase 7 added 0016 (backup_job_summary three-face)
+    assert len(statuses) == 17  # 0017 added SA CSV findings bindings (SA migration phase 1a)
     assert all(s["status"] == "applied" for s in statuses)
     migration_ids = [s["migration_id"] for s in statuses]
     assert migration_ids == sorted(migration_ids)
