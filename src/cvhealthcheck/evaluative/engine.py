@@ -25,14 +25,38 @@ from typing import Any
 
 from cvhealthcheck.artifacts.enums import FindingSeverity
 from cvhealthcheck.artifacts.models import RecommendationIntent, VerdictEntry
+from cvhealthcheck.evaluative.presence import evaluate_presence_rule
 from cvhealthcheck.evaluative.threshold import _SEVERITY_RANK, evaluate_threshold_rule
 
 
 # Keys that make up a rule *body* (the definition), as opposed to *binding*
 # keys (ref / target / target_field / unit) that a section carries to point a
 # rule at a value. Used by the DP2 guard to reject a ref entry that also smuggles
-# an inline body.
-_RULE_BODY_KEYS = frozenset({"kind", "comparison", "bands", "default_severity", "mute_on_sentinel"})
+# an inline body. Covers all kinds' body keys (threshold + presence).
+_RULE_BODY_KEYS = frozenset({
+    "kind", "comparison", "bands", "default_severity", "mute_on_sentinel",
+    "severity_when_missing", "severity_when_present",
+})
+
+
+def _evaluate_rule(
+    rule: dict[str, Any],
+    value: Any,
+    *,
+    label: str,
+    unit: str | None,
+    layer: str,
+) -> VerdictEntry:
+    """Dispatch one rule to its evaluator by ``kind`` (the single locus's
+    kind-dispatch). ``kind`` absent → ``threshold`` (the parity default — every
+    pre-existing rule routes to the unchanged threshold evaluator). Unknown kind
+    fails loudly (consistent with the registry guard discipline)."""
+    kind = rule.get("kind", "threshold")
+    if kind == "threshold":
+        return evaluate_threshold_rule(rule, value, label=label, unit=unit, layer=layer)
+    if kind == "presence":
+        return evaluate_presence_rule(rule, value, label=label, unit=unit, layer=layer)
+    raise ValueError(f"Unknown rule kind {kind!r} (supported: threshold, presence)")
 
 
 def resolve_rule(
@@ -129,7 +153,7 @@ def evaluate(
     chain: list[VerdictEntry] = list(vendor_verdicts)
     for rule in template_rules:
         chain.append(
-            evaluate_threshold_rule(rule, value, label=label, unit=unit, layer="template_default")
+            _evaluate_rule(rule, value, label=label, unit=unit, layer="template_default")
         )
     chain.extend(override_verdicts)
     if not chain:

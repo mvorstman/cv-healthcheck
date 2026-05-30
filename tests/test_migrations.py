@@ -154,7 +154,7 @@ def test_all_seeded_subjects_are_active(fresh_db: Path) -> None:
 
 def test_migration_status_reports_all_applied(fresh_db: Path) -> None:
     statuses = migration_status(db_path=fresh_db)
-    assert len(statuses) == 20  # 0020 added _metric_test per-field rules + recommend-seam exercise
+    assert len(statuses) == 21  # 0021 added _metric_test presence rule (rule-kind dispatch)
     assert all(s["status"] == "applied" for s in statuses)
     migration_ids = [s["migration_id"] for s in statuses]
     assert migration_ids == sorted(migration_ids)
