@@ -24,7 +24,7 @@ from __future__ import annotations
 from typing import Any
 
 from cvhealthcheck.artifacts.enums import FindingSeverity
-from cvhealthcheck.artifacts.models import VerdictEntry
+from cvhealthcheck.artifacts.models import RecommendationIntent, VerdictEntry
 from cvhealthcheck.evaluative.threshold import _SEVERITY_RANK, evaluate_threshold_rule
 
 
@@ -137,20 +137,21 @@ def evaluate(
     return _resolve_headline(chain), chain
 
 
-def _resolve_headline(chain: list[VerdictEntry]) -> FindingSeverity:
-    """DP4 headline: most-severe surviving verdict (muted excluded).
-
-    Later layer wins per ``rule_id`` — the chain is in layer order, so the last
-    verdict for a given rule_id is the surviving one. Verdicts with no rule_id
-    (a vendor source with no id) each survive independently.
-    """
+def _surviving(chain: list[VerdictEntry]) -> dict[Any, VerdictEntry]:
+    """The surviving verdict per ``rule_id`` (later layer wins). The chain is in
+    layer order, so the last verdict for a rule_id wins; verdicts with no rule_id
+    (a vendor source with no id) each survive independently."""
     surviving: dict[Any, VerdictEntry] = {}
     for i, verdict in enumerate(chain):
         key = verdict.rule_id if verdict.rule_id is not None else ("__anon__", i)
-        surviving[key] = verdict  # later layer for the same rule_id overwrites
+        surviving[key] = verdict
+    return surviving
 
+
+def _resolve_headline(chain: list[VerdictEntry]) -> FindingSeverity:
+    """DP4 headline: most-severe surviving verdict (muted excluded)."""
     best: FindingSeverity | None = None
-    for verdict in surviving.values():
+    for verdict in _surviving(chain).values():
         if verdict.severity == FindingSeverity.muted:
             continue
         if best is None or _SEVERITY_RANK[verdict.severity] > _SEVERITY_RANK[best]:
@@ -158,3 +159,39 @@ def _resolve_headline(chain: list[VerdictEntry]) -> FindingSeverity:
     # All surviving verdicts muted -> the headline is muted (suppressed): the
     # value WAS judged, the judgment is "deliberately not assessed / waived".
     return best if best is not None else FindingSeverity.muted
+
+
+def surface_recommendation(
+    template_rules: list[dict[str, Any]],
+    severity: FindingSeverity | None,
+    verdict_chain: list[VerdictEntry],
+    value_context: dict[str, Any] | None = None,
+) -> "RecommendationIntent | None":
+    """Recommend-seam §3b: copy a fired, surviving rule's declared
+    ``recommendation`` payload onto the verdict (no generation).
+
+    Returns a RecommendationIntent iff a template rule declared a
+    ``recommendation`` payload AND that rule's verdict survives **non-muted**.
+    SC4: a muted/waived unit (or an unjudged one) carries no intent. ``inputs``
+    are resolved to their measured values from ``value_context`` (the section's
+    computed item values) at judge time, so the recommender needs no catalog
+    round-trip.
+    """
+    if severity is None or severity is FindingSeverity.muted:
+        return None  # SC4 (waived) + unjudged: no intent
+    values = value_context or {}
+    surviving = _surviving(verdict_chain)
+    for rule in template_rules:
+        rec = rule.get("recommendation")
+        if not rec:
+            continue
+        survivor = surviving.get(rule.get("rule_id"))
+        if survivor is None or survivor.severity is FindingSeverity.muted:
+            continue  # this rule was overridden/muted — don't surface its intent
+        return RecommendationIntent(
+            intent_kind=rec.get("intent_kind"),
+            signal=rec.get("signal"),
+            inputs_resolved={f: values.get(f) for f in (rec.get("inputs") or [])},
+            note=rec.get("note"),
+        )
+    return None

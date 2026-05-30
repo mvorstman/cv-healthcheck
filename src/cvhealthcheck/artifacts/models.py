@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_serializer, model_validator
 
 from .enums import ArtifactStatus, ChartType, FindingSeverity, FindingStatus, SourceType
 
@@ -99,6 +99,21 @@ class VerdictEntry(BaseModel):
     reason:   str                       # human-readable, populated — makes the verdict auditable
 
 
+class RecommendationIntent(BaseModel):
+    """The judge→recommend seam payload surfaced onto an evaluated unit
+    (recommend-seam-contract.md §3b). Present iff a fired, surviving rule
+    declared a ``recommendation`` payload and the unit is not muted/waived (SC4).
+
+    Carries the rule's DECLARED intent — generic, subject-agnostic (SC1/SC2) —
+    plus the inputs resolved to their measured values at judge time (SC3, so a
+    recommender needs no catalog round-trip). The seam does NOT generate any
+    recommendation text — that's the future recommend stage."""
+    intent_kind:     str                  # trend_projection | remediation | attention | informational (SC1)
+    signal:          str                  # namespaced handle, e.g. "capacity.trend" (SC2)
+    inputs_resolved: dict[str, Any] = Field(default_factory=dict)  # {field: measured value}
+    note:            str | None = None
+
+
 class MetricItem(BaseModel):
     id:    str
     label: str
@@ -114,6 +129,18 @@ class MetricItem(BaseModel):
     # verdict chain that produced it. Empty/None for metrics with no rule.
     severity:      FindingSeverity | None = None
     verdict_chain: list[VerdictEntry]     = Field(default_factory=list)
+    # Recommend-seam contract §3b: the declared recommendation intent of the
+    # surviving rule, surfaced onto the artifact. Optional and ABSENT from the
+    # serialized JSON unless declared (the serializer below omits it when None,
+    # so subjects with no recommendation rule stay byte-identical).
+    recommendation_intent: RecommendationIntent | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_recommendation_intent(self, handler):
+        data = handler(self)
+        if self.recommendation_intent is None:
+            data.pop("recommendation_intent", None)
+        return data
 
 
 class FindingsSection(BaseModel):

@@ -117,6 +117,11 @@ def build_metric_section(
             computed.get(item.id), template_rules, label=item.label, unit=item.unit,
             vendor_verdicts=vendor_verdicts, override_verdicts=override_verdicts,
         )
+        # Recommend-seam §3b: surface a surviving, non-muted rule's declared
+        # recommendation intent onto this item (inputs resolved from `computed`).
+        item.recommendation_intent = engine.surface_recommendation(
+            template_rules, item.severity, item.verdict_chain, computed
+        )
 
     return MetricSection(
         type="metric",
