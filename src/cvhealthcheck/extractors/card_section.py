@@ -64,6 +64,7 @@ def build_card_section(
     spec: dict[str, Any],
     rows: list[dict[str, Any]],
     rules_registry: dict[str, dict[str, Any]] | None = None,
+    overrides: list[dict[str, Any]] | None = None,
 ) -> CardSection:
     """Build a CardSection: map one row's fields to labeled items, and apply an
     optional template-default verdict (reusing the metric threshold evaluator)."""
@@ -100,8 +101,15 @@ def build_card_section(
     if rule:
         rule = engine.resolve_rule(rule, rules_registry)  # step 2: inline or ref
         value = _coerce_number(row.get(rule.get("target_field")))
+        rule_id = rule.get("rule_id")
+        override_verdicts = [
+            engine.build_override_verdict(o)
+            for o in (overrides or [])
+            if o.get("rule_id") == rule_id
+        ]
         section.severity, section.verdict_chain = engine.evaluate(
-            value, rule, label=title, unit=rule.get("unit")
+            value, [rule], label=title, unit=rule.get("unit"),
+            override_verdicts=override_verdicts,
         )
 
     return section

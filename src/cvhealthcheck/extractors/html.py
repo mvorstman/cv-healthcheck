@@ -87,6 +87,12 @@ class ExtractionResult:
     # is catalog-read (like the specs above); resolution + evaluation happen at
     # canonicalization, not here. Empty for paths with no rules (HTML/CSV).
     rules_registry: dict[str, dict] = field(default_factory=dict)
+    # ADR 0004 phase 8 step 3: per-section override rows (layer="override") for
+    # the active (customer, project), keyed section_id -> [{rule_id, severity,
+    # reason}]. Loaded from rule_overrides by the extractor (catalog read);
+    # resolution into the verdict_chain happens at canonicalization. Empty for
+    # paths/subjects with no overrides.
+    section_overrides: dict[str, list[dict]] = field(default_factory=dict)
 
 
 class HTMLExtractor:

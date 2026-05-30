@@ -96,7 +96,8 @@ def result_to_artifact(
             # time from the catalog metric declaration.
             spec = result.section_metric_specs.get(section_id, {})
             metric_section = build_metric_section(
-                section_id, title, spec, rows, result.rules_registry
+                section_id, title, spec, rows, result.rules_registry,
+                result.section_overrides.get(section_id),
             )
             sections.append(metric_section)
             metric_sections.append(metric_section)
@@ -109,7 +110,8 @@ def result_to_artifact(
             # verdict via the reused metric threshold evaluator.
             spec = result.section_card_specs.get(section_id, {})
             card_section = build_card_section(
-                section_id, title, spec, rows, result.rules_registry
+                section_id, title, spec, rows, result.rules_registry,
+                result.section_overrides.get(section_id),
             )
             sections.append(card_section)
             card_sections.append(card_section)

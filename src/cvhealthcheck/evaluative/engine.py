@@ -25,7 +25,7 @@ from typing import Any
 
 from cvhealthcheck.artifacts.enums import FindingSeverity
 from cvhealthcheck.artifacts.models import VerdictEntry
-from cvhealthcheck.evaluative.threshold import evaluate_threshold_rule
+from cvhealthcheck.evaluative.threshold import _SEVERITY_RANK, evaluate_threshold_rule
 
 
 # Keys that make up a rule *body* (the definition), as opposed to *binding*
@@ -74,21 +74,87 @@ def resolve_rule(
     return {**definition, **binding}
 
 
+def build_override_verdict(override: dict[str, Any]) -> VerdictEntry:
+    """Build a ``layer="override"`` VerdictEntry directly from a rule_overrides
+    row (``{rule_id, severity, reason}``).
+
+    DP5: an override is a *direct* (severity, reason) assignment for a rule_id —
+    it is NOT re-thresholded against a value. The ``reason`` is the audit value
+    (e.g. "waived for Acme burst window").
+    """
+    return VerdictEntry(
+        layer="override",
+        rule_id=override["rule_id"],
+        severity=FindingSeverity(override["severity"]),
+        reason=str(override.get("reason") or ""),
+    )
+
+
 def evaluate(
     value: float | int | None,
-    rule: dict[str, Any] | None,
+    template_rules: list[dict[str, Any]],
     *,
     label: str,
     unit: str | None = None,
+    vendor_verdicts: tuple[VerdictEntry, ...] | list[VerdictEntry] = (),
+    override_verdicts: tuple[VerdictEntry, ...] | list[VerdictEntry] = (),
 ) -> tuple[FindingSeverity | None, list[VerdictEntry]]:
-    """Resolve ``(severity, verdict_chain)`` for one evaluated value.
+    """The single layered evaluation locus (phase 8 step 3).
 
-    No rule → the value is unjudged → ``(None, [])`` (a metric item / card with
-    no evaluative rule). With a ``template_default`` threshold rule, return a
-    single-entry verdict chain — byte-identical to the prior per-call-site
-    ``evaluate_threshold_rule`` usage, now funnelled through one locus.
+    Composes **vendor → template → override** into one ``(severity,
+    verdict_chain)``:
+
+    - ``vendor_verdicts`` — pre-produced ``layer="vendor"`` VerdictEntry list
+      (from a section's ``severity_source``; **empty for metric/card** until the
+      Shapes step — the slot is here so Shapes 2/3 compose without touching
+      resolution).
+    - ``template_rules`` — resolved threshold rule dicts; each is evaluated
+      against ``value`` at ``layer="template_default"``.
+    - ``override_verdicts`` — direct ``layer="override"`` VerdictEntry list (DP5).
+
+    Resolution (DP4 / DP6):
+    - The ``verdict_chain`` records **every** fired verdict in layer order
+      (vendor, template, override), including muted/suppressed ones — full audit.
+    - The headline ``severity`` is the **most-severe surviving** verdict, where
+      "surviving" = the latest-layer verdict per ``rule_id`` (later layer wins
+      for the same rule_id), and ``muted`` is **excluded** from most-severe
+      selection (muted suppresses, never becomes the headline). All-surviving-
+      muted → ``muted``.
+
+    No verdicts at all (no vendor/template/override) → ``(None, [])`` — unjudged.
+
+    Empty ``vendor``/``override`` + a single ``template_rules`` entry reduces to
+    the step-1/2 single-rule behavior, byte-identically.
     """
-    if rule is None:
+    chain: list[VerdictEntry] = list(vendor_verdicts)
+    for rule in template_rules:
+        chain.append(
+            evaluate_threshold_rule(rule, value, label=label, unit=unit, layer="template_default")
+        )
+    chain.extend(override_verdicts)
+    if not chain:
         return None, []
-    verdict = evaluate_threshold_rule(rule, value, label=label, unit=unit)
-    return verdict.severity, [verdict]
+    return _resolve_headline(chain), chain
+
+
+def _resolve_headline(chain: list[VerdictEntry]) -> FindingSeverity:
+    """DP4 headline: most-severe surviving verdict (muted excluded).
+
+    Later layer wins per ``rule_id`` — the chain is in layer order, so the last
+    verdict for a given rule_id is the surviving one. Verdicts with no rule_id
+    (a vendor source with no id) each survive independently.
+    """
+    surviving: dict[Any, VerdictEntry] = {}
+    for i, verdict in enumerate(chain):
+        key = verdict.rule_id if verdict.rule_id is not None else ("__anon__", i)
+        surviving[key] = verdict  # later layer for the same rule_id overwrites
+
+    best: FindingSeverity | None = None
+    for verdict in surviving.values():
+        if verdict.severity == FindingSeverity.muted:
+            continue
+        if best is None or _SEVERITY_RANK[verdict.severity] > _SEVERITY_RANK[best]:
+            best = verdict.severity
+    # All surviving verdicts muted -> the headline is muted (suppressed): the
+    # value WAS judged, the judgment is "deliberately not assessed / waived".
+    return best if best is not None else FindingSeverity.muted

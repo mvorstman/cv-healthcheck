@@ -56,6 +56,7 @@ def evaluate_threshold_rule(
     *,
     label: str,
     unit: str | None = None,
+    layer: str = "template_default",
 ) -> VerdictEntry:
     """Evaluate a threshold ``rule`` against ``value``; return a VerdictEntry.
 
@@ -63,6 +64,10 @@ def evaluate_threshold_rule(
     ``mute_on_sentinel`` the verdict is ``muted`` (not judged); otherwise the
     rule still returns its ``default_severity`` (a None value with no mute is
     treated as not meeting any band).
+
+    ``layer`` stamps the VerdictEntry's layer (default ``template_default`` —
+    phase 8 step 3 passes ``vendor`` for a vendor severity_source rule, though
+    the engine builds override verdicts directly rather than thresholding them).
     """
     rule_id = rule.get("rule_id")
     unit_str = unit or ""
@@ -70,14 +75,14 @@ def evaluate_threshold_rule(
     if value is None:
         if rule.get("mute_on_sentinel"):
             return VerdictEntry(
-                layer="template_default",
+                layer=layer,
                 rule_id=rule_id,
                 severity=FindingSeverity.muted,
                 reason=f"{label} is not applicable (n/a) — verdict muted",
             )
         default = _coerce_severity(rule.get("default_severity", "good"))
         return VerdictEntry(
-            layer="template_default",
+            layer=layer,
             rule_id=rule_id,
             severity=default,
             reason=f"{label} has no value; defaulted to {default.value}",
@@ -101,7 +106,7 @@ def evaluate_threshold_rule(
 
     if winner is not None and winner_sev is not None:
         return VerdictEntry(
-            layer="template_default",
+            layer=layer,
             rule_id=rule_id,
             severity=winner_sev,
             reason=(
@@ -112,7 +117,7 @@ def evaluate_threshold_rule(
 
     default = _coerce_severity(rule.get("default_severity", "good"))
     return VerdictEntry(
-        layer="template_default",
+        layer=layer,
         rule_id=rule_id,
         severity=default,
         reason=f"{label} {_fmt(value)}{unit_str} within normal range",

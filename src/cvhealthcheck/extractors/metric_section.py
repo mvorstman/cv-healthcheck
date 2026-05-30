@@ -39,6 +39,7 @@ def build_metric_section(
     spec: dict[str, Any],
     rows: list[dict[str, Any]],
     rules_registry: dict[str, dict[str, Any]] | None = None,
+    overrides: list[dict[str, Any]] | None = None,
 ) -> MetricSection:
     """Build a MetricSection from rows + spec.
 
@@ -78,26 +79,43 @@ def build_metric_section(
 
     # Index items by id so rules can attach severities.
     items_by_id = {item.id: item for item in items}
-    seen_targets: dict[str, str] = {}  # target_id -> "ref"|"inline" (DP2 guard)
+    # Step 2: resolve refs + group template rules by target; DP2 inline/ref guard.
+    template_by_target: dict[str, list[dict[str, Any]]] = {}
+    seen_kind: dict[str, str] = {}  # target_id -> "ref"|"inline" (DP2 guard)
     for rule in rules:
         kind = "ref" if "ref" in rule else "inline"
-        # Step 2: resolve a registry ref to its definition (inline rules pass
-        # through unchanged). Resolution is at canonicalization, here.
         resolved = engine.resolve_rule(rule, rules_registry)
         target_id = resolved.get("target")
-        target = items_by_id.get(target_id)
-        if target is None:
+        if target_id not in items_by_id:
             raise ValueError(f"Threshold rule targets unknown metric item {target_id!r}")
         # DP2: a target hit by BOTH an inline rule and a registry ref is a silent
         # double-fire — reject (loud-fail at build time, the load locus).
-        if seen_targets.get(target_id, kind) != kind:
+        if seen_kind.get(target_id, kind) != kind:
             raise ValueError(
                 f"Metric section {section_id!r} has both an inline rule and a registry "
                 f"ref targeting {target_id!r} — define one, not both (DP2)."
             )
-        seen_targets[target_id] = kind
-        target.severity, target.verdict_chain = engine.evaluate(
-            computed.get(target_id), resolved, label=target.label, unit=target.unit
+        seen_kind[target_id] = kind
+        template_by_target.setdefault(target_id, []).append(resolved)
+
+    # Step 3: per target, compose vendor → template → override through the single
+    # engine locus. Vendor is empty for metric today (no severity_source until
+    # the Shapes step); overrides attach by rule_id match to this target's rules.
+    override_rows = overrides or []
+    for item in items:
+        template_rules = template_by_target.get(item.id, [])
+        vendor_verdicts: list = []  # slot for Shapes 2/3
+        target_rule_ids = {r.get("rule_id") for r in template_rules}
+        override_verdicts = [
+            engine.build_override_verdict(o)
+            for o in override_rows
+            if o.get("rule_id") in target_rule_ids
+        ]
+        if not template_rules and not vendor_verdicts and not override_verdicts:
+            continue  # unjudged item — no severity, empty chain
+        item.severity, item.verdict_chain = engine.evaluate(
+            computed.get(item.id), template_rules, label=item.label, unit=item.unit,
+            vendor_verdicts=vendor_verdicts, override_verdicts=override_verdicts,
         )
 
     return MetricSection(

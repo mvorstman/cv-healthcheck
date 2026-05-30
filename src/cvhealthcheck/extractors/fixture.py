@@ -23,6 +23,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from cvhealthcheck.db.rule_overrides import load_section_overrides
 from cvhealthcheck.db.rules import load_rules_registry
 from cvhealthcheck.db.section_types import (
     UnsupportedSectionTypeError,
@@ -52,6 +53,11 @@ class FixtureExtractor:
         # Phase 8 step 2: carry the rules registry for ref-based rule resolution
         # at canonicalization (catalog read, not evaluation).
         result.rules_registry = load_rules_registry(self._db)
+        # Phase 8 step 3: carry the override layer. FixtureExtractor is the
+        # test/dev path — scope to the default project.
+        result.section_overrides = load_section_overrides(
+            self._db, "default", "default", subject_id, version
+        )
 
         instructions = self._load_section_instructions(subject_id, version)
         if not instructions:

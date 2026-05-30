@@ -42,6 +42,7 @@ from datetime import UTC, datetime
 from html.parser import HTMLParser
 from typing import Any
 
+from cvhealthcheck.db.rule_overrides import load_section_overrides
 from cvhealthcheck.db.rules import load_rules_registry
 from cvhealthcheck.db.section_types import (
     UnsupportedSectionTypeError,
@@ -76,6 +77,11 @@ class RESTExtractor:
         # Phase 8 step 2: carry the rules registry so result_to_artifact can
         # resolve `ref`-based evaluative rules (catalog read, not evaluation).
         result.rules_registry = load_rules_registry(self._db)
+        # Phase 8 step 3: carry the override layer for the active (customer,
+        # project). Resolution into the verdict_chain is at canonicalization.
+        result.section_overrides = load_section_overrides(
+            self._db, self._customer_id, self._project_id, subject_id, version
+        )
 
         instructions = self._load_section_instructions(subject_id, version)
         if not instructions:
