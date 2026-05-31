@@ -186,6 +186,27 @@ class CardItem(BaseModel):
     label: str
     value: str | int | float | None = None   # None renders as "—"
     unit:  str | None = None
+    # ADR 0004 phase-8 follow-on (per-field card judging): a card FIELD can now
+    # carry its own verdict, mirroring MetricItem — resolved through the same
+    # engine locus, the same rule kinds (threshold/presence), the same layering/
+    # override + recommend-seam machinery. Optional: a field with no rule carries
+    # nothing. Unlike MetricItem (which always emits severity/verdict_chain), the
+    # serializer below OMITS all three when absent, so existing card artifacts —
+    # whose items never had these fields — stay byte-identical (additive-absent).
+    severity:      FindingSeverity | None = None
+    verdict_chain: list[VerdictEntry]     = Field(default_factory=list)
+    recommendation_intent: RecommendationIntent | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_evaluative(self, handler):
+        data = handler(self)
+        if self.severity is None:
+            data.pop("severity", None)
+        if not self.verdict_chain:
+            data.pop("verdict_chain", None)
+        if self.recommendation_intent is None:
+            data.pop("recommendation_intent", None)
+        return data
 
 
 class CardSection(BaseModel):
@@ -193,12 +214,15 @@ class CardSection(BaseModel):
     ("typically one row"). Distinct from a metric (emphasized/derived values):
     a card is a labeled grid of fields.
 
-    Per the phase-4 steering decision, a card DOES carry a section-level verdict
-    (the compliance engine judges every card), reusing the EXACT severity +
-    verdict_chain shape MetricItem carries — so card and metric verdicts are
-    structurally identical. This duplication of the evaluative shape across
-    MetricItem and CardSection is intentional and temporary; phase 8 unifies the
-    evaluative face into one shared section-level concern.
+    Per the phase-4 steering decision, a card carries a section-level verdict,
+    reusing the EXACT severity + verdict_chain shape MetricItem carries. Two ways
+    it is populated (build_card_section):
+      - Legacy `evaluative.rule` (singular): the engine judges one target_field
+        and writes the result here (section severity + verdict_chain).
+      - Phase-8 `evaluative.rules` (plural): each field is judged on its own
+        CardItem (see CardItem.severity); `severity` here becomes the most-severe-
+        surviving ROLL-UP across fields and `verdict_chain` stays empty (the
+        per-field chains hold the provenance).
     """
     type:          Literal["card"]
     id:            str

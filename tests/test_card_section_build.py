@@ -156,3 +156,103 @@ def test_card_unknown_source_raises():
     spec = {"items": [{"label": "Bad", "source": "nope"}]}
     with pytest.raises(ValueError, match="Unknown card item source"):
         build_card_section("x.y", "Bad", spec, [{}])
+
+
+# ── ADR 0004 phase-8 follow-on: per-field card judging (evaluative.rules) ──
+
+# Two distinct fields, two rule kinds, one carrying a recommendation payload.
+_PERFIELD_SPEC = {
+    "columns": 4,
+    "items": [
+        {"label": "CommCell Name", "field": "host"},
+        {"label": "Version", "field": "version"},
+        {"label": "Timezone", "field": "timezone"},
+        {"label": "Free Space", "field": "free_pct", "unit": "%"},
+    ],
+    "evaluative": {"rules": [
+        {"rule_id": "free_space_threshold", "target_field": "free_pct", "kind": "threshold",
+         "comparison": "<=", "bands": [{"at": 5, "severity": "critical"}, {"at": 15, "severity": "warning"}],
+         "default_severity": "good", "unit": "%",
+         "recommendation": {"intent_kind": "remediation", "signal": "capacity.free_space",
+                            "inputs": ["free_pct"], "note": None}},
+        {"rule_id": "version_presence", "target_field": "version", "kind": "presence",
+         "severity_when_missing": "warning", "severity_when_present": "good"},
+    ]},
+}
+
+
+def test_per_field_two_independent_verdicts():
+    sec = build_card_section("c", "Card", _PERFIELD_SPEC, ROWS)
+    by = {i.label: i for i in sec.items}
+    # threshold field
+    assert by["Free Space"].severity == FindingSeverity.warning
+    assert by["Free Space"].verdict_chain[0].rule_id == "free_space_threshold"
+    # presence field (string value -> present -> good), NOT coerced to a number
+    assert by["Version"].severity == FindingSeverity.good
+    assert by["Version"].verdict_chain[0].rule_id == "version_presence"
+    # untargeted fields carry nothing
+    assert by["CommCell Name"].severity is None and by["CommCell Name"].verdict_chain == []
+    assert by["Timezone"].severity is None
+
+
+def test_per_field_section_severity_rolls_up_most_severe():
+    sec = build_card_section("c", "Card", _PERFIELD_SPEC, ROWS)
+    # worst surviving non-muted across fields (warning > good) -> warning,
+    # and the section chain stays empty (provenance is per-field).
+    assert sec.severity == FindingSeverity.warning
+    assert sec.verdict_chain == []
+
+
+def test_per_field_recommendation_intent_on_declaring_field_only():
+    sec = build_card_section("c", "Card", _PERFIELD_SPEC, ROWS)
+    by = {i.label: i for i in sec.items}
+    intent = by["Free Space"].recommendation_intent
+    assert intent is not None and intent.signal == "capacity.free_space"
+    assert intent.inputs_resolved == {"free_pct": 8.0}
+    assert by["Version"].recommendation_intent is None       # has a rule, no recommendation
+    assert by["CommCell Name"].recommendation_intent is None  # no rule
+
+
+def test_per_field_override_mutes_and_suppresses_recommendation():
+    # An override on free_space mutes it (SC4: muted -> no recommendation_intent),
+    # leaving version's good as the only surviving verdict -> section rolls up to good.
+    overrides = [{"rule_id": "free_space_threshold", "severity": "muted",
+                  "reason": "waived for lab"}]
+    sec = build_card_section("c", "Card", _PERFIELD_SPEC, ROWS, overrides=overrides)
+    by = {i.label: i for i in sec.items}
+    assert by["Free Space"].severity == FindingSeverity.muted
+    assert by["Free Space"].recommendation_intent is None
+    # later layer wins for the same rule_id; the chain records both (full audit)
+    assert by["Free Space"].verdict_chain[-1].layer == "override"
+    assert sec.severity == FindingSeverity.good
+
+
+def test_per_field_unjudged_card_is_byte_identical():
+    # A card with evaluative.rules that targets nothing on a field leaves that
+    # field's serialized shape unchanged (no severity/verdict_chain/intent keys).
+    sec = build_card_section("c", "Card", _PERFIELD_SPEC, ROWS)
+    dumped = {i["label"]: i for i in sec.model_dump(mode="json")["items"]}
+    assert set(dumped["Timezone"].keys()) == {"label", "value", "unit"}
+    assert set(dumped["CommCell Name"].keys()) == {"label", "value", "unit"}
+
+
+def test_per_field_unknown_target_raises():
+    import pytest
+    spec = {"items": [{"label": "Host", "field": "host"}],
+            "evaluative": {"rules": [{"rule_id": "r", "target_field": "nope", "kind": "presence"}]}}
+    with pytest.raises(ValueError, match="unknown field 'nope'"):
+        build_card_section("c", "C", spec, ROWS)
+
+
+def test_per_field_dp2_inline_and_ref_same_target_raises():
+    import pytest
+    spec = {"items": [{"label": "Free", "field": "free_pct"}],
+            "evaluative": {"rules": [
+                {"rule_id": "a", "target_field": "free_pct", "kind": "threshold",
+                 "bands": [{"at": 5, "severity": "warning"}], "default_severity": "good"},
+                {"ref": "free_space_threshold", "target_field": "free_pct"},
+            ]}}
+    registry = {"free_space_threshold": {"rule_id": "free_space_threshold", "kind": "threshold",
+                "comparison": "<=", "bands": [{"at": 15, "severity": "warning"}], "default_severity": "good"}}
+    with pytest.raises(ValueError, match="DP2"):
+        build_card_section("c", "C", spec, ROWS, rules_registry=registry)
