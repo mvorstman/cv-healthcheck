@@ -9,6 +9,8 @@ from bs4.element import Tag
 
 from .artifact import build_license_summary_artifact, write_license_summary_artifact
 from .normalize import (
+    AGENT_FEATURE_SECTION,
+    OTHER_LICENSE_SECTION,
     SUMMARY_SECTION_NAMES,
     classify_header,
     clean_text,
@@ -18,6 +20,12 @@ from .normalize import (
     normalize_other_license_record,
     normalize_workload_summary_record,
 )
+
+
+_KNOWN_SECTION_TITLES = (
+    SUMMARY_SECTION_NAMES | {OTHER_LICENSE_SECTION, AGENT_FEATURE_SECTION}
+)
+_TITLE_BEARING_TAGS = {"h1", "h2", "h3", "h4", "h5", "h6", "p", "div", "span"}
 
 
 def import_license_summary_html(
@@ -55,12 +63,15 @@ def parse_license_summary_html(
     agent_feature_licenses: list[dict[str, Any]] = []
     workload_summary_sections: list[dict[str, Any]] = []
     summary_sections_by_name: dict[str, list[dict[str, Any]]] = {}
+    claimed_section_names: set[str] = set()
     for table in soup.find_all("table"):
         headers = _table_headers(table)
         table_kind = classify_header(headers)
         if table_kind is None:
             continue
-        section_name = _table_section_name(table)
+        section_name = _table_section_name(table, claimed=claimed_section_names)
+        if section_name is not None:
+            claimed_section_names.add(section_name)
         tbody = table.find("tbody") or table
         for row in tbody.find_all("tr", recursive=False):
             cells = row.find_all(["td", "th"], recursive=False)
@@ -75,14 +86,19 @@ def parse_license_summary_html(
                 header: values[index] if index < len(values) else ""
                 for index, header in enumerate(headers)
             }
-            if table_kind == "other":
-                other_licenses.append(normalize_other_license_record(record))
-            elif table_kind == "agent":
-                agent_feature_licenses.append(normalize_agent_feature_record(record))
-            elif section_name in SUMMARY_SECTION_NAMES:
+            # When the resolved section title identifies a workload-summary
+            # section, route by section name rather than header shape. The
+            # header-only classifier cannot tell "Virtualization Licenses"
+            # apart from "Other Licenses" when both tables omit unit
+            # qualifiers (bare "License"/"Available Total"/"Used"/"Summary").
+            if section_name in SUMMARY_SECTION_NAMES:
                 normalized = normalize_workload_summary_record(record)
                 if normalized:
                     summary_sections_by_name.setdefault(section_name, []).append(normalized)
+            elif table_kind == "other":
+                other_licenses.append(normalize_other_license_record(record))
+            elif table_kind == "agent":
+                agent_feature_licenses.append(normalize_agent_feature_record(record))
 
     for section_name, section_rows in summary_sections_by_name.items():
         workload_summary_sections.append(
@@ -125,12 +141,38 @@ def _table_headers(table: Tag) -> list[str]:
     return [_cell_text(cell) for cell in first_row.find_all(["th", "td"], recursive=False)]
 
 
-def _table_section_name(table: Tag) -> str | None:
-    previous = table.find_previous(["h1", "h2", "h3", "h4", "h5", "h6", "p", "div"])
-    if previous is None:
-        return None
-    text = clean_text(previous.get_text(" ", strip=True))
-    return text or None
+def _table_section_name(
+    table: Tag,
+    *,
+    claimed: set[str] | None = None,
+) -> str | None:
+    # Walk DOM order backward from the table and return the first
+    # element whose *direct* text (string children, not recursive
+    # get_text()) matches a known section title. Commvault HTML exports
+    # wrap section titles in <span class="component-title-text"> inside
+    # nested <div> wrappers — there are no h2/h3 headings — so the
+    # previous heuristic of taking the nearest preceding div and
+    # dumping get_text() returned the table's own concatenated text.
+    #
+    # Using direct text means a wrapper div containing further markup
+    # (e.g. the table itself) won't accidentally match — only an
+    # element whose immediate text reads exactly "Capacity Licenses"
+    # (etc.) is treated as the title.
+    #
+    # The `claimed` set guards against cross-wiring: once a title has
+    # been attributed to one table, a later table walking back through
+    # the DOM will skip past it rather than silently inheriting the
+    # prior table's section.
+    claimed = claimed or set()
+    for prev in table.find_all_previous():
+        if prev.name not in _TITLE_BEARING_TAGS:
+            continue
+        direct_text = clean_text(
+            "".join(child for child in prev.children if isinstance(child, str))
+        )
+        if direct_text and direct_text in _KNOWN_SECTION_TITLES and direct_text not in claimed:
+            return direct_text
+    return None
 
 
 def _cell_text(cell: Tag) -> str:

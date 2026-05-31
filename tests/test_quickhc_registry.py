@@ -1,0 +1,193 @@
+from __future__ import annotations
+
+import sqlite3
+from pathlib import Path
+
+import pytest
+
+from cvhealthcheck.quickhc.registry import (
+    CSV_IMPORT_SOURCE_ID,
+    HTML_IMPORT_SOURCE_ID,
+    JSON_IMPORT_SOURCE_ID,
+    QUICK_HC_SECTION_IDS,
+    QUICK_HC_SELECTION_IDS,
+    QUICK_HC_SUBJECT_IDS,
+    QUICK_HC_TILE_BY_ID,
+    REST_COMMAND_CENTER_API_SOURCE_ID,
+    REST_REPORTS_PLUS_SOURCE_ID,
+    SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
+    STANDARD_SOURCES,
+    get_tiles,
+    report_overview_default_selection_ids,
+    report_subsection_options,
+)
+from cvhealthcheck.quickhc.overview_service import OVERVIEW_PREVIEW_BUILDERS
+from cvhealthcheck.quickhc.report_service import (
+    REPORT_OVERVIEW_DEFAULT_SELECTION_IDS,
+    REPORT_SELECTION_IDS,
+    REPORT_SUBSECTION_OPTIONS,
+    QuickHcReportService,
+)
+
+
+@pytest.fixture()
+def tiles_db(migrated_db_path: Path) -> sqlite3.Connection:
+    conn = sqlite3.connect(str(migrated_db_path))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def test_tile_ids_are_unique(tiles_db: sqlite3.Connection) -> None:
+    tiles = get_tiles(tiles_db)
+    tile_ids = [t["id"] for t in tiles]
+    assert len(tile_ids) == len(set(tile_ids))
+
+
+def test_section_ids_are_unique(tiles_db: sqlite3.Connection) -> None:
+    tiles = get_tiles(tiles_db)
+    section_ids = [sec["id"] for t in tiles for sec in t["sections"]]
+    assert len(section_ids) == len(set(section_ids))
+
+
+def test_every_section_id_starts_with_tile_id_prefix(tiles_db: sqlite3.Connection) -> None:
+    tiles = get_tiles(tiles_db)
+    for tile in tiles:
+        for sec in tile["sections"]:
+            assert sec["id"].startswith(f"{tile['id']}.")
+
+
+def test_every_tile_has_required_metadata(tiles_db: sqlite3.Connection) -> None:
+    tiles = get_tiles(tiles_db)
+    assert tiles, "get_tiles returned empty list"
+    for tile in tiles:
+        assert tile["id"]
+        assert tile["title"]
+        assert tile["category"]
+        assert tile["category_label"]
+
+
+def test_every_tile_has_at_least_one_section(tiles_db: sqlite3.Connection) -> None:
+    tiles = get_tiles(tiles_db)
+    for tile in tiles:
+        assert tile["sections"], f"tile {tile['id']} has no sections"
+
+
+def test_every_default_selected_section_belongs_to_its_tile(tiles_db: sqlite3.Connection) -> None:
+    tiles = get_tiles(tiles_db)
+    for tile in tiles:
+        all_ids = {sec["id"] for sec in tile["sections"]}
+        default_ids = {sec["id"] for sec in tile["sections"] if sec["default_selected"]}
+        assert default_ids.issubset(all_ids)
+
+
+def test_tile_section_ids_are_unique_per_tile(tiles_db: sqlite3.Connection) -> None:
+    tiles = get_tiles(tiles_db)
+    for tile in tiles:
+        ids = [sec["id"] for sec in tile["sections"]]
+        assert len(ids) == len(set(ids)), f"duplicate section ids in tile {tile['id']}"
+
+
+def test_every_tile_has_at_least_one_source_with_valid_canonical_id(tiles_db: sqlite3.Connection) -> None:
+    valid_ids = set(STANDARD_SOURCES)
+    tiles = get_tiles(tiles_db)
+    for tile in tiles:
+        assert tile["sources"], f"tile {tile['id']} has no sources"
+        for src in tile["sources"]:
+            assert src["id"] in valid_ids, (
+                f"tile {tile['id']} has source with unknown id {src['id']!r}"
+            )
+
+
+def test_get_tiles_includes_all_system_subjects(tiles_db: sqlite3.Connection) -> None:
+    tiles = get_tiles(tiles_db)
+    tile_ids = {t["id"] for t in tiles}
+    for subject_id in QUICK_HC_SUBJECT_IDS:
+        assert subject_id in tile_ids, f"system subject {subject_id!r} not in get_tiles()"
+
+
+def test_backup_job_summary_tile_is_registered(tiles_db: sqlite3.Connection) -> None:
+    tiles = get_tiles(tiles_db)
+    bjs = next((t for t in tiles if t["id"] == "backup_job_summary"), None)
+    assert bjs is not None, "backup_job_summary not found in get_tiles()"
+    assert bjs["title"] == "Backup Job Summary"
+    section_ids = {sec["id"] for sec in bjs["sections"]}
+    assert "backup_job_summary.summary" in section_ids
+    assert "backup_job_summary.status_breakdown" in section_ids
+    assert "backup_job_summary.recent_failures" in section_ids
+    assert "backup_job_summary.recent_jobs" in section_ids
+
+
+def test_security_assessment_tile_registers_detail_sections(tiles_db: sqlite3.Connection) -> None:
+    tiles = get_tiles(tiles_db)
+    sa = next((t for t in tiles if t["id"] == "security_assessment"), None)
+    assert sa is not None, "security_assessment not found in get_tiles()"
+    section_ids = {sec["id"] for sec in sa["sections"]}
+    for expected in (
+        "security_assessment.metadata",
+        "security_assessment.summary",
+        "security_assessment.highlights",
+        "security_assessment.access_security",
+        "security_assessment.auditing",
+        "security_assessment.platform_security",
+        "security_assessment.company_and_owners_security",
+        "security_assessment.capabilities",
+        "security_assessment.hardening",
+    ):
+        assert expected in section_ids, f"missing section {expected}"
+
+
+def test_registry_report_subsection_options_include_all_tile_section_ids() -> None:
+    subsection_options = report_subsection_options()
+    assert set(subsection_options) == QUICK_HC_SUBJECT_IDS
+    option_ids = {
+        option["id"]
+        for options in subsection_options.values()
+        for option in options
+    }
+    assert option_ids == QUICK_HC_SECTION_IDS
+
+
+def test_registry_selection_ids_include_all_tile_and_section_ids() -> None:
+    expected_ids = QUICK_HC_SUBJECT_IDS | QUICK_HC_SECTION_IDS
+    assert QUICK_HC_SELECTION_IDS == expected_ids
+
+
+def test_registry_default_overview_selection_ids_are_subset_of_selection_ids() -> None:
+    default_ids = report_overview_default_selection_ids()
+    assert default_ids.issubset(QUICK_HC_SELECTION_IDS)
+
+
+def test_report_service_selection_contract_matches_registry() -> None:
+    assert REPORT_SUBSECTION_OPTIONS == report_subsection_options()
+    assert REPORT_SELECTION_IDS == (
+        QUICK_HC_SELECTION_IDS | {SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID}
+    )
+    assert REPORT_OVERVIEW_DEFAULT_SELECTION_IDS == report_overview_default_selection_ids()
+    assert REPORT_OVERVIEW_DEFAULT_SELECTION_IDS.issubset(REPORT_SELECTION_IDS)
+
+
+def test_every_tile_preview_renderer_has_registered_builder(tiles_db: sqlite3.Connection) -> None:
+    tiles = get_tiles(tiles_db)
+    for tile in tiles:
+        renderer = tile.get("preview_renderer")
+        if renderer is not None:
+            assert renderer in OVERVIEW_PREVIEW_BUILDERS, (
+                f"no overview builder registered for preview_renderer={renderer!r} "
+                f"(tile {tile['id']})"
+            )
+
+
+def test_every_tile_report_renderer_has_registered_builder(tiles_db: sqlite3.Connection) -> None:
+    builder_names = set(QuickHcReportService()._report_builders())
+    tiles = get_tiles(tiles_db)
+    for tile in tiles:
+        renderer = tile.get("report_renderer")
+        if renderer is not None:
+            assert renderer in builder_names, (
+                f"no report builder registered for report_renderer={renderer!r} "
+                f"(tile {tile['id']})"
+            )

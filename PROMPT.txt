@@ -60,6 +60,12 @@ web/
 * No business logic in templates
 * No health evaluation logic in routes
 
+db/
+
+* Business/application state only
+* Customers and engagements currently use raw SQL helpers
+* data/app.db is separate from import registries and canonical artifact storage
+
 catalog/
 
 * Local inventory and discovery persistence
@@ -134,16 +140,24 @@ Characteristics:
 
 Current UI direction:
 
-* Keep navigation simple: Login / Logout, Quick HC, Development
-* Quick HC is the customer-facing healthcheck output area
+* Keep navigation simple and product-oriented
+* Quick HC is the current customer-facing healthcheck output area and bridge toward the broader HealthCheck workspace
 * Development is the raw/debug/API/report exploration area
 * Do not add broad Dashboard / Admin / Data Sources navigation unless explicitly requested
+
+Current product structure direction:
+
+* HealthCheck
+* Customers
+* Advanced
+* Development
 
 Current Quick HC items include:
 
 * CommCell Identity / Version
 * Client Growth and Capacity License metric pages
 * Security Assessment from Reports Plus report 336
+* License Summary canonical and customer-report flows
 
 Security Assessment:
 
@@ -152,6 +166,23 @@ Security Assessment:
 * Sections: Access Security, Auditing, Platform Security, Company and Owners Security, Capabilities, Hardening
 * Current artifact summary: 32 total checks, 2 Critical, 0 Warning, 18 Info, 12 Good
 * Checklist normalization lives in src/cvhealthcheck/reportsplus/checklist.py
+* Legacy GET detail page under /quick-hc redirects to /quick-hc
+* POST import and collect handlers remain active
+
+License Summary:
+
+* Canonical adapter exists
+* Canonical side-write is wired for REST collection and file import
+* Legacy GET detail page under /quick-hc redirects to /quick-hc
+* POST import and collect handlers remain active
+
+Current Quick HC platform notes:
+
+* TileDefinition now includes category, category_label, import_url, and collect_url
+* Quick HC initial subject data is registry-driven via list_tiles()
+* Import and collect URLs should come from tile metadata / initial subject data
+* quickhc/canonical_view.py exists as the translation layer from canonical artifacts to Quick HC JS view models
+* Continue preserving legacy fallback in subject_data_service.py while canonical-view migration completes
 
 FULL HEALTHCHECK
 
@@ -279,25 +310,49 @@ VALIDATION REQUIREMENTS
 Before commits:
 
 * python -m compileall src must pass
+* python -m pytest must pass
 * bash -n scripts/*.sh start.sh must pass
-* relevant CLI commands must be tested
-* relevant Flask routes must return HTTP 200
 
 Update when appropriate:
 
+* README.md when behavior, stack, or how-to-run changes
+* ROADMAP.md when direction changes
+* API_MAPPING.md for validated source discoveries
+
+DOCUMENTATION MODEL
+
+The project uses a three-file logging model. Do not reintroduce DEVLOG.md or docs/handover/ — both were retired on 2026-05-25.
+
+* README.md          — what the project is, how to run it, the stack. Mostly static.
+* CHANGELOG.md       — backward-looking append-only running log. One entry per session under a date heading (## YYYY-MM-DD). Sections: Added / Changed / Fixed / Removed / Notes. Past entries are never deleted or rewritten — corrections come as new entries.
+* HANDOVER.md        — forward-looking "start here" file. Always overwritten, never accumulated. Contains: current branch, latest commit hash, test pass count, what was just completed, what is in-flight, the single recommended next action with file paths and exact step, and pointers to any recent CHANGELOG entries the next session should re-read.
+
+CHANGELOG entries should preserve important findings (root causes of tricky bugs, architectural decisions, gotchas) under the Notes section even when they do not fit Added/Changed/Fixed/Removed.
+
+START OF SESSION
+
+At the start of every new session, read these three files before doing anything else:
+
 * README.md
+* HANDOVER.md
 * ROADMAP.md
-* DEVLOG.md
-* API_MAPPING.md
+
+If those three files plus the most recent CHANGELOG entry are not enough to pick up productively, that is a handover defect — improve HANDOVER.md at the end of the session.
 
 SESSION WRAP-UP
 
-At the end of major sessions:
+At the end of every session:
 
-* update DEVLOG.md
+* validate code: python -m compileall src && python -m pytest
+* append a new dated entry to CHANGELOG.md (Added / Changed / Fixed / Removed / Notes)
+* overwrite HANDOVER.md with the new forward-looking state
 * update ROADMAP.md if direction changed
-* update API_MAPPING.md for validated discoveries
-* validate code
-* commit cleanly
+* update API_MAPPING.md for validated source discoveries
+* commit cleanly at every green checkpoint — do not let large amounts of in-flight work accumulate uncommitted
 * push to GitHub
 * summarize completed work clearly
+
+ENGINEERING WORKFLOW
+
+* Commit at every green checkpoint. If tests pass and the change is coherent, commit it. Do not batch unrelated changes.
+* Claude Code does the heavy lifting: reads, edits, runs the test suite, validates, drafts the commit message, and pushes. The user reviews and steers; Claude executes.

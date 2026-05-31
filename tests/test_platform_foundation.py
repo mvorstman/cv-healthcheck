@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from cvhealthcheck.api_client import CommvaultApiClient
+from cvhealthcheck.auth.commvault_auth import SESSION_TOKEN_KEY
 from cvhealthcheck.config import Settings, load_settings
 from cvhealthcheck.license_summary.artifact import build_license_summary_artifact
 from cvhealthcheck.license_summary.models import LicenseSummaryArtifact
@@ -19,18 +20,53 @@ def test_route_split_keeps_expected_endpoints_registered() -> None:
 
     assert rules["/quick-hc"] == "main.quick_hc"
     assert rules["/quick-hc/license-summary"] == "main.quick_hc_license_summary"
-    assert rules["/security-assessment"] == "main.reportsplus_security_assessment"
+    assert rules["/quick-hc/backup-job-summary"] == "main.quick_hc_backup_job_summary"
     assert rules["/development"] == "main.development"
-    assert rules["/reportsplus/reports"] == "main.reportsplus_reports"
 
 
 def test_quick_hc_and_report_pages_still_render() -> None:
     app = create_app()
     client = app.test_client()
 
+    root_response = client.get("/")
+    assert root_response.status_code == 302
+    assert "/quick-hc" in root_response.headers["Location"]
     assert client.get("/quick-hc").status_code == 200
-    assert client.get("/quick-hc/license-summary").status_code == 200
+    assert client.get("/quick-hc/license-summary").status_code == 302
+    assert client.get("/quick-hc/security-assessment").status_code == 302
+    assert client.get("/quick-hc/backup-job-summary").status_code == 200
     assert client.get("/security-assessment").status_code == 200
+
+
+def test_development_routes_require_login() -> None:
+    app = create_app()
+    client = app.test_client()
+
+    # ADR 0004 phase 6.5 retired the Reports Plus exploration routes; the dev
+    # hub itself remains login-guarded (the held Security Assessment cluster).
+    for path in (
+        "/development",
+        "/development/security-assessment-registry",
+    ):
+        response = client.get(path)
+        assert response.status_code == 302
+        assert "/login" in response.headers["Location"]
+
+
+def test_development_routes_render_after_login() -> None:
+    app = create_app()
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session[SESSION_TOKEN_KEY] = "test-token"
+
+    # ADR 0004 phase 6.5 retired the Reports Plus exploration routes; the dev
+    # hub itself remains login-guarded (the held Security Assessment cluster).
+    for path in (
+        "/development",
+        "/development/security-assessment-registry",
+    ):
+        response = client.get(path)
+        assert response.status_code == 200
 
 
 def test_security_assessment_artifact_includes_version_fields() -> None:

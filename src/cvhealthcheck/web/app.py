@@ -6,9 +6,11 @@ import secrets
 from flask import Flask
 
 from .routes.main import bp as main_bp
+from cvhealthcheck.db.migrations import run_migrations
 
 
 def create_app() -> Flask:
+    run_migrations()
     app = Flask(__name__)
     app.secret_key = os.getenv("CV_SECRET_KEY") or secrets.token_hex(32)
     app.register_blueprint(main_bp)

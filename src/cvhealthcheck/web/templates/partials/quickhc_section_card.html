@@ -1,0 +1,26 @@
+{% macro section_card(subject_id, option_id, label, checked, meta_text="") -%}
+  <div class="quickhc-section-card" data-section-card>
+    <label class="quickhc-section-header" for="selection-{{ option_id | replace('.', '-') }}">
+      <span class="quickhc-section-header-main">
+        <input
+          id="selection-{{ option_id | replace('.', '-') }}"
+          type="checkbox"
+          name="selection_ids"
+          value="{{ option_id }}"
+          data-subject-child="{{ subject_id }}"
+          {% if checked %}checked{% endif %}
+        >
+        <span class="quickhc-section-title">{{ label }}</span>
+      </span>
+      <span class="quickhc-section-meta">
+        {% if meta_text %}
+          <span class="quickhc-section-hint">{{ meta_text }}</span>
+        {% endif %}
+        <span class="quickhc-section-state" aria-hidden="true"></span>
+      </span>
+    </label>
+    <div class="quickhc-section-content">
+      {{ caller() }}
+    </div>
+  </div>
+{%- endmacro %}

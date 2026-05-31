@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from .shared import bp, extract_security_assessment, is_authenticated
+from .shared import bp, is_authenticated
 
 # Import route modules so they register handlers on the shared blueprint.
 from . import basic  # noqa: F401
+from . import customers  # noqa: F401
 from . import development  # noqa: F401
-from . import metrics  # noqa: F401
+from . import projects  # noqa: F401
 from . import quick_hc  # noqa: F401
-from . import reportsplus  # noqa: F401
-from . import security_assessment  # noqa: F401
+from . import quick_hc_api  # noqa: F401
+from . import staging  # noqa: F401
 
-__all__ = ["bp", "extract_security_assessment", "is_authenticated"]
+__all__ = ["bp", "is_authenticated"]

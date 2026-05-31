@@ -10,9 +10,12 @@ from uuid import uuid4
 
 from werkzeug.utils import secure_filename
 
+from cvhealthcheck.adapters.license_summary import adapt as _adapt_license_summary
+from cvhealthcheck.artifact_registry import ArtifactRegistry, create_artifact_registry
+from cvhealthcheck.artifacts.models import CanonicalArtifact
+from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.reportsplus.catalog import collected_at
 from cvhealthcheck.reportsplus.client import ReportsPlusClient
-from cvhealthcheck.security_assessment.registry import SecurityAssessmentArtifactRegistry
 
 from .artifact import LICENSE_SUMMARY_CATALOG_DIR, write_license_summary_artifact
 from .collect_rest import collect_license_summary_rest, import_license_summary_xlsx_recording
@@ -49,6 +52,15 @@ DEFAULT_COMMCELL_CONTEXT = CommCellContext(
 logger = logging.getLogger(__name__)
 
 
+def _active_project_store() -> ArtifactStore:
+    """Construct an ArtifactStore scoped to the active project on demand.
+
+    Replaces the module-level singleton from before ADR 0002 phase 2.
+    """
+    from cvhealthcheck.web.active_project import make_active_project_store
+    return make_active_project_store()
+
+
 class LicenseSummaryImportError(ValueError):
     pass
 
@@ -62,7 +74,7 @@ class LicenseSummaryService:
     ) -> None:
         self.catalog_dir = catalog_dir or LICENSE_SUMMARY_CATALOG_DIR
         self.registry_path = registry_path or LICENSE_SUMMARY_REGISTRY_PATH
-        self.registry = SecurityAssessmentArtifactRegistry(self.registry_path)
+        self.registry = create_artifact_registry(self.registry_path)
 
     def get_current(
         self,
@@ -82,6 +94,9 @@ class LicenseSummaryService:
             report_stream=report_stream,
             source_type=source_type,
         )
+
+    def get_canonical(self) -> CanonicalArtifact:
+        return _active_project_store().load_latest_artifact("license_summary")
 
     def collect_from_rest(
         self,
@@ -120,7 +135,9 @@ class LicenseSummaryService:
             report_run=report_run,
             imported_by=imported_by,
             import_method="rest",
+            write_legacy=False,
         )
+        _active_project_store().save_artifact(_adapt_license_summary(persisted))
         return {
             "extraction": collected["extraction"],
             "normalized": persisted,
@@ -168,7 +185,7 @@ def import_license_summary_upload(
     if not artifact.get("other_licenses") and not artifact.get("agent_feature_licenses"):
         raise LicenseSummaryImportError(f"{source_type.upper()} import produced no license rows.")
 
-    return persist_license_summary_artifact(
+    persisted = persist_license_summary_artifact(
         artifact,
         catalog_dir=catalog_dir,
         registry_path=registry_path,
@@ -178,7 +195,10 @@ def import_license_summary_upload(
         report_stream=report_stream,
         report_run=report_run,
         imported_by=imported_by,
+        write_legacy=False,
     )
+    _active_project_store().save_artifact(_adapt_license_summary(persisted))
+    return persisted
 
 
 def persist_license_summary_artifact(
@@ -186,6 +206,7 @@ def persist_license_summary_artifact(
     *,
     catalog_dir: Path | None = None,
     registry_path: Path | None = None,
+    write_legacy: bool = True,
     customer_context: CustomerContext | None = None,
     commcell_context: CommCellContext | None = None,
     engagement_context: EngagementContext | None = None,
@@ -234,61 +255,64 @@ def persist_license_summary_artifact(
     )
     artifact_model = LicenseSummaryArtifact.from_dict(artifact_payload)
     artifact_filename = f"{artifact_id}.json"
-    artifact_paths = write_license_summary_artifact(
-        artifact_model.to_dict(),
-        catalog_dir=catalog_dir or LICENSE_SUMMARY_CATALOG_DIR,
-        artifact_filename=artifact_filename,
-    )
 
-    registry = SecurityAssessmentArtifactRegistry(
-        registry_path or LICENSE_SUMMARY_REGISTRY_PATH
-    )
-    import_run = ImportRun(
-        import_run_id=import_run_id,
-        customer_id=customer.customer_id,
-        commcell_id=commcell.commcell_id,
-        engagement_id=engagement_context.engagement_id if engagement_context else None,
-        report_stream_id=report_stream.report_stream_id if report_stream else artifact.get("report_stream_id"),
-        report_run_id=report_run.report_run_id if report_run else artifact.get("report_run_id"),
-        imported_at=imported_at,
-        executed_at=report_run.executed_at if report_run else artifact.get("executed_at"),
-        run_sequence=report_run.run_sequence if report_run else artifact.get("run_sequence"),
-        imported_by=imported_by or artifact.get("imported_by"),
-        import_method=resolved_import_method,
-    )
-    record = ArtifactRecord(
-        artifact_id=artifact_id,
-        import_run_id=import_run_id,
-        artifact_type=artifact_model.artifact_type,
-        source_type=artifact_model.source_type,
-        source_file=artifact_model.source_file,
-        file_path=artifact_paths["artifact"],
-        customer_id=customer.customer_id,
-        commcell_id=commcell.commcell_id,
-        engagement_id=engagement_context.engagement_id if engagement_context else None,
-        report_stream_id=report_stream.report_stream_id if report_stream else artifact.get("report_stream_id"),
-        report_run_id=report_run.report_run_id if report_run else artifact.get("report_run_id"),
-        imported_at=imported_at,
-        executed_at=report_run.executed_at if report_run else artifact.get("executed_at"),
-        run_sequence=report_run.run_sequence if report_run else artifact.get("run_sequence"),
-        is_active=True,
-        created_at=created_at,
-        last_accessed_at=artifact.get("last_accessed_at"),
-        retention_policy=retention_policy or artifact.get("retention_policy") or "keep",
-        imported_by=imported_by or artifact.get("imported_by"),
-        import_method=resolved_import_method,
-        source_metadata=dict(artifact_payload.get("source_metadata") or {}),
-    )
-    registry.register_artifact(import_run, record)
+    if write_legacy:
+        artifact_paths = write_license_summary_artifact(
+            artifact_model.to_dict(),
+            catalog_dir=catalog_dir or LICENSE_SUMMARY_CATALOG_DIR,
+            artifact_filename=artifact_filename,
+        )
 
-    persisted_payload = artifact_model.to_dict()
-    persisted_payload["file_path"] = artifact_paths["artifact"]
-    persisted_payload["artifact_paths"] = artifact_paths
-    write_license_summary_artifact(
-        persisted_payload,
-        catalog_dir=catalog_dir or LICENSE_SUMMARY_CATALOG_DIR,
-        artifact_filename=artifact_filename,
-    )
+        registry = create_artifact_registry(registry_path or LICENSE_SUMMARY_REGISTRY_PATH)
+        import_run = ImportRun(
+            import_run_id=import_run_id,
+            customer_id=customer.customer_id,
+            commcell_id=commcell.commcell_id,
+            engagement_id=engagement_context.engagement_id if engagement_context else None,
+            report_stream_id=report_stream.report_stream_id if report_stream else artifact.get("report_stream_id"),
+            report_run_id=report_run.report_run_id if report_run else artifact.get("report_run_id"),
+            imported_at=imported_at,
+            executed_at=report_run.executed_at if report_run else artifact.get("executed_at"),
+            run_sequence=report_run.run_sequence if report_run else artifact.get("run_sequence"),
+            imported_by=imported_by or artifact.get("imported_by"),
+            import_method=resolved_import_method,
+        )
+        record = ArtifactRecord(
+            artifact_id=artifact_id,
+            import_run_id=import_run_id,
+            artifact_type=artifact_model.artifact_type,
+            source_type=artifact_model.source_type,
+            source_file=artifact_model.source_file,
+            file_path=artifact_paths["artifact"],
+            customer_id=customer.customer_id,
+            commcell_id=commcell.commcell_id,
+            engagement_id=engagement_context.engagement_id if engagement_context else None,
+            report_stream_id=report_stream.report_stream_id if report_stream else artifact.get("report_stream_id"),
+            report_run_id=report_run.report_run_id if report_run else artifact.get("report_run_id"),
+            imported_at=imported_at,
+            executed_at=report_run.executed_at if report_run else artifact.get("executed_at"),
+            run_sequence=report_run.run_sequence if report_run else artifact.get("run_sequence"),
+            is_active=True,
+            created_at=created_at,
+            last_accessed_at=artifact.get("last_accessed_at"),
+            retention_policy=retention_policy or artifact.get("retention_policy") or "keep",
+            imported_by=imported_by or artifact.get("imported_by"),
+            import_method=resolved_import_method,
+            source_metadata=dict(artifact_payload.get("source_metadata") or {}),
+        )
+        registry.register_artifact(import_run, record)
+
+        persisted_payload = artifact_model.to_dict()
+        persisted_payload["file_path"] = artifact_paths["artifact"]
+        persisted_payload["artifact_paths"] = artifact_paths
+        write_license_summary_artifact(
+            persisted_payload,
+            catalog_dir=catalog_dir or LICENSE_SUMMARY_CATALOG_DIR,
+            artifact_filename=artifact_filename,
+        )
+    else:
+        persisted_payload = artifact_model.to_dict()
+
     return persisted_payload
 
 
@@ -308,9 +332,7 @@ def load_active_license_summary_artifact(
         commcell_name=(commcell_context.commcell_name if commcell_context else DEFAULT_COMMCELL_CONTEXT.commcell_name),
         customer_id=customer.customer_id,
     )
-    registry = SecurityAssessmentArtifactRegistry(
-        registry_path or LICENSE_SUMMARY_REGISTRY_PATH
-    )
+    registry = create_artifact_registry(registry_path or LICENSE_SUMMARY_REGISTRY_PATH)
     active_record = registry.get_active_artifact(
         "license_summary",
         customer_id=customer.customer_id,
@@ -355,7 +377,7 @@ def load_active_license_summary_artifact(
 def _load_artifact_payload_from_record(
     record: ArtifactRecord,
     *,
-    registry: SecurityAssessmentArtifactRegistry,
+    registry: ArtifactRegistry,
     catalog_dir: Path,
 ) -> dict[str, Any]:
     path = Path(record.file_path)

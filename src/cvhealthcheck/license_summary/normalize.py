@@ -58,14 +58,22 @@ def normalize_header(value: str) -> str:
 
 
 def clean_text(value: Any) -> str:
-    return str(value or "").replace("\xa0", " ").strip()
+    return str(value or "").replace("\xa0", " ").replace("\x00", "").strip()
 
 
 def parse_number(value: Any) -> int | None:
     text = clean_text(value)
     if not text:
         return None
-    normalized = text.replace(",", "")
+    # Tolerate combined "<number> <unit>" cells (e.g. "500 VMs", "25 TB",
+    # "0 sockets") that real-world Commvault exports use. Extract the
+    # leading numeric prefix and parse that; bail to None on anything
+    # that doesn't start with a number. Thousands-separator commas are
+    # preserved by stripping them before float-parse.
+    match = re.match(r"\s*(-?[\d,]+(?:\.\d+)?)", text)
+    if not match:
+        return None
+    normalized = match.group(1).replace(",", "")
     try:
         return int(float(normalized))
     except ValueError:

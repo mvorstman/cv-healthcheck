@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any
 
 
 @dataclass(frozen=True)
@@ -18,12 +17,75 @@ class QuickHcSource:
 
 @dataclass(frozen=True)
 class CommCellIdentity:
-    hostName: str | None
-    csGUID: str | None
-    csVersionInfo: Any
-    releaseId: Any
-    osType: str | None
-    timeZone: str | None
+    hostName: str | None = None
+    csGUID: str | None = None
+    csVersionInfo: str | None = None
+    releaseId: str | int | None = None
+    osType: str | None = None
+    timeZone: str | None = None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, str | int | None]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class SectionDefinition:
+    id: str
+    label: str
+    default_selected: bool = True
+    preview_renderer: str | None = None
+    report_renderer: str | None = None
+
+
+@dataclass(frozen=True)
+class SourceDefinition:
+    id: str
+    label: str
+    description: str
+
+
+@dataclass(frozen=True)
+class TileDefinition:
+    id: str
+    title: str
+    subtitle: str
+    source_type: str
+    source_service: str
+    artifact_type: str
+    preview_renderer: str
+    report_renderer: str
+    sources: tuple[SourceDefinition, ...]
+    sections: tuple[SectionDefinition, ...]
+    category: str = ""
+    category_label: str = ""
+    report_label: str | None = None
+    detail_endpoint: str | None = None
+    status_behavior: str = "available_or_missing"
+    collect_capable: bool = False
+    import_capable: bool = False
+    import_url: str | None = None
+    collect_url: str | None = None
+
+    @property
+    def display_label(self) -> str:
+        return self.title
+
+    @property
+    def effective_report_label(self) -> str:
+        return self.report_label or self.title
+
+    @property
+    def description(self) -> str:
+        return self.subtitle
+
+    @property
+    def section_ids(self) -> tuple[str, ...]:
+        return tuple(section.id for section in self.sections)
+
+    @property
+    def default_section_ids(self) -> tuple[str, ...]:
+        return tuple(section.id for section in self.sections if section.default_selected)
+
+    @property
+    def source_ids(self) -> tuple[str, ...]:
+        return tuple(source.id for source in self.sources)

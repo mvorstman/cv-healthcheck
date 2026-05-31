@@ -5,22 +5,118 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>cv-healthcheck</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script>
+      (function () {
+        var theme = localStorage.getItem('quickhc-theme-v1');
+        if (theme === 'dark' || theme === 'light') {
+          document.documentElement.dataset.theme = theme;
+        } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          document.documentElement.dataset.theme = 'dark';
+        }
+      })();
+    </script>
   </head>
   <body>
-    <header>
-      <h1>cv-healthcheck</h1>
-      <nav>
-        <a href="{{ url_for('main.login') }}">Login</a>
-        <form method="post" action="{{ url_for('main.logout') }}">
-          <button type="submit">Logout</button>
-        </form>
-        <a href="{{ url_for('main.quick_hc') }}">Quick HC</a>
-        <a href="{{ url_for('main.development') }}">Development</a>
-      </nav>
-    </header>
-    <main>
-      {% block content %}{% endblock %}
-    </main>
+    {% include "partials/active_project_selector.html" %}
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="sidebar-top">
+          <a href="{{ url_for('main.quick_hc') }}"
+             class="sidebar-brand"
+             aria-label="cvThing by Purple">
+            <img
+              src="{{ url_for('static', filename='img/cvthing-logo-dark.png') }}"
+              data-light-logo="{{ url_for('static', filename='img/cvthing-logo-light.png') }}"
+              data-dark-logo="{{ url_for('static', filename='img/cvthing-logo-dark.png') }}"
+              alt="cvThing by Purple"
+              class="sidebar-logo">
+          </a>
+        </div>
+        {% set ep = request.endpoint or '' %}
+        <nav class="sidebar-nav">
+          <a href="{{ url_for('main.quick_hc') }}"
+             class="sidebar-link{% if 'quick_hc' in ep or 'metrics_' in ep %} is-active{% endif %}">
+            HealthCheck
+          </a>
+        </nav>
+        <div class="sidebar-footer">
+          <form method="post" action="{{ url_for('main.logout') }}">
+            <button type="submit" class="sidebar-logout">Sign out</button>
+          </form>
+          <a href="{{ url_for('main.development') }}"
+             class="sidebar-dev-link{% if 'development' in ep or 'security_assessment_registry' in ep %} is-active{% endif %}">
+            Dev tools
+          </a>
+        </div>
+      </aside>
+      <div class="main">
+        <div class="topbar">
+          <div class="topbar-left">
+            <button type="button" class="topbar-link topbar-back-button" data-shell-back>
+              ← Back
+            </button>
+          </div>
+          <div class="topbar-right">
+            <div class="quickhc-theme-toggle" data-theme-toggle>
+              <span class="quickhc-theme-label">Theme</span>
+              <button type="button" class="quickhc-theme-button" data-theme-choice="light">Light</button>
+              <button type="button" class="quickhc-theme-button" data-theme-choice="dark">Dark</button>
+            </div>
+          </div>
+        </div>
+        <div class="content">
+          {% block content %}{% endblock %}
+        </div>
+      </div>
+    </div>
     {% block scripts %}{% endblock %}
+    <script>
+      (function () {
+        var themeKey = 'quickhc-theme-v1';
+        var buttons = Array.from(document.querySelectorAll('[data-theme-toggle] [data-theme-choice]'));
+        var backButton = document.querySelector('[data-shell-back]');
+        var sidebarLogo = document.querySelector('.sidebar-logo');
+
+        if (backButton) {
+          backButton.addEventListener('click', function () {
+            if (window.history.length > 1) {
+              window.history.back();
+              return;
+            }
+            window.location.href = '/quick-hc';
+          });
+        }
+
+        var syncButtons = function (theme) {
+          for (var i = 0; i < buttons.length; i++) {
+            buttons[i].dataset.active = String(buttons[i].dataset.themeChoice === theme);
+          }
+        };
+
+        var syncSidebarLogo = function (theme) {
+          if (!sidebarLogo) return;
+          var lightLogo = sidebarLogo.dataset.lightLogo;
+          var darkLogo = sidebarLogo.dataset.darkLogo;
+          sidebarLogo.src = theme === 'dark' ? darkLogo : lightLogo;
+        };
+
+        var current = document.documentElement.dataset.theme || 'light';
+        syncButtons(current);
+        syncSidebarLogo(current);
+
+        for (var i = 0; i < buttons.length; i++) {
+          (function (btn) {
+            btn.addEventListener('click', function () {
+              var theme = btn.dataset.themeChoice;
+              if (theme !== 'light' && theme !== 'dark') return;
+              document.documentElement.dataset.theme = theme;
+              localStorage.setItem(themeKey, theme);
+              syncButtons(theme);
+              syncSidebarLogo(theme);
+            });
+          })(buttons[i]);
+        }
+      })();
+    </script>
   </body>
 </html>

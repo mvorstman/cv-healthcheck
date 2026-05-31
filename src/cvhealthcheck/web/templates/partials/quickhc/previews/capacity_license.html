@@ -1,0 +1,22 @@
+<div class="quickhc-section-preview">
+  {% if capacity_license_preview_section == "summary" %}
+    {% if capacity_license.exists %}
+      <div class="quickhc-preview-inline">
+        <span>Used {{ "%.2f"|format(capacity_license.total_used or 0) }}</span>
+        <span>Licensed {{ "%.2f"|format(capacity_license.total_purchased or 0) }}</span>
+        <span>{{ capacity_license.latest_month or "Not collected yet" }}</span>
+      </div>
+    {% else %}
+      <p class="quickhc-empty-state">Capacity License data has not been collected yet.</p>
+    {% endif %}
+  {% elif capacity_license_preview_section == "table" %}
+    {% if capacity_license.exists %}
+      <div class="quickhc-preview-inline">
+        <span>{{ capacity_license.entity_count }} entities summarized</span>
+        <span>{{ capacity_license.summary }}</span>
+      </div>
+    {% else %}
+      <p class="quickhc-empty-state">Capacity License data has not been collected yet.</p>
+    {% endif %}
+  {% endif %}
+</div>

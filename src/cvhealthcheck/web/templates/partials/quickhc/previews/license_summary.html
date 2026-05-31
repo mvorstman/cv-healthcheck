@@ -1,0 +1,105 @@
+<div class="quickhc-section-preview">
+  {% if license_preview_section == "metadata" %}
+    {% if license_summary.exists %}
+      <div class="quickhc-preview-grid">
+        <div class="quickhc-preview-item">
+          <span class="quickhc-preview-label">Source</span>
+          <strong>{{ (license_summary.source_type or "unknown") | upper }}</strong>
+        </div>
+        <div class="quickhc-preview-item">
+          <span class="quickhc-preview-label">CommCell Name</span>
+          <strong>{{ license_summary.commcell_name or "Not collected yet" }}</strong>
+        </div>
+        <div class="quickhc-preview-item">
+          <span class="quickhc-preview-label">Generated on</span>
+          <strong>{{ license_summary.generated_on or "Not collected yet" }}</strong>
+        </div>
+        <div class="quickhc-preview-item">
+          <span class="quickhc-preview-label">License expiry</span>
+          <strong>{{ license_summary.license_expiry or "Not collected yet" }}</strong>
+        </div>
+        <div class="quickhc-preview-item">
+          <span class="quickhc-preview-label">Imported at</span>
+          <strong>{{ license_summary.imported_at or "Not collected yet" }}</strong>
+        </div>
+      </div>
+    {% else %}
+      <p class="quickhc-empty-state">License Summary data has not been collected yet.</p>
+    {% endif %}
+  {% elif license_preview_section == "workload_sections" %}
+    {% if license_summary.exists %}
+      <div class="quickhc-preview-grid">
+        {% for section in license_summary.workload_section_previews %}
+          <div class="quickhc-preview-item">
+            <span class="quickhc-preview-label">{{ section.section_name or "Workload section" }}</span>
+            <strong>{{ section.row_count }} rows</strong>
+            {% if section.license_names %}
+              <span>{{ section.license_names | join(" • ") }}</span>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      {% if not license_summary.workload_section_previews %}
+        <p class="quickhc-empty-state">No workload summary sections are available.</p>
+      {% endif %}
+    {% else %}
+      <p class="quickhc-empty-state">License Summary data has not been collected yet.</p>
+    {% endif %}
+  {% elif license_preview_section == "other_licenses" %}
+    {% if license_summary.exists %}
+      <p class="quickhc-preview-text">{{ license_summary.other_count }} other licenses</p>
+      <table class="compact-table quickhc-preview-table">
+        <thead>
+          <tr>
+            <th>License</th>
+            <th>Available Total</th>
+            <th>Used</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in license_summary.other_license_preview_rows %}
+            <tr>
+              <td>{{ row.license or "" }}</td>
+              <td>{{ row.available_total or "" }}</td>
+              <td>{{ row.used or "" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if license_summary.other_license_more_count %}
+        <p class="quickhc-preview-text">and {{ license_summary.other_license_more_count }} more</p>
+      {% endif %}
+    {% else %}
+      <p class="quickhc-empty-state">License Summary data has not been collected yet.</p>
+    {% endif %}
+  {% elif license_preview_section == "agent_feature_licenses" %}
+    {% if license_summary.exists %}
+      <p class="quickhc-preview-text">{{ license_summary.agent_feature_count }} agent/feature licenses</p>
+      <table class="compact-table quickhc-preview-table">
+        <thead>
+          <tr>
+            <th>License</th>
+            <th>Client</th>
+            <th>Agent</th>
+            <th>Permanent Used / Term Used</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in license_summary.agent_feature_preview_rows %}
+            <tr>
+              <td>{{ row.license or "" }}</td>
+              <td>{{ row.client or "" }}</td>
+              <td>{{ row.agent or "" }}</td>
+              <td>{{ row.usage or "" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if license_summary.agent_feature_more_count %}
+        <p class="quickhc-preview-text">and {{ license_summary.agent_feature_more_count }} more</p>
+      {% endif %}
+    {% else %}
+      <p class="quickhc-empty-state">License Summary data has not been collected yet.</p>
+    {% endif %}
+  {% endif %}
+</div>

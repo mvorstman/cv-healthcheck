@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import sqlite3
 import sys
+from pathlib import Path
 from typing import Any
 
 from .api_client import CommvaultApiClient
@@ -21,12 +23,38 @@ from .reportsplus.inventory import (
     summarize_records,
 )
 from .reportsplus.priority import prioritize_candidates, priority_summary
-from .reportsplus.security_assessment import extract_security_assessment
 from .reportsplus.validation import validate_candidates, validation_summary
-from .security_assessment import (
-    import_security_assessment_csv,
-    import_security_assessment_html,
-)
+from .artifacts.store import ArtifactStore
+from .db import DB_PATH
+from .extractors.dispatcher import extract_file
+
+
+def _cli_import_security_assessment(file_path: str) -> int:
+    """Import a Security Assessment export through the generic dispatcher.
+
+    SA migration: the CLI no longer calls the bespoke parsers — it routes through
+    extract_file -> result_to_artifact and saves the canonical artifact to the
+    default project store, the same path the workspace upload and REST collect
+    use. (The bespoke parsers remain for the held #36 dev Security-Assessment
+    cluster's own import route, not this command.)
+    """
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    try:
+        dispatch = extract_file(Path(file_path), conn, subject_id="security_assessment")
+    finally:
+        conn.close()
+    if not dispatch.extractable or dispatch.artifact is None:
+        reason = (
+            dispatch.non_extractable_reason
+            or "; ".join(dispatch.extraction_errors)
+            or "not extractable"
+        )
+        print(f"Security Assessment import failed: {reason}", file=sys.stderr)
+        return 1
+    ArtifactStore("default", "default").save_artifact(dispatch.artifact)
+    print(to_pretty_json(dispatch.artifact.model_dump(mode="json")))
+    return 0
 
 
 def _parse_parameters(values: list[str] | None) -> dict[str, str]:
@@ -347,10 +375,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Dataset parameter as key=value. Can be repeated.",
     )
 
-    security_parser = reports_subparsers.add_parser("security-assessment")
-    security_parser.add_argument("--no-execute", action="store_true")
-    security_parser.add_argument("--sample-limit", type=int, default=50)
-
     lab_parser = subparsers.add_parser("lab")
     lab_subparsers = lab_parser.add_subparsers(dest="lab_command", required=True)
     readiness_parser = lab_subparsers.add_parser("readiness")
@@ -398,14 +422,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if result.get("ok") else 1
 
     if args.command == "security-assessment":
-        if args.security_assessment_command == "import-html":
-            artifact = import_security_assessment_html(args.file)
-            print(to_pretty_json(artifact))
-            return 0
-        if args.security_assessment_command == "import-csv":
-            artifact = import_security_assessment_csv(args.file)
-            print(to_pretty_json(artifact))
-            return 0
+        if args.security_assessment_command in ("import-html", "import-csv"):
+            return _cli_import_security_assessment(args.file)
 
     if args.command == "reportsplus":
         client = ReportsPlusClient()
@@ -481,15 +499,6 @@ def main(argv: list[str] | None = None) -> int:
                     parameters=_parse_parameters(args.parameter),
                 )
             )
-        if args.reportsplus_command == "security-assessment":
-            result = extract_security_assessment(
-                client=client,
-                execute=not args.no_execute,
-                sample_limit=args.sample_limit,
-            )
-            print(to_pretty_json(result["normalized"]))
-            return 0 if result["normalized"].get("source", {}).get("ok") else 1
-
     parser.error("Unsupported command")
     return 2
 

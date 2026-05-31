@@ -76,7 +76,7 @@ Status: started.
 
 ## Phase 3.0: Quick HC Foundation
 
-Status: started.
+Status: active.
 
 - Add a Quick HC section to the Flask UI.
 - Keep Quick HC fast, read-only, low impact, and API-first.
@@ -84,6 +84,62 @@ Status: started.
 - Persist latest REST collection artifacts under `data/catalog/rest/`.
 - First subject: CommCell Identity / Version from `GET /commandcenter/api/CommServ`.
 - Normalize CommCell identity fields for later rule-engine consumption without adding health scoring.
+- Add a basic assembled HTML HealthCheck report page over existing artifacts before introducing scoring, recommendations, charts, or PDF generation.
+
+Current workspace direction:
+
+- HealthCheck becomes the primary user workspace.
+- Customers becomes the business/customer model surface.
+- Advanced holds deeper workflows outside the default HealthCheck path.
+- Development remains the internal/debug workspace.
+
+Current Phase 3 capabilities:
+
+- Quick HC now acts as the main customer-facing report-composition surface and the current bridge toward the broader HealthCheck workspace.
+- Supported Quick HC subjects are CommCell Details, Security Assessment, License Summary, Client Growth, and Capacity Licenses.
+- Supported Quick HC subjects now also include Backup Job Summary via the normalized Reports Plus artifact path, without adding scoring or rules-engine behavior.
+- Each subject supports expandable overview tiles, customer-facing previews, include/exclude controls, and nested section/table selection.
+- `/quick-hc/report` now renders selected subjects and selected sections only.
+- Customer-facing output intentionally strips artifact paths, dataset GUIDs, HTTP status fields, and raw/debug extraction metadata.
+- Client Growth now includes a professional Chart.js visualization in the customer-facing report.
+- License Summary now includes workload/category sections plus compact usage visualization where that presentation fits the data.
+- The shell navigation direction is now stabilized around a sidebar-first flow with `Connect to CS`, `Status`, `Quick HC`, and `Development`, plus a lightweight Back action in the topbar.
+- Quick HC metadata extraction has started through shared tile/section dataclasses and a registry-first architecture so future subjects can be added incrementally without a full route/template rewrite.
+- Quick HC initial subject data is now registry-driven through `list_tiles()` with explicit loader/builder dispatch rather than a fixed six-subject assembly path.
+- Quick HC overview rendering now also uses a shared subject-tile shell partial so template duplication can be reduced before any preview-renderer abstraction or report-service rewrite.
+- Quick HC section cards now also use a shared wrapper partial, completing the structural shell extraction before preview-renderer abstraction work.
+- Preview decomposition now covers all current Quick HC subjects through explicit preview partials, so the next step can focus on preview orchestration rather than further structural extraction.
+- Registry integrity tests are now in place so future renderer orchestration work can rely on tile/section metadata staying aligned with report-service selection contracts.
+- Phase 3 platform hardening has now added explicit Python-side preview-builder and report-builder mappings so overview/report composition can consume tile metadata more consistently without changing the current UI or route surface.
+
+Current Quick HC framework milestone:
+
+- `quickhc/models.py` defines shared Quick HC metadata dataclasses.
+- `quickhc/registry.py` is the source of truth for tiles, sections, IDs, labels, categories, import URLs, collect URLs, default selections, and logical renderer names.
+- `quickhc/report_service.py` remains responsible for backend report composition and filtering, and now dispatches per-tile report builders from registry metadata.
+- `quickhc/overview_service.py` now owns Quick HC overview preview shaping instead of the shared route module, and now dispatches per-tile preview builders from registry metadata.
+- `quickhc/canonical_view.py` now exists as the translation layer from canonical artifacts into Quick HC JS view models.
+- `quick_hc.html` now acts as a thin composition template over shared partials.
+- `partials/quickhc_tile.html` and `partials/quickhc_section_card.html` provide reusable structural shells.
+- `partials/quickhc/previews/*.html` now contain explicit per-subject preview bodies for all current Quick HC subjects.
+
+Next logical phase:
+
+- Introduce controlled renderer orchestration through an explicit renderer mapping layer.
+- Keep avoiding direct dynamic Jinja template resolution from registry values until the orchestration contract is explicit and testable; the current Python-side mappings are the intermediate hardening step, not the final abstraction.
+- Preserve current route thinness and keep report filtering in Python rather than moving it into templates.
+
+Longer-term alignment:
+
+- Reuse the Quick HC registry as the metadata foundation for future MCP-driven composition, scheduled reporting, and additional reporting surfaces.
+
+Current known limitations:
+
+- no PDF export yet
+- no persisted report profiles yet
+- no scoring or recommendations yet
+- UI selection persistence currently uses localStorage only
+- runtime artifacts remain outside git and are not part of the repository state
 
 ## Current Foundation Hardening
 
@@ -112,6 +168,15 @@ Status: active.
 - Preserve all artifact files by default and design future retention/cleanup as an explicit, non-destructive operator action.
 - Keep export/audit tooling lightweight while the registry model settles; no heavy migration framework yet.
 
+## Near-Term Follow-Up: Canonical Quick HC Translation
+
+Status: active.
+
+- Complete the move from legacy per-subject shaping toward canonical-view-driven Quick HC subject shaping for Security Assessment and License Summary.
+- Preserve the existing legacy fallback path in `subject_data_service.py` until canonical parity is validated.
+- Keep canonical JSON API endpoints available for debugging and future UI integration.
+- Continue deriving Quick HC import/collect action URLs from tile metadata instead of template-local route strings.
+
 ## Near-Term Follow-Up: License Summary Artifact Foundation
 
 Status: started.
@@ -130,6 +195,15 @@ Status: started.
   and render only sections that return real rows in the current CommCell.
 - Continue using page context plus field/header shape for report 206 discovery; do not hardcode environment-specific dataset GUIDs.
 - Defer scoring, compliance rules, recommendations, and trend analytics.
+
+## Emerging Application State Layer
+
+Status: started.
+
+- Add `data/app.db` for business/application state.
+- Keep business/application state separate from import registries and canonical artifact files.
+- Use the new `db/` package for customers and engagements with raw SQL helpers rather than adding an ORM.
+- Preserve artifact registries as artifact-specific storage rather than merging them into the new business DB.
 
 ## Future Research: Commvault Report Definitions
 

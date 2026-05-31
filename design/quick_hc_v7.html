@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quick HC v7</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0d0f;--bg-panel:#111114;--bg-card:#18181c;--bg-hover:rgba(255,255,255,.05);--bg-active:rgba(255,255,255,.08);
+  --border:#242428;--border-hi:#2e2e38;
+  --text-1:#e8e8f0;--text-2:#8888a0;--text-3:#55556a;
+  --accent:#4f8ef7;--accent-dim:#1e3358;
+  --green:#22c55e;--red:#ef4444;--amber:#f59e0b;
+  --c-crit-bg:#2a0d0d;--c-crit-bd:#ef4444;--c-crit-tx:#fca5a5;
+  --c-warn-bg:#271a06;--c-warn-bd:#f59e0b;--c-warn-tx:#fcd34d;
+  --c-info-bg:#0e1e38;--c-info-bd:#3b82f6;--c-info-tx:#93c5fd;
+  --c-good-bg:#0a2016;--c-good-bd:#22c55e;--c-good-tx:#86efac;
+  --font:'IBM Plex Sans',sans-serif;--mono:'IBM Plex Mono',monospace;
+}
+html,body{height:100%;background:var(--bg);color:var(--text-1);font-family:var(--font);font-size:13px;overflow:hidden}
+
+/* HEADER */
+.hdr{height:46px;background:var(--bg-panel);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 16px;position:fixed;top:0;left:0;right:0;z-index:100}
+.hdr-title{font-weight:600;font-size:14px;cursor:pointer}
+.hdr-title:hover{color:var(--accent)}
+.hdr-sep{width:1px;height:20px;background:var(--border-hi)}
+.hdr-spacer{flex:1}
+.pill-green{background:rgba(34,197,94,.12);color:var(--green);font-size:11px;font-weight:500;padding:2px 10px;border-radius:10px}
+.hdr-avail{background:var(--accent-dim);color:var(--accent);font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;font-family:var(--mono)}
+.btn-ghost{background:none;border:1px solid var(--border-hi);color:var(--text-2);padding:3px 10px;border-radius:4px;cursor:pointer;font-family:var(--font);font-size:12px}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+
+/* LAYOUT */
+.body{position:fixed;top:46px;left:0;right:0;bottom:0;display:flex}
+
+/* LEFT */
+.left{width:280px;flex-shrink:0;background:var(--bg-panel);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.left-scroll{flex:1;overflow-y:auto;padding:12px 10px 8px}
+.left-footer{padding:10px 12px;border-top:1px solid var(--border)}
+.btn-gen{width:100%;padding:9px;background:var(--accent);color:#fff;border:none;border-radius:5px;cursor:pointer;font-family:var(--font);font-size:12px;font-weight:600}
+.btn-gen:hover{opacity:.88}
+.btn-gen:disabled{background:var(--border-hi);color:var(--text-3);cursor:not-allowed}
+
+/* NAV */
+.cat-group{margin-bottom:4px}
+.cat-hdr{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:6px;cursor:pointer;user-select:none;transition:background .12s}
+.cat-hdr:hover{background:var(--bg-hover)}
+.cat-icon{font-size:16px;width:22px;text-align:center}
+.cat-label{font-size:14px;font-weight:600;flex:1;letter-spacing:-.01em}
+.cat-chev{font-size:9px;color:var(--text-3);transition:transform .18s}
+.cat-chev.open{transform:rotate(90deg)}
+.cat-body{overflow:hidden;transition:max-height .22s ease;padding-left:32px}
+.cat-div{height:1px;background:var(--border);margin:4px 8px}
+.subj-row{display:flex;align-items:center;gap:6px;padding:0 8px;height:38px;border-radius:6px;cursor:pointer;transition:background .1s;margin-bottom:1px}
+.subj-row:hover{background:var(--bg-hover)}
+.subj-row.active{background:var(--bg-active)}
+.subj-row.active .subj-name{font-weight:600}
+.subj-cb{appearance:none;width:13px;height:13px;border:1.5px solid var(--border-hi);border-radius:3px;cursor:pointer;position:relative;flex-shrink:0;transition:background .12s,border-color .12s}
+.subj-cb:checked{background:var(--accent);border-color:var(--accent)}
+.subj-cb:checked::after{content:'✓';position:absolute;top:-1px;left:1px;font-size:9px;color:#fff;font-weight:700}
+.subj-name{flex:1;font-size:13px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.subj-badge{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
+.b-ok{background:var(--accent);color:#fff}
+.b-issues{background:var(--red);color:#fff}
+.b-nodata{border:1.5px dashed var(--border-hi)}
+
+/* RIGHT */
+.right{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.right-body{flex:1;overflow-y:auto}
+.right-footer{height:44px;border-top:1px solid var(--border);background:var(--bg-panel);display:flex;align-items:center;justify-content:space-between;padding:0 20px;flex-shrink:0;display:none}
+.rf-source{font-size:12px;color:var(--text-3)}
+.rf-link{font-size:12px;color:var(--accent);text-decoration:none}
+.rf-link:hover{text-decoration:underline}
+
+/* SHARED CONTENT LAYOUT */
+.cfg-wrap{padding:22px 28px}
+.cfg-title{font-size:20px;font-weight:600;margin-bottom:4px}
+.cfg-back{font-size:12px;color:var(--text-2);cursor:pointer;margin-bottom:16px;display:inline-flex;align-items:center;gap:6px}
+.cfg-back:hover{color:var(--accent)}
+.cfg-sec{margin-top:20px}
+.cfg-sec-title{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);font-family:var(--mono);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.cfg-tile{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:8px}
+.cfg-tile-hint{font-size:10px;color:var(--text-3);margin-top:6px;font-family:var(--mono)}
+.cfg-desc-edit{background:none;border:none;color:var(--text-1);font-family:var(--font);font-size:12px;padding:0;width:100%;resize:none;outline:none;line-height:1.6}
+.cfg-desc-edit::placeholder{color:var(--text-3)}
+
+/* SOURCE SELECTOR */
+.src-selector-row{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.src-selector-label{font-size:12px;color:var(--text-2);white-space:nowrap}
+.src-btn{padding:5px 14px;border-radius:6px;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border-hi);background:var(--bg-card);color:var(--text-2);transition:all .15s}
+.src-btn:hover{border-color:var(--accent);color:var(--text-1)}
+.src-btn.src-active{background:rgba(34,197,94,.15);border-color:var(--green);color:var(--green)}
+.src-meta-panel{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px 14px}
+.src-meta-row{display:flex;gap:8px;padding:4px 0;font-size:11px;border-bottom:1px solid rgba(255,255,255,.04)}
+.src-meta-row:last-child{border-bottom:none}
+.src-meta-row span:first-child{color:var(--text-3);min-width:100px}
+.src-meta-row span:last-child{color:var(--text-1);font-family:var(--mono);font-size:10px}
+.src-status{display:inline-flex;font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;margin-bottom:8px}
+.ss-v{background:rgba(34,197,94,.12);color:var(--green)}
+.ss-n{background:rgba(136,136,160,.1);color:var(--text-3)}
+.src-upload{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
+.btn-sm{padding:5px 12px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);border:none}
+.btn-sm-p{background:var(--accent);color:#fff}
+.btn-sm-s{background:none;border:1px solid var(--border-hi);color:var(--text-2)}
+.btn-sm-s:hover{border-color:var(--accent);color:var(--accent)}
+.cfg-input{background:var(--bg-card);border:1px solid var(--border-hi);border-radius:4px;color:var(--text-1);font-family:var(--mono);font-size:12px;padding:6px 10px;width:100%}
+.cfg-input:focus{outline:none;border-color:var(--accent)}
+
+/* REPORT SECTION TILES */
+.sec-tile{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden}
+.sec-tile.excluded{opacity:.4}
+.sec-tile-hdr{display:flex;align-items:center;gap:10px;padding:10px 14px}
+.sec-tile-hdr-border{border-bottom:1px solid var(--border)}
+.sec-title{font-size:13px;font-weight:500;flex:1}
+.sec-meta{font-size:11px;color:var(--text-3)}
+.sec-inc-label{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-2);cursor:pointer;white-space:nowrap;user-select:none}
+.sec-inc-cb{appearance:none;width:13px;height:13px;border:1.5px solid var(--border-hi);border-radius:3px;cursor:pointer;position:relative;flex-shrink:0;transition:background .12s,border-color .12s}
+.sec-inc-cb:checked{background:var(--accent);border-color:var(--accent)}
+.sec-inc-cb:checked::after{content:'✓';position:absolute;top:-1px;left:1px;font-size:9px;color:#fff;font-weight:700}
+.inc-pill-yes{font-size:10px;font-weight:600;padding:1px 8px;border-radius:8px;background:var(--accent-dim);color:var(--accent)}
+.inc-pill-no{font-size:10px;font-weight:600;padding:1px 8px;border-radius:8px;background:rgba(136,136,160,.1);color:var(--text-3)}
+.sec-tile-body{padding:12px 14px}
+
+/* META CARDS */
+.meta-grid{display:grid;gap:8px}
+.meta-grid-4{grid-template-columns:repeat(4,1fr)}
+.meta-grid-3{grid-template-columns:repeat(3,1fr)}
+.meta-card{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px}
+.meta-lbl{font-size:10px;letter-spacing:.08em;color:var(--text-3);text-transform:uppercase;font-family:var(--mono)}
+.meta-val{font-size:13px;font-weight:600;margin-top:4px}
+.meta-val.ok{color:var(--green)}.meta-val.err{color:var(--red)}.meta-val.warn{color:var(--amber)}
+
+/* FINDINGS */
+.finding-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.finding-card{background:var(--bg);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.fc-top{padding:6px 10px;font-size:10px;font-weight:700;font-family:var(--mono)}
+.fc-crit{background:rgba(239,68,68,.18);color:var(--c-crit-tx)}
+.fc-warn{background:rgba(245,158,11,.18);color:var(--c-warn-tx)}
+.fc-info{background:rgba(59,130,246,.15);color:var(--c-info-tx)}
+.fc-good{background:rgba(34,197,94,.12);color:var(--c-good-tx)}
+.fc-body{padding:8px 10px}
+.fc-title{font-size:12px;font-weight:600;margin-bottom:4px}
+.fc-rem{font-size:11px;color:var(--text-2);line-height:1.5}
+.finding-row{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.finding-row:last-child{border-bottom:none}
+.f-badge{flex-shrink:0;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;font-family:var(--mono);white-space:nowrap;margin-top:1px}
+.b-crit{background:var(--c-crit-bg);color:var(--c-crit-tx)}
+.b-warn{background:var(--c-warn-bg);color:var(--c-warn-tx)}
+.b-info{background:var(--c-info-bg);color:var(--c-info-tx)}
+.b-good{background:var(--c-good-bg);color:var(--c-good-tx)}
+.f-body{flex:1}.f-ttl{font-size:12px;font-weight:500}.f-rem{font-size:11px;color:var(--text-2);margin-top:2px;line-height:1.4}
+
+/* COUNTERS */
+.counter-chips{display:flex;gap:6px;flex-wrap:wrap}
+.counter-chip{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:5px 14px;text-align:center}
+.cc-n{font-size:18px;font-weight:700;font-family:var(--mono)}
+.cc-l{font-size:10px;color:var(--text-3);margin-top:1px}
+.cc-crit{color:var(--c-crit-tx)}.cc-warn{color:var(--c-warn-tx)}.cc-info{color:var(--c-info-tx)}.cc-good{color:var(--c-good-tx)}
+
+/* WORKLOAD */
+.wl-table{width:100%;border-collapse:collapse;font-size:12px}
+.wl-table th{font-size:10px;color:var(--text-3);font-family:var(--mono);padding:4px 8px;text-align:left;border-bottom:1px solid var(--border)}
+.wl-table td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.04)}
+.wl-table tr:last-child td{border-bottom:none}
+.wl-sec-name{font-size:10px;font-weight:600;color:var(--text-3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px}
+.wl-sec-name:first-child{margin-top:0}
+.usage-wrap{background:var(--border-hi);border-radius:2px;height:4px;overflow:hidden;width:80px}
+.usage-fill{height:100%;border-radius:2px}
+.uf-g{background:var(--green)}.uf-a{background:var(--amber)}.uf-r{background:var(--red)}
+
+/* CHART */
+.mini-chart{height:70px;display:flex;align-items:flex-end;gap:2px;margin-bottom:8px}
+.chart-legend{display:flex;gap:14px;align-items:center}
+.legend-item{display:flex;gap:4px;align-items:center;font-size:10px;color:var(--text-2)}
+.legend-dot{width:8px;height:8px;border-radius:1px}
+
+/* CONFIGURE BUTTON */
+.btn-configure{background:none;border:1px solid var(--border-hi);color:var(--text-2);padding:5px 16px;border-radius:6px;cursor:pointer;font-family:var(--font);font-size:12px;font-weight:500;white-space:nowrap;transition:border-color .15s,color .15s}
+.btn-configure:hover{border-color:var(--accent);color:var(--accent)}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--bg-panel);border:1px solid var(--border-hi);border-radius:8px;padding:24px;max-width:400px;width:90%}
+.modal h3{font-size:15px;font-weight:600;margin-bottom:8px}
+.modal p{font-size:13px;color:var(--text-2);line-height:1.6;margin-top:6px}
+.modal-footer{margin-top:18px;display:flex;justify-content:flex-end}
+.btn-prim{background:var(--accent);color:#fff;border:none;padding:7px 18px;border-radius:5px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600}
+
+/* COMPLIANCE PLACEHOLDER */
+.placeholder-tile{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:12px 14px;opacity:.55}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.right-body > div{animation:fadeIn .13s ease}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:3px}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <span class="hdr-title" onclick="showOverview()">Quick HC</span>
+  <span class="hdr-sep"></span>
+  <span style="font-family:var(--mono);font-size:11px;color:var(--text-2)">cs01 · SP40.47</span>
+  <span class="hdr-spacer"></span>
+  <span class="hdr-avail" id="hdr-avail">5 available</span>
+  <span class="pill-green">● Connected</span>
+  <button class="btn-ghost">Connections</button>
+  <button class="btn-ghost">Logout</button>
+</header>
+
+<div class="body">
+  <aside class="left">
+    <div class="left-scroll" id="left-scroll"></div>
+    <div class="left-footer">
+      <button class="btn-gen" id="btn-gen">⬇ Generate Customer Report</button>
+    </div>
+  </aside>
+  <main class="right">
+    <div class="right-body" id="right-body"></div>
+    <footer class="right-footer" id="right-footer">
+      <span class="rf-source" id="rf-source"></span>
+      <a class="rf-link" id="rf-link" href="#">Open full details →</a>
+    </footer>
+  </main>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3>✓ Customer Report Generated</h3>
+    <p>Report compiled for <strong>cs01</strong> including all selected subjects.</p>
+    <p>In production this triggers the report pipeline and produces a downloadable artifact.</p>
+    <div class="modal-footer"><button class="btn-prim" onclick="document.getElementById('modal').classList.remove('open')">Close</button></div>
+  </div>
+</div>
+
+<script>
+// ── DATA ──
+const CATS = [
+  { id:'identity', name:'Identity', icon:'🖥', open:true, subjects:[
+    { id:'commcell', name:'CommCell Details', state:'issues', included:true, subtitle:'cs01 · SP40.47', fullUrl:'/quick-hc/commcell', activeSource:'rest_api',
+      sections:[
+        {id:'cc_id', title:'CommCell Identity', meta:'Name · Version · API · SSL', included:true, type:'empty'},
+        {id:'cc_f', title:'Critical / Warning findings', meta:'Priority findings', included:true, type:'empty'},
+      ],
+      sources:[
+        {id:'rest_api', name:'Direct REST API', desc:'Live call to GET /commandcenter/api/CommServ', status:'v', meta:[{k:'Endpoint',v:'/commandcenter/api/CommServ'},{k:'Collected',v:'10 min ago'},{k:'HTTP',v:'200 OK'}]},
+        {id:'rest_report', name:'REST Report', desc:'Reports Plus / Metrics dataset', status:'n', meta:[]},
+        {id:'import', name:'Import File', desc:'Upload CSV or HTML export — format auto-detected', status:'n', meta:[], hasUpload:true},
+      ],
+      sections:[
+
+
+      ]
+    }
+  ]},
+  { id:'security', name:'Security', icon:'🔒', open:true, subjects:[
+    { id:'security_assessment', name:'Security Assessment', state:'issues', included:true, subtitle:'2 critical · 18 info · 12 good', fullUrl:'/quick-hc/security-assessment', activeSource:'rest_report',
+      sources:[
+        {id:'rest_report', name:'REST Report', desc:'Reports Plus report 336 — Security Assessment', status:'v', meta:[{k:'Report ID',v:'336'},{k:'Collected',v:'2 hours ago'},{k:'Findings',v:'32'}]},
+        {id:'import', name:'Import File', desc:'Upload HTML or CSV export — format auto-detected', status:'v', meta:[{k:'Generated',v:'May 18, 2026 15:16'},{k:'Rows',v:'32'}], hasUpload:true},
+      ],
+      sections:[
+        {id:'sa_c', title:'Summary counters', meta:'32 checks', included:true, type:'counters', counters:{Critical:2,Warning:0,Info:18,Good:12}},
+        {id:'sa_h', title:'Critical / Warning highlights', meta:'Priority findings', included:true, type:'findings_grid',
+         findings:[
+           {sev:'crit',title:'Backup encryption not enforced',rem:'Access Security · Data at rest encryption policy is not configured'},
+           {sev:'crit',title:'Audit trail retention below minimum',rem:'Auditing · Retention is 30 days; minimum recommended 90 days'},
+         ]},
+        {id:'sa_i', title:'Info / Good findings', meta:'Informational checks', included:false, type:'findings_list',
+         findings:[
+           {sev:'info',title:'MFA available but not mandatory',rem:'Not enforced for all users'},
+           {sev:'info',title:'Password complexity policy is weak',rem:'Minimum password length is 6 characters'},
+           {sev:'good',title:'Admin lockout policy configured',rem:'Account lockout after 5 failed attempts'},
+         ]},
+      ]
+    }
+  ]},
+  { id:'licensing', name:'Licensing', icon:'📋', open:true, subjects:[
+    { id:'license_summary', name:'License Summary', state:'ok', included:true, subtitle:'Workloads · 16 other licenses', fullUrl:'/quick-hc/license-summary', activeSource:'import',
+      sources:[
+        {id:'rest_report', name:'REST Report', desc:'Live Reports Plus — report 206', status:'v', meta:[{k:'Report ID',v:'206'},{k:'Status',v:'Executable'}]},
+        {id:'import', name:'Import File', desc:'Upload CSV or HTML export — format auto-detected', status:'v', meta:[{k:'Generated',v:'May 18, 2026 15:16'},{k:'Rows',v:'57'}], hasUpload:true},
+      ],
+      sections:[
+        {id:'ls_m', title:'Source metadata', meta:'Collection details', included:true, type:'meta',
+         rows:[{k:'SOURCE',v:'CSV'},{k:'IMPORTED',v:'2026-05-20 14:32'},{k:'GENERATED ON',v:'2026-05-18'},{k:'LICENSE EXPIRY',v:'2027-01-15',cls:'warn'}]},
+        {id:'ls_w', title:'Workload summary', meta:'Capacity by license type', included:true, type:'workload',
+         workload:[
+           {name:'Capacity Licenses', rows:[{license:'Windows File System Backup',ent:'20 TB',used:'12 TB',pct:60},{license:'VMware vSphere Backup',ent:'10 TB',used:'8.5 TB',pct:85}]},
+           {name:'Operating Instance Licenses', rows:[{license:'Virtual Machine',ent:'200',used:'187',pct:94}]},
+         ]},
+        {id:'ls_f', title:'Findings', meta:'License health checks', included:true, type:'findings_grid',
+         findings:[
+           {sev:'warn',title:'VMware vSphere Backup at 85%',rem:'10 TB licensed · 8.5 TB used'},
+           {sev:'warn',title:'Virtual Machine license near limit',rem:'200 licensed · 187 in use · 94%'},
+         ]},
+      ]
+    }
+  ]},
+  { id:'performance', name:'Performance & Growth', icon:'📈', open:true, subjects:[
+    { id:'client_growth', name:'Client Growth', state:'ok', included:true, subtitle:'487 clients · +57% YoY', fullUrl:null, activeSource:'rest_report',
+      sources:[{id:'rest_report',name:'REST Report',desc:'Reports Plus report 318 — Client Growth',status:'v',meta:[{k:'Report ID',v:'318'},{k:'Collected',v:'1 hour ago'},{k:'Records',v:'12 months'}]},{id:'import',name:'Import File',desc:'Upload CSV or HTML export',status:'n',meta:[],hasUpload:true}],
+      sections:[
+        {id:'cg_s',title:'Growth summary',meta:'Key metrics',included:true,type:'meta',rows:[{k:'LATEST TOTAL',v:'487 clients'},{k:'PERIOD',v:'May 2025 – Apr 2026'},{k:'ADDED (APR)',v:'+29'},{k:'YoY GROWTH',v:'+57%',cls:'ok'}]},
+        {id:'cg_c',title:'Growth chart',meta:'12-month trend',included:true,type:'chart_growth',chart:{months:['May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr'],totals:[310,318,325,340,355,362,380,390,408,430,461,487],added:[12,10,11,18,19,12,22,14,22,25,34,29]}},
+        {id:'cg_f',title:'Findings',meta:'Growth observations',included:true,type:'findings_list',findings:[{sev:'info',title:'Steady growth trend over 12 months',rem:'310 → 487 clients (+57%) · avg +15/month'},{sev:'info',title:'Accelerating growth in Q1 2026',rem:'March 2026 saw highest monthly addition: +34'}]},
+      ]
+    },
+    { id:'capacity_license', name:'Capacity License', state:'ok', included:true, subtitle:'21.5 TB used · 61%', fullUrl:null, activeSource:'rest_report',
+      sources:[{id:'rest_report',name:'REST Report',desc:'Reports Plus report 318 — Capacity License',status:'v',meta:[{k:'Report ID',v:'318'},{k:'Collected',v:'1 hour ago'}]},{id:'import',name:'Import File',desc:'Upload CSV or HTML export',status:'n',meta:[],hasUpload:true}],
+      sections:[
+        {id:'cl_s',title:'Capacity summary',meta:'Current state',included:true,type:'meta',rows:[{k:'USED CAPACITY',v:'21.5 TB'},{k:'PURCHASED',v:'35 TB'},{k:'UTILISATION',v:'61%'},{k:'PERIOD',v:'Apr 2026'}]},
+        {id:'cl_c',title:'Capacity trend',meta:'12-month history',included:true,type:'chart_capacity',chart:{months:['May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr'],used:[14.2,15.1,15.8,16.4,17.1,17.9,18.4,19.0,19.8,20.5,21.1,21.5]}},
+        {id:'cl_f',title:'Findings',meta:'Capacity observations',included:true,type:'findings_list',findings:[{sev:'info',title:'Capacity utilisation at 61%',rem:'21.5 TB used of 35 TB purchased'},{sev:'info',title:'Projected runway ~24 months',rem:'+0.65 TB/month average'}]},
+      ]
+    },
+  ]},
+  { id:'operations', name:'Operations', icon:'🔧', open:false, subjects:[
+    {id:'job_failures',name:'Job Failures',state:'nodata',included:false,subtitle:'Not configured',fullUrl:null,activeSource:null,sources:[{id:'rest_api',name:'Direct REST API',desc:'GET /Job failure filter',status:'n',meta:[]},{id:'rest_report',name:'REST Report',desc:'Reports Plus failed jobs',status:'n',meta:[]},{id:'import',name:'Import File',desc:'Upload CSV or HTML export',status:'n',meta:[],hasUpload:true}],sections:[]},
+    {id:'sla',name:'SLA Compliance',state:'nodata',included:false,subtitle:'Not configured',fullUrl:null,activeSource:null,sources:[{id:'rest_report',name:'REST Report',desc:'Reports Plus SLA dataset',status:'n',meta:[]},{id:'import',name:'Import File',desc:'Upload CSV or HTML export',status:'n',meta:[],hasUpload:true}],sections:[]},
+  ]},
+];
+
+// ── STATE ──
+let activeId = null;
+let mode = 'overview'; // overview | subject | config
+
+function allSubjs(){ return CATS.flatMap(c=>c.subjects); }
+function findSubj(id){ return allSubjs().find(s=>s.id===id); }
+function findSec(sid,secId){ return findSubj(sid)?.sections?.find(s=>s.id===secId); }
+
+// ── LEFT NAV ──
+function renderLeft(){
+  let h = '';
+  CATS.forEach((cat,ci) => {
+    h += `<div class="cat-group">
+      <div class="cat-hdr" onclick="toggleCat('${cat.id}',this)">
+        <span class="cat-icon">${cat.icon}</span>
+        <span class="cat-label">${cat.name}</span>
+        <span class="cat-chev ${cat.open?'open':''}">▶</span>
+      </div>
+      <div class="cat-body" id="cb-${cat.id}" style="max-height:${cat.open?'2000px':'0'}">`;
+    cat.subjects.forEach(s => {
+      const bc = s.state==='ok'?'b-ok':s.state==='issues'?'b-issues':'b-nodata';
+      const bi = s.state==='ok'?'✓':s.state==='issues'?'!':'';
+      const isActive = s.id===activeId && mode==='subject';
+      h += `<div class="subj-row${isActive?' active':''}" id="sr-${s.id}">
+        <input type="checkbox" class="subj-cb" ${s.included?'checked':''} onclick="event.stopPropagation()" onchange="toggleInclude('${s.id}',this.checked)" title="Include in report">
+        <span class="subj-name" onclick="selectSubj('${s.id}')">${s.name}</span>
+        <span class="subj-badge ${bc}">${bi}</span>
+      </div>`;
+    });
+    h += `</div></div>`;
+    if(ci < CATS.length-1) h += `<div class="cat-div"></div>`;
+  });
+  document.getElementById('left-scroll').innerHTML = h;
+  document.getElementById('btn-gen').disabled = !allSubjs().some(s=>s.included);
+}
+
+function toggleCat(id,el){
+  const cat=CATS.find(c=>c.id===id); cat.open=!cat.open;
+  document.getElementById('cb-'+id).style.maxHeight=cat.open?'2000px':'0';
+  el.querySelector('.cat-chev').classList.toggle('open',cat.open);
+}
+
+function toggleInclude(id,val){
+  findSubj(id).included=val;
+  document.getElementById('btn-gen').disabled=!allSubjs().some(s=>s.included);
+  if(mode==='overview') showOverview();
+}
+
+// ── SECTION BODY RENDERER ──
+function secBody(sec){
+  const lm={crit:'Critical',warn:'Warning',info:'Info',good:'Good'};
+  const bm={crit:'b-crit',warn:'b-warn',info:'b-info',good:'b-good'};
+  const cm={crit:'fc-crit',warn:'fc-warn',info:'fc-info',good:'fc-good'};
+  if(sec.type==='meta'){
+    const gc=sec.rows.length>4?'meta-grid-3':'meta-grid-4';
+    return `<div class="meta-grid ${gc}">${sec.rows.map(r=>`<div class="meta-card"><div class="meta-lbl">${r.k}</div><div class="meta-val ${r.cls||''}">${r.v}</div></div>`).join('')}</div>`;
+  }
+  if(sec.type==='counters'){
+    const cc={Critical:'cc-crit',Warning:'cc-warn',Info:'cc-info',Good:'cc-good'};
+    return `<div class="counter-chips">${Object.entries(sec.counters).map(([k,v])=>`<div class="counter-chip"><div class="cc-n ${cc[k]||''}">${v}</div><div class="cc-l">${k}</div></div>`).join('')}<div class="counter-chip"><div class="cc-n" style="color:var(--text-2)">${Object.values(sec.counters).reduce((a,b)=>a+b,0)}</div><div class="cc-l">Total</div></div></div>`;
+  }
+  if(sec.type==='findings_grid'){
+    return `<div class="finding-grid">${sec.findings.map(f=>`<div class="finding-card"><div class="fc-top ${cm[f.sev]}">${lm[f.sev]}</div><div class="fc-body"><div class="fc-title">${f.title}</div><div class="fc-rem">${f.rem}</div></div></div>`).join('')}</div>`;
+  }
+  if(sec.type==='findings_list'){
+    return sec.findings.map(f=>`<div class="finding-row"><span class="f-badge ${bm[f.sev]}">${lm[f.sev]}</span><div class="f-body"><div class="f-ttl">${f.title}</div><div class="f-rem">${f.rem}</div></div></div>`).join('');
+  }
+  if(sec.type==='workload'){
+    return sec.workload.map(ws=>`<div class="wl-sec-name">${ws.name}</div><table class="wl-table"><thead><tr><th>License</th><th>Entitlement</th><th>Used</th><th>Utilisation</th></tr></thead><tbody>${ws.rows.map(r=>{const col=r.pct>=90?'uf-r':r.pct>=80?'uf-a':'uf-g';return`<tr><td>${r.license}</td><td style="font-family:var(--mono);font-size:11px">${r.ent}</td><td style="font-family:var(--mono);font-size:11px">${r.used}</td><td><div class="usage-wrap"><div class="usage-fill ${col}" style="width:${r.pct}%"></div></div><span style="font-size:10px;color:var(--text-2)">${r.pct}%</span></td></tr>`;}).join('')}</tbody></table>`).join('');
+  }
+  if(sec.type==='chart_growth'){
+    const cd=sec.chart; const mT=Math.max(...cd.totals); const mA=Math.max(...cd.added);
+    const bars=cd.months.map((m,i)=>{const th=Math.round((cd.totals[i]/mT)*62)+4;const ah=Math.round((cd.added[i]/mA)*44)+4;return`<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end" title="${m}: ${cd.totals[i]}, +${cd.added[i]}"><div style="background:rgba(34,197,94,.35);height:${th}px;border-radius:2px 2px 0 0;position:relative"><div style="position:absolute;bottom:0;left:0;right:0;height:${ah}px;background:rgba(79,142,247,.85);border-radius:2px 2px 0 0"></div></div></div>`;}).join('');
+    return `<div class="mini-chart">${bars}</div><div class="chart-legend"><div class="legend-item"><div class="legend-dot" style="background:rgba(79,142,247,.85)"></div>Added</div><div class="legend-item"><div class="legend-dot" style="background:rgba(34,197,94,.35)"></div>Total</div><span style="margin-left:auto;font-size:11px;color:var(--text-2)">Latest: <strong style="color:var(--text-1)">487</strong> · YoY: <strong style="color:var(--green)">+57%</strong></span></div>`;
+  }
+  if(sec.type==='chart_capacity'){
+    const cd=sec.chart;
+    const bars=cd.months.map((m,i)=>{const pct=cd.used[i]/35;const col=pct>.9?'rgba(239,68,68,.8)':pct>.75?'rgba(245,158,11,.8)':'rgba(59,130,246,.7)';return`<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end" title="${m}: ${cd.used[i]} TB"><div style="background:var(--border-hi);height:66px;border-radius:2px 2px 0 0;position:relative;overflow:hidden"><div style="position:absolute;bottom:0;left:0;right:0;height:${Math.round(pct*66)}px;background:${col}"></div></div></div>`;}).join('');
+    return `<div class="mini-chart">${bars}</div><div class="chart-legend"><div class="legend-item"><div class="legend-dot" style="background:rgba(59,130,246,.7)"></div>Used</div><div class="legend-item"><div class="legend-dot" style="background:var(--border-hi)"></div>Purchased (35 TB)</div><span style="margin-left:auto;font-size:11px;color:var(--text-2)">Utilisation: <strong style="color:var(--text-1)">61%</strong></span></div>`;
+  }
+  if(sec.type==='text') return `<div style="font-size:12px;color:var(--text-2)">${sec.text}</div>`;
+  return '';
+}
+
+// ── SECTION TILE — with optional "Include in report" checkbox ──
+function secTile(subjId, sec, showCheckbox){
+  const body = sec.included ? secBody(sec) : '';
+  const right = showCheckbox
+    ? `<label class="sec-inc-label"><span style="color:var(--text-2)">Include in report</span><input type="checkbox" class="sec-inc-cb" ${sec.included?'checked':''} onchange="toggleSec('${subjId}','${sec.id}',this.checked)"></label>`
+    : (sec.included ? `<span class="inc-pill-yes">Included</span>` : `<span class="inc-pill-no">Not included</span>`);
+  return `<div class="sec-tile${sec.included?'':' excluded'}">
+    <div class="sec-tile-hdr${body?' sec-tile-hdr-border':''}">
+      <span class="sec-title">${sec.title}</span>
+      <span class="sec-meta">${sec.meta}</span>
+      ${right}
+    </div>
+    ${body ? `<div class="sec-tile-body">${body}</div>` : ''}
+  </div>`;
+}
+
+// ── OVERVIEW ──
+function showOverview(){
+  activeId=null; mode='overview';
+  renderLeft();
+  document.getElementById('right-footer').style.display='none';
+  const bycat=CATS.map(cat=>({cat,subjects:cat.subjects.filter(s=>s.included)})).filter(c=>c.subjects.length);
+  let subjList='';
+  if(bycat.length){
+    bycat.forEach(({cat,subjects})=>{
+      subjList+=`<div style="font-size:11px;font-weight:600;color:var(--text-3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 4px">${cat.name}</div>`;
+      subjects.forEach(s=>{
+        const bc=s.state==='ok'?'b-ok':s.state==='issues'?'b-issues':'b-nodata';
+        const bi=s.state==='ok'?'✓':s.state==='issues'?'!':'';
+        subjList+=`<div class="cfg-tile" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;margin-bottom:6px" onclick="selectSubj('${s.id}')" onmouseenter="this.style.borderColor='var(--border-hi)'" onmouseleave="this.style.borderColor='var(--border)'"><span class="subj-badge ${bc}" style="flex-shrink:0">${bi}</span><span style="font-size:13px;font-weight:500;flex:1">${s.name}</span><span style="font-size:11px;color:var(--text-3)">${s.subtitle}</span></div>`;
+      });
+    });
+  } else {
+    subjList=`<div class="cfg-tile" style="color:var(--text-3);font-size:12px">No subjects included. Use the checkboxes on the left.</div>`;
+  }
+  document.getElementById('right-body').innerHTML=`<div class="cfg-wrap">
+    <div class="cfg-title">Quick HealthCheck</div>
+    <div style="font-size:12px;color:var(--text-2);margin-top:2px">cs01 · SP40.47</div>
+    <div class="cfg-sec"><div class="cfg-sec-title">Report Sections</div>${subjList}</div>
+    <div class="cfg-sec"><div class="cfg-sec-title">Compliance Status</div>
+      <div class="placeholder-tile">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:13px;font-weight:600">Compliance overview</span>
+          <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;background:rgba(136,136,160,.1);color:var(--text-3);font-family:var(--mono)">Not yet implemented</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-2);line-height:1.6">Pass/fail compliance status across all included subjects will appear here once compliance rules are configured.</div>
+        <div class="cfg-tile-hint" style="margin-top:8px">Placeholder — no backend support yet</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── SUBJECT VIEW ──
+function selectSubj(id){
+  openConfig(id);
+}
+
+function selectSubj_unused(id){
+  activeId=id; mode='subject';
+  renderLeft();
+  const s=findSubj(id);
+  const rf=document.getElementById('right-footer');
+  const srcName={rest_api:'Direct REST API',rest_report:'REST Report',import:'Import File'};
+  rf.style.display='flex';
+  document.getElementById('rf-source').textContent=s.activeSource?'Source: '+(srcName[s.activeSource]||s.activeSource):'';
+  const lnk=document.getElementById('rf-link');
+  if(s.fullUrl){lnk.href=s.fullUrl;lnk.style.display='';}else{lnk.style.display='none';}
+
+  const tiles=s.sections.map(sec=>secTile(s.id,sec,true)).join('');
+
+  document.getElementById('right-body').innerHTML=`<div class="cfg-wrap">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between">
+      <div class="cfg-title">${s.name}</div>
+      <button class="btn-configure" data-id="${s.id}" onclick="openConfig(this.dataset.id)">Configure</button>
+    </div>
+    <div class="cfg-sec">
+      <div class="cfg-sec-title">Description</div>
+      <div class="cfg-tile">
+        <textarea class="cfg-desc-edit" placeholder="Add a description for this subject…" rows="2">${s.subtitle}</textarea>
+        <div class="cfg-tile-hint">Not yet persisted — placeholder only</div>
+      </div>
+    </div>
+    ${tiles ? `<div class="cfg-sec"><div class="cfg-sec-title">Report Sections</div>${tiles}</div>` : ''}
+  </div>`;
+}
+
+function toggleSec(sid,secId,val){
+  const sec=findSec(sid,secId); if(sec) sec.included=val;
+  selectSubj(sid);
+}
+
+// ── CONFIG ──
+function openConfig(id){
+  activeId=id; mode='config';
+  renderLeft();
+  document.getElementById('right-footer').style.display='none';
+  const s=findSubj(id);
+  const sl={v:'● Validated',n:'○ Not configured'};
+  const sc={v:'ss-v',n:'ss-n'};
+
+  let srcBtns=s.sources.map(src=>`<button class="src-btn${s.activeSource===src.id?' src-active':''}" data-src="${src.id}" data-subj="${s.id}" onclick="setActiveSrc(this.dataset.subj,this.dataset.src)">${src.name}</button>`).join('');
+
+  const activeSrc=s.sources.find(src=>src.id===s.activeSource);
+  let srcPanel='';
+  if(activeSrc){
+    srcPanel=`<div class="src-meta-panel"><span class="src-status ${sc[activeSrc.status]||'ss-n'}">${sl[activeSrc.status]||'○ Not configured'}</span>`;
+    if(activeSrc.meta&&activeSrc.meta.length) srcPanel+=`<div style="margin-top:8px">${activeSrc.meta.map(m=>`<div class="src-meta-row"><span>${m.k}</span><span>${m.v}</span></div>`).join('')}</div>`;
+    if(activeSrc.hasUpload) srcPanel+=`<div class="src-upload"><label class="btn-sm btn-sm-s" style="cursor:pointer">Choose File<input type="file" hidden accept=".html,.htm,.csv,.json"></label><button class="btn-sm btn-sm-p">Import</button></div>`;
+    srcPanel+=`</div>`;
+  }
+
+  const secTiles=s.sections.map(sec=>secTile(s.id,sec,true)).join('');
+
+  document.getElementById('right-body').innerHTML=`<div class="cfg-wrap">
+    <div class="cfg-back" onclick="selectSubj('${s.id}')">← Back to ${s.name}</div>
+    <div class="cfg-title">${s.name}</div>
+    <div class="cfg-sec">
+      <div class="cfg-sec-title">Description</div>
+      <div class="cfg-tile">
+        <textarea class="cfg-desc-edit" placeholder="Add a description for this subject…" rows="2">${s.subtitle}</textarea>
+        <div class="cfg-tile-hint">Not yet persisted — placeholder only</div>
+      </div>
+    </div>
+    <div class="cfg-sec">
+      <div class="cfg-sec-title">Data Source</div>
+      <div class="src-selector-row"><span class="src-selector-label">Select source</span>${srcBtns}</div>
+      ${srcPanel}
+    </div>
+    <div class="cfg-sec">
+      <div class="cfg-sec-title">Report Sections</div>
+      <div class="cfg-tile">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+          <div>
+            <div style="font-size:13px;font-weight:600">${s.name}</div>
+            <div style="font-size:11px;color:var(--text-2);margin-top:2px">This subject reports on the CommCell identity below</div>
+          </div>
+          <label class="sec-inc-label">
+            Include in report
+            <input type="checkbox" class="sec-inc-cb" ${s.included?'checked':''} onchange="toggleInclude('${s.id}',this.checked);renderLeft()">
+          </label>
+        </div>
+        <div style="display:grid;gap:0">
+          <div class="src-meta-row"><span>CommCell Name</span><span>cs01</span></div>
+          <div class="src-meta-row"><span>Version</span><span>SP40.47</span></div>
+          <div class="src-meta-row"><span>Connection</span><span>192.168.182.129:4433</span></div>
+          <div class="src-meta-row" style="border-bottom:none"><span>CommCell ID</span><span><span style="font-family:var(--mono);font-size:11px;color:var(--text-1)">cs01</span></span></div>
+        </div>
+      </div>
+    </div>
+    ${secTiles ? `<div class="cfg-sec"><div class="cfg-sec-title">Report Sections</div>${secTiles}</div>` : ''}
+    <div class="cfg-sec">
+      <div class="cfg-sec-title">Compliance</div>
+      <div class="placeholder-tile">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:13px;font-weight:600">Compliance rules</span>
+          <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;background:rgba(136,136,160,.1);color:var(--text-3);font-family:var(--mono)">Not yet implemented</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-2);line-height:1.6">Compliance rules for this subject will be configurable here — thresholds, required checks, pass/fail criteria, and policy enforcement.</div>
+        <div class="cfg-tile-hint" style="margin-top:8px">Placeholder — no backend support yet</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function setActiveSrc(subjId,srcId){
+  findSubj(subjId).activeSource=srcId;
+  openConfig(subjId);
+}
+
+// ── EVENTS ──
+document.getElementById('btn-gen').addEventListener('click',()=>document.getElementById('modal').classList.add('open'));
+document.getElementById('modal').addEventListener('click',e=>{if(e.target===document.getElementById('modal'))document.getElementById('modal').classList.remove('open');});
+
+// ── INIT ──
+renderLeft();
+showOverview();
+</script>
+</body>
+</html>

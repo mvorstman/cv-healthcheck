@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Delete customer — Quick HC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='quick_hc.css') }}">
+  <script>
+    (function () {
+      var theme = localStorage.getItem('quickhc-theme-v1');
+      if (theme === 'dark' || theme === 'light') {
+        document.documentElement.dataset.theme = theme;
+      } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.dataset.theme = 'dark';
+      } else {
+        document.documentElement.dataset.theme = 'light';
+      }
+    })();
+  </script>
+  <style>
+    html, body { overflow: auto; }
+    .cust-page {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 48px 24px 64px;
+      font-family: var(--font);
+      color: var(--text-1);
+    }
+    .cust-back {
+      display: inline-block;
+      font-size: 12px;
+      color: var(--text-2);
+      text-decoration: none;
+      margin-bottom: 24px;
+    }
+    .cust-back:hover { color: var(--accent); }
+    .cust-title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .cust-lede {
+      font-size: 13px;
+      color: var(--text-2);
+      margin-bottom: 32px;
+    }
+    .cust-card {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 18px 20px;
+      background: var(--bg-panel);
+      margin-bottom: 24px;
+    }
+    .cust-card-row { padding: 6px 0; font-size: 13px; }
+    .cust-card-row + .cust-card-row { border-top: 1px solid var(--border); }
+    .cust-card-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      font-family: var(--mono);
+      display: block;
+      margin-bottom: 2px;
+    }
+    .cust-block-msg {
+      padding: 14px 16px;
+      border-radius: 5px;
+      margin-bottom: 24px;
+      font-size: 13px;
+      background: rgba(208, 64, 64, 0.12);
+      color: #d04040;
+      border: 1px solid rgba(208, 64, 64, 0.3);
+    }
+    .cust-actions {
+      display: flex;
+      gap: 12px;
+    }
+    .cust-btn {
+      border: none;
+      border-radius: 5px;
+      padding: 10px 18px;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .cust-btn-danger {
+      background: #d04040;
+      color: white;
+    }
+    .cust-btn-danger:hover { filter: brightness(1.1); }
+    .cust-btn-disabled {
+      background: var(--bg-panel);
+      color: var(--text-3);
+      border: 1px solid var(--border);
+      cursor: not-allowed;
+    }
+    .cust-btn-cancel {
+      background: var(--bg-panel);
+      color: var(--text-1);
+      border: 1px solid var(--border);
+    }
+    .cust-btn-cancel:hover { border-color: var(--accent); color: var(--accent); }
+  </style>
+</head>
+<body>
+
+{% include "partials/active_project_selector.html" %}
+
+<div class="cust-page">
+  <a class="cust-back" href="{{ url_for('main.customers_list') }}">← Back to Customers</a>
+
+  <div class="cust-title">Delete customer</div>
+  <p class="cust-lede">
+    {% if blocked %}
+      This customer has projects attached. Delete its projects first
+      from the Projects page (coming in a later phase), then return
+      here to delete the customer.
+    {% else %}
+      This will permanently remove the customer record. The action
+      cannot be undone.
+    {% endif %}
+  </p>
+
+  <div class="cust-card">
+    <div class="cust-card-row">
+      <span class="cust-card-label">Customer</span>
+      {{ customer.customer_name }}
+    </div>
+    <div class="cust-card-row">
+      <span class="cust-card-label">ID</span>
+      <code>{{ customer.customer_id }}</code>
+    </div>
+    {% if customer.commcell_id %}
+      <div class="cust-card-row">
+        <span class="cust-card-label">CommCell ID</span>
+        <code>{{ customer.commcell_id }}</code>
+      </div>
+    {% endif %}
+    <div class="cust-card-row">
+      <span class="cust-card-label">Project count</span>
+      {{ project_count }}
+    </div>
+  </div>
+
+  {% if blocked %}
+    <div class="cust-block-msg">
+      Cannot delete: this customer has {{ project_count }} project{% if project_count != 1 %}s{% endif %} attached.
+    </div>
+    <div class="cust-actions">
+      <button type="button" class="cust-btn cust-btn-disabled" disabled>Delete (blocked)</button>
+      <a class="cust-btn cust-btn-cancel" href="{{ url_for('main.customers_list') }}">Cancel</a>
+    </div>
+  {% else %}
+    <form method="post"
+          action="{{ url_for('main.customers_delete', customer_id=customer.customer_id) }}">
+      <div class="cust-actions">
+        <button type="submit" class="cust-btn cust-btn-danger">Delete permanently</button>
+        <a class="cust-btn cust-btn-cancel" href="{{ url_for('main.customers_list') }}">Cancel</a>
+      </div>
+    </form>
+  {% endif %}
+</div>
+
+</body>
+</html>

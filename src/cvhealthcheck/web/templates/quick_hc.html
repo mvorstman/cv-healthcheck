@@ -1,87 +1,204 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quick HC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='quick_hc.css', v=asset_version) }}">
+  <script>
+    (function () {
+      var theme = localStorage.getItem('quickhc-theme-v1');
+      if (theme === 'dark' || theme === 'light') {
+        document.documentElement.dataset.theme = theme;
+      } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.dataset.theme = 'dark';
+      } else {
+        document.documentElement.dataset.theme = 'light';
+      }
+    })();
+  </script>
+  <script>
+    window.QUICK_HC_INITIAL_DATA = {{ initial_data | tojson }};
+    window.QUICK_HC_FLASHES = {{ flashes | tojson }};
+    window.IS_AUTHENTICATED = {{ is_authenticated | tojson }};
+    window.CURRENT_USERNAME = {{ current_username | tojson }};
+  </script>
+</head>
+<body>
 
-{% block content %}
-<section>
-  <h2>Quick HC</h2>
-  <p>Quick HealthCheck is the fast, read-only acquisition path for low-impact operational checks.</p>
+<div class="body">
 
-  <h3>Subjects</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>Subject</th>
-        <th>Source</th>
-        <th>Latest artifact</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><a href="{{ url_for('main.quick_hc_commcell') }}">CommCell Identity / Version</a></td>
-        <td><code>GET /commandcenter/api/CommServ</code></td>
-        <td><code>{{ commcell_status.path }}</code></td>
-        <td>
-          {% if commcell_status.exists %}
-            collected {{ commcell_status.collected_at or "unknown" }}
-          {% else %}
-            not collected
-          {% endif %}
-        </td>
-      </tr>
-      <tr>
-        <td><a href="{{ url_for('main.metrics_client_growth') }}">Client Growth</a></td>
-        <td>Reports Plus / Metrics</td>
-        <td>Report 318 extraction artifacts</td>
-        <td>available when extracted</td>
-      </tr>
-      <tr>
-        <td><a href="{{ url_for('main.metrics_capacity_license') }}">Capacity License</a></td>
-        <td>Reports Plus / Metrics</td>
-        <td>Report 318 extraction artifacts</td>
-        <td>available when extracted</td>
-      </tr>
-      <tr>
-        <td><a href="{{ url_for('main.quick_hc_security_assessment') }}">Security Assessment</a></td>
-        <td>
-          {% if security_assessment.exists %}
-            {{ (security_assessment.source_type or "unknown") | upper }}
-          {% else %}
-            Reports Plus / Metrics report 336
-          {% endif %}
-        </td>
-        <td><code>{{ security_assessment.path }}</code></td>
-        <td>
-          {% if security_assessment.exists and security_assessment.summary %}
-            {% set counters = security_assessment.summary.counters %}
-            {{ counters["Critical"] }} critical,
-            {{ counters["Warning"] }} warning,
-            {{ counters["Info"] }} info,
-            {{ counters["Good"] }} good
-          {% else %}
-            not collected
-          {% endif %}
-        </td>
-      </tr>
-      <tr>
-        <td><a href="{{ url_for('main.quick_hc_license_summary') }}">License Summary</a></td>
-        <td>
-          {% if license_summary.exists %}
-            {{ (license_summary.source_type or "unknown") | upper }}
-          {% else %}
-            Reports Plus report 206 / import
-          {% endif %}
-        </td>
-        <td><code>{{ license_summary.path }}</code></td>
-        <td>
-          {% if license_summary.exists %}
-            {{ license_summary.other_count }} other licenses,
-            {{ license_summary.agent_feature_count }} agent/feature licenses
-          {% else %}
-            not collected
-          {% endif %}
-        </td>
-      </tr>
-    </tbody>
-  </table>
-</section>
-{% endblock %}
+  <!-- ── SIDEBAR ── -->
+  <aside class="left">
+
+    <!-- 1. App header: logo + connection badge -->
+    <div class="left-hdr">
+      <a href="{{ url_for('main.quick_hc') }}" class="left-brand" aria-label="cvThing">
+        <img
+          src="{{ url_for('static', filename='img/cvthing-logo-dark.png') }}"
+          data-light-logo="{{ url_for('static', filename='img/cvthing-logo-light.png') }}"
+          data-dark-logo="{{ url_for('static', filename='img/cvthing-logo-dark.png') }}"
+          alt="cvThing"
+          class="left-logo">
+      </a>
+      <button class="conn-badge" id="conn-badge" onclick="openConnectModal()" title="Click to connect">
+        <span class="conn-dot" id="conn-dot"></span>
+        <span id="conn-label">–</span>
+      </button>
+    </div>
+
+    <!-- 1b. Active-project selector (highest-level context) -->
+    {% include "partials/active_project_selector.html" %}
+
+    <!-- 2. Primary navigation -->
+    <nav class="left-primary-nav">
+      <button class="lnav-item" id="nav-overview" onclick="showOverview()">Overview</button>
+      <a class="lnav-item" href="{{ url_for('main.quick_hc_report') }}">Reports</a>
+      <a class="lnav-item" href="{{ url_for('main.customers_list') }}">Customers</a>
+      <a class="lnav-item" href="{{ url_for('main.quick_hc_settings') }}">Settings</a>
+      <a class="lnav-item" href="{{ url_for('main.quick_hc_staging') }}">Staging</a>
+    </nav>
+
+    <div class="left-sep"></div>
+    <div class="left-section-hdr">Subjects</div>
+
+    <!-- 3. Subject catalog (JS-rendered, no checkboxes) -->
+    <div class="left-catalog" id="left-catalog"></div>
+
+    <!-- 4. Bottom: theme toggle + dev tools -->
+    <div class="left-bottom">
+      <div class="quickhc-theme-toggle" data-theme-toggle>
+        <span class="quickhc-theme-label">Theme</span>
+        <button type="button" class="quickhc-theme-button" data-theme-choice="light">Light</button>
+        <button type="button" class="quickhc-theme-button" data-theme-choice="dark">Dark</button>
+      </div>
+      <a href="{{ url_for('main.development') }}" class="lnav-sm">Dev tools</a>
+    </div>
+  </aside>
+
+  <!-- ── MAIN CONTENT ── -->
+  <main class="right">
+
+    <div class="right-body" id="right-body"></div>
+
+    <!-- Report action bar — shown when subjects are selected for a report -->
+    <div class="report-bar" id="report-bar" hidden>
+      <span id="report-bar-label" class="report-bar-label"></span>
+      <button class="btn-gen-bar" id="btn-gen">Generate Report</button>
+    </div>
+
+    <footer class="right-footer" id="right-footer" style="display:none">
+      <span class="rf-source" id="rf-source"></span>
+    </footer>
+  </main>
+</div>
+
+<!-- ── HIDDEN REPORT FORM ── -->
+<form id="report-form" method="post" action="{{ url_for('main.quick_hc_report') }}" style="display:none"></form>
+
+<!-- ── CONNECT MODAL ── -->
+<div class="modal-overlay" id="connect-modal" hidden aria-modal="true" role="dialog">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <span class="modal-title" id="connect-modal-title">Connect to Commvault</span>
+      <button class="modal-close" type="button" onclick="closeConnectModal()" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body-inner">
+      <div id="connect-modal-signin">
+        <div class="modal-field">
+          <label class="modal-label" for="connect-username">Username</label>
+          <input class="modal-input" id="connect-username" type="text" autocomplete="username" placeholder="admin">
+        </div>
+        <div class="modal-field">
+          <label class="modal-label" for="connect-password">Password</label>
+          <input class="modal-input" id="connect-password" type="password" autocomplete="current-password" placeholder="••••••••">
+        </div>
+        <div class="modal-error" id="connect-error" hidden></div>
+        <button class="btn-modal-submit" id="connect-submit" type="button" onclick="submitConnect()">Connect</button>
+      </div>
+      <div id="connect-modal-signout" hidden>
+        <p id="signout-summary" style="margin-bottom:16px;color:var(--text-2);font-size:13px">
+          Signed in as <strong id="signout-username">…</strong>. Sign out?
+        </p>
+        <div class="modal-error" id="signout-error" hidden></div>
+        <button class="btn-modal-submit" id="signout-submit" type="button" onclick="submitSignOut()">Sign out</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if flashes %}
+<div id="flash-messages" class="flash-list">
+  {% for f in flashes %}
+  <div class="flash flash-{{ f.category }}">{{ f.message }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Chart.js for ADR 0004 chart section types (loaded before quick_hc.js so
+     window.Chart is available when section bodies mount). Pinned to major 4
+     (current stable); the chart renderer shows a visible fallback if it fails
+     to load rather than rendering nothing. -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="{{ url_for('static', filename='quick_hc.js', v=asset_version) }}"></script>
+<script>
+  (function () {
+    var themeKey = 'quickhc-theme-v1';
+    var buttons = Array.from(document.querySelectorAll('[data-theme-toggle] [data-theme-choice]'));
+    var logo = document.querySelector('.left-logo');
+
+    var syncButtons = function (theme) {
+      for (var i = 0; i < buttons.length; i++) {
+        buttons[i].dataset.active = String(buttons[i].dataset.themeChoice === theme);
+      }
+    };
+
+    var syncLogo = function (theme) {
+      if (!logo) return;
+      logo.src = theme === 'dark' ? logo.dataset.darkLogo : logo.dataset.lightLogo;
+    };
+
+    var current = document.documentElement.dataset.theme || 'light';
+    syncButtons(current);
+    syncLogo(current);
+
+    for (var i = 0; i < buttons.length; i++) {
+      (function (btn) {
+        btn.addEventListener('click', function () {
+          var theme = btn.dataset.themeChoice;
+          if (theme !== 'light' && theme !== 'dark') return;
+          document.documentElement.dataset.theme = theme;
+          localStorage.setItem(themeKey, theme);
+          syncButtons(theme);
+          syncLogo(theme);
+        });
+      })(buttons[i]);
+    }
+
+    // Close modal on overlay click
+    var overlay = document.getElementById('connect-modal');
+    if (overlay) {
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) closeConnectModal();
+      });
+    }
+
+    // Close modal on Escape
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeConnectModal();
+    });
+
+    // Connect form — submit on Enter in password field
+    var pwInput = document.getElementById('connect-password');
+    if (pwInput) {
+      pwInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') submitConnect();
+      });
+    }
+  })();
+</script>
+</body>
+</html>

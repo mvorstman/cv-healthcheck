@@ -121,6 +121,10 @@ def test_parse_license_summary_csv_extracts_sections_and_metadata() -> None:
     assert len(artifact["other_licenses"]) == 2
     assert len(artifact["agent_feature_licenses"]) == 2
     assert artifact["other_licenses"][1]["unit"] == "TB"
+    # Combined-cell row in the CSV ("25 TB" / "10 TB") — same fix as HTML
+    # applies because both paths go through normalize_other_license_record.
+    assert artifact["other_licenses"][1]["available_total"] == 25
+    assert artifact["other_licenses"][1]["used"] == 10
     assert artifact["agent_feature_licenses"][0]["license"] == "Virtual Server"
 
 
@@ -138,6 +142,220 @@ def test_parse_license_summary_html_extracts_canonical_records() -> None:
     assert len(artifact["agent_feature_licenses"]) == 1
     assert artifact["other_licenses"][0]["available_total"] == 100
     assert artifact["agent_feature_licenses"][0]["permanent_used"] == 12
+    # Combined-cell row ("25 TB" / "10 TB") — was previously dropped by
+    # parse_number's float-parse-the-whole-string path. The numeric
+    # prefix must be extracted now.
+    assert artifact["other_licenses"][1]["available_total"] == 25
+    assert artifact["other_licenses"][1]["used"] == 10
+    assert artifact["other_licenses"][1]["unit"] == "TB"
+
+
+def test_parse_license_summary_html_extracts_value_and_unit_combined_cell() -> None:
+    """Matches the user-reported real-world row shape: cells like
+    "500 VMs" / "0 VMs" (value + space + unit in one <td>).
+
+    Without the parse_number regex-extraction fix, both available_total
+    and used would be None and only the unit would survive — exactly
+    the symptom the user reported (Other Licenses table renders blank
+    columns for value/used).
+    """
+    html = """
+    <html><body>
+      <h2>Other Licenses - current usage details</h2>
+      <table>
+        <thead><tr><th>License</th><th>Available Total</th><th>Used</th></tr></thead>
+        <tbody>
+          <tr><td>VM Sockets</td><td>0 sockets</td><td>0 sockets</td></tr>
+          <tr><td>Auto Recovery</td><td>500 VMs</td><td>0 VMs</td></tr>
+        </tbody>
+      </table>
+    </body></html>
+    """
+    artifact = parse_license_summary_html(html, source_file="/tmp/x.html")
+
+    rows = artifact["other_licenses"]
+    assert len(rows) == 2
+
+    assert rows[0]["license"] == "VM Sockets"
+    assert rows[0]["available_total"] == 0
+    assert rows[0]["used"] == 0
+    assert rows[0]["unit"] == "sockets"
+
+    assert rows[1]["license"] == "Auto Recovery"
+    assert rows[1]["available_total"] == 500
+    assert rows[1]["used"] == 0
+    assert rows[1]["unit"] == "VMs"
+
+
+def test_parse_license_summary_html_handles_commvault_export_markup_shape() -> None:
+    """Real Commvault HTML exports wrap section titles in
+    <span class="component-title-text"> inside nested <div> wrappers,
+    not in <h2>/<h3> headings. The original find_previous heuristic
+    returned the table's own concatenated text as the section_name —
+    no match against SUMMARY_SECTION_NAMES — so every workload section
+    was silently dropped. In addition, when workload tables omit unit
+    qualifiers ("Available Total" / "Used" rather than "Available
+    Total (TB)" / "Used (TB)"), the header-only classifier returns
+    "other" and the rows get mis-bucketed into other_licenses. Both
+    must be fixed together: section_name resolution must walk past
+    nested divs to find the real title span, and the parse-loop must
+    route section_name-in-SUMMARY_SECTION_NAMES tables to the
+    workload bucket regardless of classifier output.
+    """
+    html = """
+    <html><body>
+      <h1>License summary</h1>
+      <div class="section">
+        <div class="component-title">
+          <span class="input-title tileHelpLabels component-title-text">Capacity Licenses</span>
+        </div>
+        <div class="component-body">
+          <div class="exportTable">
+            <table>
+              <thead><tr>
+                <th>License</th><th>Available Total (TB)</th><th>Used (TB)</th><th>Summary</th>
+              </tr></thead>
+              <tbody>
+                <tr><td>Backup and Recovery</td><td>100</td><td>0</td><td>0%</td></tr>
+                <tr><td>Snapshot</td><td>500</td><td>0</td><td>0%</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="component-title">
+          <span class="input-title tileHelpLabels component-title-text">Virtualization Licenses</span>
+        </div>
+        <div class="component-body">
+          <div class="exportTable">
+            <table>
+              <thead><tr>
+                <th>License</th><th>Available Total</th><th>Used</th><th>Summary</th>
+              </tr></thead>
+              <tbody>
+                <tr><td>VM Sockets</td><td>0 sockets</td><td>0 sockets</td><td>License not purchased</td></tr>
+                <tr><td>Auto Recovery</td><td>500 VMs</td><td>0 VMs</td><td>0%</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="component-title">
+          <span class="input-title tileHelpLabels component-title-text">Other Licenses</span>
+        </div>
+        <div class="component-body">
+          <div class="exportTable">
+            <table>
+              <thead><tr>
+                <th>License</th><th>Available Total</th><th>Used</th><th>Summary</th>
+              </tr></thead>
+              <tbody>
+                <tr><td>E-Discovery For Files</td><td>100 TB</td><td>0</td><td>0%</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </body></html>
+    """
+    artifact = parse_license_summary_html(html, source_file="/tmp/real-shape.html")
+
+    # All three workload tables resolve to their correct titles.
+    sections_by_name = {
+        section["section_name"]: section
+        for section in artifact["workload_summary_sections"]
+    }
+    assert set(sections_by_name) == {
+        "Capacity Licenses",
+        "Virtualization Licenses",
+        "Other Licenses",
+    }
+
+    # Row counts per section.
+    assert len(sections_by_name["Capacity Licenses"]["rows"]) == 2
+    assert len(sections_by_name["Virtualization Licenses"]["rows"]) == 2
+    assert len(sections_by_name["Other Licenses"]["rows"]) == 1
+
+    # Virtualization Licenses uses bare "Available Total" / "Used"
+    # headers — without the parse-loop fix, the classifier returns
+    # "other" and these rows would end up in other_licenses. Pin both
+    # invariants: rows land in the right section, and other_licenses
+    # is empty.
+    assert artifact["other_licenses"] == []
+    assert artifact["agent_feature_licenses"] == []
+
+    virt_rows = {
+        row["license"]: row
+        for row in sections_by_name["Virtualization Licenses"]["rows"]
+    }
+    assert "VM Sockets" in virt_rows
+    assert "Auto Recovery" in virt_rows
+    assert virt_rows["Auto Recovery"]["entitlement_value"] == "500 VMs"
+    assert virt_rows["Auto Recovery"]["used"] == "0 VMs"
+    assert virt_rows["Auto Recovery"]["status"] == "0%"
+
+    cap_rows = {
+        row["license"]: row
+        for row in sections_by_name["Capacity Licenses"]["rows"]
+    }
+    assert cap_rows["Backup and Recovery"]["entitlement_value"] == "100"
+    assert cap_rows["Backup and Recovery"]["used"] == "0"
+
+
+def test_parse_license_summary_html_does_not_cross_wire_section_titles() -> None:
+    """Cross-wire guard: if a single preceding section title sits before
+    two adjacent tables, only the first table should claim that title.
+    The second table should fall through to the classifier-based
+    bucketing (or be dropped) — it must NOT silently inherit the
+    first table's section_name and pile its rows onto a section they
+    don't belong to. Without the claimed-titles guard, the second
+    table's find_all_previous walk would still match the first
+    title, cross-wiring its rows.
+    """
+    html = """
+    <html><body>
+      <div class="section">
+        <div class="component-title">
+          <span class="input-title tileHelpLabels component-title-text">Capacity Licenses</span>
+        </div>
+      </div>
+      <div class="exportTable">
+        <table>
+          <thead><tr>
+            <th>License</th><th>Available Total (TB)</th><th>Used (TB)</th><th>Summary</th>
+          </tr></thead>
+          <tbody>
+            <tr><td>Backup and Recovery</td><td>100</td><td>0</td><td>0%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="exportTable">
+        <table>
+          <thead><tr>
+            <th>License</th><th>Available Total (TB)</th><th>Used (TB)</th><th>Summary</th>
+          </tr></thead>
+          <tbody>
+            <tr><td>Should Not Cross Wire</td><td>50</td><td>10</td><td>0%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </body></html>
+    """
+    artifact = parse_license_summary_html(html, source_file="/tmp/cross-wire.html")
+
+    sections_by_name = {
+        section["section_name"]: section
+        for section in artifact["workload_summary_sections"]
+    }
+
+    assert "Capacity Licenses" in sections_by_name
+    licenses_in_capacity = {
+        row["license"] for row in sections_by_name["Capacity Licenses"]["rows"]
+    }
+    assert licenses_in_capacity == {"Backup and Recovery"}
+    assert "Should Not Cross Wire" not in licenses_in_capacity
 
 
 def test_parse_license_summary_xlsx_recording_extracts_rest_artifact() -> None:
@@ -481,7 +699,7 @@ def test_license_summary_registry_write_and_registry_first_read(tmp_path) -> Non
     assert len(current["other_licenses"]) == 2
 
 
-def test_license_summary_service_collect_from_rest_persists_registry_artifact(
+def test_license_summary_service_collect_from_rest_writes_canonical_only(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -554,14 +772,17 @@ def test_license_summary_service_collect_from_rest_persists_registry_artifact(
         registry_path=tmp_path / "registry.sqlite3",
     )
     result = service.collect_from_rest()
-    current = service.get_current()
 
+    # Option A — REST collection writes canonical only, not the legacy store.
     assert result["normalized"]["source_type"] == "rest"
-    assert result["normalized"]["artifact_id"] == current["artifact_id"]
-    assert current["source"]["report_id"] == "206"
-    assert current["license_expiry"] is None
-    assert len(current["workload_summary_sections"]) == 1
-    assert len(current["other_licenses"]) == 1
+    assert result["normalized"]["source"]["report_id"] == "206"
+    assert result["normalized"]["license_expiry"] is None
+    assert len(result["normalized"]["workload_summary_sections"]) == 1
+    assert len(result["normalized"]["other_licenses"]) == 1
+    assert not (tmp_path / "catalog" / "latest.json").exists()
+    assert not (tmp_path / "catalog" / "registry.sqlite3").exists()
+    canonical = service.get_canonical()
+    assert canonical.artifact_type == "license_summary"
 
 
 def _build_xlsx(rows: list[list[str]]) -> bytes:

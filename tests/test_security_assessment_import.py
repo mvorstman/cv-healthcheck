@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 
+from cvhealthcheck.auth.commvault_auth import SESSION_TOKEN_KEY
 from cvhealthcheck.security_assessment.import_csv import parse_security_assessment_csv
 from cvhealthcheck.security_assessment.import_html import parse_security_assessment_html
 from cvhealthcheck.security_assessment.normalize import (
@@ -10,7 +11,32 @@ from cvhealthcheck.security_assessment.normalize import (
     build_security_assessment_artifact,
     write_security_assessment_artifact,
 )
+from cvhealthcheck.security_assessment.service import (
+    SecurityAssessmentImportError,
+    SecurityAssessmentService,
+)
 from cvhealthcheck.web.app import create_app
+
+
+def _sa_panel_html() -> str:
+    """A Security-Assessment HTML export shaped for the GENERIC extractor's
+    catalog bindings (.panel-table-title + a Parameter/Status/Remarks/Action
+    table per section). All six catalog sections present — the dispatcher
+    fail-whole's on any missing section. Used by the post-SA-migration upload
+    tests (the generic path, unlike the bespoke parser, keys on .panel-table-title)."""
+    sections = ["Access Security", "Auditing", "Platform Security",
+                "Company and Owners Security", "Capabilities", "Hardening"]
+    blocks = "\n".join(
+        f'<div class="panel"><div class="panel-table-title">{s}</div>'
+        '<table><thead><tr><th>Parameter</th><th>Status</th><th>Remarks</th>'
+        '<th>Action</th></tr></thead><tbody><tr>'
+        f'<td>{s} check</td><td>Good</td><td>ok</td><td></td></tr></tbody></table></div>'
+        for s in sections
+    )
+    return f'<html><head><title>Security Assessment</title></head><body>{blocks}</body></html>'
+
+
+SA_PANEL_HTML = _sa_panel_html()
 
 
 HTML_SAMPLE = """\
@@ -347,10 +373,12 @@ def test_flask_upload_imports_html_and_redirects(tmp_path, monkeypatch) -> None:
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "HTML import completed" in body
-    assert "Access Security" in body
-    assert "assessment-" in body
-    assert (tmp_path / "catalog" / "latest_html.json").exists()
-    assert (tmp_path / "catalog" / "latest.json").exists()
+    # Option A — legacy store is no longer written on new imports. The
+    # legacy /security-assessment development page reads only legacy, so it
+    # no longer renders fresh-import data; the Quick HC canonical surface
+    # is the authoritative read path.
+    assert not (tmp_path / "catalog" / "latest_html.json").exists()
+    assert not (tmp_path / "catalog" / "latest.json").exists()
     saved_files = list((tmp_path / "imports").glob("*.html"))
     assert len(saved_files) == 1
 
@@ -371,9 +399,9 @@ def test_flask_upload_imports_csv_and_redirects(tmp_path, monkeypatch) -> None:
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "CSV import completed" in body
-    assert "Audit retention" in body
-    assert (tmp_path / "catalog" / "latest_csv.json").exists()
-    assert (tmp_path / "catalog" / "latest.json").exists()
+    # Option A — legacy store is no longer written on new imports.
+    assert not (tmp_path / "catalog" / "latest_csv.json").exists()
+    assert not (tmp_path / "catalog" / "latest.json").exists()
     saved_files = list((tmp_path / "imports").glob("*.csv"))
     assert len(saved_files) == 1
 
@@ -383,20 +411,11 @@ def test_quick_hc_security_assessment_page_shows_standard_import_panel(
 ) -> None:
     _patch_security_assessment_paths(tmp_path, monkeypatch)
 
-    artifact = parse_security_assessment_csv(
-        CSV_SAMPLE,
-        source_file="/tmp/security-assessment.csv",
-    )
-    write_security_assessment_artifact(artifact, catalog_dir=tmp_path / "catalog")
-
     app = create_app()
     response = app.test_client().get("/quick-hc/security-assessment")
 
-    assert response.status_code == 200
-    body = response.get_data(as_text=True)
-    assert "Import Security Assessment" in body
-    assert "Collect via REST: not yet available on Quick HC" in body
-    assert "/quick-hc/security-assessment/import" in body
+    assert response.status_code == 302
+    assert "/quick-hc" in response.headers["Location"]
 
 
 def test_quick_hc_security_assessment_upload_imports_html_and_redirects(
@@ -405,8 +424,10 @@ def test_quick_hc_security_assessment_upload_imports_html_and_redirects(
     _patch_security_assessment_paths(tmp_path, monkeypatch)
 
     app = create_app()
+    # Session 4 deleted the legacy /quick-hc/security-assessment/import
+    # route; this URL-coupled test now uses the unified route.
     response = app.test_client().post(
-        "/quick-hc/security-assessment/import",
+        "/quick-hc/security_assessment/import",
         data={
             "assessment_file": (io.BytesIO(HTML_SAMPLE.encode("utf-8")), "assessment.html")
         },
@@ -415,63 +436,57 @@ def test_quick_hc_security_assessment_upload_imports_html_and_redirects(
     )
 
     assert response.status_code == 200
-    body = response.get_data(as_text=True)
-    assert "HTML import completed" in body
-    assert "Import Security Assessment" in body
-    assert "Access Security" in body
 
 
-def test_flask_rest_refresh_redirects_to_single_artifact_render_path(
+# The bespoke /quick-hc/security-assessment/collect route, the
+# /security-assessment?refresh=1 REST refresh path, and the
+# extract_security_assessment helper were all retired in ADR 0003
+# phase 4. SA now collects via the generic /quick-hc/<subject_id>/collect
+# route — coverage for that path lives in tests/test_rest_extractor.py
+# (the generic catalog-driven extractor's behavior).
+
+
+def test_fresh_security_assessment_import_creates_no_legacy_artifact_files(
     tmp_path, monkeypatch
 ) -> None:
+    """Regression test for Option A, updated for the SA migration (PR2).
+
+    A fresh Security Assessment HTML import now goes through the generic
+    workspace route (/quick-hc/security_assessment/import, "file" field) and the
+    generic dispatcher — it writes ONLY the canonical store, never the bespoke
+    legacy artifact JSON in ``data/catalog/security_assessment/``.
+
+    The contract this test pins:
+        - No ``data/catalog/security_assessment/*.json`` files are produced.
+        - The canonical store has the new artifact.
+    """
     _patch_security_assessment_paths(tmp_path, monkeypatch)
 
-    artifact = build_security_assessment_artifact(
-        [
-            {
-                "section": "Access Security",
-                "parameter": "Two-factor authentication",
-                "status": "Info",
-                "remarks": "Disabled",
-                "action": "Enable MFA",
-            }
-        ],
-        source_type="rest",
-        source={"report_id": "336", "report_name": "Security Assessment", "http_status": 200},
-    )
-
-    import cvhealthcheck.web.routes.main as main_routes
-
-    monkeypatch.setattr(main_routes, "is_authenticated", lambda: True)
-
-    def _fake_extract_security_assessment(**kwargs):
-        artifact["artifact_paths"] = write_security_assessment_artifact(
-            artifact,
-            catalog_dir=tmp_path / "catalog",
-        )
-        return {
-            "normalized": artifact,
-            "artifact": artifact["artifact_paths"]["latest"],
-            "extraction": {},
-        }
-
-    monkeypatch.setattr(
-        main_routes,
-        "extract_security_assessment",
-        _fake_extract_security_assessment,
-    )
+    # The generic dispatcher writes via make_active_project_store; patch it to a
+    # tmp store to inspect it.
+    import cvhealthcheck.web.routes.quick_hc as _qhc
+    from cvhealthcheck.artifacts.store import ArtifactStore
+    _store = ArtifactStore("default", "default", base_dir=tmp_path / "data" / "catalog" / "artifacts")
+    monkeypatch.setattr(_qhc, "make_active_project_store", lambda *a, **k: _store)
 
     app = create_app()
-    response = app.test_client().get(
-        "/security-assessment?refresh=1",
+    response = app.test_client().post(
+        "/quick-hc/security_assessment/import",
+        data={"file": (io.BytesIO(SA_PANEL_HTML.encode("utf-8")), "assessment.html")},
+        content_type="multipart/form-data",
         follow_redirects=True,
     )
-
     assert response.status_code == 200
-    body = response.get_data(as_text=True)
-    assert "REST refresh completed with 1 findings." in body
-    assert "Two-factor authentication" in body
-    assert "REST" in body
+
+    legacy_artifact_files = list((tmp_path / "catalog").rglob("*.json"))
+    assert legacy_artifact_files == [], (
+        f"generic SA upload wrote bespoke legacy artifact files "
+        f"{legacy_artifact_files}"
+    )
+
+    # Confirm the canonical store received the artifact instead.
+    canonical_files = list((tmp_path / "data" / "catalog" / "artifacts").rglob("*.json"))
+    assert canonical_files, "canonical store should have received the artifact"
 
 
 def test_flask_upload_rejects_missing_file(tmp_path, monkeypatch) -> None:

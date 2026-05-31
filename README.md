@@ -30,19 +30,47 @@ The central cv-healthcheck/reporting platform must not assume direct access to c
 
 ## Quick HC Foundation
 
-Quick HC is the fast, read-only path for customer-facing healthcheck output. The Flask UI intentionally stays simple:
+Quick HC is now the main customer-facing report-composition surface for cv-healthcheck and is moving toward the broader HealthCheck primary workspace.
 
-- Login / Logout
-- Quick HC
+The product split is intentional:
+
+- HealthCheck is the primary workspace direction.
+- Customers will hold business/customer and engagement state.
+- Advanced will hold deeper workflows outside the default HealthCheck path.
+- Development holds raw/debug/API/report exploration pages, including lab readiness, Reports Plus inventory, report extraction, dataset execution, registry views, and validation tools.
+
+Current structure direction:
+
+- HealthCheck
+- Customers
+- Advanced
 - Development
 
-Quick HC contains finished or useful healthcheck items. Development contains raw/debug/API/report exploration pages, including lab readiness, Reports Plus inventory, report extraction, dataset execution, and validation views.
+Current Quick HC subjects:
 
-Current Quick HC items:
+- CommCell Details
+- Security Assessment
+- License Summary
+- Client Growth
+- Capacity Licenses
+- Backup Job Summary
 
-- CommCell Identity / Version from REST.
-- Client Growth and Capacity License metric pages from Reports Plus / Metrics artifacts.
-- Security Assessment from Reports Plus report 336.
+Uploads and collection now go through a unified routing layer:
+
+- `POST /quick-hc/<subject_id>/import` is the sole upload route. Subject IDs are underscored (`security_assessment`, `license_summary`, etc.). System subjects with dedicated import functions are dispatched via `src/cvhealthcheck/web/routes/upload_dispatch.py`; AI subjects fall through to the generic dispatcher.
+- `POST /quick-hc/<subject_id>/collect` is the generic REST-collection route (runs `RESTExtractor` against `subject_section_sources` rows in the catalog DB).
+- `POST /quick-hc/security-assessment/collect` and `POST /quick-hc/license-summary/collect` remain as the dedicated REST-collection endpoints for SA and LS (hyphenated; their collection is hardcoded in Python services rather than catalog-described).
+- `GET /quick-hc/security-assessment` and `GET /quick-hc/license-summary` redirect to `/quick-hc#subject=<id>` so the JS workspace re-opens the right tile after the full-page reload.
+
+Each subject now supports:
+
+- an expandable tile on `/quick-hc`
+- customer-facing preview content in the tile body
+- a parent include/exclude control
+- nested section or table selection for report composition
+- composition into `/quick-hc/report`
+
+The Quick HC overview is the place where the user decides which subjects and sections appear in the customer-facing report. Selections are currently remembered in the browser with `localStorage`; there is no server-side saved profile or database persistence for report layouts yet.
 
 Phase 3.0 started with CommCell Identity / Version from:
 
@@ -69,8 +97,143 @@ Flask UI:
 ```text
 http://127.0.0.1:5001/quick-hc
 http://127.0.0.1:5001/quick-hc/commcell
-http://127.0.0.1:5001/quick-hc/security-assessment
+http://127.0.0.1:5001/quick-hc/report
 ```
+
+### Customer-Facing Report Composition
+
+`/quick-hc/report` now renders only the selected subjects and selected nested sections. The composition pipeline is assembled through `QuickHcReportService` and keeps the core filtering logic out of Jinja templates.
+
+Current report output capabilities include:
+
+- CommCell Details environment metadata
+- Security Assessment summary counters
+- Security Assessment critical or warning highlight output
+- Security Assessment optional all-findings section
+- License Summary workload sections
+- License Summary other-license detail tables with compact usage summaries
+- License Summary agent or feature detail tables without progress bars
+- Client Growth summary metrics
+- Client Growth Chart.js history visualization
+- Client Growth monthly summary table
+- Capacity Licenses summary and latest table inclusion
+
+Customer-facing report rules:
+
+- no artifact paths
+- no dataset GUIDs
+- no HTTP status values
+- no raw/debug extraction fields
+- evidence and source metadata stay internal only
+
+### UI Foundation
+
+The current UI foundation work is moving the Flask surface from isolated pages to a cleaner product shell:
+
+- app shell layout with sidebar and topbar
+- sidebar navigation with `Connect to CS`, `Quick HC`, and `Development`
+- active navigation states
+- global design tokens
+- global light/dark theme toggle with persisted preference
+- topbar theme toggle plus a Back action that prefers browser history and falls back to `/quick-hc`
+- responsive shell behavior
+- visual separation between customer-facing Quick HC pages and internal/development pages
+
+The shell now exposes the connection/login route through the sidebar as `Connect to CS` instead of a separate `Login` navigation label.
+
+Quick HC itself now uses full-width expandable subject tiles, per-section cards, nested include/exclude controls, and theme-aware customer-facing previews.
+
+The current refactor direction is registry-first rather than renderer-first. Quick HC tile and section metadata is now moving through shared dataclasses and a central registry so new subjects can be added with less duplication across routes, templates, and report composition code, while preserving the existing customer-facing UX.
+
+Detail pages now also use a standardized Source Provenance block so supported acquisition paths are visible consistently across tiles. Available or validated sources remain active, while unavailable, not implemented, not tested, or not applicable sources are rendered in a muted state instead of being hidden.
+
+The next extraction step is now in place on the overview template as well: the repeated outer Quick HC subject-card shell is rendered through a shared partial, and the reusable section-card wrapper now lives in its own partial too. Preview extraction now covers CommCell, Security Assessment, License Summary, Client Growth, and Capacity License via explicit partials, and the current platform layer now hardens that structure with explicit preview-builder and report-builder mappings keyed by registry metadata rather than ad hoc per-route wiring.
+
+Because Quick HC now depends on a registry-first metadata contract, dedicated integrity tests now verify tile IDs, section IDs, required tile metadata, default-selection safety, and alignment between the registry and report-service selection constants before any renderer abstraction is introduced.
+
+### Quick HC Framework
+
+Current Quick HC framework structure:
+
+```text
+src/cvhealthcheck/quickhc/
+  models.py
+  registry.py
+  report_service.py
+  overview_service.py
+
+src/cvhealthcheck/web/templates/
+  quick_hc.html
+  partials/
+    quickhc_tile.html
+    quickhc_section_card.html
+    quickhc/previews/
+      commcell.html
+      security_assessment.html
+      license_summary.html
+      client_growth.html
+      capacity_license.html
+```
+
+The current registry layer uses shared dataclasses:
+
+- `TileDefinition`: subject-level metadata such as tile ID, title, subtitle/description, source type, service name, artifact type, preview renderer name, report renderer name, category/category label, detail endpoint, import URL, collect URL, and registry-derived section/default-selection helpers.
+- `SectionDefinition`: nested report-section metadata such as stable section ID, label, default-selection flag, and logical renderer names.
+
+Current boundaries are intentional:
+
+- `quickhc/models.py`: shared Quick HC metadata models only.
+- `quickhc/registry.py`: the single source of truth for tile IDs, section IDs, labels, subtitles, default selections, and logical renderer names.
+- `quickhc/report_service.py`: backend report composition and filtering only.
+- `quickhc/canonical_view.py`: translation layer from canonical artifacts into the Quick HC JavaScript view-model contract.
+- `quickhc/overview_service.py`: overview-only preview shaping for the `/quick-hc` dashboard, including the explicit preview-renderer mapping that turns tile metadata into preview payloads.
+- `web/routes/quick_hc.py`: thin route layer that passes already-shaped data into templates.
+- `web/templates/quick_hc.html`: top-level overview composition only.
+- `web/templates/partials/quickhc_tile.html`: reusable outer tile shell.
+- `web/templates/partials/quickhc_section_card.html`: reusable nested section-card shell.
+- `web/templates/partials/quickhc/previews/*.html`: subject-specific preview bodies only.
+
+The current extension model for future tiles is:
+
+1. Add or update `TileDefinition` and `SectionDefinition` entries in `quickhc/registry.py`.
+2. Register a preview builder and a report builder that consume the tile metadata contract instead of duplicating tile IDs or labels elsewhere.
+3. Keep `report_service.py` as the backend source of filtered report data.
+4. Add a subject preview partial when a new overview subject needs one.
+5. Keep renderer orchestration explicit rather than dynamically resolving Jinja templates from registry values.
+
+Quick HC initial subject data is now registry-driven through `quickhc.registry.list_tiles()`, with explicit tile-id loader and builder dispatch in `subject_data_service.py`.
+
+Import and collect action URLs now come from `TileDefinition.import_url` and `TileDefinition.collect_url` metadata. Quick HC frontend forms still render through initial subject data rather than hardcoding those URLs directly in the main template.
+
+The next logical phase remains controlled renderer orchestration. The platform now has the first hardened version of that boundary through explicit Python-side renderer mappings; the remaining work is to formalize those mappings further without switching to direct dynamic Jinja includes.
+
+Longer term, the same registry-first model is intended to align Quick HC with broader orchestration surfaces such as scheduled reporting, future MCP-driven report assembly, and eventually multi-surface report composition without duplicating tile metadata in each layer.
+
+### Current Limitations
+
+- no PDF export yet
+- no persisted report profiles yet
+- no scoring or recommendations yet
+- localStorage is currently used for UI selection persistence
+- runtime artifacts remain outside git
+- evidence provenance is intentionally kept out of the customer-facing report output
+
+### Business State and Persistence
+
+Application/business state is now intentionally separate from import registries and canonical artifact storage.
+
+- `data/app.db` was added for business/application state.
+- The new `src/cvhealthcheck/db/` package supports customers and engagements using raw SQL and lightweight schema/migration files.
+- Import registries and canonical artifact storage remain separate from `data/app.db`.
+- Canonical artifact persistence remains under the existing artifact/import storage paths and service layers rather than moving into the new business DB.
+
+### Session Validation
+
+Current local validation for the May 24, 2026 session:
+
+- `python -m compileall src`
+- `pytest`
+- `483` tests passing
 
 ## Reports Plus Security Assessment
 
@@ -83,6 +246,11 @@ Security Assessment now supports multi-source ingestion with a shared canonical 
 - CSV export import
 
 All three sources feed the same collect -> normalize -> persist -> render path. The canonical artifact is the normalized evidence contract shared across REST, HTML, and CSV so the UI and downstream health logic can render one consistent structure regardless of acquisition method.
+
+Security Assessment and License Summary now also expose canonical JSON read endpoints for debugging and future UI integration:
+
+- `GET /api/security-assessment/canonical`
+- `GET /api/license-summary/canonical`
 
 Endpoint pattern:
 
@@ -256,6 +424,17 @@ Current Quick HC behavior:
 
 The License Summary canonical artifact currently focuses on acquisition, normalization, provenance, and persistence only. No scoring, compliance rules, recommendations, or trend analytics are implemented yet.
 
+License Summary now also has:
+
+- a canonical adapter
+- canonical side-write for live REST collection
+- canonical side-write for file import
+- Quick HC translation support through `quickhc/canonical_view.py`
+
+Current pending follow-up:
+
+- finish routing Security Assessment and License Summary subject shaping more completely through `quickhc/canonical_view.py` inside `subject_data_service.py` while preserving the existing legacy fallback path during migration
+
 ## Metric Charts
 
 Historical metric pages use Chart.js through a reusable server-side payload pattern:
@@ -271,6 +450,9 @@ route -> server-side chart payload -> metric_detail.html -> Chart.js render
 - [DATA_SOURCE_MAPPING.md](DATA_SOURCE_MAPPING.md) is the operating-mode source strategy. It documents which datasource should be used per healthcheck subject across Quick HC, Daily Reporting, and Full Healthcheck, including REST, Reports Plus / Metrics, and import/manual fallbacks.
 - [API_MAPPING.md](API_MAPPING.md) is the technical collection and source catalog. It tracks what data can be collected, where it comes from, required authentication and parameters, and whether the source is proven.
 - [HEALTHCHECK_MATRIX.md](HEALTHCHECK_MATRIX.md) is the health evaluation and rule catalog. It tracks the health questions, required collected data, evaluation rules, severities, and reporting categories.
+- [docs/PATTERNS.md](docs/PATTERNS.md) — two project-wide patterns to know before adding new code: writes converge to canonical / reads stay diverse, and verify before write.
+- [docs/data_flow_audit.md](docs/data_flow_audit.md) — read-only audit of where data lives on disk and which code paths read/write each location.
+- [docs/adr/](docs/adr/) — Architecture Decision Records (ADR 0001 source-building fork, ADR 0002 customer and project entities). Required reading before touching the areas they govern.
 
 The API mapping feeds the collector capability layer. The health matrix consumes collected data and feeds the health rule engine, reports, and UI.
 
@@ -625,9 +807,15 @@ source ~/.cv-healthcheck-env
 flask --app cvhealthcheck.web.app run --debug --port 5001
 ```
 
-Pages:
+Customer-facing pages:
 
-- `/`
+- `/` — redirects to `/quick-hc`
+- `/quick-hc` — Quick HC workspace (subject tiles, source selection, report composition)
+- `/quick-hc/commcell` — CommCell identity detail
+- `/quick-hc/report` — composed customer-facing report
+
+Internal / development pages (raw API + Reports Plus exploration, lab readiness):
+
 - `/api/test`
 - `/reportsplus/reports`
 - `/reportsplus/reports/<report_id_or_guid>`

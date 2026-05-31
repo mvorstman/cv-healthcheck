@@ -11,6 +11,10 @@ dist/
 build/
 *.egg-info/
 logs/
+data/app.db
+data/app.db-shm
+data/app.db-wal
+data/app.db-journal
 data/catalog/*.json
 data/catalog/**/*.json
 !data/catalog/.gitkeep

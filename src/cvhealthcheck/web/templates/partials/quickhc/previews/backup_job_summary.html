@@ -1,0 +1,61 @@
+<div class="quickhc-section-preview">
+  {% if backup_job_summary_preview_section == "summary" %}
+    {% if backup_job_summary.exists %}
+      <div class="quickhc-preview-inline">
+        <span>Total jobs {{ backup_job_summary.total_jobs }}</span>
+        <span>Completed {{ backup_job_summary.completed_jobs }}</span>
+        <span>Failed {{ backup_job_summary.failed_jobs }}</span>
+        <span>Warnings {{ backup_job_summary.completed_with_errors_or_warnings }}</span>
+      </div>
+      <div class="quickhc-preview-inline">
+        <span>Running {{ backup_job_summary.running_jobs }}</span>
+        <span>Killed {{ backup_job_summary.killed_jobs }}</span>
+        <span>Protected clients {{ backup_job_summary.protected_clients_seen }}</span>
+        <span>Recent failures {{ backup_job_summary.recent_failures_count }}</span>
+      </div>
+    {% else %}
+      <p class="quickhc-empty-state">No Backup Job Summary artifact available yet.</p>
+    {% endif %}
+  {% elif backup_job_summary_preview_section == "status_breakdown" %}
+    {% if backup_job_summary.exists %}
+      <div class="quickhc-preview-inline">
+        {% for label, count in backup_job_summary.status_breakdown.items() %}
+          <span>{{ label }} {{ count }}</span>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="quickhc-empty-state">No Backup Job Summary artifact available yet.</p>
+    {% endif %}
+  {% elif backup_job_summary_preview_section == "recent_failures" %}
+    {% if backup_job_summary.exists and backup_job_summary.recent_failures %}
+      <div class="quickhc-highlight-cards">
+        {% for row in backup_job_summary.recent_failures[:3] %}
+          <article class="quickhc-highlight-card quickhc-highlight-card--critical">
+            <span class="quickhc-highlight-badge">Failed</span>
+            <strong>{{ row.job_id or "Unknown job" }}{% if row.client %} · {{ row.client }}{% endif %}</strong>
+            <p>{{ row.failure_reason or row.status or "Failure details unavailable." }}</p>
+          </article>
+        {% endfor %}
+      </div>
+    {% elif backup_job_summary.exists %}
+      <p class="quickhc-preview-text">No recent failed jobs are recorded in the current artifact.</p>
+    {% else %}
+      <p class="quickhc-empty-state">No Backup Job Summary artifact available yet.</p>
+    {% endif %}
+  {% elif backup_job_summary_preview_section == "recent_jobs" %}
+    {% if backup_job_summary.exists %}
+      <div class="quickhc-preview-inline">
+        <span>{{ backup_job_summary.recent_jobs | length }} recent jobs</span>
+        <span>
+          {% if backup_job_summary.generated_at %}
+            Generated {{ backup_job_summary.generated_at }}
+          {% else %}
+            Generated time unavailable
+          {% endif %}
+        </span>
+      </div>
+    {% else %}
+      <p class="quickhc-empty-state">No Backup Job Summary artifact available yet.</p>
+    {% endif %}
+  {% endif %}
+</div>

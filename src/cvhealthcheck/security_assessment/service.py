@@ -10,6 +10,8 @@ from uuid import uuid4
 
 from werkzeug.utils import secure_filename
 
+from cvhealthcheck.artifacts.models import CanonicalArtifact
+from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.reportsplus.catalog import collected_at
 
 from .artifact import SECURITY_ASSESSMENT_CATALOG_DIR, write_security_assessment_artifact
@@ -44,6 +46,18 @@ DEFAULT_COMMCELL_CONTEXT = CommCellContext(
     customer_id=DEFAULT_CUSTOMER_CONTEXT.customer_id,
 )
 logger = logging.getLogger(__name__)
+
+
+def _active_project_store() -> ArtifactStore:
+    """Construct an ArtifactStore scoped to the active project on demand.
+
+    Replaces the module-level singleton from before ADR 0002 phase 2.
+    Constructed per-call so each call sees the current session's active
+    project (or falls back to the Default project outside a request
+    context — e.g. tests, CLI, MCP staging).
+    """
+    from cvhealthcheck.web.active_project import make_active_project_store
+    return make_active_project_store()
 
 
 class SecurityAssessmentImportError(ValueError):
@@ -113,6 +127,7 @@ class SecurityAssessmentService:
         source_type: str | None = None,
         engagement_id: str | None = None,
         report_stream_id: str | None = None,
+        limit: int = 10,
     ) -> dict[str, Any]:
         artifacts = self.registry.list_artifacts_for_scope(
             "security_assessment",
@@ -122,6 +137,7 @@ class SecurityAssessmentService:
             engagement_id=engagement_id,
             report_stream_id=report_stream_id,
             descending=True,
+            limit=limit,
         )
         return {
             "artifacts": [artifact.to_dict() for artifact in artifacts],
@@ -140,6 +156,9 @@ class SecurityAssessmentService:
                 )
             ],
         }
+
+    def get_canonical(self) -> CanonicalArtifact:
+        return _active_project_store().load_latest_artifact("security_assessment")
 
 
 def import_security_assessment_upload(
@@ -192,6 +211,7 @@ def import_security_assessment_upload(
         report_stream=report_stream,
         report_run=report_run,
         imported_by=imported_by,
+        write_legacy=False,
     )
     logger.info(
         "Imported Security Assessment upload source_file=%s source_type=%s imported_at=%s finding_count=%s first_finding=%s",
@@ -217,7 +237,18 @@ def persist_security_assessment_artifact(
     imported_by: str | None = None,
     import_method: str | None = None,
     retention_policy: str | None = None,
+    write_legacy: bool = True,
 ) -> dict[str, Any]:
+    """Persist a Security Assessment artifact.
+
+    By default writes both the legacy per-domain store
+    (``data/catalog/security_assessment/``) AND the canonical store
+    (``data/catalog/artifacts/security_assessment/``). New production code
+    paths pass ``write_legacy=False`` to land canonical-only — the legacy
+    store is being deprecated (Option A from 2026-05-26 HANDOVER). Test
+    fixtures that exercise legacy-store behavior continue to default to
+    ``write_legacy=True``.
+    """
     customer = customer_context or DEFAULT_CUSTOMER_CONTEXT
     commcell = commcell_context or CommCellContext(
         commcell_id=(commcell_context.commcell_id if commcell_context else DEFAULT_COMMCELL_CONTEXT.commcell_id),
@@ -256,61 +287,72 @@ def persist_security_assessment_artifact(
     )
     artifact_model = SecurityAssessmentArtifact.from_dict(artifact_payload)
     artifact_filename = f"{artifact_id}.json"
-    artifact_paths = write_security_assessment_artifact(
-        artifact_model.to_dict(),
-        catalog_dir=catalog_dir or SECURITY_ASSESSMENT_CATALOG_DIR,
-        artifact_filename=artifact_filename,
-    )
 
-    registry = SecurityAssessmentArtifactRegistry(
-        registry_path or SECURITY_ASSESSMENT_REGISTRY_PATH
-    )
-    import_run = ImportRun(
-        import_run_id=import_run_id,
-        customer_id=customer.customer_id,
-        commcell_id=commcell.commcell_id,
-        engagement_id=engagement_context.engagement_id if engagement_context else None,
-        report_stream_id=report_stream.report_stream_id if report_stream else artifact.get("report_stream_id"),
-        report_run_id=report_run.report_run_id if report_run else artifact.get("report_run_id"),
-        imported_at=imported_at,
-        executed_at=report_run.executed_at if report_run else artifact.get("executed_at"),
-        run_sequence=report_run.run_sequence if report_run else artifact.get("run_sequence"),
-        imported_by=imported_by or artifact.get("imported_by"),
-        import_method=resolved_import_method,
-    )
-    record = ArtifactRecord(
-        artifact_id=artifact_id,
-        import_run_id=import_run_id,
-        artifact_type=artifact_model.artifact_type,
-        source_type=artifact_model.source_type,
-        source_file=artifact_model.source_file,
-        file_path=artifact_paths["artifact"],
-        customer_id=customer.customer_id,
-        commcell_id=commcell.commcell_id,
-        engagement_id=engagement_context.engagement_id if engagement_context else None,
-        report_stream_id=report_stream.report_stream_id if report_stream else artifact.get("report_stream_id"),
-        report_run_id=report_run.report_run_id if report_run else artifact.get("report_run_id"),
-        imported_at=imported_at,
-        executed_at=report_run.executed_at if report_run else artifact.get("executed_at"),
-        run_sequence=report_run.run_sequence if report_run else artifact.get("run_sequence"),
-        is_active=True,
-        created_at=created_at,
-        last_accessed_at=artifact.get("last_accessed_at"),
-        retention_policy=retention_policy or artifact.get("retention_policy") or "keep",
-        imported_by=imported_by or artifact.get("imported_by"),
-        import_method=resolved_import_method,
-        source_metadata=dict(artifact_payload.get("source_metadata") or {}),
-    )
-    registry.register_artifact(import_run, record)
+    if write_legacy:
+        artifact_paths = write_security_assessment_artifact(
+            artifact_model.to_dict(),
+            catalog_dir=catalog_dir or SECURITY_ASSESSMENT_CATALOG_DIR,
+            artifact_filename=artifact_filename,
+        )
 
-    persisted_payload = artifact_model.to_dict()
-    persisted_payload["file_path"] = artifact_paths["artifact"]
-    persisted_payload["artifact_paths"] = artifact_paths
-    write_security_assessment_artifact(
-        persisted_payload,
-        catalog_dir=catalog_dir or SECURITY_ASSESSMENT_CATALOG_DIR,
-        artifact_filename=artifact_filename,
-    )
+        registry = SecurityAssessmentArtifactRegistry(
+            registry_path or SECURITY_ASSESSMENT_REGISTRY_PATH
+        )
+        import_run = ImportRun(
+            import_run_id=import_run_id,
+            customer_id=customer.customer_id,
+            commcell_id=commcell.commcell_id,
+            engagement_id=engagement_context.engagement_id if engagement_context else None,
+            report_stream_id=report_stream.report_stream_id if report_stream else artifact.get("report_stream_id"),
+            report_run_id=report_run.report_run_id if report_run else artifact.get("report_run_id"),
+            imported_at=imported_at,
+            executed_at=report_run.executed_at if report_run else artifact.get("executed_at"),
+            run_sequence=report_run.run_sequence if report_run else artifact.get("run_sequence"),
+            imported_by=imported_by or artifact.get("imported_by"),
+            import_method=resolved_import_method,
+        )
+        record = ArtifactRecord(
+            artifact_id=artifact_id,
+            import_run_id=import_run_id,
+            artifact_type=artifact_model.artifact_type,
+            source_type=artifact_model.source_type,
+            source_file=artifact_model.source_file,
+            file_path=artifact_paths["artifact"],
+            customer_id=customer.customer_id,
+            commcell_id=commcell.commcell_id,
+            engagement_id=engagement_context.engagement_id if engagement_context else None,
+            report_stream_id=report_stream.report_stream_id if report_stream else artifact.get("report_stream_id"),
+            report_run_id=report_run.report_run_id if report_run else artifact.get("report_run_id"),
+            imported_at=imported_at,
+            executed_at=report_run.executed_at if report_run else artifact.get("executed_at"),
+            run_sequence=report_run.run_sequence if report_run else artifact.get("run_sequence"),
+            is_active=True,
+            created_at=created_at,
+            last_accessed_at=artifact.get("last_accessed_at"),
+            retention_policy=retention_policy or artifact.get("retention_policy") or "keep",
+            imported_by=imported_by or artifact.get("imported_by"),
+            import_method=resolved_import_method,
+            source_metadata=dict(artifact_payload.get("source_metadata") or {}),
+        )
+        registry.register_artifact(import_run, record)
+
+        persisted_payload = artifact_model.to_dict()
+        persisted_payload["file_path"] = artifact_paths["artifact"]
+        persisted_payload["artifact_paths"] = artifact_paths
+        write_security_assessment_artifact(
+            persisted_payload,
+            catalog_dir=catalog_dir or SECURITY_ASSESSMENT_CATALOG_DIR,
+            artifact_filename=artifact_filename,
+        )
+    else:
+        persisted_payload = artifact_model.to_dict()
+
+    # SA migration (PR2): the bespoke path no longer emits a parallel
+    # CanonicalArtifact. Production SA now writes the canonical store ONLY
+    # through the generic extractor (workspace upload -> dispatcher, REST
+    # collect -> RESTExtractor, CLI -> dispatcher), all via result_to_artifact.
+    # persist() now writes the per-domain store + the artifact registry only —
+    # the held #36 dev Security-Assessment cluster's machinery.
     return persisted_payload
 
 
@@ -397,6 +439,7 @@ def list_security_assessment_artifacts(
     source_type: str | None = None,
     engagement_id: str | None = None,
     report_stream_id: str | None = None,
+    limit: int = 10,
 ) -> list[dict[str, Any]]:
     registry = SecurityAssessmentArtifactRegistry(
         registry_path or SECURITY_ASSESSMENT_REGISTRY_PATH
@@ -411,6 +454,7 @@ def list_security_assessment_artifacts(
             engagement_id=engagement_id,
             report_stream_id=report_stream_id,
             descending=True,
+            limit=limit,
         )
     ]
 

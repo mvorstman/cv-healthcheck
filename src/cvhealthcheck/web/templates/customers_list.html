@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Customers — Quick HC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='quick_hc.css') }}">
+  <script>
+    (function () {
+      var theme = localStorage.getItem('quickhc-theme-v1');
+      if (theme === 'dark' || theme === 'light') {
+        document.documentElement.dataset.theme = theme;
+      } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.dataset.theme = 'dark';
+      } else {
+        document.documentElement.dataset.theme = 'light';
+      }
+    })();
+  </script>
+  <style>
+    html, body { overflow: auto; }
+    .cust-page {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 48px 24px 64px;
+      font-family: var(--font);
+      color: var(--text-1);
+    }
+    .cust-back {
+      display: inline-block;
+      font-size: 12px;
+      color: var(--text-2);
+      text-decoration: none;
+      margin-bottom: 24px;
+    }
+    .cust-back:hover { color: var(--accent); }
+    .cust-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .cust-title {
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .cust-btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      padding: 8px 14px;
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .cust-btn:hover { filter: brightness(1.1); }
+    .cust-btn-link {
+      background: var(--bg-panel);
+      color: var(--text-1);
+      border: 1px solid var(--border);
+    }
+    .cust-btn-link:hover { border-color: var(--accent); color: var(--accent); }
+    .cust-btn-danger {
+      color: #d04040;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+    }
+    .cust-btn-danger:hover { border-color: #d04040; }
+    .cust-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      border: 1px solid var(--border);
+      background: var(--bg-panel);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .cust-table th, .cust-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    .cust-table th {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      font-family: var(--mono);
+      background: var(--bg);
+    }
+    .cust-table tr:last-child td { border-bottom: none; }
+    .cust-table td.mono {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-2);
+    }
+    .cust-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .cust-actions .cust-btn { padding: 5px 10px; font-size: 11px; }
+    .cust-empty {
+      padding: 32px;
+      text-align: center;
+      color: var(--text-2);
+      font-size: 13px;
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+    }
+    .cust-flash {
+      padding: 10px 14px;
+      border-radius: 5px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+    .cust-flash-success {
+      background: rgba(80, 180, 100, 0.12);
+      color: #2c8040;
+      border: 1px solid rgba(80, 180, 100, 0.3);
+    }
+    .cust-flash-error {
+      background: rgba(208, 64, 64, 0.12);
+      color: #d04040;
+      border: 1px solid rgba(208, 64, 64, 0.3);
+    }
+  </style>
+</head>
+<body>
+
+{% include "partials/active_project_selector.html" %}
+
+<div class="cust-page">
+  <a class="cust-back" href="{{ url_for('main.quick_hc') }}">← Back to Quick HC</a>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="cust-flash cust-flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="cust-header">
+    <div class="cust-title">Customers</div>
+    <a class="cust-btn" href="{{ url_for('main.customers_new') }}">+ New customer</a>
+  </div>
+
+  {% if customers %}
+    <table class="cust-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>CommCell ID</th>
+          <th>Projects</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in customers %}
+          <tr>
+            <td>
+              <a href="{{ url_for('main.customers_detail', customer_id=c.customer_id) }}"
+                 style="color: var(--text-1); text-decoration: none; font-weight: 500;">
+                {{ c.customer_name }}
+              </a>
+            </td>
+            <td class="mono">{{ c.commcell_id or '—' }}</td>
+            <td class="mono">{{ c.project_count }}</td>
+            <td>
+              <div class="cust-actions">
+                <a class="cust-btn cust-btn-link" href="{{ url_for('main.customers_edit', customer_id=c.customer_id) }}">Edit</a>
+                <a class="cust-btn cust-btn-danger" href="{{ url_for('main.customers_delete', customer_id=c.customer_id) }}">Delete</a>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="cust-empty">
+      No customers yet. <a href="{{ url_for('main.customers_new') }}">Create the first one.</a>
+    </div>
+  {% endif %}
+</div>
+
+</body>
+</html>

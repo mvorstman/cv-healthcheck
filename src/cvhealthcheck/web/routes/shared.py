@@ -20,8 +20,11 @@ from cvhealthcheck.api_client import CommvaultApiClient
 from cvhealthcheck.auth import (
     AuthError,
     clear_current_token,
+    get_current_customer_id,
     get_current_token,
+    get_current_username,
     is_authenticated,
+    is_authenticated_for,
     login_to_commvault,
     set_current_token,
 )
@@ -33,10 +36,8 @@ from cvhealthcheck.license_summary import (
     import_license_summary_upload,
 )
 from cvhealthcheck.metrics import (
-    get_capacity_license_usage,
     get_client_count_history,
     get_client_growth_details,
-    get_client_growth_summary,
 )
 from cvhealthcheck.output.json_report import to_pretty_json
 from cvhealthcheck.quickhc import get_commcell_identity
@@ -55,9 +56,7 @@ from cvhealthcheck.reportsplus.inventory import (
 from cvhealthcheck.reportsplus.metric_inventory import build_report_metric_inventory
 from cvhealthcheck.reportsplus.metadata import summarize_dataset_metadata
 from cvhealthcheck.reportsplus.security_assessment import (
-    extract_security_assessment,
     load_security_assessment_artifact,
-    security_assessment_quick_hc,
     security_assessment_status,
 )
 from cvhealthcheck.security_assessment.service import (
@@ -106,7 +105,7 @@ def _safe_next(default: str | None = None) -> str:
     value = request.values.get("next", "")
     if value.startswith("/") and not value.startswith("//"):
         return value
-    return default or url_for("main.lab_readiness")
+    return default or url_for("main.quick_hc")
 
 
 def _parameters_from_form() -> dict[str, str]:
@@ -183,29 +182,6 @@ def _number_or_none(value: Any, *, allow_negative: bool = True) -> int | float |
     if not allow_negative and number < 0:
         return None
     return number
-
-
-def _license_summary_quick_hc() -> dict[str, Any]:
-    try:
-        payload = LicenseSummaryService().get_current()
-    except FileNotFoundError:
-        return {
-            "exists": False,
-            "path": "data/catalog/license_summary/latest.json",
-        }
-    return {
-        "exists": True,
-        "path": str(payload.get("file_path") or "data/catalog/license_summary/latest.json"),
-        "source_type": payload.get("source_type"),
-        "imported_at": payload.get("imported_at"),
-        "generated_on": payload.get("generated_on"),
-        "customer_id": payload.get("customer_id"),
-        "commcell_id": payload.get("commcell_id"),
-        "commcell_name": payload.get("commcell_name"),
-        "license_expiry": payload.get("license_expiry"),
-        "other_count": len(payload.get("other_licenses") or []),
-        "agent_feature_count": len(payload.get("agent_feature_licenses") or []),
-    }
 
 
 def _client_count_chart(metric: dict[str, Any]) -> dict[str, Any] | None:

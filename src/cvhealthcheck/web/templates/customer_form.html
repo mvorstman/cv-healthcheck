@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if mode == 'edit' %}Edit{% else %}New{% endif %} customer — Quick HC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='quick_hc.css') }}">
+  <script>
+    (function () {
+      var theme = localStorage.getItem('quickhc-theme-v1');
+      if (theme === 'dark' || theme === 'light') {
+        document.documentElement.dataset.theme = theme;
+      } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.dataset.theme = 'dark';
+      } else {
+        document.documentElement.dataset.theme = 'light';
+      }
+    })();
+  </script>
+  <style>
+    html, body { overflow: auto; }
+    .cust-page {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 48px 24px 64px;
+      font-family: var(--font);
+      color: var(--text-1);
+    }
+    .cust-back {
+      display: inline-block;
+      font-size: 12px;
+      color: var(--text-2);
+      text-decoration: none;
+      margin-bottom: 24px;
+    }
+    .cust-back:hover { color: var(--accent); }
+    .cust-title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .cust-lede {
+      font-size: 13px;
+      color: var(--text-2);
+      margin-bottom: 32px;
+    }
+    .cust-form {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .cust-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .cust-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      font-family: var(--mono);
+    }
+    .cust-label-req::after {
+      content: " *";
+      color: var(--accent);
+    }
+    .cust-input, .cust-textarea {
+      background: var(--bg-panel);
+      color: var(--text-1);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 8px 10px;
+      font-family: var(--font);
+      font-size: 13px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .cust-input:focus, .cust-textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .cust-textarea {
+      min-height: 80px;
+      font-family: var(--mono);
+      font-size: 12px;
+      resize: vertical;
+    }
+    .cust-hint {
+      font-size: 11px;
+      color: var(--text-3);
+    }
+    .cust-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .cust-btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      padding: 10px 18px;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .cust-btn:hover { filter: brightness(1.1); }
+    .cust-btn-cancel {
+      background: var(--bg-panel);
+      color: var(--text-1);
+      border: 1px solid var(--border);
+    }
+    .cust-btn-cancel:hover { border-color: var(--accent); color: var(--accent); }
+    .cust-error {
+      padding: 10px 14px;
+      border-radius: 5px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      background: rgba(208, 64, 64, 0.12);
+      color: #d04040;
+      border: 1px solid rgba(208, 64, 64, 0.3);
+    }
+  </style>
+</head>
+<body>
+
+{% include "partials/active_project_selector.html" %}
+
+<div class="cust-page">
+  <a class="cust-back" href="{{ url_for('main.customers_list') }}">← Back to Customers</a>
+
+  <div class="cust-title">
+    {% if mode == 'edit' %}Edit customer{% else %}New customer{% endif %}
+  </div>
+  <p class="cust-lede">
+    {% if mode == 'edit' %}
+      Update this customer's details. The customer id is fixed.
+    {% else %}
+      Create a customer record. Only the name is required; CommCell
+      details can be added later.
+    {% endif %}
+  </p>
+
+  {% if error %}
+    <div class="cust-error">{{ error }}</div>
+  {% endif %}
+
+  <form class="cust-form" method="post"
+        action="{% if mode == 'edit' %}{{ url_for('main.customers_edit', customer_id=customer.customer_id) }}{% else %}{{ url_for('main.customers_new') }}{% endif %}">
+
+    <div class="cust-field">
+      <label class="cust-label cust-label-req" for="customer_name">Name</label>
+      <input class="cust-input" id="customer_name" name="customer_name" type="text"
+             value="{{ customer.customer_name or '' }}" required maxlength="200" autofocus>
+    </div>
+
+    <div class="cust-field">
+      <label class="cust-label" for="commcell_id">CommCell ID</label>
+      <input class="cust-input" id="commcell_id" name="commcell_id" type="text"
+             value="{{ customer.commcell_id or '' }}" maxlength="200">
+      <span class="cust-hint">Optional. Set later if not known yet.</span>
+    </div>
+
+    <div class="cust-field">
+      <label class="cust-label" for="commcell_hostname">CommCell hostname</label>
+      <input class="cust-input" id="commcell_hostname" name="commcell_hostname" type="text"
+             value="{{ customer.commcell_hostname or '' }}" maxlength="200">
+    </div>
+
+    <div class="cust-field">
+      <label class="cust-label" for="company_guid">Company GUID</label>
+      <input class="cust-input" id="company_guid" name="company_guid" type="text"
+             value="{{ customer.company_guid or '' }}" maxlength="200">
+      <span class="cust-hint">Optional. Only set if the CommCell hosts multiple companies.</span>
+    </div>
+
+    <div class="cust-field">
+      <label class="cust-label" for="contact_info">Contact info</label>
+      <textarea class="cust-textarea" id="contact_info" name="contact_info"
+                rows="3">{{ customer.contact_info or '' }}</textarea>
+      <span class="cust-hint">Free-form. Names, emails, phone numbers, anything per-customer.</span>
+    </div>
+
+    <div class="cust-field">
+      <label class="cust-label" for="notes">Notes</label>
+      <textarea class="cust-textarea" id="notes" name="notes"
+                rows="4">{{ customer.notes or '' }}</textarea>
+    </div>
+
+    <div class="cust-actions">
+      <button type="submit" class="cust-btn">
+        {% if mode == 'edit' %}Save changes{% else %}Create customer{% endif %}
+      </button>
+      <a class="cust-btn cust-btn-cancel" href="{{ url_for('main.customers_list') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+
+</body>
+</html>

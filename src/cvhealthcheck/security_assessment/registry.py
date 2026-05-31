@@ -277,7 +277,11 @@ class SecurityAssessmentArtifactRegistry:
             return None
         return self._artifact_from_row(row)
 
-    def list_artifacts(self, artifact_type: str | None = None) -> list[ArtifactRecord]:
+    def list_artifacts(
+        self,
+        artifact_type: str | None = None,
+        limit: int | None = None,
+    ) -> list[ArtifactRecord]:
         self.ensure_schema()
         query = """
             SELECT
@@ -310,6 +314,9 @@ class SecurityAssessmentArtifactRegistry:
             query += " WHERE a.artifact_type = ?"
             parameters = (artifact_type,)
         query += " ORDER BY i.imported_at ASC, a.artifact_id ASC"
+        if limit is not None:
+            query += " LIMIT ?"
+            parameters = (*parameters, limit)
         with self._connect() as connection:
             connection.row_factory = sqlite3.Row
             rows = connection.execute(query, parameters).fetchall()
@@ -325,6 +332,7 @@ class SecurityAssessmentArtifactRegistry:
         engagement_id: str | None = None,
         report_stream_id: str | None = None,
         descending: bool = True,
+        limit: int | None = None,
     ) -> list[ArtifactRecord]:
         self.ensure_schema()
         where_sql, parameters = self._scope_where_clause(
@@ -336,6 +344,7 @@ class SecurityAssessmentArtifactRegistry:
             report_stream_id=report_stream_id,
         )
         direction = "DESC" if descending else "ASC"
+        limit_sql = f" LIMIT {int(limit)}" if limit is not None else ""
         with self._connect() as connection:
             connection.row_factory = sqlite3.Row
             rows = connection.execute(
@@ -365,7 +374,7 @@ class SecurityAssessmentArtifactRegistry:
                 FROM artifacts a
                 JOIN import_runs i ON i.import_run_id = a.import_run_id
                 WHERE {where_sql}
-                ORDER BY i.imported_at {direction}, a.artifact_id {direction}
+                ORDER BY i.imported_at {direction}, a.artifact_id {direction}{limit_sql}
                 """,
                 parameters,
             ).fetchall()
