@@ -13,7 +13,8 @@ fi
 
 # Configure Flask runtime
 export FLASK_APP="cvhealthcheck.web.app"
-export FLASK_ENV="production"
+# Dev auto-reload is enabled below via `flask run --debug` (Python reloader +
+# Jinja template auto-reload). FLASK_ENV is removed — it's ignored in Flask 3.x.
 export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 export CV_WEB_HOST="${CV_WEB_HOST:-0.0.0.0}"
 export CV_WEB_PORT="${CV_WEB_PORT:-5001}"
@@ -62,4 +63,4 @@ echo "[start] runtime directories ready"
 # Start the app
 echo "Starting cv-healthcheck..."
 echo "[start] starting cv-healthcheck on ${CV_WEB_HOST}:${CV_WEB_PORT}..."
-flask run --host="${CV_WEB_HOST}" --port="${CV_WEB_PORT}"
+flask run --debug --no-debugger --host="${CV_WEB_HOST}" --port="${CV_WEB_PORT}"
