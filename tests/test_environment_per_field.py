@@ -31,10 +31,22 @@ from cvhealthcheck.quickhc.subject_data_service import (
     _normalize_timezone,
 )
 
+# The REAL GET /commandcenter/api/CommServ response shape (the .raw block) — the
+# builder now reads card fields directly from this nested structure, not a flat
+# identity dict. commCellId is the integer 2 (rendered hex "2").
 _CC = {
-    "hostName": "cs01",
-    "csGUID": "C721DF1F-DB93-41A0-BD28-1EDEB944E34D",
+    "commcell": {
+        "commCellId": 2,
+        "commCellName": "CS01",
+        "csGUID": "C721DF1F-DB93-41A0-BD28-1EDEB944E34D",
+    },
+    "csTimeZone": {"TimeZoneID": 269, "TimeZoneName": "America/Danmarkshavn"},
     "csVersionInfo": "11 SP40.47",
+    "currentSPVersion": 40,
+    "installedSPVersion": 40,
+    "hostName": "cs01",
+    "osType": "Unix",
+    "releaseId": 16,
     "timeZone": "0:0:America/Danmarkshavn",
 }
 
@@ -121,22 +133,44 @@ def test_environment_timezone_value_is_normalized(migrated_db_path: Path):
     assert by["Timezone"]["value"] == "America/Danmarkshavn"
 
 
-# ── value mapping / order preserved (rules aside) ──
+# ── the full GET CommServ field set, read directly from the real response ──
 
-def test_environment_identity_values_and_order_preserved(migrated_db_path: Path):
-    """Same four cells, same order; values from cc (Timezone now the normalized
-    IANA component). Labels are CSS-uppercased at render."""
+def test_environment_card_shows_full_commserv_field_set_in_schema_order(migrated_db_path: Path):
+    """The card surfaces the real GET CommServ fields in schema order, read
+    directly (no synthesis). commCellId(int 2) → hex "2"; GUID + Timezone direct;
+    Release Name omitted (absent from the API). Labels CSS-uppercased at render."""
     conn = _conn(migrated_db_path)
     try:
         sec = _identity_section(_CC, conn)
     finally:
         conn.close()
     assert [(i["label"], i["value"]) for i in sec["items"]] == [
-        ("CommCell Name", "cs01"),
-        ("CommCell ID", "C721DF1F-DB93-41A0-BD28-1EDEB944E34D"),
-        ("Version", "11 SP40.47"),
-        ("Timezone", "America/Danmarkshavn"),
+        ("CommCell Name", "CS01"),                 # commcell.commCellName
+        ("CommCell ID", "2"),                       # hex(commCellId=2) — NOT the GUID
+        ("CommCell GUID", "C721DF1F-DB93-41A0-BD28-1EDEB944E34D"),  # direct
+        ("Version", "11 SP40.47"),                  # csVersionInfo
+        ("OS Type", "Unix"),                        # osType
+        ("Current SP Version", "40"),               # currentSPVersion
+        ("Installed SP Version", "40"),             # installedSPVersion
+        ("Timezone", "America/Danmarkshavn"),       # csTimeZone.TimeZoneName (clean)
+        ("Hostname", "cs01"),                       # hostName
     ]
+    assert "Release Name" not in {i["label"] for i in sec["items"]}
+
+
+def test_environment_commcell_id_is_hex_not_synthesized(migrated_db_path: Path):
+    """commCellId is read as an integer and rendered hex (the brief's 13183 ->
+    "337f"); the GUID is read directly. ID and GUID are distinct values — the ID
+    is NOT the GUID (the old bug) and neither is synthesized from Serial/RegCode."""
+    cc = dict(_CC, commcell=dict(_CC["commcell"], commCellId=13183))
+    conn = _conn(migrated_db_path)
+    try:
+        by = {i["label"]: i for i in _identity_section(cc, conn)["items"]}
+    finally:
+        conn.close()
+    assert by["CommCell ID"]["value"] == "337f"     # hex(13183)
+    assert by["CommCell GUID"]["value"] == "C721DF1F-DB93-41A0-BD28-1EDEB944E34D"
+    assert by["CommCell ID"]["value"] != by["CommCell GUID"]["value"]
 
 
 def test_environment_version_missing_renders_dash_and_warns(migrated_db_path: Path):

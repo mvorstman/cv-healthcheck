@@ -521,22 +521,11 @@ function openConfig(id) {
     srcPanel += `</div>`;
   }
 
-  // CommCell identity (environment subject only)
-  let identityRows = '';
-  if (s.id === 'environment' && CC.exists) {
-    const rows = [
-      {k:'CommCell Name', v: CC.name || '—'},
-      {k:'Version', v: CC.version || '—'},
-      {k:'Timezone', v: CC.timezone || null},
-      {k:'CommCell ID', v: CC.id || null},
-    ].filter(r => r.v);
-    if (rows.length) {
-      const lastIdx = rows.length - 1;
-      identityRows = `<div style="display:grid;gap:0;margin-top:10px">${rows.map((r, i) =>
-        `<div class="src-meta-row"${i === lastIdx ? ' style="border-bottom:none"' : ''}><span>${esc(r.k)}</span><span>${esc(r.v)}</span></div>`
-      ).join('')}</div>`;
-    }
-  }
+  // NOTE: the environment CommCell-identity grid used to be rendered here from
+  // the header CC object (CommCell Name/Version/Timezone/ID). It duplicated the
+  // environment card SECTION and still showed the dirty "0:0:" timezone and the
+  // GUID under "CommCell ID". Removed — the expanded environment card section
+  // (built from the real GET CommServ response) is now the single source.
 
   // Section tiles
   const secTiles = (s.sections || []).map(sec => secTile(s.id, sec, true)).join('');
@@ -588,7 +577,6 @@ function openConfig(id) {
     </div>` : ''}
     <div class="cfg-sec">
       <div class="cfg-sec-title">Report Sections</div>
-      ${identityRows ? `<div class="cfg-tile">${identityRows}</div>` : ''}
       ${secTiles}
     </div>
     ${deleteSection}

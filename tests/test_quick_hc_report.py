@@ -795,13 +795,18 @@ def test_quick_hc_workspace_sections_match_registry_contract_for_all_tiles(
         assert actual_section_ids == tile.section_ids
 
 
-def test_quick_hc_renderer_scopes_commcell_metadata_to_environment_tile() -> None:
+def test_quick_hc_renderer_has_no_redundant_commcell_identity_grid() -> None:
+    """The header-CC identity grid (CommCell Name/Version/Timezone/ID from the
+    CC object) was removed — it duplicated the environment card SECTION and showed
+    the dirty "0:0:" timezone + GUID-as-ID. The expanded environment card is now
+    the single CommCell Details display."""
     app = create_app()
     response = app.test_client().get("/static/quick_hc.js")
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    assert "s.id === 'environment' && CC.exists" in body
+    # the old per-CC-object identity grid block is gone
+    assert "s.id === 'environment' && CC.exists" not in body
     assert "shown for all subjects" not in body
 
 
@@ -1008,15 +1013,23 @@ def test_quick_hc_overview_license_summary_previews_real_fields(
 def test_quick_hc_overview_renders_commcell_report_section_values(monkeypatch) -> None:
     import cvhealthcheck.quickhc.subject_data_service as subject_data_service_module
 
+    # The real GET CommServ response shape (the .raw block) — the builder reads
+    # card fields directly from it. commCellId 13183 renders hex "337f".
     monkeypatch.setattr(
         subject_data_service_module,
         "read_json",
         lambda *_args, **_kwargs: {
-            "identity": {
-                "hostName": "CommServe A",
-                "csGUID": "commcell-01",
+            "raw": {
+                "commcell": {"commCellId": 13183, "commCellName": "CommServe A",
+                             "csGUID": "C0FF-EE00-GUID"},
+                "csTimeZone": {"TimeZoneID": 5, "TimeZoneName": "UTC"},
                 "csVersionInfo": "11 SP40.47",
-                "timeZone": "UTC",
+                "currentSPVersion": 40,
+                "installedSPVersion": 40,
+                "hostName": "commserve-a",
+                "osType": "Windows",
+                "releaseId": 16,
+                "timeZone": "0:0:UTC",
             }
         },
     )
@@ -1026,15 +1039,17 @@ def test_quick_hc_overview_renders_commcell_report_section_values(monkeypatch) -
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    # Option A: the environment identity card is built through the shared per-field
-    # card path, with rules read from the catalog binding (migration 0023). Version
-    # (presence) -> good; CommCell Name (format, no pattern) and Timezone (enum, no
-    # allowed-set) render SAFE good; CommCell ID is informational (bare, sev null).
+    # The environment card is built through the shared per-field card path, fields
+    # read directly from the real GET CommServ response. Rules (binding 0023):
+    # Version presence -> good; Name format / Timezone enum -> safe good with no
+    # spec; CommCell ID is hex(commCellId) and informational (bare).
     assert '"id": "environment.metadata"' in body
     assert '"label": "CommCell Name", "reason": "CommCell Name: no format pattern configured", "sev": "good", "unit": "", "value": "CommServe A"' in body
-    assert '"label": "CommCell ID", "reason": "", "sev": null, "unit": "", "value": "commcell-01"' in body
+    assert '"label": "CommCell ID", "reason": "", "sev": null, "unit": "", "value": "337f"' in body   # hex(13183), not the GUID
+    assert '"label": "CommCell GUID", "reason": "", "sev": null, "unit": "", "value": "C0FF-EE00-GUID"' in body
     assert '"label": "Version", "reason": "Version is set", "sev": "good", "unit": "", "value": "11 SP40.47"' in body
     assert '"label": "Timezone", "reason": "Timezone: no allowed-set configured", "sev": "good", "unit": "", "value": "UTC"' in body
+    assert '"label": "Hostname", "reason": "", "sev": null, "unit": "", "value": "commserve-a"' in body
 
 
 def test_quick_hc_overview_renders_security_assessment_report_section_values(

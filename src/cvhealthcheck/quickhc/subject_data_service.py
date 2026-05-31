@@ -405,12 +405,27 @@ def _build_generic_subject(tile: dict[str, Any], artifact: CanonicalArtifact | N
 # These are fallbacks used only when no canonical artifact exists in ArtifactStore.
 
 def _load_legacy_commcell() -> dict | None:
+    """Return the REAL GET CommServ response (the ``raw`` block) for the
+    environment subject — nested shape: ``commcell.{commCellId,commCellName,csGUID}``,
+    ``csTimeZone.{TimeZoneID,TimeZoneName}``, ``csVersionInfo``, ``currentSPVersion``,
+    ``installedSPVersion``, ``hostName``, ``osType``, ``releaseId``, ``timeZone``.
+
+    Previously returned the lossy flat ``identity`` block, which dropped
+    commCellId / commCellName / csTimeZone / SP versions and carried the dirty
+    ``timeZone`` ("0:0:<IANA>") composite. The card + header now read the real
+    response directly. Falls back to ``identity`` / a normalized view only when no
+    ``raw`` is present (older captures). environment-ONLY loader (legacy_loaders)."""
     try:
         payload = read_json("commserv.json", catalog_dir=Path("data/catalog/rest"))
-        identity = payload.get("identity") if isinstance(payload, dict) else {}
-        if not isinstance(identity, dict) or not identity:
-            identity = normalize_commserv(payload if isinstance(payload, dict) else {}).to_dict()
-        return identity
+        if not isinstance(payload, dict):
+            return None
+        raw = payload.get("raw")
+        if isinstance(raw, dict) and raw:
+            return raw
+        identity = payload.get("identity")
+        if isinstance(identity, dict) and identity:
+            return identity
+        return normalize_commserv(payload).to_dict()
     except FileNotFoundError:
         return None
     except Exception:
@@ -485,14 +500,19 @@ def _legacy_loaders() -> dict[str, Any]:
 # ── HEADER ──
 
 def _build_commcell_header(cc: dict | None) -> dict:
+    """Header summary (subtitle name/version). ``cc`` is now the REAL GET CommServ
+    response (nested), so read commCellId/csGUID/TimeZoneName from their real
+    locations rather than the old flat fields."""
     if not cc:
         return {"exists": False, "name": "", "version": "", "id": "", "timezone": ""}
+    commcell = cc.get("commcell") if isinstance(cc.get("commcell"), dict) else {}
+    cstz = cc.get("csTimeZone") if isinstance(cc.get("csTimeZone"), dict) else {}
     return {
         "exists": True,
         "name": cc.get("hostName") or "",
         "version": cc.get("csVersionInfo") or "",
-        "id": cc.get("csGUID") or "",
-        "timezone": cc.get("timeZone") or "",
+        "id": commcell.get("csGUID") or cc.get("csGUID") or "",
+        "timezone": cstz.get("TimeZoneName") or cc.get("timeZone") or "",
     }
 
 
@@ -703,41 +723,71 @@ def _load_environment_identity_rules(db: sqlite3.Connection | None) -> list[dict
     return ((instructions.get("card") or {}).get("evaluative") or {}).get("rules") or []
 
 
+def _hex_commcell_id(commcell_id: Any) -> str | None:
+    """Render commcell.commCellId (an integer, e.g. 2 or 13183) as lowercase hex
+    with no '0x' prefix (2 → "2", 13183 → "337f"). The raw int is NOT shown — it
+    stays in commserv.json. None / non-numeric → None (renders "—")."""
+    if commcell_id is None:
+        return None
+    try:
+        return format(int(commcell_id), "x")
+    except (TypeError, ValueError):
+        return None
+
+
 def _build_environment_identity_section(
     cc: dict, name: str, version: str, db: sqlite3.Connection | None = None
 ) -> dict[str, Any]:
     """Build the CommCell-identity card for the bespoke environment subject.
 
-    Phase-8 follow-on (per-field evaluation on the bespoke track): the identity
-    card is built through the SAME shared path the generic cards use —
-    ``build_card_section`` (the single ``engine.evaluate`` locus) and
-    ``_card_section_view`` (the shared per-field card view). So the bespoke
-    builder feeds the same evaluation locus + renderer as _card_test, not a
-    parallel one (ADR 0006: one evaluation locus).
+    The identity card is built through the SAME shared path the generic cards use
+    — ``build_card_section`` (the single ``engine.evaluate`` locus) +
+    ``_card_section_view`` (the shared per-field card view) — and its per-field
+    rules are DATA from the catalog binding (migration 0023), not a literal.
 
-    Option A: the per-field rules are now DATA — read from environment's catalog
-    binding (migration 0023) via ``_load_environment_identity_rules``, NOT a
-    Python literal. The card VALUES are still sourced live from commserv.json
-    (``cc``); only the rules moved out of code. Rules this slice: Version
-    (presence), Timezone (enum, no allowed-set yet), CommCell Name (format, no
-    pattern yet); CommCell ID stays informational (no rule)."""
-    # version → None (not "") when absent, so the value renders as "—" AND the
-    # presence rule correctly reads it as "not set" (presence treats "" / None
-    # as missing). Timezone is normalized to its IANA component for both display
-    # and the enum evaluator. Field order preserved: Name, ID, Version, Timezone.
+    The card VALUES are read DIRECTLY from the real GET /commandcenter/api/CommServ
+    response (``cc`` is now the raw nested block: ``commcell.{commCellId,commCellName,
+    csGUID}``, ``csTimeZone.TimeZoneName``, ``csVersionInfo``, SP versions, …). No
+    synthesis: CommCell ID is the numeric commCellId rendered as hex; CommCell GUID
+    and Timezone are read directly (csTimeZone.TimeZoneName — no "0:0:" composite).
+    Fields the API doesn't return (e.g. releaseName) get no row. Rows for releaseId
+    / TimeZoneID / top-level timeZone are intentionally omitted (they stay in
+    commserv.json; there is no card-metadata slot).
+
+    Field keys ``name`` / ``version`` / ``timezone`` are preserved so the 49053a9
+    rule binding still attaches (Version presence, Timezone enum, Name format); the
+    new fields carry no rule and render bare."""
+    commcell = cc.get("commcell") if isinstance(cc.get("commcell"), dict) else {}
+    cstz = cc.get("csTimeZone") if isinstance(cc.get("csTimeZone"), dict) else {}
+    # *_or_None so absent values render "—" AND a presence rule reads "not set".
     identity_row = {
-        "name": name,
-        "guid": str(cc.get("csGUID") or "—"),
-        "version": version or None,
-        "timezone": _normalize_timezone(cc.get("timeZone")) or "—",
+        "name": commcell.get("commCellName") or None,            # format rule
+        "id": _hex_commcell_id(commcell.get("commCellId")),      # numeric → hex
+        "guid": commcell.get("csGUID") or None,                  # direct, no synth
+        "version": cc.get("csVersionInfo") or None,              # presence rule
+        "os_type": cc.get("osType") or None,
+        "current_sp": cc.get("currentSPVersion"),
+        "installed_sp": cc.get("installedSPVersion"),
+        # csTimeZone.TimeZoneName is already clean; _normalize_timezone kept as a
+        # harmless pass-through guard (no-op on clean values, strips a stray
+        # "0:0:" if a deployment ever puts the composite here). enum rule target.
+        "timezone": _normalize_timezone(cstz.get("TimeZoneName")),
+        "hostname": cc.get("hostName") or None,
     }
     identity_spec = {
         "columns": 4,
+        # Schema order (reordering is a later cosmetic pass). Release Name omitted
+        # — releaseName is absent from the real response.
         "items": [
             {"label": "CommCell Name", "field": "name"},
-            {"label": "CommCell ID", "field": "guid"},
+            {"label": "CommCell ID", "field": "id"},
+            {"label": "CommCell GUID", "field": "guid"},
             {"label": "Version", "field": "version"},
+            {"label": "OS Type", "field": "os_type"},
+            {"label": "Current SP Version", "field": "current_sp"},
+            {"label": "Installed SP Version", "field": "installed_sp"},
             {"label": "Timezone", "field": "timezone"},
+            {"label": "Hostname", "field": "hostname"},
         ],
         # Rules come from the catalog binding (DATA), not a literal.
         "evaluative": {"rules": _load_environment_identity_rules(db)},
