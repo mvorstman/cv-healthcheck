@@ -695,7 +695,9 @@ def test_quick_hc_subject_initial_data_uses_registry_tile_order_and_explicit_dis
         "_legacy_builders",
         lambda: {
             "security_assessment": lambda payload: {"id": "security_assessment", "payload": payload},
-            "environment": lambda payload: {"id": "environment", "payload": payload},
+            # environment is dispatched with the db connection (it reads its card
+            # rules from the catalog binding); accept and ignore it in the mock.
+            "environment": lambda payload, db=None: {"id": "environment", "payload": payload},
         },
     )
     monkeypatch.setattr(
@@ -1024,16 +1026,15 @@ def test_quick_hc_overview_renders_commcell_report_section_values(monkeypatch) -
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
-    # Phase-8 follow-on: the environment identity card is now built through the
-    # shared per-field card path (a "card" section with label/value items), not
-    # the old hand-built "meta" section (k/v rows). Same four fields + values;
-    # the Version field is evaluated via a presence rule (set -> good), the
-    # other three stay bare (sev null).
+    # Option A: the environment identity card is built through the shared per-field
+    # card path, with rules read from the catalog binding (migration 0023). Version
+    # (presence) -> good; CommCell Name (format, no pattern) and Timezone (enum, no
+    # allowed-set) render SAFE good; CommCell ID is informational (bare, sev null).
     assert '"id": "environment.metadata"' in body
-    assert '"label": "CommCell Name", "reason": "", "sev": null, "unit": "", "value": "CommServe A"' in body
+    assert '"label": "CommCell Name", "reason": "CommCell Name: no format pattern configured", "sev": "good", "unit": "", "value": "CommServe A"' in body
     assert '"label": "CommCell ID", "reason": "", "sev": null, "unit": "", "value": "commcell-01"' in body
     assert '"label": "Version", "reason": "Version is set", "sev": "good", "unit": "", "value": "11 SP40.47"' in body
-    assert '"label": "Timezone", "reason": "", "sev": null, "unit": "", "value": "UTC"' in body
+    assert '"label": "Timezone", "reason": "Timezone: no allowed-set configured", "sev": "good", "unit": "", "value": "UTC"' in body
 
 
 def test_quick_hc_overview_renders_security_assessment_report_section_values(

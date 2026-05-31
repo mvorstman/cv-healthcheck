@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import logging
+import re
 import sqlite3
 from datetime import date, datetime
 from pathlib import Path
@@ -130,7 +132,14 @@ def build_subject_initial_data(
             legacy_loader = legacy_loaders.get(subject_id)
             legacy_builder = legacy_builders.get(subject_id)
             if legacy_builder is not None:
-                built = legacy_builder(legacy_loader() if legacy_loader else None)
+                loaded = legacy_loader() if legacy_loader else None
+                # environment reads its per-field card rules from the catalog
+                # binding (data, migration 0023), so it needs the db connection;
+                # the other legacy builders take only their loaded blob.
+                if subject_id == "environment":
+                    built = legacy_builder(loaded, db)
+                else:
+                    built = legacy_builder(loaded)
             elif db is not None:
                 built = _build_generic_subject(tile, None)
             else:
@@ -582,7 +591,7 @@ def _build_tile_sources(
     ]
 
 
-def _build_environment_subject(cc: dict | None) -> dict:
+def _build_environment_subject(cc: dict | None, db: sqlite3.Connection | None = None) -> dict:
     full_url = _try_url("main.quick_hc_commcell")
     if not cc:
         subj = _nodata_subject("environment", "CommCell Details", full_url)
@@ -645,35 +654,82 @@ def _build_environment_subject(cc: dict | None) -> dict:
                 REST_COMMAND_CENTER_API_SOURCE_ID: "Live collection of CommCell identity details from Command Center.",
             },
         ),
-        "sections": [_build_environment_identity_section(cc, name, version)],
+        "sections": [_build_environment_identity_section(cc, name, version, db)],
     }
 
 
-def _build_environment_identity_section(cc: dict, name: str, version: str) -> dict[str, Any]:
+def _normalize_timezone(raw: Any) -> str | None:
+    """Normalize a CommCell timezone to its IANA component for both display and
+    evaluation. commserv.json carries a composite like ``"0:0:America/Danmarkshavn"``
+    (``<offsetH>:<offsetM>:<IANA>``); reduce it to ``"America/Danmarkshavn"`` so
+    BOTH the displayed CardItem value AND the value handed to the enum evaluator
+    are the IANA name (the evaluator deliberately does not normalize). Values that
+    don't match the composite shape (e.g. ``"UTC"``) pass through unchanged; an
+    absent value → None (renders "—", reads as "not set")."""
+    if raw is None:
+        return None
+    text = str(raw)
+    if not text:
+        return None
+    m = re.match(r"^\d+:\d+:(.+)$", text)
+    return m.group(1) if m else text
+
+
+def _load_environment_identity_rules(db: sqlite3.Connection | None) -> list[dict[str, Any]]:
+    """Read environment's per-field card rules from its catalog binding (DATA),
+    not from a Python literal. Returns ``card.evaluative.rules`` from the
+    ``subject_section_sources`` row for ``environment / environment.metadata``
+    (migration 0023). Returns ``[]`` when the binding is absent or no db is
+    available (e.g. the no-db status API path) — the card then renders bare,
+    which is safe; the main render path always has a db."""
+    if db is None:
+        return []
+    try:
+        row = db.execute(
+            "SELECT sss.extraction_instructions "
+            "FROM subject_section_sources sss "
+            "JOIN subject_sources src ON src.id = sss.source_id "
+            "WHERE src.subject_id = 'environment' AND src.subject_version = 1 "
+            "  AND sss.section_id = 'environment.metadata'",
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return []
+    if not row or not row["extraction_instructions"]:
+        return []
+    try:
+        instructions = json.loads(row["extraction_instructions"])
+    except (json.JSONDecodeError, TypeError):
+        return []
+    return ((instructions.get("card") or {}).get("evaluative") or {}).get("rules") or []
+
+
+def _build_environment_identity_section(
+    cc: dict, name: str, version: str, db: sqlite3.Connection | None = None
+) -> dict[str, Any]:
     """Build the CommCell-identity card for the bespoke environment subject.
 
     Phase-8 follow-on (per-field evaluation on the bespoke track): the identity
     card is built through the SAME shared path the generic cards use —
     ``build_card_section`` (the single ``engine.evaluate`` locus) and
-    ``_card_section_view`` (the shared per-field card view) — rather than the
-    hand-built ``type="meta"`` section it used before. So the bespoke builder
-    feeds the same evaluation locus + renderer as _card_test, not a parallel one
-    (ADR 0006: one evaluation locus). One field is evaluated this slice — Version
-    via a ``presence`` rule (set → good); CommCell Name / ID / Timezone stay
-    unjudged (bare) until enum/format kinds land.
+    ``_card_section_view`` (the shared per-field card view). So the bespoke
+    builder feeds the same evaluation locus + renderer as _card_test, not a
+    parallel one (ADR 0006: one evaluation locus).
 
-    The presence rule is authored inline here because the bespoke builder
-    constructs its card in Python (it has no catalog ``extraction_instructions``
-    card binding); the rule still resolves through ``engine.evaluate``.
-    """
+    Option A: the per-field rules are now DATA — read from environment's catalog
+    binding (migration 0023) via ``_load_environment_identity_rules``, NOT a
+    Python literal. The card VALUES are still sourced live from commserv.json
+    (``cc``); only the rules moved out of code. Rules this slice: Version
+    (presence), Timezone (enum, no allowed-set yet), CommCell Name (format, no
+    pattern yet); CommCell ID stays informational (no rule)."""
     # version → None (not "") when absent, so the value renders as "—" AND the
     # presence rule correctly reads it as "not set" (presence treats "" / None
-    # as missing). Field order preserved: Name, ID, Version, Timezone.
+    # as missing). Timezone is normalized to its IANA component for both display
+    # and the enum evaluator. Field order preserved: Name, ID, Version, Timezone.
     identity_row = {
         "name": name,
         "guid": str(cc.get("csGUID") or "—"),
         "version": version or None,
-        "timezone": str(cc.get("timeZone") or "—"),
+        "timezone": _normalize_timezone(cc.get("timeZone")) or "—",
     }
     identity_spec = {
         "columns": 4,
@@ -683,11 +739,8 @@ def _build_environment_identity_section(cc: dict, name: str, version: str) -> di
             {"label": "Version", "field": "version"},
             {"label": "Timezone", "field": "timezone"},
         ],
-        "evaluative": {"rules": [
-            {"rule_id": "environment_version_presence", "target_field": "version",
-             "kind": "presence", "severity_when_missing": "warning",
-             "severity_when_present": "good"},
-        ]},
+        # Rules come from the catalog binding (DATA), not a literal.
+        "evaluative": {"rules": _load_environment_identity_rules(db)},
     }
     card_section = build_card_section(
         "environment.metadata", "Environment metadata", identity_spec, [identity_row]

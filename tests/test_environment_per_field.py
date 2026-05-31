@@ -2,25 +2,34 @@
 
 CommCell Details / environment is built by the bespoke _build_environment_subject
 (one of the six system subjects with custom view shapes, ADR 0001 source-building
-fork), NOT the generic build_card_section path that _card_test uses. This slice
-routes its identity card through the SAME shared path (build_card_section →
-engine.evaluate → _card_section_view → the per-field card renderer), and authors
-one presence rule (Version is set → good). The other identity fields stay bare.
+fork), NOT the generic build_card_section path that _card_test uses. Its identity
+card flows through the SAME shared path (build_card_section → engine.evaluate →
+_card_section_view → the per-field card renderer).
+
+Option A (this slice): the per-field rules are DATA — read from environment's
+catalog binding (migration 0023) — not a Python literal. Values are still sourced
+live from commserv.json (cc). Rules: Version (presence), Timezone (enum, no
+allowed-set yet), CommCell Name (format, no pattern yet); CommCell ID informational.
 """
 from __future__ import annotations
 
+import sqlite3
 from datetime import datetime, timezone
+from pathlib import Path
 
-from cvhealthcheck.artifacts.enums import SourceType
+from cvhealthcheck.artifacts.enums import ArtifactStatus, SourceType
 from cvhealthcheck.artifacts.models import (
     ArtifactSource,
     ArtifactSubject,
     ArtifactSummary,
     CanonicalArtifact,
 )
-from cvhealthcheck.artifacts.enums import ArtifactStatus
 from cvhealthcheck.extractors.card_section import build_card_section
-from cvhealthcheck.quickhc.subject_data_service import _build_environment_subject
+from cvhealthcheck.quickhc.subject_data_service import (
+    _build_environment_subject,
+    _load_environment_identity_rules,
+    _normalize_timezone,
+)
 
 _CC = {
     "hostName": "cs01",
@@ -30,51 +39,113 @@ _CC = {
 }
 
 
-def _identity_section(cc: dict) -> dict:
-    return _build_environment_subject(cc)["sections"][0]
+def _conn(db_path: Path) -> sqlite3.Connection:
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
 
 
-def test_environment_identity_routed_onto_shared_card_path():
-    """The bespoke builder now emits a `card` section (not the old hand-built
-    `meta` section), so it flows through the shared per-field card renderer."""
-    sec = _identity_section(_CC)
-    assert sec["type"] == "card"
-    assert sec["columns"] == 4
-    assert sec["meta"] == "CommCell profile"          # original sub-label preserved
+def _identity_section(cc: dict, db: sqlite3.Connection | None = None) -> dict:
+    return _build_environment_subject(cc, db)["sections"][0]
 
 
-def test_environment_version_presence_verdict():
-    sec = _identity_section(_CC)
-    by = {i["label"]: i for i in sec["items"]}
-    # The one evaluated field: Version, via a presence rule -> good.
-    assert by["Version"]["sev"] == "good"
-    assert by["Version"]["reason"] == "Version is set"
-    # The other three identity fields stay bare (no rule this slice).
-    assert by["CommCell Name"]["sev"] is None
-    assert by["CommCell ID"]["sev"] is None
-    assert by["Timezone"]["sev"] is None
-    # Section header badge rolls up from the one judged field.
+# ── the rules are DATA (from the binding), not a Python literal ──
+
+def test_environment_rules_loaded_from_binding(migrated_db_path: Path):
+    """With the catalog binding present (migration 0023), the card's per-field
+    rules load from DATA: Version (presence) judges good; Timezone (enum, no
+    allowed-set) and CommCell Name (format, no pattern) render SAFE good; CommCell
+    ID is informational (bare). Section rolls up good."""
+    conn = _conn(migrated_db_path)
+    try:
+        by = {i["label"]: i for i in _identity_section(_CC, conn)["items"]}
+    finally:
+        conn.close()
+    assert by["Version"]["sev"] == "good" and by["Version"]["reason"] == "Version is set"
+    assert by["Timezone"]["sev"] == "good"          # enum, no allowed-set -> safe
+    assert "no allowed-set configured" in by["Timezone"]["reason"]
+    assert by["CommCell Name"]["sev"] == "good"     # format, no pattern -> safe
+    assert "no format pattern configured" in by["CommCell Name"]["reason"]
+    assert by["CommCell ID"]["sev"] is None         # informational, no rule
+
+
+def test_environment_section_rolls_up_good(migrated_db_path: Path):
+    conn = _conn(migrated_db_path)
+    try:
+        sec = _identity_section(_CC, conn)
+    finally:
+        conn.close()
+    assert sec["type"] == "card" and sec["columns"] == 4 and sec["meta"] == "CommCell profile"
     assert sec["sev"] == "good"
 
 
-def test_environment_identity_values_and_order_preserved():
-    """Field mapping is unchanged from the old meta card: same four cells, same
-    values, same order (labels are CSS-uppercased at render, so display is
-    identical to the prior COMMCELL NAME / ID / VERSION / TIMEZONE)."""
-    sec = _identity_section(_CC)
+def test_environment_no_db_no_rules_is_bare_proves_literal_gone(migrated_db_path: Path):
+    """The rule literal is GONE: with no db (so the binding can't be read), NO
+    field is judged — every field is bare. If a Version literal still lived in the
+    builder, Version would be `good` here. It isn't, so the rules are pure data."""
+    by = {i["label"]: i for i in _identity_section(_CC, None)["items"]}
+    assert all(by[f]["sev"] is None for f in
+               ["CommCell Name", "CommCell ID", "Version", "Timezone"])
+
+
+def test_environment_binding_carries_three_rules(migrated_db_path: Path):
+    conn = _conn(migrated_db_path)
+    try:
+        rules = _load_environment_identity_rules(conn)
+    finally:
+        conn.close()
+    by_field = {r["target_field"]: r for r in rules}
+    assert by_field["version"]["kind"] == "presence"
+    assert by_field["timezone"]["kind"] == "enum" and "allowed_values" not in by_field["timezone"]
+    assert by_field["name"]["kind"] == "format" and "pattern" not in by_field["name"]
+
+
+# ── timezone normalization ──
+
+def test_timezone_normalized_to_iana_component():
+    # composite "<offsetH>:<offsetM>:<IANA>" -> the IANA name only
+    assert _normalize_timezone("0:0:America/Danmarkshavn") == "America/Danmarkshavn"
+    assert _normalize_timezone("UTC") == "UTC"             # non-composite passes through
+    assert _normalize_timezone("") is None
+    assert _normalize_timezone(None) is None
+
+
+def test_environment_timezone_value_is_normalized(migrated_db_path: Path):
+    """The normalized IANA component is what both displays AND is evaluated."""
+    conn = _conn(migrated_db_path)
+    try:
+        by = {i["label"]: i for i in _identity_section(_CC, conn)["items"]}
+    finally:
+        conn.close()
+    assert by["Timezone"]["value"] == "America/Danmarkshavn"
+
+
+# ── value mapping / order preserved (rules aside) ──
+
+def test_environment_identity_values_and_order_preserved(migrated_db_path: Path):
+    """Same four cells, same order; values from cc (Timezone now the normalized
+    IANA component). Labels are CSS-uppercased at render."""
+    conn = _conn(migrated_db_path)
+    try:
+        sec = _identity_section(_CC, conn)
+    finally:
+        conn.close()
     assert [(i["label"], i["value"]) for i in sec["items"]] == [
         ("CommCell Name", "cs01"),
         ("CommCell ID", "C721DF1F-DB93-41A0-BD28-1EDEB944E34D"),
         ("Version", "11 SP40.47"),
-        ("Timezone", "0:0:America/Danmarkshavn"),
+        ("Timezone", "America/Danmarkshavn"),
     ]
 
 
-def test_environment_version_missing_renders_dash_and_warns():
-    """An absent version renders as '—' (unchanged display) AND the presence
-    rule reads it as not-set -> warning."""
-    cc = dict(_CC, csVersionInfo="")
-    by = {i["label"]: i for i in _identity_section(cc)["items"]}
+def test_environment_version_missing_renders_dash_and_warns(migrated_db_path: Path):
+    """Absent version renders '—' AND the presence rule reads not-set -> warning."""
+    conn = _conn(migrated_db_path)
+    try:
+        by = {i["label"]: i for i in _identity_section(dict(_CC, csVersionInfo=""), conn)["items"]}
+    finally:
+        conn.close()
     assert by["Version"]["value"] == "—"
     assert by["Version"]["sev"] == "warn"
 
@@ -83,16 +154,14 @@ def test_environment_no_data_branch_unchanged():
     """The no-data branch (cc is None) is untouched — no identity card built."""
     subj = _build_environment_subject(None)
     assert subj["id"] == "environment"
-    # nodata subject carries no judged identity card section.
     assert all(s.get("type") != "card" for s in subj.get("sections", []))
 
 
 # ── Model-layer: the shared path's CardSection validates on reload ──
 
 def test_environment_identity_card_validates_on_reload():
-    """The identity card the bespoke builder produces (via build_card_section)
-    is a real CardSection that round-trips through CanonicalArtifact validation,
-    same as the generic path."""
+    """The identity card the bespoke builder produces (via build_card_section) is
+    a real CardSection that round-trips through CanonicalArtifact validation."""
     spec = {
         "columns": 4,
         "items": [
@@ -114,28 +183,3 @@ def test_environment_identity_card_validates_on_reload():
         summary=ArtifactSummary(status=ArtifactStatus.good), sections=[sec],
     )
     CanonicalArtifact.model_validate(art.model_dump(mode="json"))  # no raise
-
-
-def test_environment_identity_no_rule_is_bare_and_additive():
-    """Parity: the SAME shared path with NO rule authored leaves every field
-    bare — no per-field badges, no section verdict, and each CardItem serializes
-    to exactly {label,value,unit} (byte-identical to the prior bare identity
-    card shape). Adding the capability is additive-absent."""
-    spec = {
-        "columns": 4,
-        "items": [
-            {"label": "CommCell Name", "field": "name"},
-            {"label": "CommCell ID", "field": "guid"},
-            {"label": "Version", "field": "version"},
-            {"label": "Timezone", "field": "timezone"},
-        ],
-        # no evaluative block
-    }
-    rows = [{"name": "cs01", "guid": "G", "version": "11 SP40.47", "timezone": "UTC"}]
-    sec = build_card_section("environment.metadata", "Environment metadata", spec, rows)
-    assert sec.severity is None and sec.verdict_chain == []
-    for item in sec.items:
-        assert item.severity is None and item.verdict_chain == []
-    dumped = sec.model_dump(mode="json")["items"]
-    for cell in dumped:
-        assert set(cell.keys()) == {"label", "value", "unit"}
