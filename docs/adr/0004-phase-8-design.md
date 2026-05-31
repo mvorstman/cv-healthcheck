@@ -281,33 +281,33 @@ The table above is now **decided**, not "options + recommendations." Each DP is 
  
 ---
  
-# Addendum — Per-field judging, the measure→judge→recommend→store spine, and build status
+# Addendum — Per-field evaluation, the measure→evaluate→recommend→store spine, and build status
  
 **Added:** 2026-05-30 (post-ratification design evolution + build progress)
-**Scope note:** This addendum records decisions made *after* the phase-8 DP ratification above. Some items extend **beyond** phase 8's original scope (per-field judging, the recommend stage, the project spine). Where flagged **→ future ADR**, the item is recorded here for continuity but will graduate to its own ADR (the predictive/recommendations ADR; number still open — see *Placement* in the seam contract).
+**Scope note:** This addendum records decisions made *after* the phase-8 DP ratification above. Some items extend **beyond** phase 8's original scope (per-field evaluation, the recommend stage, the project spine). Where flagged **→ future ADR**, the item is recorded here for continuity but will graduate to its own ADR (the predictive/recommendations ADR; number still open — see *Placement* in the seam contract).
  
 ## A. The project spine (context) → future ADR for the recommend half
  
-The platform's real goal is a pipeline: **measure → judge → recommend → store**.
+The platform's real goal is a pipeline: **measure → evaluate → recommend → store**.
 - **measure** — extraction → `ExtractionResult` (done; ADR 0006 governs the boundary).
-- **judge** — deterministic, rule-driven evaluation → verdict (this is what phase 8 + per-field judging build out).
+- **evaluate** — deterministic, rule-driven evaluation → verdict (this is what phase 8 + per-field evaluation build out).
 - **recommend** — *generative* (AI-assisted), consumes a **settled** verdict + history; produces the consultant-facing recommendation (e.g. "based on growth, expand in ~N months"). **Not built. → future ADR.**
 - **store** — finalization chain (exists); the recommend stage reads across finalizations for trend ("since last delivery"). Substrate confirmed ready.
-**Hard seam (ratified, committed separately):** the judge stage stays **deterministic**; AI lives **only** in the recommend stage, consuming a settled verdict — never in judging. The judge→recommend contract is defined in `recommend-seam-contract.md` (committed, ratified): a `recommendation` payload on the catalog rule, surfaced onto the emitted verdict as `recommendation_intent` (per evaluated-unit), kept **subject-agnostic** so it carries security-check / documentation verdicts too, not just capacity.
+**Hard seam (ratified, committed separately):** the evaluate stage stays **deterministic**; AI lives **only** in the recommend stage, consuming a settled verdict — never in evaluation. The evaluate→recommend contract is defined in `recommend-seam-contract.md` (committed, ratified): a `recommendation` payload on the catalog rule, surfaced onto the emitted verdict as `recommendation_intent` (per evaluated-unit), kept **subject-agnostic** so it carries security-check / documentation verdicts too, not just capacity.
  
-## B. Per-field judging model (extends phase 8)
+## B. Per-field evaluation model (extends phase 8)
  
 **Unified rule switch — every field is rule-eligible.** A compliance rule attaches **per field** within a section. Each rule has a **global default (on/off)** that is **overridable per customer** (reusing the phase-8 vendor→template→override layering + `rule_overrides` storage). "Informational" is **not** a separate state — it is simply the **default-off** position of the same switch. Three states collapse to one axis:
 - *measured by default* (e.g. CommCell Version),
 - *not measured by default but rule-eligible* (e.g. CommCell Name — a customer override can switch it on),
 - *informational* (e.g. CommCell ID) = default-off, nobody overrides it on.
-The deliberate-vs-not-yet-judged distinction is **deferred** to an optional UI hint (catalog metadata), not modelled as engine state.
+The deliberate-vs-not-yet-evaluated distinction is **deferred** to an optional UI hint (catalog metadata), not modelled as engine state.
  
 **Multiple rule kinds.** "Measurable" is broader than thresholds. `kind` now **dispatches** in `engine.evaluate` (it was a declared-but-ignored discriminator). Kinds: **threshold** and **presence** built; **enum** and **format/regex** deferred (each is "another evaluator behind the same dispatch"). The CommCell example needs presence (Version is set), enum (Timezone in allowed set), format (Name matches convention) — none are thresholds.
  
-**Granularity asymmetry.** *Metrics are already per-item* (each `MetricItem` carries its own severity/verdict_chain) → per-field metric judging is rule-authoring only, no engine change. *Cards are section-level today* → per-field cards require `CardItem` to gain severity/verdict_chain, a per-field loop in `build_card_section`, and per-field render. **Per-field cards = next build.**
+**Granularity asymmetry.** *Metrics are already per-item* (each `MetricItem` carries its own severity/verdict_chain) → per-field metric evaluation is rule-authoring only, no engine change. *Cards are section-level today* → per-field cards require `CardItem` to gain severity/verdict_chain, a per-field loop in `build_card_section`, and per-field render. **Per-field cards = next build.**
  
-**The placeholder never existed.** `recommendation_hook` was always **doc-only** (zero code occurrences in history). Per-field judging is a *first build*, not a restore of lost capability.
+**The placeholder never existed.** `recommendation_hook` was always **doc-only** (zero code occurrences in history). Per-field evaluation is a *first build*, not a restore of lost capability.
  
 ## C. Verdict surfacing — decided
  
@@ -321,11 +321,11 @@ The deliberate-vs-not-yet-judged distinction is **deferred** to an optional UI h
 - **Per-customer overrule of a finding** (keep the finding, substitute your own severity + reason) is a **future extension** of the override layer to findings: the transcribed severity is the base, an override sits on top — same mechanism as metric/card overrides. **Low priority, not built.** "copy" semantics are settled; overrule is deferred.
 ## E. Recommendation presentation
  
-- Recommendations render **per evaluated-unit, inline with the judged item** (e.g. per finding in the Security Assessment), **not** collected into a single global summary card.
+- Recommendations render **per evaluated-unit, inline with the evaluated item** (e.g. per finding in the Security Assessment), **not** collected into a single global summary card.
 - Presentation is likely **per-report-type** (inline per finding here; could be inline-on-metric elsewhere). The **data** is uniform (recommendation attached per unit, per seam SC5); the **layout** can vary by subject. The recommend stage must **not** assume one global recommendations-section layout.
 ## F. Bespoke-track caveat (system subjects)
  
-`environment` / "CommCell Details" is built by `_build_environment_subject` — one of the six **system subjects with custom view shapes** (ADR 0001 source-building fork), **not** the generic catalog-driven path. Consequence: it collects (Command Center API identity path, not Reports-Plus Collect), judges, and surfaces controls differently — e.g. it has **no Collect button by design** (the button gates on the Reports-Plus source type; the Command-Center-API source carries no collect action). **Per-field card judging must work against the bespoke builder, not only the generic path** — and CommCell Details is the worked example for per-field judging, so this track matters for that slice.
+`environment` / "CommCell Details" is built by `_build_environment_subject` — one of the six **system subjects with custom view shapes** (ADR 0001 source-building fork), **not** the generic catalog-driven path. Consequence: it collects (Command Center API identity path, not Reports-Plus Collect), evaluates, and surfaces controls differently — e.g. it has **no Collect button by design** (the button gates on the Reports-Plus source type; the Command-Center-API source carries no collect action). **Per-field card evaluation must work against the bespoke builder, not only the generic path** — and CommCell Details is the worked example for per-field evaluation, so this track matters for that slice.
  
 ## G. Authoring model — deferred
  
