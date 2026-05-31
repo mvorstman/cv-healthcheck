@@ -62,6 +62,26 @@ def test_card_view_without_status():
     assert all(i["sev"] is None for i in view["items"])
 
 
+def test_card_view_defaults_to_tiles():
+    """Generic cards (via artifact_to_view) default to the tiles layout — the
+    table view is opt-in via view_mode data on the section, so other subjects are
+    unchanged."""
+    sec = CardSection(type="card", id="c.id", title="Card",
+                      items=[CardItem(label="Host", value="cs01")])
+    view = artifact_to_view(_artifact(sec))["sections"][0]
+    assert view["view_mode"] == "tiles"
+
+
+def test_card_view_mode_table_passes_through_and_validates():
+    """_card_section_view surfaces view_mode for the renderer; an unrecognised
+    value falls back to tiles."""
+    from cvhealthcheck.quickhc.canonical_view import _card_section_view
+    sec = CardSection(type="card", id="c.id", title="Card",
+                      items=[CardItem(label="Host", value="cs01")])
+    assert _card_section_view(sec, "c.id", view_mode="table")["view_mode"] == "table"
+    assert _card_section_view(sec, "c.id", view_mode="bogus")["view_mode"] == "tiles"
+
+
 def test_card_view_per_field_verdicts():
     """Phase-8 follow-on: each judged field carries its own sev + reason (the
     metric-item shape), so the renderer can paint a per-field badge; unjudged

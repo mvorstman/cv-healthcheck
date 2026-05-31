@@ -695,15 +695,16 @@ def _normalize_timezone(raw: Any) -> str | None:
     return m.group(1) if m else text
 
 
-def _load_environment_identity_rules(db: sqlite3.Connection | None) -> list[dict[str, Any]]:
-    """Read environment's per-field card rules from its catalog binding (DATA),
-    not from a Python literal. Returns ``card.evaluative.rules`` from the
-    ``subject_section_sources`` row for ``environment / environment.metadata``
-    (migration 0023). Returns ``[]`` when the binding is absent or no db is
-    available (e.g. the no-db status API path) — the card then renders bare,
-    which is safe; the main render path always has a db."""
+def _load_environment_card_block(db: sqlite3.Connection | None) -> dict[str, Any]:
+    """Read environment's ``card`` config block from its catalog binding (DATA),
+    not from a Python literal — the ``card`` object of ``extraction_instructions``
+    on the ``subject_section_sources`` row for ``environment / environment.metadata``
+    (migrations 0023 rules + 0024 view_mode). Carries ``evaluative.rules`` and the
+    presentational ``view_mode`` hint. Returns ``{}`` when the binding is absent or
+    no db is available (e.g. the no-db status API path) — the card then renders
+    bare/tiles, which is safe; the main render path always has a db."""
     if db is None:
-        return []
+        return {}
     try:
         row = db.execute(
             "SELECT sss.extraction_instructions "
@@ -713,14 +714,19 @@ def _load_environment_identity_rules(db: sqlite3.Connection | None) -> list[dict
             "  AND sss.section_id = 'environment.metadata'",
         ).fetchone()
     except sqlite3.OperationalError:
-        return []
+        return {}
     if not row or not row["extraction_instructions"]:
-        return []
+        return {}
     try:
         instructions = json.loads(row["extraction_instructions"])
     except (json.JSONDecodeError, TypeError):
-        return []
-    return ((instructions.get("card") or {}).get("evaluative") or {}).get("rules") or []
+        return {}
+    return instructions.get("card") or {}
+
+
+def _load_environment_identity_rules(db: sqlite3.Connection | None) -> list[dict[str, Any]]:
+    """The per-field rules from environment's catalog binding (``card.evaluative.rules``)."""
+    return (_load_environment_card_block(db).get("evaluative") or {}).get("rules") or []
 
 
 def _hex_commcell_id(commcell_id: Any) -> str | None:
@@ -757,6 +763,9 @@ def _build_environment_identity_section(
     Field keys ``name`` / ``version`` / ``timezone`` are preserved so the 49053a9
     rule binding still attaches (Version presence, Timezone enum, Name format); the
     new fields carry no rule and render bare."""
+    # One read of the catalog binding's card block — carries both the per-field
+    # rules and the view_mode presentational hint (DATA, migrations 0023 + 0024).
+    card_block = _load_environment_card_block(db)
     commcell = cc.get("commcell") if isinstance(cc.get("commcell"), dict) else {}
     cstz = cc.get("csTimeZone") if isinstance(cc.get("csTimeZone"), dict) else {}
     # *_or_None so absent values render "—" AND a presence rule reads "not set".
@@ -789,13 +798,19 @@ def _build_environment_identity_section(
             {"label": "Timezone", "field": "timezone"},
             {"label": "Hostname", "field": "hostname"},
         ],
-        # Rules come from the catalog binding (DATA), not a literal.
-        "evaluative": {"rules": _load_environment_identity_rules(db)},
+        # Rules + view_mode come from the catalog binding (DATA), not literals.
+        "evaluative": {"rules": (card_block.get("evaluative") or {}).get("rules") or []},
     }
     card_section = build_card_section(
         "environment.metadata", "Environment metadata", identity_spec, [identity_row]
     )
-    section = _canonical_view._card_section_view(card_section, "environment.metadata")
+    # view_mode is presentational DATA on the section (migration 0024 sets "table"
+    # for environment); the renderer reads it. Default "tiles" keeps other cards
+    # unchanged.
+    view_mode = card_block.get("view_mode") or "tiles"
+    section = _canonical_view._card_section_view(
+        card_section, "environment.metadata", view_mode=view_mode
+    )
     # Preserve the original section sub-label (the view builder defaults meta="").
     section["meta"] = "CommCell profile"
     return section

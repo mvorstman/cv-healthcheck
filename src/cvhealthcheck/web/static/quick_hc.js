@@ -248,6 +248,23 @@ function secBody(sec) {
     // verdict-reason tooltip). Fields with no rule (it.sev falsy) render bare.
     const items = sec.items || [];
     if (!items.length) return `<div style="font-size:12px;color:var(--text-3)">No card data.</div>`;
+
+    // view_mode is DATA on the section (default "tiles"). "table" lays the same
+    // per-field items out as a Field/Value table (reusing the wl-table styling
+    // that renders e.g. License Summary's "Other Licenses"), with a small verdict
+    // DOT — no status column, no text label — on rows whose field carries a rule.
+    if (sec.view_mode === 'table') {
+      const dot = {crit:'vdot-crit',warn:'vdot-warn',info:'vdot-info',good:'vdot-good',muted:'vdot-muted'};
+      const rows = items.map(it => {
+        const d = it.sev
+          ? `<span class="vdot ${dot[it.sev] || ''}" title="${esc(it.reason || '')}"></span>`
+          : '';
+        const unit = it.unit ? `<span class="m-unit">${esc(it.unit)}</span>` : '';
+        return `<tr><td>${esc(it.label)}</td><td><div class="kv-val"><span>${esc(it.value)}${unit}</span>${d}</div></td></tr>`;
+      }).join('');
+      return `<table class="wl-table"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
     const cols = sec.columns === 3 ? 'meta-grid-3'
                : sec.columns === 4 ? 'meta-grid-4'
                : (items.length > 4 ? 'meta-grid-3' : 'meta-grid-4');

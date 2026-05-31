@@ -472,7 +472,9 @@ def _worst_item_verdict(sec: MetricSection) -> tuple[str | None, str]:
     return worst_item.severity.value, reason
 
 
-def _card_section_view(sec: CardSection, sec_id: str) -> dict[str, Any]:
+def _card_section_view(
+    sec: CardSection, sec_id: str, view_mode: str = "tiles"
+) -> dict[str, Any]:
     """Render a card section: a labeled-value grid plus a section-level status
     badge (when the card carries a verdict). Mirrors how a metric shows its
     badge; the badge code reuses the shared severity vocabulary.
@@ -481,7 +483,13 @@ def _card_section_view(sec: CardSection, sec_id: str) -> dict[str, Any]:
     `sev`/`reason` — identical shape to a metric item — so the renderer can paint
     a per-field indicator. A field with no rule has `sev=None` and renders bare
     (informational = no rule = no indicator). The section-level `sev`/`reason`
-    (the rolled-up header badge) is unchanged."""
+    (the rolled-up header badge) is unchanged.
+
+    ``view_mode`` ("tiles" | "table") is a presentational hint the JS renderer
+    reads to pick the layout — tiles (the labeled grid, default) or a Field/Value
+    table. It rides as data on the section (e.g. the catalog binding); the
+    renderer branches on it, never on the subject id. Default "tiles" keeps every
+    other card unchanged."""
     sev = sec.severity.value if sec.severity is not None else None
     reason = sec.verdict_chain[-1].reason if sec.verdict_chain else ""
     items = []
@@ -501,6 +509,7 @@ def _card_section_view(sec: CardSection, sec_id: str) -> dict[str, Any]:
         "meta": "",
         "included": True,
         "type": "card",
+        "view_mode": view_mode if view_mode in ("tiles", "table") else "tiles",
         "columns": sec.columns,
         "items": items,
         "sev": _METRIC_SEV_CODE.get(sev) if sev else None,

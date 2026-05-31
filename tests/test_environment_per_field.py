@@ -92,6 +92,41 @@ def test_environment_section_rolls_up_good(migrated_db_path: Path):
     assert sec["sev"] == "good"
 
 
+def test_environment_section_view_mode_is_table_from_binding(migrated_db_path: Path):
+    """view_mode is DATA on the section (migration 0024), read from the binding —
+    environment opts into the Field/Value table. The renderer reads sec.view_mode;
+    nothing is hardcoded per subject."""
+    conn = _conn(migrated_db_path)
+    try:
+        sec = _identity_section(_CC, conn)
+    finally:
+        conn.close()
+    assert sec["view_mode"] == "table"
+
+
+def test_environment_table_dot_only_on_ruled_fields(migrated_db_path: Path):
+    """In the table, a verdict dot appears only on rows whose field carries a rule
+    (the JS paints a dot when item.sev is set). Ruled fields Name/Version/Timezone
+    carry sev; the rest are bare (no dot)."""
+    conn = _conn(migrated_db_path)
+    try:
+        by = {i["label"]: i for i in _identity_section(_CC, conn)["items"]}
+    finally:
+        conn.close()
+    # ruled -> sev present -> dot
+    assert by["CommCell Name"]["sev"] and by["Version"]["sev"] and by["Timezone"]["sev"]
+    # bare -> no sev -> no dot
+    for bare in ["CommCell ID", "CommCell GUID", "OS Type",
+                 "Current SP Version", "Installed SP Version", "Hostname"]:
+        assert by[bare]["sev"] is None
+
+
+def test_environment_view_mode_defaults_tiles_without_binding():
+    """No db / no binding -> view_mode falls back to the default "tiles" (safe)."""
+    sec = _identity_section(_CC, None)
+    assert sec["view_mode"] == "tiles"
+
+
 def test_environment_no_db_no_rules_is_bare_proves_literal_gone(migrated_db_path: Path):
     """The rule literal is GONE: with no db (so the binding can't be read), NO
     field is judged — every field is bare. If a Version literal still lived in the
