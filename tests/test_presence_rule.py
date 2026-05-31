@@ -65,8 +65,10 @@ def test_absent_kind_defaults_to_threshold():
 
 
 def test_unknown_kind_fails_loudly():
-    with pytest.raises(ValueError, match="Unknown rule kind 'enum'"):
-        engine.evaluate(5.0, [{"rule_id": "x", "kind": "enum"}], label="X")
+    # `enum`/`format` are now implemented kinds; use a genuinely-unknown kind to
+    # keep asserting the loud-fail guarantee for unrecognised kinds.
+    with pytest.raises(ValueError, match="Unknown rule kind 'bogus'"):
+        engine.evaluate(5.0, [{"rule_id": "x", "kind": "bogus"}], label="X")
 
 
 # ── presence composes with the seam + override layering ──

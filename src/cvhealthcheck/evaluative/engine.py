@@ -25,6 +25,8 @@ from typing import Any
 
 from cvhealthcheck.artifacts.enums import FindingSeverity
 from cvhealthcheck.artifacts.models import RecommendationIntent, VerdictEntry
+from cvhealthcheck.evaluative.enum_rule import evaluate_enum_rule
+from cvhealthcheck.evaluative.format_rule import evaluate_format_rule
 from cvhealthcheck.evaluative.presence import evaluate_presence_rule
 from cvhealthcheck.evaluative.threshold import _SEVERITY_RANK, evaluate_threshold_rule
 
@@ -32,10 +34,12 @@ from cvhealthcheck.evaluative.threshold import _SEVERITY_RANK, evaluate_threshol
 # Keys that make up a rule *body* (the definition), as opposed to *binding*
 # keys (ref / target / target_field / unit) that a section carries to point a
 # rule at a value. Used by the DP2 guard to reject a ref entry that also smuggles
-# an inline body. Covers all kinds' body keys (threshold + presence).
+# an inline body. Covers all kinds' body keys (threshold + presence + enum + format).
 _RULE_BODY_KEYS = frozenset({
     "kind", "comparison", "bands", "default_severity", "mute_on_sentinel",
     "severity_when_missing", "severity_when_present",
+    "allowed_values", "severity_when_allowed", "severity_when_disallowed",
+    "pattern", "severity_when_match", "severity_when_no_match",
 })
 
 
@@ -56,7 +60,13 @@ def _evaluate_rule(
         return evaluate_threshold_rule(rule, value, label=label, unit=unit, layer=layer)
     if kind == "presence":
         return evaluate_presence_rule(rule, value, label=label, unit=unit, layer=layer)
-    raise ValueError(f"Unknown rule kind {kind!r} (supported: threshold, presence)")
+    if kind == "enum":
+        return evaluate_enum_rule(rule, value, label=label, unit=unit, layer=layer)
+    if kind == "format":
+        return evaluate_format_rule(rule, value, label=label, unit=unit, layer=layer)
+    raise ValueError(
+        f"Unknown rule kind {kind!r} (supported: threshold, presence, enum, format)"
+    )
 
 
 def resolve_rule(
