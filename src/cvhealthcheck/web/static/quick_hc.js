@@ -250,9 +250,9 @@ function secBody(sec) {
     if (!items.length) return `<div style="font-size:12px;color:var(--text-3)">No card data.</div>`;
 
     // view_mode is DATA on the section (default "tiles"). "table" lays the same
-    // per-field items out as a Field/Value table (reusing the wl-table styling
-    // that renders e.g. License Summary's "Other Licenses"), with a small verdict
-    // DOT on EVERY row — no status column, no text label.
+    // per-field items out as a Field | Value | Status table (reusing the wl-table
+    // styling that renders e.g. License Summary's "Other Licenses"). The verdict
+    // DOT lives in its own right-aligned Status column.
     if (sec.view_mode === 'table') {
       const dot = {crit:'vdot-crit',warn:'vdot-warn',info:'vdot-info',good:'vdot-good',muted:'vdot-muted'};
       // One place resolves a row's effective dot state: a fired-rule verdict
@@ -264,7 +264,7 @@ function secBody(sec) {
       const rows = items.map(it => {
         const d = `<span class="vdot ${dot[effState(it)] || 'vdot-info'}" title="${esc(it.reason || '')}"></span>`;
         const unit = it.unit ? `<span class="m-unit">${esc(it.unit)}</span>` : '';
-        return `<tr><td>${esc(it.label)}</td><td><div class="kv-val"><span>${esc(it.value)}${unit}</span>${d}</div></td></tr>`;
+        return `<tr><td>${esc(it.label)}</td><td style="font-family:var(--mono);font-size:11px">${esc(it.value)}${unit}</td><td>${d}</td></tr>`;
       }).join('');
       const legend = `<div class="vdot-legend">
         <span class="legend-item"><span class="vdot vdot-good"></span>good</span>
@@ -272,7 +272,9 @@ function secBody(sec) {
         <span class="legend-item"><span class="vdot vdot-warn"></span>warning</span>
         <span class="legend-item"><span class="vdot vdot-crit"></span>critical</span>
       </div>`;
-      return `<table class="wl-table"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>${rows}</tbody></table>${legend}`;
+      // kv-table modifier: uppercase headers + a right-aligned Status column
+      // (scoped here so the generic wl-table / Other Licenses is unchanged).
+      return `<table class="wl-table kv-table"><thead><tr><th>Field</th><th>Value</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>${legend}`;
     }
 
     const cols = sec.columns === 3 ? 'meta-grid-3'

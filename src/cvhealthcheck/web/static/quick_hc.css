@@ -380,9 +380,12 @@ html,body{height:100%;background:var(--bg);color:var(--text-1);font-family:var(-
 .wl-table tr:last-child td{border-bottom:none}
 .wl-sec-name{font-size:10px;font-weight:600;color:var(--text-3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px}
 
-/* Card Field/Value table (view_mode="table"): value left, verdict dot far-right
-   on the row — no status column, no text label. Fields with no rule = no dot. */
-.kv-val{display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:var(--mono);font-size:11px}
+/* Card Field|Value|Status table (view_mode="table"): the verdict dot sits in its
+   own right-aligned Status column. kv-table is scoped so the generic wl-table
+   (e.g. License Summary's "Other Licenses") is unchanged: uppercase headers +
+   a shrink-to-content, right-aligned last (Status) column. */
+.kv-table th{text-transform:uppercase}
+.kv-table th:last-child,.kv-table td:last-child{text-align:right;width:1%;white-space:nowrap}
 .vdot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
 /* Static verdict legend beneath the Field/Value table: good, info, warning, critical. */
 .vdot-legend{display:flex;gap:14px;align-items:center;margin-top:10px}

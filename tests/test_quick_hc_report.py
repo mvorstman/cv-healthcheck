@@ -795,11 +795,27 @@ def test_quick_hc_workspace_sections_match_registry_contract_for_all_tiles(
         assert actual_section_ids == tile.section_ids
 
 
+def test_quick_hc_table_is_three_columns_with_status_header() -> None:
+    """The table is Field | Value | Status (3 columns) with headers, and the
+    verdict dot lives in its own right-aligned Status column (kv-table modifier)
+    — not inside the value cell."""
+    app = create_app()
+    body = app.test_client().get("/static/quick_hc.js").get_data(as_text=True)
+
+    # three headers, in order
+    hdr = body.find("<th>Field</th><th>Value</th><th>Status</th>")
+    assert hdr != -1
+    # the kv-table modifier (scoped uppercase headers + right-aligned Status col)
+    assert "wl-table kv-table" in body
+    # the dot is no longer in the value cell (kv-val value+dot flex is gone)
+    assert "kv-val" not in body
+
+
 def test_quick_hc_table_dot_falls_back_to_info_with_legend() -> None:
-    """The Field/Value table renderer puts a verdict dot on EVERY row: a fired
-    rule's severity, an explicit per-field state (future hook), else the "info"
-    fallback — resolved in one spot (effState), not gated on item.sev. A static
-    legend (good / info / warning / critical, in that order) sits beneath."""
+    """The table puts a verdict dot on EVERY row: a fired rule's severity, an
+    explicit per-field state (future hook), else the "info" fallback — resolved
+    in one spot (effState), not gated on item.sev. A static legend (good / info /
+    warning / critical, in that order) sits beneath."""
     app = create_app()
     body = app.test_client().get("/static/quick_hc.js").get_data(as_text=True)
 
