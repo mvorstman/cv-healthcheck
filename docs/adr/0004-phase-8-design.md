@@ -93,7 +93,7 @@ vendor:           (no vendor severity_source for this metric)        → —
 template_default: rule util_critical  (>=90 → critical) fires        → critical
 override (Acme):  rule util_critical  severity: muted, reason:"…"    → muted (same rule_id)
 ```
-Resolution: same `rule_id` (`util_critical`) → later layer (override) wins → that id resolves to `muted`. No other surviving non-muted verdict → **final severity = muted** (under DP4-A; muted suppresses, value still shown as n/a-for-judgment). `verdict_chain`:
+Resolution: same `rule_id` (`util_critical`) → later layer (override) wins → that id resolves to `muted`. No other surviving non-muted verdict → **final severity = muted** (under DP4-A; muted suppresses, value still shown as n/a-for-evaluation). `verdict_chain`:
 ```yaml
 severity: muted
 verdict_chain:
