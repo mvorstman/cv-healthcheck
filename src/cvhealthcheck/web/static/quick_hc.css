@@ -384,6 +384,8 @@ html,body{height:100%;background:var(--bg);color:var(--text-1);font-family:var(-
    on the row — no status column, no text label. Fields with no rule = no dot. */
 .kv-val{display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:var(--mono);font-size:11px}
 .vdot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0}
+/* Static verdict legend beneath the Field/Value table: good, info, warning, critical. */
+.vdot-legend{display:flex;gap:14px;align-items:center;margin-top:10px}
 .vdot-good{background:var(--green)}
 .vdot-warn{background:var(--amber)}
 .vdot-crit{background:var(--red)}

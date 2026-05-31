@@ -795,6 +795,26 @@ def test_quick_hc_workspace_sections_match_registry_contract_for_all_tiles(
         assert actual_section_ids == tile.section_ids
 
 
+def test_quick_hc_table_dot_falls_back_to_info_with_legend() -> None:
+    """The Field/Value table renderer puts a verdict dot on EVERY row: a fired
+    rule's severity, an explicit per-field state (future hook), else the "info"
+    fallback — resolved in one spot (effState), not gated on item.sev. A static
+    legend (good / info / warning / critical, in that order) sits beneath."""
+    app = create_app()
+    body = app.test_client().get("/static/quick_hc.js").get_data(as_text=True)
+
+    # single-spot fallback resolution to "info" (no scattered inline else-blue)
+    assert "it.sev ?? it.state ?? 'info'" in body
+    # the dot is no longer gated on it.sev (every row renders one)
+    assert "const d = it.sev" not in body
+    # static legend present, in order (label texts are legend-only)
+    assert "vdot-legend" in body
+    order = [body.find(">good<"), body.find(">info<"),
+             body.find(">warning<"), body.find(">critical<")]
+    assert all(p != -1 for p in order)          # all four present
+    assert order == sorted(order)               # good, info, warning, critical
+
+
 def test_quick_hc_renderer_has_no_redundant_commcell_identity_grid() -> None:
     """The header-CC identity grid (CommCell Name/Version/Timezone/ID from the
     CC object) was removed — it duplicated the environment card SECTION and showed

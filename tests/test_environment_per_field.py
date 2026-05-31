@@ -104,18 +104,21 @@ def test_environment_section_view_mode_is_table_from_binding(migrated_db_path: P
     assert sec["view_mode"] == "table"
 
 
-def test_environment_table_dot_only_on_ruled_fields(migrated_db_path: Path):
-    """In the table, a verdict dot appears only on rows whose field carries a rule
-    (the JS paints a dot when item.sev is set). Ruled fields Name/Version/Timezone
-    carry sev; the rest are bare (no dot)."""
+def test_environment_table_dots_verdict_vs_info_fallback(migrated_db_path: Path):
+    """Every row gets a dot: ruled fields carry a real verdict severity (their
+    dot colour), and no-verdict fields fall back to the "info" dot at RENDER time
+    — NOT via authored rules. The data contract here is: ruled fields have sev;
+    informational fields have sev=None (no info rule written onto them). The
+    info-fallback itself lives in the JS renderer (effState: sev ?? state ?? info)."""
     conn = _conn(migrated_db_path)
     try:
         by = {i["label"]: i for i in _identity_section(_CC, conn)["items"]}
     finally:
         conn.close()
-    # ruled -> sev present -> dot
+    # ruled fields -> a real verdict severity drives the dot
     assert by["CommCell Name"]["sev"] and by["Version"]["sev"] and by["Timezone"]["sev"]
-    # bare -> no sev -> no dot
+    # informational fields carry NO sev -> their info dot comes from the render
+    # fallback, not from an authored info rule (the 49053a9 binding is untouched).
     for bare in ["CommCell ID", "CommCell GUID", "OS Type",
                  "Current SP Version", "Installed SP Version", "Hostname"]:
         assert by[bare]["sev"] is None

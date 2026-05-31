@@ -252,17 +252,27 @@ function secBody(sec) {
     // view_mode is DATA on the section (default "tiles"). "table" lays the same
     // per-field items out as a Field/Value table (reusing the wl-table styling
     // that renders e.g. License Summary's "Other Licenses"), with a small verdict
-    // DOT — no status column, no text label — on rows whose field carries a rule.
+    // DOT on EVERY row — no status column, no text label.
     if (sec.view_mode === 'table') {
       const dot = {crit:'vdot-crit',warn:'vdot-warn',info:'vdot-info',good:'vdot-good',muted:'vdot-muted'};
+      // One place resolves a row's effective dot state: a fired-rule verdict
+      // severity, else an explicit per-field state (future override hook), else
+      // the "info" fallback. So informational fields (no rule) show the info
+      // (blue) dot WITHOUT authoring info rules — and a future explicit state can
+      // override the fallback here, not scattered through the render path.
+      const effState = it => it.sev ?? it.state ?? 'info';
       const rows = items.map(it => {
-        const d = it.sev
-          ? `<span class="vdot ${dot[it.sev] || ''}" title="${esc(it.reason || '')}"></span>`
-          : '';
+        const d = `<span class="vdot ${dot[effState(it)] || 'vdot-info'}" title="${esc(it.reason || '')}"></span>`;
         const unit = it.unit ? `<span class="m-unit">${esc(it.unit)}</span>` : '';
         return `<tr><td>${esc(it.label)}</td><td><div class="kv-val"><span>${esc(it.value)}${unit}</span>${d}</div></td></tr>`;
       }).join('');
-      return `<table class="wl-table"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>${rows}</tbody></table>`;
+      const legend = `<div class="vdot-legend">
+        <span class="legend-item"><span class="vdot vdot-good"></span>good</span>
+        <span class="legend-item"><span class="vdot vdot-info"></span>info</span>
+        <span class="legend-item"><span class="vdot vdot-warn"></span>warning</span>
+        <span class="legend-item"><span class="vdot vdot-crit"></span>critical</span>
+      </div>`;
+      return `<table class="wl-table"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>${rows}</tbody></table>${legend}`;
     }
 
     const cols = sec.columns === 3 ? 'meta-grid-3'
