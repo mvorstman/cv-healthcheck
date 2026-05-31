@@ -1024,11 +1024,16 @@ def test_quick_hc_overview_renders_commcell_report_section_values(monkeypatch) -
 
     assert response.status_code == 200
     body = response.get_data(as_text=True)
+    # Phase-8 follow-on: the environment identity card is now built through the
+    # shared per-field card path (a "card" section with label/value items), not
+    # the old hand-built "meta" section (k/v rows). Same four fields + values;
+    # the Version field is evaluated via a presence rule (set -> good), the
+    # other three stay bare (sev null).
     assert '"id": "environment.metadata"' in body
-    assert '{"k": "COMMCELL NAME", "v": "CommServe A"}' in body
-    assert '{"k": "COMMCELL ID", "v": "commcell-01"}' in body
-    assert '{"k": "VERSION", "v": "11 SP40.47"}' in body
-    assert '{"k": "TIMEZONE", "v": "UTC"}' in body
+    assert '"label": "CommCell Name", "reason": "", "sev": null, "unit": "", "value": "CommServe A"' in body
+    assert '"label": "CommCell ID", "reason": "", "sev": null, "unit": "", "value": "commcell-01"' in body
+    assert '"label": "Version", "reason": "Version is set", "sev": "good", "unit": "", "value": "11 SP40.47"' in body
+    assert '"label": "Timezone", "reason": "", "sev": null, "unit": "", "value": "UTC"' in body
 
 
 def test_quick_hc_overview_renders_security_assessment_report_section_values(

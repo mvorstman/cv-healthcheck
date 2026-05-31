@@ -8,6 +8,7 @@ from typing import Any
 
 from cvhealthcheck.artifacts.models import CanonicalArtifact
 from cvhealthcheck.artifacts.store import ArtifactStore
+from cvhealthcheck.extractors.card_section import build_card_section
 from cvhealthcheck.db.subjects import (
     list_family_versions,
     resolve_active_version,
@@ -610,12 +611,6 @@ def _build_environment_subject(cc: dict | None) -> dict:
     name = cc.get("hostName") or "CommCell"
     version = cc.get("csVersionInfo") or ""
     subtitle = f"{name} · {version}" if version else name
-    metadata_rows = [
-        {"k": "COMMCELL NAME", "v": name},
-        {"k": "COMMCELL ID", "v": str(cc.get("csGUID") or "—")},
-        {"k": "VERSION", "v": version or "—"},
-        {"k": "TIMEZONE", "v": str(cc.get("timeZone") or "—")},
-    ]
 
     return {
         "id": "environment",
@@ -640,7 +635,7 @@ def _build_environment_subject(cc: dict | None) -> dict:
                 # ADR 0004: CommCell server version is NOT shown on the data
                 # source tile — it's a property of the deployment, not of this
                 # collection. It stays in the environment subject's identity
-                # card (metadata_rows below), where it's the whole point.
+                # card (built below), where it's the whole point.
                 REST_COMMAND_CENTER_API_SOURCE_ID: [
                     {"k": "Endpoint", "v": "GET /commandcenter/api/CommServ"},
                     {"k": "Host", "v": name},
@@ -650,17 +645,57 @@ def _build_environment_subject(cc: dict | None) -> dict:
                 REST_COMMAND_CENTER_API_SOURCE_ID: "Live collection of CommCell identity details from Command Center.",
             },
         ),
-        "sections": [
-            {
-                "id": "environment.metadata",
-                "included": True,
-                "title": "Environment metadata",
-                "meta": "CommCell profile",
-                "type": "meta",
-                "rows": metadata_rows,
-            }
-        ],
+        "sections": [_build_environment_identity_section(cc, name, version)],
     }
+
+
+def _build_environment_identity_section(cc: dict, name: str, version: str) -> dict[str, Any]:
+    """Build the CommCell-identity card for the bespoke environment subject.
+
+    Phase-8 follow-on (per-field evaluation on the bespoke track): the identity
+    card is built through the SAME shared path the generic cards use —
+    ``build_card_section`` (the single ``engine.evaluate`` locus) and
+    ``_card_section_view`` (the shared per-field card view) — rather than the
+    hand-built ``type="meta"`` section it used before. So the bespoke builder
+    feeds the same evaluation locus + renderer as _card_test, not a parallel one
+    (ADR 0006: one evaluation locus). One field is evaluated this slice — Version
+    via a ``presence`` rule (set → good); CommCell Name / ID / Timezone stay
+    unjudged (bare) until enum/format kinds land.
+
+    The presence rule is authored inline here because the bespoke builder
+    constructs its card in Python (it has no catalog ``extraction_instructions``
+    card binding); the rule still resolves through ``engine.evaluate``.
+    """
+    # version → None (not "") when absent, so the value renders as "—" AND the
+    # presence rule correctly reads it as "not set" (presence treats "" / None
+    # as missing). Field order preserved: Name, ID, Version, Timezone.
+    identity_row = {
+        "name": name,
+        "guid": str(cc.get("csGUID") or "—"),
+        "version": version or None,
+        "timezone": str(cc.get("timeZone") or "—"),
+    }
+    identity_spec = {
+        "columns": 4,
+        "items": [
+            {"label": "CommCell Name", "field": "name"},
+            {"label": "CommCell ID", "field": "guid"},
+            {"label": "Version", "field": "version"},
+            {"label": "Timezone", "field": "timezone"},
+        ],
+        "evaluative": {"rules": [
+            {"rule_id": "environment_version_presence", "target_field": "version",
+             "kind": "presence", "severity_when_missing": "warning",
+             "severity_when_present": "good"},
+        ]},
+    }
+    card_section = build_card_section(
+        "environment.metadata", "Environment metadata", identity_spec, [identity_row]
+    )
+    section = _canonical_view._card_section_view(card_section, "environment.metadata")
+    # Preserve the original section sub-label (the view builder defaults meta="").
+    section["meta"] = "CommCell profile"
+    return section
 
 
 def _build_security_assessment_subject(sa: dict | None) -> dict:
