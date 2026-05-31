@@ -10,6 +10,38 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-05-31 (ADR 0004 phase-8 follow-on — per-field evaluation, enum/format kinds, environment table)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commits:** `8f3910d` (per-field cards), `a06df57` (per-field card render), `cd4a777` (enum/format kinds), `49053a9` (environment rules as data), `9c3299c` (environment GET CommServ field set), `c61502d` (Field/Value table + `view_mode`), `98b0700` (info-dot fallback + legend), `46ef200` (right-aligned Status column). Plus terminology/doc commits (`d59141d`, `5e55d22`, ADR record `4ead582`) and a dev-workflow commit (`c2a9d87`, `start.sh` auto-reload).
+
+Phase 8's evaluative face moved from base machinery to per-field judging on both metric and card sections, two new rule kinds, and a full rebuild of the bespoke environment / CommCell Details subject onto the shared path. **807 passing** under both `pytest` and `python -m pytest`.
+
+### Added
+
+- **Per-field card judging.** `CardItem` carries optional `severity` / `verdict_chain` / `recommendation_intent` (serializer omits them when absent, so existing card artifacts stay byte-identical). `card_section.py::_apply_per_field_rules` resolves each field's rule through the single `engine.evaluate` locus; section severity rolls up most-severe-surviving. Per-field render (badge in tiles; dot in table).
+- **`enum` and `format` rule kinds** (`evaluative/enum_rule.py`, `evaluative/format_rule.py`), dispatched in `engine.evaluate` alongside threshold/presence. enum checks membership in `allowed_values`; format matches a `pattern` via `re.fullmatch`. "No spec configured → good, never raise," so an unconfigured rule renders safe.
+- **environment per-field rules as catalog data** (migration 0023) and **`view_mode` on the section** (migration 0024) — both ride the `subject_section_sources` binding, mirroring how `evaluative.rules` already attach. `view_mode` ("tiles" | "table") is read by the renderer, not hardcoded per subject.
+- **Field/Value table view for CommCell Details** — Field | Value | Status (3 columns, uppercase headers), reusing the `wl-table` styling, with a verdict dot on every row and a good/info/warning/critical legend beneath.
+
+### Changed
+
+- **environment / CommCell Details reads the real GET CommServ response.** `_load_legacy_commcell` now returns the real `.raw` block; the card reads `commcell.commCellName`, `hex(commcell.commCellId)`, `commcell.csGUID`, `csTimeZone.TimeZoneName` (clean, no `"0:0:"`), SP versions, etc. directly. CommCell ID is now the numeric id as hex (was the GUID); Release Name omitted (absent from the response).
+- **Verdict dot fallback.** Every table row shows a dot: `effState = it.sev ?? it.state ?? 'info'` resolved in one spot — informational fields fall back to the info (blue) dot at render time, **not** via authored rules.
+- **`start.sh`** enables dev auto-reload (`flask run --debug --no-debugger`); dropped the dead `FLASK_ENV`.
+
+### Removed
+
+- The duplicate header-CC identity grid in `quick_hc.js` (it duplicated the environment card and showed the dirty `"0:0:"` timezone + GUID-as-ID).
+
+### Notes
+
+- **No ID/GUID synthesis ever existed.** The "CommCell ID synthesized from Serial+RegCode" premise was false — the GUID is read directly; the bug was the card labeling the GUID as "CommCell ID." Serial/RegCode == the GUID split is a License-UI relationship, not collector code.
+- **License fields are not in GET CommServ** (Edition / Mode / Serial / Reg Code / expiry / IPs); License Summary report 206 carries only Registration Code + License Expiry. Live capture of the rest was blocked by an expired lab token — recorded for a later slice.
+- The recommend **seam** is built and ratified (`recommendation_intent` on verdicts); the recommend **stage** is not (future ADR). Phase-8 **Shapes** (StatusRow / inline-threshold) remain unbuilt.
+
+---
+
 ## 2026-05-30 (ADR 0004 phase 7 — migrate backup_job_summary)
 
 **Branch:** `feature/basic-healthcheck-report-output`

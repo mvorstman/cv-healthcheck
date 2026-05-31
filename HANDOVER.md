@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-05-30 (ADR 0004 phase 7 complete — backup_job_summary migrated; regression-recovery arc complete)
+**Last updated:** 2026-05-31 (ADR 0004 phase 8 follow-on — per-field evaluation + enum/format kinds + environment/CommCell Details expanded to a data-driven Field/Value table)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `b003681` — CHANGELOG + HANDOVER: ADR 0004 phase 7 — backup_job_summary migrated
-**Test status:** **727 passing** under both `pytest` and `python -m pytest` (was 713; +5 card-builder, +3 table-empty-message, +6 BJS e2e this session).
+**Last commit:** `46ef200` — CommCell Details table: dedicated right-aligned Status column
+**Test status:** **807 passing** under both `pytest` and `python -m pytest`.
 
 ---
 
@@ -23,6 +23,18 @@ If you are a new chat / new session, read these files in order before doing anyt
 ---
 
 ## What was just completed
+
+**ADR 0004 phase-8 follow-on — per-field evaluation, two new rule kinds, and the environment/CommCell Details rebuild.** Built on the phase-8 base (single `engine.evaluate` locus, rules registry + ref, vendor→template→override layering + `rule_overrides`, severity enum + `muted`, the recommend seam). **807 passing** under both invocations. Shipped, in order:
+
+- **Per-field card judging** (`8f3910d`, `a06df57`) — `CardItem` gains `severity`/`verdict_chain`; `card_section.py::_apply_per_field_rules` resolves rules per field; per-field render (badge in tiles).
+- **enum + format rule kinds** (`cd4a777`) — `evaluative/enum_rule.py`, `evaluative/format_rule.py`, dispatched in `engine.evaluate` (now threshold / presence / enum / format). "No spec configured → good, never raise" so blank rules render safe.
+- **environment rules as catalog DATA** (`49053a9`) — moved the bespoke card's per-field rules out of a Python literal into the `subject_section_sources` binding (migration 0023); the builder reads them via the generic `build_card_section`.
+- **environment card reads the real GET CommServ field set** (`9c3299c`) — `_load_legacy_commcell` returns the real `.raw` response; CommCell ID = `hex(commCellId)`, GUID + Timezone (`csTimeZone.TimeZoneName`) read directly; removed the duplicate header-CC identity grid. No license fields in GET CommServ.
+- **CommCell Details as a data-driven Field/Value table** (`c61502d`, `98b0700`, `46ef200`) — `view_mode` ("tiles" | "table") is DATA on the section (migration 0024); the renderer branches on it (no per-subject hardcoding). Field | Value | Status table reusing `wl-table`, a verdict dot on **every** row (`effState = sev ?? state ?? 'info'` fallback), with a good/info/warning/critical legend.
+
+**Next step (open):** the remaining phase-8 work is the two compliance **Shapes** (StatusRow / inline-threshold vendor sources) and — separately, a future ADR — the generative **recommend stage** (the seam is built and ratified; the stage is not). Smaller follow-ups noted in code: authoring real `allowed_values`/`pattern` for the environment Timezone/Name rules (they render safe-good with no spec today), and the dev-DB `step3-demo` override row (harmless dev data). Per the doc-reconciliation sweep, several ADR Status lines (0004 parent, 0006) are **decision-blocked** — code honors them but ratification is the user's call.
+
+---
 
 **ADR 0004 phase 7 (migrate backup_job_summary) implemented and browser-verified PASS.** The **third and last regressed-subject migration — ADR 0004's regression-recovery arc is COMPLETE** (capacity_license, client_growth, backup_job_summary all render canonically). The **first real `build_card_section` consumer**. 727 passing both invocations (was 713).
 

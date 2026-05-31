@@ -8,6 +8,15 @@ This document records the phase slicing for ADR 0004 implementation. The ADR its
 
 The plan is nine phases. Each phase has a narrow scope, a defined validation gate, and a single in-workspace verification moment. Phases 5–7 are the user-visible regression recovery; phase 8 is the architectural compliance work; phases 1–4 are infrastructure that lands without user-visible change.
 
+## Implementation status (2026-05-31)
+
+Factual build-tracking (the parent ADR's Status line is unchanged — ratification is the user's call; this records what has shipped against the plan):
+
+- **Phases 1–4** (Foundation, `metric`, `chart`, `card` section types) — **shipped**.
+- **Phase 5** capacity_license · **Phase 6** client_growth · **Phase 6.5** dev-tools retirement · **Phase 7** backup_job_summary — **shipped** (the regression-recovery arc is complete; all render canonically).
+- **Phase 8** (evaluative face) — **largely shipped**: single evaluation locus (`engine.evaluate`), rules registry + reference-by-id, vendor→template→override layering + `rule_overrides`, severity enum + `muted`, per-field **metric** and **card** judging, rule-kind dispatch with **threshold / presence / enum / format** kinds, and the recommend **seam** (`recommendation_intent`). See `0004-phase-8-design.md` §H for the dated build status.
+- **Still outstanding in Phase 8** (genuinely not built): the two compliance **Shapes** (StatusRow, inline-threshold vendor sources) and the generative **recommend stage** (a future ADR).
+
 ## Scope adjustments
 
 Two adjustments to the ADR's stated scope, made during phase planning:

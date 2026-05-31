@@ -4,6 +4,8 @@
 
 Proposed.
 
+> **Implementation note (2026-05-31):** the Status line above is left as written — its formal ratification is the user's call, not a doc-cleanup act. Factually, the vocabulary's plan has **largely shipped**: phases 1–7 are complete and phase 8 (the evaluative face) is largely built (per-field metric/card judging; threshold / presence / enum / format rule kinds). Only the phase-8 **Shapes** and the generative **recommend stage** remain. See `0004-phase-plan.md` §Implementation status and `0004-phase-8-design.md` §H.
+
 ## Context
 
 ADR 0003 unified REST collection into a single catalog-driven extractor. Phase 4 migrated Security Assessment cleanly. Phase 5 deferred License Summary. Then a screenshot revealed that Capacity Licenses had lost its chart, and a blast-radius investigation showed that three of four migrated subjects had silently regressed: ADR 0003 modernized *how data gets collected* and accidentally downgraded *how data gets shown*, because the rendering intent lived in hand-written legacy builders rather than in the data itself.

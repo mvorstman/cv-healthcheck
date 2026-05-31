@@ -345,9 +345,16 @@ How rules get created/edited is a **separate decision from the engine** (rules a
 - Additional rule **kinds**: enum, format/regex.
 - Phase-8 **Shapes** (StatusRow / inline-threshold vendor sources) — deferred; slot in as additional vendor sources behind the existing layering.
 - The **recommend stage** itself — → future ADR.
+
+**Update (2026-05-31) — what has since shipped.** The items marked *Not yet built* above are now built and committed (the 2026-05-30 snapshot is preserved as the point-in-time record):
+- **Per-field cards** — `CardItem` carries `severity`/`verdict_chain`; `card_section.py::_apply_per_field_rules` resolves rules per field; per-field render landed (`8f3910d`, `a06df57`).
+- **enum** and **format** rule kinds — `evaluative/enum_rule.py`, `evaluative/format_rule.py`, dispatched in `engine.evaluate` (`cd4a777`).
+- **Bespoke `environment` / CommCell Details track** — per-field rules as catalog data (`49053a9`), the real GET CommServ field set read directly (`9c3299c`), and a data-driven Field/Value table view with a per-field verdict dot (`c61502d` / `98b0700` / `46ef200`).
+
+Still genuinely **not built** (unchanged): phase-8 **Shapes** (StatusRow / inline-threshold vendor sources) and the **recommend stage**.
  
 
 
 ---
 
-*End of draft. No code written; this file is placed untracked for review.*
+*This file is committed (it landed in `4ead582`) and the phase-8 build it designs has largely shipped — see §H Build status above. The earlier "draft / no code written / untracked" footer was accurate only at first authoring and is corrected here.*
