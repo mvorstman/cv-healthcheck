@@ -242,16 +242,21 @@ function secBody(sec) {
 
   if (sec.type === 'card') {
     // ADR 0004 card section: a labeled-value identity grid (reuses meta-card
-    // styling). The section's status badge lives in the section header (see
-    // secTile), not in the body — consistent with metric sections.
+    // styling). The section's rolled-up status badge lives in the section header
+    // (see secTile). Phase-8 follow-on: each FIELD can also carry its own verdict
+    // — paint a per-field badge exactly like a metric item (same SEV tokens +
+    // verdict-reason tooltip). Fields with no rule (it.sev falsy) render bare.
     const items = sec.items || [];
     if (!items.length) return `<div style="font-size:12px;color:var(--text-3)">No card data.</div>`;
     const cols = sec.columns === 3 ? 'meta-grid-3'
                : sec.columns === 4 ? 'meta-grid-4'
                : (items.length > 4 ? 'meta-grid-3' : 'meta-grid-4');
     const cells = items.map(it => {
+      const badge = it.sev
+        ? `<span class="m-badge ${bm[it.sev] || ''}" title="${esc(it.reason || '')}">${lm[it.sev] || esc(it.sev)}</span>`
+        : '';
       const unit = (it.unit && it.value !== '—') ? `<span class="m-unit">${esc(it.unit)}</span>` : '';
-      return `<div class="meta-card"><div class="meta-lbl">${esc(it.label)}</div><div class="meta-val">${esc(it.value)}${unit}</div></div>`;
+      return `<div class="meta-card"><div class="meta-lbl">${esc(it.label)}</div><div class="meta-val">${esc(it.value)}${unit}</div>${badge}</div>`;
     }).join('');
     return `<div class="meta-grid ${cols}">${cells}</div>`;
   }

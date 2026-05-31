@@ -475,9 +475,26 @@ def _worst_item_verdict(sec: MetricSection) -> tuple[str | None, str]:
 def _card_section_view(sec: CardSection, sec_id: str) -> dict[str, Any]:
     """Render a card section: a labeled-value grid plus a section-level status
     badge (when the card carries a verdict). Mirrors how a metric shows its
-    badge; the badge code reuses the shared severity vocabulary."""
+    badge; the badge code reuses the shared severity vocabulary.
+
+    Phase-8 follow-on (per-field card judging): each item also carries its own
+    `sev`/`reason` — identical shape to a metric item — so the renderer can paint
+    a per-field indicator. A field with no rule has `sev=None` and renders bare
+    (informational = no rule = no indicator). The section-level `sev`/`reason`
+    (the rolled-up header badge) is unchanged."""
     sev = sec.severity.value if sec.severity is not None else None
     reason = sec.verdict_chain[-1].reason if sec.verdict_chain else ""
+    items = []
+    for item in sec.items:
+        item_sev = item.severity.value if item.severity is not None else None
+        item_reason = item.verdict_chain[-1].reason if item.verdict_chain else ""
+        items.append({
+            "label": item.label,
+            "value": _fmt_card_value(item.value),
+            "unit": item.unit or "",
+            "sev": _METRIC_SEV_CODE.get(item_sev) if item_sev else None,
+            "reason": item_reason,
+        })
     return {
         "id": sec_id,
         "title": sec.title,
@@ -485,10 +502,7 @@ def _card_section_view(sec: CardSection, sec_id: str) -> dict[str, Any]:
         "included": True,
         "type": "card",
         "columns": sec.columns,
-        "items": [
-            {"label": item.label, "value": _fmt_card_value(item.value), "unit": item.unit or ""}
-            for item in sec.items
-        ],
+        "items": items,
         "sev": _METRIC_SEV_CODE.get(sev) if sev else None,
         "reason": reason,
     }

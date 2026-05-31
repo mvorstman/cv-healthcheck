@@ -335,6 +335,10 @@ html,body{height:100%;background:var(--bg);color:var(--text-1);font-family:var(-
 /* Section-level status badge in the section header (card + metric), sits
    right-aligned next to the inclusion control (.sec-title has flex:1). */
 .sec-badge{flex-shrink:0}
+/* Per-field verdict badge inside a card cell. .meta-card isn't a flex column
+   (unlike .metric-card), so give the badge block flow + spacing below the
+   value. Fields with no verdict emit no badge — the cell stays bare. */
+.meta-card .m-badge{display:inline-block;margin-top:6px}
 
 /* ── FINDINGS ── */
 .finding-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
