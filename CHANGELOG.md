@@ -10,6 +10,52 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-01 (ADR 0007 Phase 3 follow-on, slice A — surface the command-center source tab + Collect by default, thread card view_mode, flash auth-failed collects)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `afecdc2` (code + tests). **827 passing** (was 821; +6).
+
+### Fixed
+- **BUG 1 — command-center source tab dropped in the generic path.** Once a stored artifact wins
+  precedence, environment renders via `_build_generic_subject` → `get_tiles` → `_build_db_source_entries`,
+  whose `_SOURCE_TYPE_TO_CANONICAL_ID`/`_SOURCE_TYPE_TO_LABEL` (`registry.py`) only knew `{html,csv,rest,json}`
+  — so the `rest_command_center_api` row mapped to `src_id=None` and was dropped. Added the mapping →
+  a **"REST / Command Center API"** tab with its `/quick-hc/<id>/collect` url; `_build_generic_sources`
+  (`subject_data_service.py`) now emits the collect action (`requiresSession=True`) for it.
+- **BUG 2 — activeSource pointed at the dropped tab.** `artifact_to_view` maps `rest_commserve` →
+  `REST_COMMAND_CENTER_API_SOURCE_ID` — the **same id string** the now-mapped tab renders with — so
+  `quick_hc.js:501` resolves `activeSrc` and `:503` shows the panel + Collect button **by default**
+  (previously reachable only by manually clicking the mislabeled Reports-Plus tab). Resolved by BUG 1's
+  mapping; the stored artifact's `source.type` was **not** changed.
+- **BUG 3 — silent auth-failed collect.** The customer-bound auth gate (`quick_hc.py`) did a bare
+  redirect with no flash, so an auth-failed collect looked identical to a stale success (cost multiple
+  diagnosis cycles). It now flashes **"Collection failed: sign in to Commvault for customer '…'…"**
+  before redirecting. The `result.errors` flash and success flash are unchanged.
+
+### Changed
+- **Card `view_mode` now rides on the artifact (render-only).** `CardSection` gained an optional
+  `view_mode` (`models.py`, additive-absent serializer — existing card artifacts stay byte-identical);
+  `build_card_section` captures the binding's `card.view_mode`; `artifact_to_view` threads it to
+  `_card_section_view` so a card authored `view_mode="table"` renders as the **Field/Value table**
+  (matching the live card). Source-agnostic; unset → tiles (unchanged). The stored environment artifact
+  was regenerated so it carries `view_mode="table"`.
+- **Stale plain-`rest` source tab suppressed for command-center subjects.** When a subject has a
+  `rest_command_center_api` source, `_build_db_source_entries` hides the legacy plain-`rest` tab so the
+  user sees ONE correct source. Generic (keyed on source_type, not subject id) and reversible; the
+  `rest` row itself is untouched. environment is the only command-center subject today.
+
+### Notes
+- **This slice is UI plumbing only — the live builder `_build_environment_subject` was NOT retired**
+  (still in `legacy_builders`). Retiring it is the **next slice**.
+- Non-goals held: the "canonical store wins" precedence, the collect/extractor/auth *logic* (beyond the
+  BUG-3 flash), and CEL/`html.py`/`csv.py` are all unchanged.
+- **Reviewer browser check (requires `./start.sh` — Python/template/JS state — + a cache-busted reload):**
+  at `localhost:5001#subject=environment`, by default (no manual tab click) the **Command Center API**
+  tab is selected, the **Collect button is visible**, and the card renders as a **TABLE**. Tests prove
+  the data contract; final confirmation is the reviewer's browser.
+
+---
+
 ## 2026-06-01 (ADR 0007 Phase 3 — environment full 9-field parity card spec + rules on the command-center artifact)
 
 **Branch:** `feature/basic-healthcheck-report-output`
