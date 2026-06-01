@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-01 (ADR 0007 Phase 2 fix — migration 0027 lands the command-center source on live DBs)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `ce8e8d4` (migration 0027 + tests).
+
+**Root cause:** the broken first migration 0026 ran a plain `INSERT OR IGNORE` against the old
+4-value `subject_sources.source_type` CHECK — the CHECK silently rejected the
+`rest_command_center_api` row, but 0026 was stamped applied, so run-once keying meant the
+corrected 0026 could never re-run on `data/app.db` (stuck: 4-value CHECK, no command-center
+source → environment `/collect` fell to RESTExtractor and errored "missing report_id"). **0027**
+lands 0026's intended effect under a new migration id: an idempotent + FK-safe `subject_sources`
+rebuild (widen the CHECK) + `INSERT OR IGNORE` source/binding — no-op on fresh DBs, corrective on
+the live DB (existing `rest` row id 7 + live-card binding preserved). Data/migration fix only, no
+code changed. **820 passing** (was 818; +2 migration tests).
+
+---
+
 ## 2026-06-01 (ADR 0007 Phase 2 — command_center_api source + pluggable /collect + environment Collect button)
 
 **Branch:** `feature/basic-healthcheck-report-output`
