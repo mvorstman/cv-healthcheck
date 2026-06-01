@@ -10,6 +10,53 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-01 (ADR 0007 Phase 3 slice B — retire the live environment builder; environment fully on the declarative path — **ADR 0007 COMPLETE**)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `c44d6b1`. **824 passing** (was 836; −14 = the obsolete `test_environment_per_field.py` removed, +2 new). Net **−337 lines** of code.
+
+### Removed
+- **`_build_environment_subject` and its helper cluster** (217 lines): `_build_environment_identity_section`,
+  `_load_environment_card_block`, `_load_environment_identity_rules`, `_normalize_timezone`,
+  `_hex_commcell_id` — plus the `if subject_id == "environment"` dispatch special-case and the
+  now-unused `import re` / `build_card_section` import. Environment is no longer registered in
+  `_legacy_builders()`; it is served by the uniform "canonical store wins" generic path like every
+  other subject. **The live-serve special case for environment is GONE.**
+- `tests/test_environment_per_field.py` (257 lines) — entirely tested the removed live builder; the
+  9-field card + per-field rules + view_mode are covered by the extractor / canonical-view tests.
+
+### Changed
+- **Empty-state (pre-first-collect):** `_build_generic_subject`'s no-artifact branch now default-selects
+  the first source, so the command-center tab's Collect button is visible before the first collect; and
+  the dispatch builds the generic not-collected state for builderless tiles in the no-db `list_tiles`
+  path too (previously dropped) — so environment is never skipped there.
+- **3 cosmetics absorbed in the generic path** (so removal is a visual no-op): CC source badge `v`
+  (Validated) when an artifact exists else `a`; CC source description from `SOURCE_DESCRIPTIONS` (was
+  empty); subtitle `"<host> · <version>"` derived from the identity card for command-center artifacts
+  (was "Data available").
+
+### Notes
+- **Caller audit (the gate before deletion):** the only live reference to the removed functions was the
+  `legacy_builders` registration; everything else was the dying cluster, migration **comments**, or
+  tests. No route / report page / detail GET called them. **KEPT** (shared, not env-specific):
+  `_load_legacy_commcell` (feeds the CommCell header), `get_commcell_identity` (used by the Command
+  Center **extractor**), `_build_tile_sources`, `_nodata_subject`, `_command_center_*`.
+- **Row 7** (the stale plain-`rest` environment source) left **INERT, not deleted**: its only reader
+  (`_load_environment_card_block`) is now gone and its tab was suppressed in slice A; deleting it would
+  require cascading its FK-child binding (`subject_section_sources`) for zero functional gain — so per
+  the "don't delete if an FK depends on it" guard, it stays (invisible).
+- **Behavior change worth noting:** environment no longer auto-renders its card from the global
+  `commserv.json` — it shows its card from a **collected artifact** (nodata until first collect), exactly
+  like every other subject. The CommCell header still reads `commserv.json` via `_load_legacy_commcell`.
+- **Visual no-op verified** (real dispatch, stored artifact): CommCell Details · subtitle
+  `cs01 · 11 SP40.47` · CC tab active · badge Validated · Endpoint/Host meta · "Last collected" (local) ·
+  9-field table · per-field verdicts. **Reviewer gate:** `./start.sh` + cache-busted reload — environment
+  must render the SAME as before, plus sanity-check the empty state (a fresh/uncollected environment
+  shows the not-collected tile with the Command Center tab + Collect, not a crash/blank). Final
+  confirmation is the reviewer's browser + a fresh live collect.
+
+---
+
 ## 2026-06-01 (UI — surface command-center source metadata in the generic panel + group "Last collected" with Collect)
 
 **Branch:** `feature/basic-healthcheck-report-output`
