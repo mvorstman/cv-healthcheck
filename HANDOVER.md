@@ -2,10 +2,12 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-01 (ADR 0007 Phase 3 follow-on slice A — surface command-center source tab + Collect by default, thread card view_mode, flash auth-failed collects)
+**Last updated:** 2026-06-01 (UI — render UTC timestamps in browser-local time with a zone label, display-only)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** `afecdc2` — fix(ui): surface command-center source tab + Collect by default, thread card view_mode, flash auth-failed collects (ADR 0007 ph3 follow-on)
-**Test status:** **827 passing** under `pytest` and `python -m pytest` (was 821; +6).
+**Last commit:** `8e1930d` — docs(changelog) for `58b0079` feat(ui): render UTC timestamps in browser-local time with zone label (display-only). Prior: `afecdc2` (ADR 0007 ph3 follow-on slice A).
+**Test status:** **831 passing** under `pytest` and `python -m pytest` (was 827; +4).
+
+> Note: the browser-local timestamp slice (`58b0079`) is display-only — storage stays UTC (`…Z`). One server seam `localtime_span` (Jinja global, `web/app.py`) + `web/static/localtime.js` (`window.fmtLocalTime` + a `data-localtime` sweep); 20 call sites routed through them. Needs `./start.sh` + cache-busted reload for the reviewer to see local times. The single recommended next action below (slice B) is unchanged.
 
 ---
 
