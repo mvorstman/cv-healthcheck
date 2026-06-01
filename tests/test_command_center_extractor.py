@@ -110,24 +110,61 @@ def test_collect_dispatch_discriminator(migrated_db_path: Path):
         conn.close()
 
 
-# ── D: the environment Collect button (on the source, not the card) ──
+# ── D: the environment Collect button via the GENERIC path (ADR 0007 ph3 slice B) ──
 
 def test_environment_emits_collect_action_on_command_center_source(migrated_db_path: Path):
-    from cvhealthcheck.quickhc.subject_data_service import _build_environment_subject, _load_legacy_commcell
-    from cvhealthcheck.quickhc.registry import REST_COMMAND_CENTER_API_SOURCE_ID
+    """Post-retirement: environment is served by the generic path. On a fresh DB
+    (no stored artifact) it renders the not-collected empty state with the
+    command-center source DEFAULT-SELECTED and its Collect action present — so a
+    first collect is reachable without the retired live builder."""
+    from cvhealthcheck.quickhc.registry import get_tiles, REST_COMMAND_CENTER_API_SOURCE_ID
+    from cvhealthcheck.quickhc.subject_data_service import _build_generic_subject
     conn = _conn(migrated_db_path)
     try:
-        subj = _build_environment_subject(_load_legacy_commcell(), conn)
+        tile = next(t for t in get_tiles(conn) if t["id"] == "environment")
     finally:
         conn.close()
+    subj = _build_generic_subject(tile, None)          # no artifact -> empty state
+    assert subj["state"] == "nodata"
+    assert subj["activeSource"] == REST_COMMAND_CENTER_API_SOURCE_ID   # so the panel shows
     cc_source = next(s for s in subj["sources"] if s["id"] == REST_COMMAND_CENTER_API_SOURCE_ID)
     collect = next((a for a in cc_source.get("actions", []) if a.get("kind") == "collect"), None)
     assert collect is not None
     assert collect["collectUrl"] == "/quick-hc/environment/collect"
     assert collect["requiresSession"] is True
-    # the live-served CARD section is unchanged (still a card, still has its items)
-    card = subj["sections"][0]
-    assert card["type"] == "card" and card["items"]
+
+
+def test_environment_is_no_longer_a_legacy_builder():
+    """ADR 0007 ph3 slice B: the bespoke _build_environment_subject is GONE —
+    environment is no longer registered in the legacy_builders fork, and the
+    symbol no longer exists on the module."""
+    from cvhealthcheck.quickhc import subject_data_service as sds
+    assert "environment" not in sds._legacy_builders()
+    assert not hasattr(sds, "_build_environment_subject")
+    # the loader stays (it feeds the CommCell header), the VIEW builder is gone.
+    assert "environment" in sds._legacy_loaders()
+
+
+def test_environment_generic_render_applies_command_center_cosmetics(migrated_db_path: Path):
+    """Visual no-op proof: the generic render of a command-center artifact carries
+    the cosmetics the retired live builder showed — CC source status 'v'
+    (Validated), a non-empty source description, and a '<host> · <version>'
+    subtitle — instead of the bare generic defaults."""
+    from cvhealthcheck.quickhc.registry import get_tiles, REST_COMMAND_CENTER_API_SOURCE_ID
+    from cvhealthcheck.quickhc.subject_data_service import _build_generic_subject
+    conn = _conn(migrated_db_path)
+    try:
+        tile = next(t for t in get_tiles(conn) if t["id"] == "environment")
+        result = CommandCenterExtractor(conn, identity_provider=lambda: _PAYLOAD).extract("environment", 1)
+    finally:
+        conn.close()
+    artifact = result_to_artifact(result, "environment", "CommCell Details")
+    subj = _build_generic_subject(tile, artifact)
+    assert subj["activeSource"] == REST_COMMAND_CENTER_API_SOURCE_ID
+    assert subj["subtitle"] == "cs01 · 11 SP40.47"      # <host> · <version> from the card
+    cc = next(s for s in subj["sources"] if s["id"] == REST_COMMAND_CENTER_API_SOURCE_ID)
+    assert cc["status"] == "v"                           # Validated — an artifact exists
+    assert cc["desc"]                                    # non-empty source description
 
 
 def test_command_center_source_carries_full_parity_binding(migrated_db_path: Path):

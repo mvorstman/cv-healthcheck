@@ -42,6 +42,57 @@ def _sa_canonical_from_findings(findings, *, source_type="html"):
 from cvhealthcheck.web.app import create_app
 
 
+def _environment_canonical_artifact():
+    """A minimal stored-shape environment artifact (command-center card) for tests
+    that render the workspace. Post ADR 0007 ph3 slice B environment renders its
+    card from a collected artifact, not the retired live builder."""
+    from datetime import datetime, timezone
+    from cvhealthcheck.artifacts.enums import ArtifactStatus, SourceType
+    from cvhealthcheck.artifacts.models import (
+        ArtifactSource, ArtifactSubject, ArtifactSummary, CanonicalArtifact, CardItem, CardSection,
+    )
+    now = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    return CanonicalArtifact(
+        artifact_type="environment",
+        generated_at=now,
+        source=ArtifactSource(type=SourceType.rest_commserve, collected_at=now),
+        subject=ArtifactSubject(id="environment", title="CommCell Details"),
+        summary=ArtifactSummary(status=ArtifactStatus.good),
+        sections=[CardSection(
+            type="card", id="environment.metadata", title="Environment metadata",
+            view_mode="table",
+            items=[CardItem(label="CommCell Name", value="CS01"),
+                   CardItem(label="Hostname", value="cs01")],
+        )],
+    )
+
+
+def _seed_environment_artifact(migrated_db_path, raw: dict) -> None:
+    """Seed a stored environment artifact in the (test-isolated) canonical store.
+
+    Post ADR 0007 ph3 slice B the bespoke live builder is gone — environment is no
+    longer auto-served from commserv.json; it renders its command-center card from a
+    COLLECTED artifact, like every other subject. This drives a real collect through
+    the Command Center extractor (against the migrated binding) so the stored artifact
+    carries the same 9 fields + per-field verdicts the live builder used to compute."""
+    import sqlite3
+    from cvhealthcheck.extractors.command_center import CommandCenterExtractor
+    from cvhealthcheck.extractors.result_to_artifact import result_to_artifact
+    from cvhealthcheck.web.active_project import make_active_project_store
+
+    payload = {"http_status": 200, "ok": True, "error": None, "raw": raw}
+    conn = sqlite3.connect(str(migrated_db_path))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        result = CommandCenterExtractor(conn, identity_provider=lambda: payload).extract("environment", 1)
+    finally:
+        conn.close()
+    make_active_project_store().save_artifact(
+        result_to_artifact(result, "environment", "CommCell Details")
+    )
+
+
 LICENSE_CSV_SAMPLE = """\
 License summary
 Generated on: May 18, 2026 09:15:00 AM
@@ -711,14 +762,19 @@ def test_quick_hc_subject_initial_data_uses_registry_tile_order_and_explicit_dis
         initial_data = build_subject_initial_data()
 
     assert [category["id"] for category in initial_data["cats"]] == ["security", "identity"]
+    # security_assessment has a (mock) legacy builder; unknown_tile has none and no
+    # stored artifact, so it now renders the generic not-collected state rather than
+    # being dropped (ADR 0007 ph3 slice B: a builderless tile falls to the generic
+    # path in the no-db list_tiles path too, so environment is never dropped there).
     assert [subject["id"] for subject in initial_data["cats"][0]["subjects"]] == [
-        "security_assessment"
+        "security_assessment", "unknown_tile",
     ]
     assert [subject["id"] for subject in initial_data["cats"][1]["subjects"]] == [
         "environment"
     ]
     assert initial_data["cats"][0]["subjects"][0]["payload"] == {"payload": "security"}
     assert initial_data["cats"][1]["subjects"][0]["payload"] == {"payload": "environment"}
+    assert initial_data["cats"][0]["subjects"][1]["state"] == "nodata"   # unknown_tile, generic
     assert initial_data["commcell"] == {"exists": True, "name": "header"}
 
 
@@ -778,6 +834,16 @@ def test_quick_hc_workspace_sections_match_registry_contract_for_all_tiles(
     write_backup_job_summary_artifact(
         BACKUP_JOB_SUMMARY_ARTIFACT,
         catalog_dir=backup_catalog_dir,
+    )
+
+    # Environment renders its card from a collected artifact now (live builder
+    # retired). The _patch_* helpers above point _canonical_store at a tmp store;
+    # return a stored environment artifact for `environment` only (other subjects
+    # keep their legacy-builder path), so environment meets its section contract.
+    monkeypatch.setattr(
+        subject_data_service_module,
+        "_load_from_canonical_store",
+        lambda sid, _a=_environment_canonical_artifact(): _a if sid == "environment" else None,
     )
 
     app = create_app()
@@ -1046,27 +1112,23 @@ def test_quick_hc_overview_license_summary_previews_real_fields(
     assert "HTTP status" not in body
 
 
-def test_quick_hc_overview_renders_commcell_report_section_values(monkeypatch) -> None:
-    import cvhealthcheck.quickhc.subject_data_service as subject_data_service_module
-
-    # The real GET CommServ response shape (the .raw block) — the builder reads
-    # card fields directly from it. commCellId 13183 renders hex "337f".
-    monkeypatch.setattr(
-        subject_data_service_module,
-        "read_json",
-        lambda *_args, **_kwargs: {
-            "raw": {
-                "commcell": {"commCellId": 13183, "commCellName": "CommServe A",
-                             "csGUID": "C0FF-EE00-GUID"},
-                "csTimeZone": {"TimeZoneID": 5, "TimeZoneName": "UTC"},
-                "csVersionInfo": "11 SP40.47",
-                "currentSPVersion": 40,
-                "installedSPVersion": 40,
-                "hostName": "commserve-a",
-                "osType": "Windows",
-                "releaseId": 16,
-                "timeZone": "0:0:UTC",
-            }
+def test_quick_hc_overview_renders_commcell_report_section_values(migrated_db_path) -> None:
+    # Post ADR 0007 ph3 slice B: environment renders its card from a COLLECTED
+    # artifact (the live builder is gone). Seed one via the Command Center extractor
+    # on the real GET CommServ .raw shape; commCellId 13183 renders hex "337f".
+    _seed_environment_artifact(
+        migrated_db_path,
+        {
+            "commcell": {"commCellId": 13183, "commCellName": "CommServe A",
+                         "csGUID": "C0FF-EE00-GUID"},
+            "csTimeZone": {"TimeZoneID": 5, "TimeZoneName": "UTC"},
+            "csVersionInfo": "11 SP40.47",
+            "currentSPVersion": 40,
+            "installedSPVersion": 40,
+            "hostName": "commserve-a",
+            "osType": "Windows",
+            "releaseId": 16,
+            "timeZone": "0:0:UTC",
         },
     )
 
@@ -1076,7 +1138,7 @@ def test_quick_hc_overview_renders_commcell_report_section_values(monkeypatch) -
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     # The environment card is built through the shared per-field card path, fields
-    # read directly from the real GET CommServ response. Rules (binding 0023):
+    # read directly from the real GET CommServ response. Rules (migration 0028):
     # Version presence -> good; Name format / Timezone enum -> safe good with no
     # spec; CommCell ID is hex(commCellId) and informational (bare).
     assert '"id": "environment.metadata"' in body
