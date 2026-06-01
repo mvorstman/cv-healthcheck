@@ -196,6 +196,11 @@ class CardItem(BaseModel):
     severity:      FindingSeverity | None = None
     verdict_chain: list[VerdictEntry]     = Field(default_factory=list)
     recommendation_intent: RecommendationIntent | None = None
+    # ADR 0007 D3 (hex coercion): when a `type` coercion reshapes the displayed
+    # value (e.g. integer → lowercase hex), the raw pre-coercion value is kept
+    # here so it isn't discarded. Optional; omitted from JSON when absent, so
+    # uncoerced items stay byte-identical.
+    raw_value: int | float | str | None = None
 
     @model_serializer(mode="wrap")
     def _omit_absent_evaluative(self, handler):
@@ -206,6 +211,8 @@ class CardItem(BaseModel):
             data.pop("verdict_chain", None)
         if self.recommendation_intent is None:
             data.pop("recommendation_intent", None)
+        if self.raw_value is None:
+            data.pop("raw_value", None)
         return data
 
 
