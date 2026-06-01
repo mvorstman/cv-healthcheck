@@ -673,6 +673,18 @@ def _build_environment_subject(cc: dict | None, db: sqlite3.Connection | None = 
             descriptions={
                 REST_COMMAND_CENTER_API_SOURCE_ID: "Live collection of CommCell identity details from Command Center.",
             },
+            # ADR 0007 ph2: surface a Collect button on environment's Command
+            # Center source tile (the button lives on the SOURCE, not the card —
+            # the live-served card section below is untouched). requiresSession
+            # stays True: the collect is customer-bound-auth, same as Reports-Plus.
+            actions={
+                REST_COMMAND_CENTER_API_SOURCE_ID: [{
+                    "kind": "collect",
+                    "label": "Collect",
+                    "collectUrl": "/quick-hc/environment/collect",
+                    "requiresSession": True,
+                }],
+            },
         ),
         "sections": [_build_environment_identity_section(cc, name, version, db)],
     }

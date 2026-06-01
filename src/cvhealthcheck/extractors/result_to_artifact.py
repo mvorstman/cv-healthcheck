@@ -38,7 +38,14 @@ _SOURCE_TYPE_MAP: dict[str, SourceType] = {
     "csv":   SourceType.csv_import,
     "json":  SourceType.json_import,
     "rest":  SourceType.rest,
+    # ADR 0007 (single-object Command Center API source). Reuses the existing
+    # canonical CommServe source type rather than adding a redundant enum value.
+    "rest_command_center_api": SourceType.rest_commserve,
 }
+
+# Source types that represent a LIVE collection (stamp collected_at), as opposed
+# to a file import (imported_at only).
+_LIVE_SOURCE_TYPES = {SourceType.rest, SourceType.rest_commserve}
 
 
 def result_to_artifact(
@@ -55,7 +62,7 @@ def result_to_artifact(
     )
     # ADR 0004: live REST collection records collected_at; file imports record
     # only imported_at (the file may have been generated earlier elsewhere).
-    collected_at = now if artifact_source_type == SourceType.rest else None
+    collected_at = now if artifact_source_type in _LIVE_SOURCE_TYPES else None
     source = ArtifactSource(
         type=artifact_source_type,
         collected_at=collected_at,

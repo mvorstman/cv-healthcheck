@@ -26,6 +26,10 @@ from cvhealthcheck.db.subjects import (
     set_pinned_subject_id,
     subject_family,
 )
+from cvhealthcheck.extractors.command_center import (
+    COMMAND_CENTER_SOURCE_TYPE,
+    CommandCenterExtractor,
+)
 from cvhealthcheck.extractors.dispatcher import extract_file
 from cvhealthcheck.extractors.fixture import FixtureExtractor
 from cvhealthcheck.extractors.rest import RESTExtractor
@@ -161,6 +165,19 @@ def quick_hc_delete_subject(subject_id: str):
     return redirect(url_for("main.quick_hc"))
 
 
+def _has_command_center_source(db, subject_id: str, version: int) -> bool:
+    """True iff the subject declares a ``rest_command_center_api`` source — the
+    discriminator that routes its /collect to the single-object extractor (ADR
+    0007 ph2). Defensive: any error -> False (falls back to the Reports-Plus path)."""
+    try:
+        return any(
+            s.get("source_type") == COMMAND_CENTER_SOURCE_TYPE
+            for s in get_subject_sources(db, subject_id, version)
+        )
+    except Exception:
+        return False
+
+
 @bp.route("/quick-hc/<subject_id>/collect", methods=["POST"])
 def quick_hc_generic_collect(subject_id: str):
     """Collect a subject's REST data using the active customer's CommCell.
@@ -214,9 +231,19 @@ def quick_hc_generic_collect(subject_id: str):
         title = subject["title"]
         version = subject["version"]
         _, project_id = get_active_project(db)
-        with CommvaultSession(base_url, token, verify_ssl=settings.verify_ssl) as cv_session:
-            extractor = RESTExtractor(db, cv_session, customer_id, project_id)
+        # ADR 0007 ph2 — pluggable extractor selection by the subject's collect
+        # source type. Reports-Plus -> RESTExtractor (unchanged); the single-object
+        # Command Center API source -> CommandCenterExtractor. The auth checks above
+        # and the result_to_artifact -> save_artifact tail below are identical.
+        if _has_command_center_source(db, active_subject_id, version):
+            extractor = CommandCenterExtractor(
+                db, token=token, customer_id=customer_id, project_id=project_id
+            )
             result = extractor.extract(active_subject_id, version)
+        else:
+            with CommvaultSession(base_url, token, verify_ssl=settings.verify_ssl) as cv_session:
+                extractor = RESTExtractor(db, cv_session, customer_id, project_id)
+                result = extractor.extract(active_subject_id, version)
     except Exception as exc:
         flash(f"Collection failed: {exc}", "error")
         return _workspace_redirect(subject_id)
