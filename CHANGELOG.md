@@ -10,6 +10,46 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-01 (ADR 0007 Phase 1 — nested-path field selector + hex coercion capability fixture)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `70850bd` (implementation + tests + migration 0025 + fixture).
+
+Proves ADR 0007's two new EXTRACT-stage capabilities in isolation on a dedicated test
+subject, before any real subject depends on them — mirroring how `_metric_test` /
+`_card_test` de-risked ADR 0004. Test-subject-first, additive only. **813 passing** (was
+807; +6 new tests). environment, the HTML/CSV extractors, and CEL were NOT touched.
+
+### Added
+
+- **D2 — nested-path field selector.** New `_resolve_field_path(record, path)` in
+  `metric_section.py` (the shared field-resolution module). A card/metric item `field` may
+  now be a dot-path (`commcell.commCellId`, `csTimeZone.TimeZoneName`); it traverses nested
+  dicts, and a missing/non-dict segment resolves to `None` (consistent with `.get()`). Used
+  once, by both the metric/card path via `_aggregate` and the card no-agg path — not CEL.
+- **D3 — `hex` coercion.** New `_coerce_item_value` in `card_section.py` adds `type: "hex"`
+  to the card item path (a closed sibling of the HTML extractor's string/int/float): formats
+  an integer as lowercase hex, no `0x` (`13183 -> "337f"`). `CardItem` gains an optional
+  `raw_value` (the pre-coercion integer), omitted from JSON when absent.
+- **`_nested_test` subject** (migration 0025, `created_by=system`) + nested JSON fixture
+  `data/test_fixtures/nested_test.json` + `test_nested_test_subject.py` — one card section
+  with `commcell.commCellName`, `commcell.commCellId` (hex), `csTimeZone.TimeZoneName`,
+  deliberately mirroring environment's two hard fields.
+
+### Notes
+
+- **Step-1 finding:** `_aggregate` is the shared field helper (metric always; card-with-agg);
+  the card no-agg path (`row.get(field)`) was the one outlier — both now route through the
+  single `_resolve_field_path`, matching ADR 0007 D2's "implemented once, shared." No
+  semantic change to flat fields (single-segment path is byte-identical to `row.get`).
+- **Step-2 finding:** there was NO `type`-coercion step in the card/metric item value path
+  (`_coerce` is HTML-local; `_coerce_number` is evaluate-stage). D3 therefore *added* a
+  coercion step to card item resolution — it did not extend `html.py`.
+- `_card_test` stays the flat-path oracle (untouched). Existing card artifacts are
+  byte-identical (the new `raw_value` is omitted when absent).
+
+---
+
 ## 2026-05-31 (ADR 0004 phase-8 follow-on — per-field evaluation, enum/format kinds, environment table)
 
 **Branch:** `feature/basic-healthcheck-report-output`
