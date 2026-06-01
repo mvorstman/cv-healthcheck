@@ -10,6 +10,34 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-01 (UI fix — load localtime.js on the standalone workspace page; completes the browser-local timestamp slice)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `7f2dc0e`. **832 passing** (was 831; +1).
+
+### Fixed
+- **The workspace "Last collected" still rendered raw UTC** after `58b0079`. Root cause: `quick_hc.html`
+  is a **standalone** document (no `{% extends "base.html" %}`), so the `localtime.js` include `58b0079`
+  added to `base.html` never reached it — `window.fmtLocalTime` was undefined on the workspace, so
+  `fmtUtc` silently took its raw-UTC fallback. Added the `localtime.js` `<script>` to `quick_hc.html`
+  itself, **before** `quick_hc.js` (fmtUtc delegates to `window.fmtLocalTime`, so the helper must be
+  defined first), with the page's `v=asset_version` cache-bust.
+
+### Notes
+- **`base.html:19` left as-is (reported, not expanded):** `asset_version` is passed only to
+  `quick_hc.py`'s two `render_template` calls — it is **not** a global context processor — so it isn't in
+  `base.html`'s scope. Adding `v=asset_version` there would raise `Undefined` on the other routes that
+  extend base. base.html's include works on those pages (first-load); only the standalone workspace was
+  missing one.
+- **Guard test** (`test_platform_foundation.py::test_workspace_loads_localtime_helper_before_quick_hc_js`):
+  the rendered `/quick-hc` references `static/localtime.js` **before** `static/quick_hc.js`, so this
+  standalone-page miss can't silently recur. (It matches the `static/` src paths, not bare filenames,
+  which also appear in on-page comments.)
+- **Reviewer browser check (needs `./start.sh` + cache-busted reload):** the workspace "Last collected"
+  now shows local time + zone label (e.g. `2026-06-01 21:49 CEST`), not `… UTC`.
+
+---
+
 ## 2026-06-01 (UI — render UTC timestamps in browser-local time with a zone label; display-only)
 
 **Branch:** `feature/basic-healthcheck-report-output`
