@@ -27,7 +27,7 @@
       </div>
       <dl id="source-metadata">
         <dt>Generated at</dt>
-        <dd>{{ artifact.generated_at or "N/A" }}</dd>
+        <dd>{{ localtime_span(artifact.generated_at, "N/A") }}</dd>
         <dt>Source report</dt>
         <dd>{{ artifact.source_report_name or "N/A" }}</dd>
         <dt>Source dataset GUID</dt>

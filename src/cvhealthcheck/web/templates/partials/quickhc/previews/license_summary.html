@@ -12,7 +12,7 @@
         </div>
         <div class="quickhc-preview-item">
           <span class="quickhc-preview-label">Generated on</span>
-          <strong>{{ license_summary.generated_on or "Not collected yet" }}</strong>
+          <strong>{{ localtime_span(license_summary.generated_on, "Not collected yet") }}</strong>
         </div>
         <div class="quickhc-preview-item">
           <span class="quickhc-preview-label">License expiry</span>
@@ -20,7 +20,7 @@
         </div>
         <div class="quickhc-preview-item">
           <span class="quickhc-preview-label">Imported at</span>
-          <strong>{{ license_summary.imported_at or "Not collected yet" }}</strong>
+          <strong>{{ localtime_span(license_summary.imported_at, "Not collected yet") }}</strong>
         </div>
       </div>
     {% else %}

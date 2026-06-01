@@ -30,7 +30,7 @@
       <dt>Active rendered source</dt>
       <dd>{{ (status.source_type or "unknown") | upper }}</dd>
       <dt>Imported at</dt>
-      <dd>{{ status.collected_at or "unknown" }}</dd>
+      <dd>{{ localtime_span(status.collected_at, "unknown") }}</dd>
       <dt>Findings</dt>
       <dd>{{ status.finding_count or 0 }}</dd>
     {% endif %}
@@ -59,9 +59,9 @@
         <dd><code>{{ normalized.artifact_paths.latest_source }}</code></dd>
       {% endif %}
       <dt>Generated on</dt>
-      <dd>{{ normalized.generated_on or "unknown" }}</dd>
+      <dd>{{ localtime_span(normalized.generated_on, "unknown") }}</dd>
       <dt>Imported at</dt>
-      <dd>{{ normalized.imported_at or "unknown" }}</dd>
+      <dd>{{ localtime_span(normalized.imported_at, "unknown") }}</dd>
       {% if normalized.source.report_id %}
         <dt>Report</dt>
         <dd>{{ normalized.source.report_id }} / {{ normalized.source.report_name }}</dd>

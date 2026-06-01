@@ -31,7 +31,7 @@
     </div>
     <dl id="source-metadata">
       <dt>Generated at</dt>
-      <dd>{{ report.generated_at or "N/A" }}</dd>
+      <dd>{{ localtime_span(report.generated_at, "N/A") }}</dd>
       {% if customer_id %}
         <dt>Customer ID</dt>
         <dd><code>{{ customer_id }}</code></dd>
@@ -200,8 +200,8 @@
         <table class="compact-table">
           <tbody>
             <tr><th>Source Type</th><td>{{ (report.license_summary.source_type or "unknown") | upper }}</td></tr>
-            <tr><th>Imported At</th><td>{{ report.license_summary.imported_at or "Not collected yet" }}</td></tr>
-            <tr><th>Generated On</th><td>{{ report.license_summary.generated_on or "Not collected yet" }}</td></tr>
+            <tr><th>Imported At</th><td>{{ localtime_span(report.license_summary.imported_at, "Not collected yet") }}</td></tr>
+            <tr><th>Generated On</th><td>{{ localtime_span(report.license_summary.generated_on, "Not collected yet") }}</td></tr>
             <tr><th>License Expiry</th><td>{{ report.license_summary.license_expiry or "N/A" }}</td></tr>
             <tr><th>Workload Summary Sections</th><td>{{ report.license_summary.workload_summary_section_count }}</td></tr>
             <tr><th>Other License Rows</th><td>{{ report.license_summary.other_license_row_count }}</td></tr>
@@ -315,7 +315,7 @@
             <tr><th>Latest Total Clients</th><td>{{ report.client_growth.latest_total_clients if report.client_growth.latest_total_clients is not none else "Not collected yet" }}</td></tr>
             <tr><th>Net Growth Over Period</th><td>{% if report.client_growth.net_growth is not none %}{{ report.client_growth.net_growth }}{% else %}Not collected yet{% endif %}</td></tr>
             <tr><th>History Range</th><td>{% if report.client_growth.history_range %}{{ report.client_growth.history_range.start }} to {{ report.client_growth.history_range.end }}{% else %}Not collected yet{% endif %}</td></tr>
-            <tr><th>Last Collected</th><td>{{ report.client_growth.imported_at or "Not collected yet" }}</td></tr>
+            <tr><th>Last Collected</th><td>{{ localtime_span(report.client_growth.imported_at, "Not collected yet") }}</td></tr>
           </tbody>
         </table>
       {% endif %}
@@ -374,7 +374,7 @@
         <table class="compact-table">
           <tbody>
             <tr><th>Source Type</th><td>{{ (report.capacity_license.source_type or "unknown") | upper }}</td></tr>
-            <tr><th>Imported At</th><td>{{ report.capacity_license.imported_at or "Not collected yet" }}</td></tr>
+            <tr><th>Imported At</th><td>{{ localtime_span(report.capacity_license.imported_at, "Not collected yet") }}</td></tr>
             <tr><th>Latest Month</th><td>{{ report.capacity_license.latest_month or "Not collected yet" }}</td></tr>
             <tr><th>Record Count</th><td>{{ report.capacity_license.record_count }}</td></tr>
             <tr><th>Detail Page</th><td><a href="{{ report.capacity_license.detail_url }}">View Capacity License</a></td></tr>
@@ -418,7 +418,7 @@
       {% if report.backup_job_summary.show_summary %}
         <table class="compact-table">
           <tbody>
-            <tr><th>Generated At</th><td>{{ report.backup_job_summary.generated_at or "Not collected yet" }}</td></tr>
+            <tr><th>Generated At</th><td>{{ localtime_span(report.backup_job_summary.generated_at, "Not collected yet") }}</td></tr>
             <tr><th>Source Report</th><td>{{ report.backup_job_summary.source_report_name or "Not collected yet" }}</td></tr>
             <tr><th>Source Dataset GUID</th><td><code>{{ report.backup_job_summary.source_dataset_guid or "Not collected yet" }}</code></td></tr>
             <tr><th>Total Jobs</th><td>{{ report.backup_job_summary.total_jobs }}</td></tr>

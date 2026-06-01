@@ -17,7 +17,7 @@
       <dt>Source</dt>
       <dd>{{ source.method }} <code>{{ source.endpoint }}</code></dd>
       <dt>Collected at</dt>
-      <dd>{{ result.collected_at or "N/A" }}</dd>
+      <dd>{{ localtime_span(result.collected_at, "N/A") }}</dd>
       <dt>Authentication</dt>
       <dd>{{ source.auth or "N/A" }}</dd>
     </dl>

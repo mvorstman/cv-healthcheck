@@ -726,9 +726,13 @@ function mountCharts() {
   });
 }
 
-// Format an ISO timestamp as "YYYY-MM-DD HH:MM UTC" for the source tile.
+// Format a stored UTC ISO timestamp for display. Delegates to the shared
+// localtime.js helper so the workspace renders timestamps in the browser's LOCAL
+// timezone with a zone label (display-only; storage stays UTC). Falls back to a
+// UTC render only if localtime.js somehow isn't loaded.
 function fmtUtc(iso) {
   if (!iso) return '';
+  if (window.fmtLocalTime) return window.fmtLocalTime(iso);
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
   const p = n => String(n).padStart(2, '0');

@@ -8,6 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='quick_hc.css') }}">
+  <!-- Display-only: render stored-UTC timestamps in the browser's local zone. -->
+  <script src="{{ url_for('static', filename='localtime.js') }}"></script>
   <script>
     (function () {
       var theme = localStorage.getItem('quickhc-theme-v1');
@@ -243,9 +245,9 @@
         <dd>{{ project.assigned_consultant }}</dd>
       {% endif %}
       <dt>Created</dt>
-      <dd style="font-family: var(--mono); font-size: 12px; color: var(--text-2);">{{ project.created_at }}</dd>
+      <dd style="font-family: var(--mono); font-size: 12px; color: var(--text-2);">{{ localtime_span(project.created_at) }}</dd>
       <dt>Working state modified</dt>
-      <dd style="font-family: var(--mono); font-size: 12px; color: var(--text-2);">{{ project.working_state_modified_at }}</dd>
+      <dd style="font-family: var(--mono); font-size: 12px; color: var(--text-2);">{{ localtime_span(project.working_state_modified_at) }}</dd>
     </dl>
   </div>
 
@@ -266,7 +268,7 @@
         {% for f in finalizations %}
           <tr>
             <td class="mono">{{ f.finalization_number }}</td>
-            <td class="mono">{{ f.finalized_at }}</td>
+            <td class="mono">{{ localtime_span(f.finalized_at) }}</td>
             <td>{{ f.finalized_by or '—' }}</td>
             <td class="mono">{{ f.ticket_reference or '—' }}</td>
             <td>{{ f.notes or '—' }}</td>

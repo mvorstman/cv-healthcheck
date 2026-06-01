@@ -62,8 +62,8 @@
             <td><code>{{ artifact.commcell_id }}</code></td>
             <td>{{ artifact.source_type }}</td>
             <td>{{ artifact.artifact_type }}</td>
-            <td>{{ artifact.imported_at or "" }}</td>
-            <td>{{ artifact.executed_at or "" }}</td>
+            <td>{{ localtime_span(artifact.imported_at) }}</td>
+            <td>{{ localtime_span(artifact.executed_at) }}</td>
             <td><code>{{ artifact.report_stream_id or "" }}</code></td>
             <td><code>{{ artifact.report_run_id or "" }}</code></td>
             <td>{{ "yes" if artifact.is_active else "no" }}</td>
