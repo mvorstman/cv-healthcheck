@@ -310,6 +310,7 @@ def _build_generic_sources(
         is_html = src_id == HTML_IMPORT_SOURCE_ID
         is_csv = src_id == CSV_IMPORT_SOURCE_ID
         is_rest = src_id == REST_REPORTS_PLUS_SOURCE_ID
+        is_command_center = src_id == REST_COMMAND_CENTER_API_SOURCE_ID
         is_json = src_id == JSON_IMPORT_SOURCE_ID
         collect_url = src.get("collect_url")
         is_import = is_html or is_csv
@@ -319,17 +320,18 @@ def _build_generic_sources(
                 _upload_action(import_url=import_url_base, import_field="file", accept=accept)
             ]
             status = "a"
-        elif (is_rest or is_json) and collect_url:
-            # REST collects from the lab; JSON (internal/test subjects) collects
-            # from a shipped fixture via the collect-fixture route. Only REST is
-            # auth-gated (customer-bound CommCell session); requiresSession lets
-            # the frontend open the connect modal in-place for that case. JSON
-            # fixture collection needs no session and submits straight through.
+        elif (is_rest or is_command_center or is_json) and collect_url:
+            # REST / Command Center API collect from the lab; JSON (internal/test
+            # subjects) collects from a shipped fixture via the collect-fixture
+            # route. Both live-REST paths are auth-gated (customer-bound CommCell
+            # session); requiresSession lets the frontend open the connect modal
+            # in-place for that case. JSON fixture collection needs no session and
+            # submits straight through.
             actions = [{
                 "kind": "collect",
                 "label": "Collect",
                 "collectUrl": collect_url,
-                "requiresSession": is_rest,
+                "requiresSession": is_rest or is_command_center,
             }]
             status = "a"
         else:

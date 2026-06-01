@@ -237,9 +237,23 @@ class CardSection(BaseModel):
     items:         list[CardItem] = Field(default_factory=list)
     # Presentational grid hint; None = auto (renderer picks columns by count).
     columns:       int | None = None
+    # ADR 0007 ph3 follow-on: presentational layout hint that rides ON the artifact
+    # so the source-agnostic render path (artifact_to_view → _card_section_view) can
+    # pick the Field/Value TABLE the live card used instead of the tiles default.
+    # Sourced from the catalog binding's card.view_mode at build_card_section time.
+    # Optional; the serializer below OMITS it when absent so existing card artifacts
+    # (which never carried it) stay byte-identical (additive-absent).
+    view_mode:     Literal["tiles", "table"] | None = None
     # Evaluative face (reused from the metric machinery — same enum / VerdictEntry).
     severity:      FindingSeverity | None = None
     verdict_chain: list[VerdictEntry]     = Field(default_factory=list)
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_view_mode(self, handler):
+        data = handler(self)
+        if self.view_mode is None:
+            data.pop("view_mode", None)
+        return data
 
 
 class MetricSection(BaseModel):

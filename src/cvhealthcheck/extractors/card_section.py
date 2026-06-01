@@ -114,6 +114,10 @@ def build_card_section(
         title=title,
         items=items,
         columns=spec.get("columns"),
+        # ADR 0007 ph3 follow-on: carry the catalog binding's presentational
+        # view_mode ("tiles" | "table") onto the artifact so the source-agnostic
+        # render path can pick the layout. Absent → None → tiles default.
+        view_mode=spec.get("view_mode"),
     )
 
     evaluative = spec.get("evaluative") or {}

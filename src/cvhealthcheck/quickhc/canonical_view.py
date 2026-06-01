@@ -146,7 +146,11 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
         elif isinstance(sec, ChartSection):
             sections.append(_chart_section_view(sec, sec_id))
         elif isinstance(sec, CardSection):
-            sections.append(_card_section_view(sec, sec_id))
+            # ADR 0007 ph3 follow-on: honor the section's own view_mode (carried
+            # on the artifact from the catalog binding) instead of the hardcoded
+            # tiles default — so a card authored view_mode="table" renders as the
+            # Field/Value table. Source-agnostic; unset → tiles (unchanged).
+            sections.append(_card_section_view(sec, sec_id, view_mode=sec.view_mode or "tiles"))
 
     return {
         "id": subject_id,

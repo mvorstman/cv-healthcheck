@@ -212,6 +212,15 @@ def quick_hc_generic_collect(subject_id: str):
     if not is_authenticated_for(customer_id):
         if is_authenticated():
             clear_current_token()
+        # ADR 0007 ph3 follow-on (BUG 3): the result.errors path flashes (below),
+        # but this auth-gate redirect used to be silent — an auth-failed collect
+        # then looked identical to a stale success (the stored artifact + its old
+        # timestamp just stayed). Flash so the failure is visible, not silent.
+        customer_label = customer.get("customer_name") or customer_id
+        flash(
+            f"Collection failed: sign in to Commvault for customer '{customer_label}' before collecting.",
+            "error",
+        )
         return redirect(url_for("main.login", next=request.path))
 
     token = _current_token()

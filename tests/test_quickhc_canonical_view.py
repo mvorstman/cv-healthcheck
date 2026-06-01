@@ -253,3 +253,46 @@ def test_ls_empty_sections_state_nodata():
     artifact = _ls_artifact(sections=[])
     view = license_summary_to_view(artifact)
     assert view["state"] == "nodata"
+
+
+# ── ADR 0007 ph3 follow-on: command-center activeSource round-trip + card view_mode ──
+
+def _command_center_card_artifact(view_mode: str | None = None) -> CanonicalArtifact:
+    from cvhealthcheck.extractors.card_section import build_card_section
+    spec = {"columns": 4, "items": [{"label": "CommCell Name", "field": "name"}]}
+    if view_mode is not None:
+        spec["view_mode"] = view_mode
+    sec = build_card_section("environment.metadata", "Environment metadata", spec, [{"name": "CS01"}])
+    return CanonicalArtifact(
+        artifact_type="environment",
+        generated_at=_NOW,
+        source=ArtifactSource(type=SourceType.rest_commserve),
+        subject=ArtifactSubject(id="environment", title="CommCell Details"),
+        summary=ArtifactSummary(status=ArtifactStatus.good),
+        sections=[sec],
+    )
+
+
+def test_command_center_artifact_active_source_matches_mapped_tab_id():
+    """BUG 2: a rest_commserve artifact's activeSource is the command-center
+    canonical id — the SAME id string the now-mapped source tab renders with — so
+    quick_hc.js resolves activeSrc and shows the panel + Collect by default."""
+    from cvhealthcheck.quickhc.registry import REST_COMMAND_CENTER_API_SOURCE_ID
+    view = artifact_to_view(_command_center_card_artifact())
+    assert view["activeSource"] == REST_COMMAND_CENTER_API_SOURCE_ID
+    assert view["activeSource"] == "rest_command_center_api"   # round-trips on one id string
+
+
+def test_card_section_view_mode_table_threads_to_render():
+    """view_mode threading: a card authored view_mode='table' renders as a TABLE
+    through the source-agnostic artifact_to_view path (no per-subject hardcoding)."""
+    view = artifact_to_view(_command_center_card_artifact(view_mode="table"))
+    card = next(s for s in view["sections"] if s["type"] == "card")
+    assert card["view_mode"] == "table"
+
+
+def test_card_section_view_mode_defaults_tiles_when_unset():
+    """Unset view_mode falls back to tiles — every other card stays unchanged."""
+    view = artifact_to_view(_command_center_card_artifact(view_mode=None))
+    card = next(s for s in view["sections"] if s["type"] == "card")
+    assert card["view_mode"] == "tiles"

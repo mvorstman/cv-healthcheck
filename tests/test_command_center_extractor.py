@@ -190,3 +190,28 @@ def test_command_center_parity_rules_fire_with_correct_severities(migrated_db_pa
                  "Current SP Version", "Installed SP Version", "Hostname"]:
         assert by[bare].severity is None
     assert card.severity == "good"
+
+
+# ── E: auth-gate flash (ADR 0007 ph3 follow-on, BUG 3) ──
+
+def test_collect_auth_gate_flashes_instead_of_silent_redirect(monkeypatch):
+    """An auth-failed collect (no customer-bound session) now FLASHES an error
+    before redirecting to /login — so it no longer looks identical to a stale
+    success (the prior silent redirect cost multiple diagnosis cycles)."""
+    from cvhealthcheck.web.app import create_app
+    import cvhealthcheck.web.routes.quick_hc as qh
+
+    # Active customer has a CommCell URL (so the hostname guard passes), but no
+    # session token is set -> is_authenticated_for(...) is False -> the auth gate.
+    monkeypatch.setattr(qh, "get_active_customer", lambda *a, **k: {
+        "customer_id": "default", "customer_name": "Default",
+        "commcell_hostname": "https://192.0.2.1:4433", "commcell_id": "X",
+    })
+
+    client = create_app().test_client()
+    resp = client.post("/quick-hc/environment/collect")
+    assert resp.status_code == 302
+    assert "/login" in resp.headers["Location"]
+    with client.session_transaction() as sess:
+        flashes = sess.get("_flashes", [])
+    assert any("Collection failed" in msg and "sign in" in msg for _cat, msg in flashes), flashes
