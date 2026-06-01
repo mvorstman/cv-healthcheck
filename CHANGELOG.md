@@ -10,6 +10,56 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-01 (ADR 0007 Phase 2 — command_center_api source + pluggable /collect + environment Collect button)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `db39758` (implementation + tests + migration 0026).
+
+Makes `environment` collectable through a single-object Command Center API extractor that
+STORES a canonical artifact in `working/environment/`, proving the seam end to end (Collect
+button → `/collect` → extract → `result_to_artifact` → `save_artifact`). **818 passing**
+(was 813; +5). Additive — the live-served environment card is unchanged. CommCell ID is **not**
+authored (gated on a live capture, Phase 3).
+
+### Added
+
+- **`extractors/command_center.py`** — `CommandCenterExtractor`: wraps the existing
+  `get_commcell_identity` (unchanged; still writes `commserv.json` as raw provenance), feeds
+  the CommServ `raw` object as ONE record to the generic card path, and reads the card spec
+  from the subject's `rest_command_center_api` binding. Nested fields resolve via Phase-1's
+  dot-path selector. Injectable `identity_provider` for offline tests.
+- **Pluggable `/collect` dispatch** (`quick_hc.py`): `_has_command_center_source` selects the
+  extractor by the subject's source type — Reports-Plus → `RESTExtractor` (unchanged),
+  command-center → the new extractor. Auth checks + `result_to_artifact`/`save_artifact` tail
+  identical.
+- **environment Collect button** — the Command Center SOURCE tile emits a collect action
+  (`collectUrl` + `requiresSession=True`); the card section is untouched.
+- **Migration 0026** — widens the `subject_sources.source_type` CHECK to admit
+  `rest_command_center_api` (FK-safe table rebuild, FK integrity verified) + adds environment's
+  command-center source and a PROVISIONAL 3-field card spec (CommCell Name / Version / Timezone;
+  two nested reads). No CommCell ID this slice.
+
+### Changed
+
+- `result_to_artifact._SOURCE_TYPE_MAP` maps `rest_command_center_api` → the existing
+  `SourceType.rest_commserve` (the stored artifact's `source.type` is the CommServe type, not
+  `rest`); `collected_at` is stamped for it (live collection).
+
+### Notes (deviations from the brief, flagged)
+
+- **SourceType reused, not added.** The brief asked for a `command_center_api` SourceType, but
+  the canonical model already has `SourceType.rest_commserve` (used by the env adapter,
+  `commcell_details.py:38`). Reused it rather than add a redundant third name alongside
+  `rest_commserve` (enum) + `rest_command_center_api` (source-id). `source.type` = `rest_commserve`.
+- **Collect-button gate point differed.** The brief's gate (`:269`, `_provenance_to_tile_sources`)
+  is NOT on environment's bespoke path — environment builds sources via `_build_tile_sources` in
+  `_build_environment_subject`. The button was surfaced by passing a collect action there (SOURCE
+  only; the card section, rules, view_mode, and live-serve model are untouched).
+- **CHECK ripple.** `subject_sources.source_type` had a closed CHECK — adding a new source type
+  required a table rebuild (the ripple the STOP-AND-STEER list anticipated).
+
+---
+
 ## 2026-06-01 (ADR 0007 Phase 1 — nested-path field selector + hex coercion capability fixture)
 
 **Branch:** `feature/basic-healthcheck-report-output`
