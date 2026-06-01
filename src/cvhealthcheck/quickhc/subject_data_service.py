@@ -45,6 +45,7 @@ from cvhealthcheck.quickhc.registry import (
     SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME,
     SECURITY_ASSESSMENT_METADATA_SECTION_ID,
     SOURCE_DESCRIPTIONS,
+    SOURCE_ENDPOINTS,
     SOURCE_LABELS,
     STANDARD_SOURCES,
     get_tiles,
@@ -342,9 +343,45 @@ def _build_generic_sources(
             src.get("label", src_id),
             src.get("description", ""),
             status=status,
+            meta=_command_center_source_meta(artifact_payload) if is_command_center else [],
             actions=actions,
         ))
     return result
+
+
+def _command_center_source_meta(artifact_payload: dict[str, Any] | None) -> list[dict[str, str]]:
+    """Source-panel descriptor for the single-object Command Center API source,
+    built in the GENERIC path so it survives the live builder's retirement.
+
+    - Endpoint: a source-TYPE constant (SOURCE_ENDPOINTS) — GET /commandcenter/api/CommServ.
+    - Host: the CommCell host from the collected identity card (Hostname, falling
+      back to CommCell Name). It is NOT in the artifact's source block (that carries
+      the customer name), so it is read from the card the collection produced; absent
+      → the Host row is simply omitted. (Populating source.endpoint/host at collect
+      time would be the cleaner long-term home, but that touches the stored artifact.)"""
+    meta: list[dict[str, str]] = []
+    endpoint = SOURCE_ENDPOINTS.get(REST_COMMAND_CENTER_API_SOURCE_ID)
+    if endpoint:
+        meta.append({"k": "Endpoint", "v": endpoint})
+    host = _command_center_host(artifact_payload)
+    if host:
+        meta.append({"k": "Host", "v": host})
+    return meta
+
+
+def _command_center_host(artifact_payload: dict[str, Any] | None) -> str | None:
+    """Best-effort CommCell host from the collected identity card (Hostname, then
+    CommCell Name). Returns None when unavailable — no host row is shown."""
+    if not artifact_payload:
+        return None
+    for sec in artifact_payload.get("sections", []) or []:
+        if sec.get("type") != "card":
+            continue
+        items = {it.get("label"): it.get("value") for it in sec.get("items", []) or []}
+        host = items.get("Hostname") or items.get("CommCell Name")
+        if host:
+            return str(host)
+    return None
 
 
 def _version_info(

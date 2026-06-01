@@ -215,3 +215,49 @@ def test_collect_auth_gate_flashes_instead_of_silent_redirect(monkeypatch):
     with client.session_transaction() as sess:
         flashes = sess.get("_flashes", [])
     assert any("Collection failed" in msg and "sign in" in msg for _cat, msg in flashes), flashes
+
+
+# ── F: generic source-panel metadata + Last-collected relocation (ph3 follow-on) ──
+
+def test_command_center_source_meta_carries_endpoint_and_host_from_artifact():
+    """The GENERIC source panel surfaces the command-center descriptor (Endpoint
+    constant + Host from the collected identity card) — no live builder needed."""
+    from cvhealthcheck.quickhc.subject_data_service import _command_center_source_meta
+    payload = {"sections": [{"type": "card", "items": [
+        {"label": "CommCell Name", "value": "CS01"},
+        {"label": "Hostname", "value": "cs01"},
+    ]}]}
+    kv = {m["k"]: m["v"] for m in _command_center_source_meta(payload)}
+    assert kv["Endpoint"] == "GET /commandcenter/api/CommServ"
+    assert kv["Host"] == "cs01"          # Hostname item preferred over CommCell Name
+
+
+def test_command_center_source_meta_endpoint_only_when_no_host_artifact():
+    """No artifact (no card) -> Endpoint row still shows, Host row omitted (not a
+    placeholder). The "No source metadata" placeholder only shows when meta is
+    genuinely empty — the endpoint constant means CC is never empty."""
+    from cvhealthcheck.quickhc.subject_data_service import _command_center_source_meta
+    meta = _command_center_source_meta(None)
+    kv = {m["k"]: m["v"] for m in meta}
+    assert kv == {"Endpoint": "GET /commandcenter/api/CommServ"}
+    assert meta, "command-center meta must never be empty (endpoint is a constant)"
+
+
+def test_command_center_host_falls_back_to_commcell_name():
+    from cvhealthcheck.quickhc.subject_data_service import _command_center_host
+    payload = {"sections": [{"type": "card", "items": [{"label": "CommCell Name", "value": "CS01"}]}]}
+    assert _command_center_host(payload) == "CS01"
+
+
+def test_last_collected_relocated_into_source_card_keeps_localtime():
+    """Layout guard: "Last collected" now renders INSIDE the source card
+    (src-last-collected, in the srcPanel block) and is still routed through fmtUtc
+    -> window.fmtLocalTime (local time preserved). The Template dropdown stays in
+    provBlock below the card."""
+    from pathlib import Path
+    js = (Path(__file__).resolve().parents[1]
+          / "src/cvhealthcheck/web/static/quick_hc.js").read_text()
+    assert "src-last-collected" in js                  # relocated marker inside srcPanel
+    assert "fmtUtc(s.last_collected)" in js            # still localtime-rendered
+    # the Template dropdown is still authored (untouched) in the provenance block
+    assert "version-dropdown" in js

@@ -477,10 +477,10 @@ function openConfig(id) {
   const vi = s.version_info || {};
   const versions = vi.versions || [];
   const activeVer = vi.active || s.id;
+  // "Last collected" used to live here (below the card); it now renders INSIDE
+  // the source card next to Collect (see srcPanel below) — action + last-run as
+  // one unit. The Template dropdown stays here, below the card, untouched.
   let provRows = '';
-  if (s.last_collected) {
-    provRows += `<div class="src-meta-row"><span>Last collected</span><span>${esc(fmtUtc(s.last_collected))}</span></div>`;
-  }
   if (versions.length) {
     const opts = versions.map(v =>
       `<option value="${esc(v)}"${v === activeVer ? ' selected' : ''}>${esc(v)}</option>`
@@ -546,6 +546,13 @@ function openConfig(id) {
           <button type="submit" class="btn-sm btn-sm-p">${esc(collectAction.label || 'Collect')}</button>
         </form>
       </div>`;
+    }
+
+    // Last collected — INSIDE the source card, grouped with Collect (action +
+    // last-run as one unit). Renders whether or not there's a Collect action.
+    // fmtUtc delegates to window.fmtLocalTime, so this stays in browser-local time.
+    if (s.last_collected) {
+      srcPanel += `<div class="src-meta-row src-last-collected" style="margin-top:8px"><span>Last collected</span><span>${esc(fmtUtc(s.last_collected))}</span></div>`;
     }
     srcPanel += `</div>`;
   }

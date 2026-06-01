@@ -43,6 +43,15 @@ SOURCE_DESCRIPTIONS: dict[str, str] = {
     HTML_IMPORT_SOURCE_ID:             "Offline HTML import into the canonical Quick HC artifact contract.",
 }
 
+# ADR 0007 ph3 follow-on: the REST endpoint a live source collects from, keyed by
+# canonical source id. Source-TYPE metadata (a constant of the source, not of any
+# one collection), surfaced on the generic source panel so it survives the live
+# builder's retirement. Only sources with a fixed single endpoint appear here;
+# absent → no endpoint row (Reports Plus varies by report, imports have none).
+SOURCE_ENDPOINTS: dict[str, str] = {
+    REST_COMMAND_CENTER_API_SOURCE_ID: "GET /commandcenter/api/CommServ",
+}
+
 # Private tuple kept for canonical_view.py backward compatibility (legacy subject builders).
 _UNIVERSAL_SOURCES: tuple[SourceDefinition, ...] = tuple(
     SourceDefinition(id=sid, label=SOURCE_LABELS[sid], description=SOURCE_DESCRIPTIONS[sid])
