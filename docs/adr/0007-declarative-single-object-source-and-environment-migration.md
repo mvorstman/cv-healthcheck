@@ -1,6 +1,6 @@
 # ADR 0007 — Declarative single-object source + environment migration
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-06-01) — implemented and render-verified; see Outcome below.
 - **Date:** 2026-06-01
 - **Deciders:** Michiel (sole maintainer)
 - **Depends on / ratifies:** ADR 0006 (declarative extraction boundary — currently *Proposed*). This ADR is the worked example that exercises 0006's boundary; accepting 0007 should move 0006 to *Accepted*.
@@ -177,3 +177,25 @@ No license fields exist in this response (confirmed). License data is a separate
 - Bespoke builder (view-model dict, not artifact): `subject_data_service.py:617`; collect-button gate `:263,269,274-277`; JS `quick_hc.js:537,543`
 - Artifact timestamp at collect time: `result_to_artifact.py:52,94-128,168`
 - Spec-carrying contrast (reference for the new extractor): REST `rest.py:162-166`, fixture `fixture.py:102-106`
+
+---
+
+## Outcome (2026-06-01)
+
+ADR 0007 shipped across Phases 1–3 (slice B completing the environment retirement) and is render-verified. The forward-looking Decision / Parity / Phases above are preserved as the original plan; this section records where the **as-built** implementation corrected it. Where they conflict, **this Outcome governs.**
+
+- **Source type — reused, not new.** No `command_center_api` `SourceType` enum value was added (contrary to D1's framing). The existing **`SourceType.rest_commserve`** was reused, with the already-existing id constant `REST_COMMAND_CENTER_API_SOURCE_ID = "rest_command_center_api"`. Throughout the implementation, "command-center source type" means **`rest_commserve`**. What D1 actually delivered is the single-object `CommandCenterExtractor` + the by-source-type `/collect` dispatch — minus a new enum value.
+
+- **CommCell ID = `2` — the ⚠ value gate is FALSE and is superseded by this note.** A live `GET /commandcenter/api/CommServ` returned `commcell.commCellId == 2`; the displayed value is `hex(2) = "2"`, which matches **both** the cached `commserv.json` and the live API. The `337f` in the gate came from a **different** CommServe (`commCellId 13183`) and should be disregarded. The gate's premise — that the ID is "required to diverge from `2`" / "expected `337f`" — is **wrong**; the rendered `2` is correct, not a baked-in bug, and parity on CommCell ID *is* "match today's output." The **hex coercion mechanism (D3) was correct**; only the *expected value* written into the gate was wrong.
+
+- **Project log is `CHANGELOG.md`.** The Implementation-phases references to `DEVLOG.md` are stale — **no `DEVLOG.md` exists** (retired 2026-05-25). Session logging went to `CHANGELOG.md` (+ `HANDOVER.md`).
+
+- **Live builder retired (slice B).** `_build_environment_subject` and its helper cluster were **deleted**; `environment` is removed from `_legacy_builders` and rendered by the generic "canonical store wins" path from its stored artifact — the sanctioned retirement of ADR 0001's fork **for `environment` specifically** (see ADR 0001's 2026-06-01 amendment). `_legacy_builders` now serves **five** subjects: `security_assessment`, `license_summary`, `client_growth`, `capacity_license`, `backup_job_summary`. The shared collectors `get_commcell_identity` and the `_command_center_*` helpers were **kept** — they feed the extractor, not the retired view builder.
+
+- **Behaviour, as shipped.** `environment` no longer auto-renders from the global `commserv.json`: it is **not-collected until the first Collect**, then renders its stored artifact like every other subject. Connection health is "as of the last collect" — exactly the deliberate change the Consequences section flagged.
+
+### Parked (open follow-ups)
+
+- **(a) CommCell ID display convention.** Bare `2` vs zero-padded `0002` is unconfirmed against the Command Center UI. The *value* `2` is correct; only the padding convention is open.
+- **(b) Stale row-7 `rest` source.** `environment`'s legacy plain-`rest` `subject_sources` row is left **inert** — its tab is suppressed, and its only reader (the deleted `_load_environment_card_block`) is gone. Optional future cleanup: delete it + its binding via an idempotent FK-safe migration, gated on confirming no FK dependency.
+- **(c) Report-page provenance timestamps.** Still rendered as raw UTC; deferred to the report-page redesign.
