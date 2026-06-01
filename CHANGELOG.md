@@ -10,6 +10,51 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-01 (UI — render UTC timestamps in browser-local time with a zone label; display-only)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `58b0079` (code + tests). **831 passing** (was 827; +4).
+
+### Changed
+- **Every user-facing timestamp now renders in the browser's LOCAL timezone with an explicit zone
+  label** (e.g. `2026-06-01 21:30 CEST`) instead of UTC, fixing the UTC-vs-local misread (a stored
+  `19:30 UTC` looked wrong to a viewer at 21:30 CEST). Correct-by-default; no setting/picker (the
+  picker was deliberately deferred — browser-local is the chosen scope).
+- **One helper each side, routing all 20 call sites:**
+  - `web/static/localtime.js` (new) — `window.fmtLocalTime(iso)` (UTC ISO → local + zone label, via
+    `Intl.DateTimeFormat`, numeric-offset fallback) plus a `data-localtime` DOM sweep on load. Loaded
+    globally via `base.html` (+ the standalone `project_detail.html`).
+  - `localtime_span(value, fallback)` Jinja global (`web/app.py`) — emits a `data-localtime` span
+    carrying the machine-readable UTC, with the raw value as fallback text (no-JS / bad value) and a
+    plain placeholder for empty values.
+  - `quick_hc.js` `fmtUtc` now delegates to `window.fmtLocalTime` (the workspace "Last collected" line).
+
+### Notes
+- **HARD CONSTRAINT held — storage stays UTC.** `collected_at` / `generated_at` / `imported_at` are
+  unchanged ISO-8601 `…Z`; no stamping/serialization/storage/extractor code was touched (verified by a
+  guard test asserting a collect still stores `…Z`, and by `git diff --name-only` — changes are all in
+  `web/`). This slice changes rendering only.
+- **Call-site inventory (20):** 1 JS workspace render (`quick_hc.js` "Last collected") + 19
+  server-rendered template timestamps across 9 templates — `quick_hc_report.html` (×6:
+  generated_at/generated_on + license/client_growth/capacity imported_at + bjs generated_at),
+  `quick_hc_staging.html` (created_at, reviewed_at), `project_detail.html` (created_at,
+  working_state_modified_at, finalized_at), `security_assessment.html` (collected_at, generated_on,
+  imported_at), `quick_hc_commcell.html` (collected_at), `quick_hc_backup_job_summary.html`
+  (generated_at), `security_assessment_registry_history.html` (imported_at, executed_at), and the
+  license_summary / backup_job_summary preview partials + the source_provenance partial. All values
+  were confirmed machine-readable ISO-UTC at source (`collected_at()` / `_now()` / artifact
+  `.isoformat()`), so none needed raw-value threading.
+- **STOP-AND-STEER evaluated, did not trigger:** the report page (`quick_hc_report.html`) is a live
+  on-screen render (route `render_template`), not a baked/exported customer document — `finalize_project`
+  snapshots the JSON artifacts (UTC preserved), it does not bake the HTML — so browser-local is correct.
+  No timestamp consumed for sorting/comparison was touched (SQL `ORDER BY created_at` uses the stored
+  UTC value, unaffected).
+- **Reviewer browser check (requires `./start.sh` — JS/template — + cache-busted reload):** every
+  inventoried timestamp now shows local time with a zone label; "Last collected" in the workspace is the
+  headline fix. Tests prove the server seam + the storage guard; the browser is the final confirmation.
+
+---
+
 ## 2026-06-01 (ADR 0007 Phase 3 follow-on, slice A — surface the command-center source tab + Collect by default, thread card view_mode, flash auth-failed collects)
 
 **Branch:** `feature/basic-healthcheck-report-output`
