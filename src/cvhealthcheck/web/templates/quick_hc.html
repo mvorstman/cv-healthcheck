@@ -143,6 +143,11 @@
      (current stable); the chart renderer shows a visible fallback if it fails
      to load rather than rendering nothing. -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<!-- localtime.js BEFORE quick_hc.js: fmtUtc delegates to window.fmtLocalTime, so
+     the helper must be defined first. quick_hc.html is standalone (no base.html
+     extend), so it needs its own include — base.html's (58b0079) doesn't reach
+     this page. -->
+<script src="{{ url_for('static', filename='localtime.js', v=asset_version) }}"></script>
 <script src="{{ url_for('static', filename='quick_hc.js', v=asset_version) }}"></script>
 <script>
   (function () {

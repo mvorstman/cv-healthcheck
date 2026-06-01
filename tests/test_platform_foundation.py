@@ -38,6 +38,21 @@ def test_quick_hc_and_report_pages_still_render() -> None:
     assert client.get("/security-assessment").status_code == 200
 
 
+def test_workspace_loads_localtime_helper_before_quick_hc_js() -> None:
+    """Guard: quick_hc.html is standalone (no base.html extend), so it must carry
+    its OWN localtime.js include — and BEFORE quick_hc.js, since fmtUtc delegates
+    to window.fmtLocalTime. (58b0079 added it only to base.html, which this page
+    does not extend, so "Last collected" fell back to raw UTC.)"""
+    html = create_app().test_client().get("/quick-hc").get_data(as_text=True)
+    # Match the actual static src paths, not bare filenames (which also appear in
+    # source comments on this page).
+    lt = html.find("static/localtime.js")
+    qhc = html.find("static/quick_hc.js")
+    assert lt != -1, "localtime.js not referenced on the standalone workspace page"
+    assert qhc != -1
+    assert lt < qhc, "localtime.js must load before quick_hc.js (fmtUtc needs window.fmtLocalTime)"
+
+
 def test_development_routes_require_login() -> None:
     app = create_app()
     client = app.test_client()
