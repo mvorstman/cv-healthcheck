@@ -27,6 +27,9 @@ _PAYLOAD = {
                      "csGUID": "C721DF1F-DB93-41A0-BD28-1EDEB944E34D"},
         "csTimeZone": {"TimeZoneID": 269, "TimeZoneName": "America/Danmarkshavn"},
         "csVersionInfo": "11 SP40.47",
+        "osType": "Unix",
+        "currentSPVersion": 40,
+        "installedSPVersion": 40,
         "hostName": "cs01",
     },
 }
@@ -63,12 +66,24 @@ def test_command_center_extractor_builds_card_with_nested_reads(migrated_db_path
 
     card = next(s for s in artifact.sections if isinstance(s, CardSection))
     by = {i.label: i for i in card.items}
-    assert set(by) == {"CommCell Name", "Version", "Timezone"}     # provisional 3-field spec
+    # ADR 0007 ph3: FULL 9-field parity spec (migration 0028), read from the
+    # real nested GET CommServ shape (no synthesis).
+    assert set(by) == {
+        "CommCell Name", "CommCell ID", "CommCell GUID", "Version", "OS Type",
+        "Current SP Version", "Installed SP Version", "Timezone", "Hostname",
+    }
     assert by["CommCell Name"].value == "cs01"                     # commcell.commCellName (nested)
-    assert by["Timezone"].value == "America/Danmarkshavn"          # csTimeZone.TimeZoneName (nested)
+    assert by["CommCell ID"].value == "337f"                       # hex(13183) — ADR 0007 D3
+    assert by["CommCell GUID"].value == "C721DF1F-DB93-41A0-BD28-1EDEB944E34D"
     assert by["Version"].value == "11 SP40.47"                     # csVersionInfo (flat)
-    # CommCell ID deliberately NOT authored this slice
-    assert "CommCell ID" not in by
+    assert by["OS Type"].value == "Unix"                           # osType
+    # SP versions are numeric at the model layer (the view layer stringifies).
+    assert by["Current SP Version"].value == 40                    # currentSPVersion
+    assert by["Installed SP Version"].value == 40                  # installedSPVersion
+    assert by["Timezone"].value == "America/Danmarkshavn"          # csTimeZone.TimeZoneName (nested)
+    assert by["Hostname"].value == "cs01"                          # hostName
+    # ID and GUID are distinct (ID is hex of the int, NOT the GUID — the old bug)
+    assert by["CommCell ID"].value != by["CommCell GUID"].value
 
 
 def test_command_center_extractor_reports_api_failure(migrated_db_path: Path):
@@ -115,8 +130,10 @@ def test_environment_emits_collect_action_on_command_center_source(migrated_db_p
     assert card["type"] == "card" and card["items"]
 
 
-def test_command_center_source_carries_provisional_three_field_binding(migrated_db_path: Path):
-    """The migration binding holds exactly the 3 provisional fields (no CommCell ID)."""
+def test_command_center_source_carries_full_parity_binding(migrated_db_path: Path):
+    """ADR 0007 ph3 (migration 0028): the binding holds the FULL 9-field parity
+    spec — schema-ordered, CommCell ID authored with type:hex, plus the 3
+    retargeted per-field rules (dot-path target_fields)."""
     conn = _conn(migrated_db_path)
     try:
         extractor = CommandCenterExtractor(conn, identity_provider=lambda: _PAYLOAD)
@@ -124,7 +141,52 @@ def test_command_center_source_carries_provisional_three_field_binding(migrated_
     finally:
         conn.close()
     assert len(instrs) == 1
-    items = instrs[0]["extraction_instructions"]["card"]["items"]
-    labels = [i["label"] for i in items]
-    assert labels == ["CommCell Name", "Version", "Timezone"]
-    assert all("type" not in i for i in items)  # no hex field authored yet
+    card = instrs[0]["extraction_instructions"]["card"]
+    assert card["columns"] == 4 and card["view_mode"] == "table"
+    items = card["items"]
+    assert [(i["label"], i["field"]) for i in items] == [
+        ("CommCell Name", "commcell.commCellName"),
+        ("CommCell ID", "commcell.commCellId"),
+        ("CommCell GUID", "commcell.csGUID"),
+        ("Version", "csVersionInfo"),
+        ("OS Type", "osType"),
+        ("Current SP Version", "currentSPVersion"),
+        ("Installed SP Version", "installedSPVersion"),
+        ("Timezone", "csTimeZone.TimeZoneName"),
+        ("Hostname", "hostName"),
+    ]
+    # CommCell ID is the only hex-coerced field (ADR 0007 D3).
+    assert next(i for i in items if i["label"] == "CommCell ID")["type"] == "hex"
+    assert all(i.get("type") is None for i in items if i["label"] != "CommCell ID")
+    # the 3 rules, retargeted from the row-7 flat keys to row-22 dot-paths
+    rules = {r["target_field"]: r for r in card["evaluative"]["rules"]}
+    assert rules["csVersionInfo"]["rule_id"] == "environment_version_presence"
+    assert rules["csVersionInfo"]["kind"] == "presence"
+    assert rules["csTimeZone.TimeZoneName"]["rule_id"] == "environment_timezone_enum"
+    assert rules["csTimeZone.TimeZoneName"]["kind"] == "enum"
+    assert rules["commcell.commCellName"]["rule_id"] == "environment_name_format"
+    assert rules["commcell.commCellName"]["kind"] == "format"
+
+
+def test_command_center_parity_rules_fire_with_correct_severities(migrated_db_path: Path):
+    """ADR 0007 ph3 PARITY GATE: on the stored artifact the 3 retargeted rules
+    evaluate good/good/good (matching the live card) and the section rolls up
+    good. Version present -> good; Timezone enum (no allowed-set) -> safe good;
+    CommCell Name format (no pattern) -> safe good. The 6 bare fields carry no
+    severity (informational; the render-time info dot is the JS fallback)."""
+    conn = _conn(migrated_db_path)
+    try:
+        extractor = CommandCenterExtractor(conn, identity_provider=lambda: _PAYLOAD)
+        result = extractor.extract("environment", 1)
+    finally:
+        conn.close()
+    artifact = result_to_artifact(result, "environment", "CommCell Details")
+    card = next(s for s in artifact.sections if isinstance(s, CardSection))
+    by = {i.label: i for i in card.items}
+    assert by["Version"].severity == "good"
+    assert by["Timezone"].severity == "good"
+    assert by["CommCell Name"].severity == "good"
+    for bare in ["CommCell ID", "CommCell GUID", "OS Type",
+                 "Current SP Version", "Installed SP Version", "Hostname"]:
+        assert by[bare].severity is None
+    assert card.severity == "good"

@@ -10,6 +10,39 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-01 (ADR 0007 Phase 3 — environment full 9-field parity card spec + rules on the command-center artifact)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+
+### Added
+- **Migration 0028** (`0028_environment_full_parity_card_spec.sql`): replaces the provisional
+  3-field spec migration 0026/0027 put on environment's `rest_command_center_api` binding with the
+  **full 9-field parity spec** mapped to the real GET CommServ dot-paths — CommCell Name
+  (`commcell.commCellName`), CommCell ID (`commcell.commCellId`, `type:hex` → "2"), CommCell GUID
+  (`commcell.csGUID`), Version (`csVersionInfo`), OS Type (`osType`), Current/Installed SP Version,
+  Timezone (`csTimeZone.TimeZoneName`), Hostname (`hostName`) — plus the **3 per-field rules**
+  retargeted from row-7's flat keys (`version`/`timezone`/`name`) to row-22's dot-path field ids.
+  Pure idempotent + FK-safe `UPDATE` of one binding row.
+
+### Notes
+- **Parity verified (the gate):** the STORED command-center artifact now resolves all 9 fields from
+  the real nested `.raw` dict (no resolver changes — D2 dot-paths + D3 hex carry it), and the 3 rules
+  fire **good / good / good** with a **good** roll-up — matching the live-served identity card.
+- **The live builder `_build_environment_subject` is NOT retired this slice (steered).** Removing it
+  is not a clean "remove from `legacy_builders`": the live builder also *authors* environment's
+  `rest_command_center_api` SOURCE tile + Collect button + `Endpoint/Host` meta, which `get_tiles()`
+  (surfaces only a `rest_reports_plus` source for environment) and `_build_generic_sources` (no
+  command-center collect branch) do not yet produce for the generic path. A clean retire needs that
+  source-tile/Collect plumbing first — a separate follow-on.
+- **view_mode parity gap (presentational, deferred):** the spec carries `"view_mode":"table"` as
+  declared intent, but the stored-artifact render path (`canonical_view.artifact_to_view` →
+  `_card_section_view`) hardcodes `tiles` and does not thread a section view_mode, so the stored card
+  renders as tiles today. Outside the hard parity gate (9 fields + 3 firing rules); a follow-on
+  threads view_mode through the artifact render path.
+- **821 passing** (was 820; +1 net: parity-rules-fire test added, provisional-3-field tests retargeted).
+
+---
+
 ## 2026-06-01 (ADR 0007 Phase 2 fix — migration 0027 lands the command-center source on live DBs)
 
 **Branch:** `feature/basic-healthcheck-report-output`

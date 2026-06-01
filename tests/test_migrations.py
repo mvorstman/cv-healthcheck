@@ -155,7 +155,7 @@ def test_all_seeded_subjects_are_active(fresh_db: Path) -> None:
 
 def test_migration_status_reports_all_applied(fresh_db: Path) -> None:
     statuses = migration_status(db_path=fresh_db)
-    assert len(statuses) == 27  # 0027 fix: land command-center source on stamped-but-ineffective 0026
+    assert len(statuses) == 28  # 0028: environment full 9-field parity card spec + rules (ADR 0007 ph3)
     assert all(s["status"] == "applied" for s in statuses)
     migration_ids = [s["migration_id"] for s in statuses]
     assert migration_ids == sorted(migration_ids)
