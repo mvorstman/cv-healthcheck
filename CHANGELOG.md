@@ -10,6 +10,50 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-01 (UI — surface command-center source metadata in the generic panel + group "Last collected" with Collect)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `7e85c95`. **836 passing** (was 832; +4).
+
+### Added
+- **`SOURCE_ENDPOINTS` registry constant** — the REST endpoint a live source collects from, keyed by
+  canonical source id (`rest_command_center_api → "GET /commandcenter/api/CommServ"`). Source-TYPE
+  metadata, mirroring `SOURCE_DESCRIPTIONS`; sources without a fixed single endpoint are absent.
+
+### Changed
+- **The shared generic source panel now surfaces the command-center descriptor** instead of "No source
+  metadata is available yet." `_build_generic_sources` attaches **Endpoint** (the `SOURCE_ENDPOINTS`
+  constant) + **Host** (read from the collected identity card via `_command_center_host` — Hostname,
+  fallback CommCell Name) to the `rest_command_center_api` source. Built entirely in the **generic
+  path**, so it survives the live builder's retirement. Other source types keep empty meta (no
+  regression — no generic source surfaced meta before; the placeholder still shows when meta is
+  genuinely absent).
+- **"Last collected" moved INSIDE the source card**, grouped with the Collect button (action + last-run
+  as one unit), rendering whether or not a Collect action exists. Still routed through `fmtUtc` →
+  `window.fmtLocalTime`, so local-time rendering is preserved. The **Template dropdown is untouched** —
+  it stays in the provenance block below the card.
+
+### Notes
+- **Host is read from the card, not the source block.** The artifact's `source.commcell_name` is the
+  *customer* name ("Default"); the CommCell host ("cs01" = `cc.hostName`) lives only in the collected
+  identity card. So `_command_center_host` reads it from the card (graceful: absent → Host row omitted).
+  The cleaner long-term home is populating `source.endpoint`/host at collect time, but that touches the
+  stored artifact (out of scope here).
+- **Slice-B readiness:** after this slice the generic CC source `meta` matches the live builder **exactly**
+  (Endpoint + Host=cs01). The only remaining live-builder-unique output is **cosmetic** — `status` badge
+  (Validated vs Available), the source `description` text, and the tile `subtitle` (`cs01 · 11 SP40.47`
+  vs "Data available"). `_build_environment_subject` is now **fully replaceable**; source metadata was the
+  last substantive thing it uniquely authored. (`_build_environment_subject` was NOT retired this slice.)
+- Untouched: collect/extractor/auth logic, storage, artifact schema, CEL, the evaluate path, the report
+  page, and the Template selector.
+- **Reviewer browser check (needs `./start.sh` + cache-busted reload):** (i) environment — source card
+  shows Endpoint + Host (not the placeholder), "Last collected" sits inside the card next to Collect in
+  local time, Template unchanged below; (ii) a non-CC subject (e.g. License Summary / Client Growth) —
+  panel still renders, "Last collected" relocated consistently, no regression. Final confirmation is the
+  reviewer's browser.
+
+---
+
 ## 2026-06-01 (UI fix — load localtime.js on the standalone workspace page; completes the browser-local timestamp slice)
 
 **Branch:** `feature/basic-healthcheck-report-output`
