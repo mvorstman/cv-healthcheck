@@ -10,6 +10,38 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-02 (ADR-0008 B — Connections page; **ADR-0008 COMPLETE end to end**)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **862 passing** (was 857; +5). **This is the last piece —
+the trust boundary is built, proven against the live CommServe, and now has a real connect/status surface.**
+
+### Added
+- **`GET /connections`** + `connections.html` (extends `base.html`; matches the app's look — CSS variables,
+  `localtime_span` for timestamps) — a live connection surface:
+  - **Status from `token_store.status()`:** `connected` → shows the principal + connected-at (+ token-expiry
+    when known) and a **Disconnect** button; `disconnected` / `expired` → an honest **"Disconnected —
+    reconnect"** prompt (expired is worded as a reconnect, not an error) with a **Connect** action.
+  - **Connect** reuses the existing login — a link to `/login?next=/connections` (no second login path; the
+    operator enters the password live, the store fills, the page reflects `connected`).
+  - **Disconnect** (`POST /connections/disconnect`) calls `clear_current_token()` (store + session markers) and
+    returns to the page as `disconnected`.
+  - **Read-only connection target** from `Settings`: CommServe URL (`CV_BASE_URL`), SSL verification, customer,
+    username — **no token, no password ever rendered**. Noted as environment-configured (editing is out of scope).
+- A **"Connections"** sidebar nav link (`base.html`) — the long-planned Settings/Connections item.
+- `tests/test_connections_page.py` (+5): disconnected→reconnect+Connect link; connected→principal+Disconnect (token
+  never rendered); expired→reconnect (not error); disconnect→clears store + redirects; target shown without secrets.
+
+### Notes
+- **ADR-0008 is complete end to end:** the AI/MCP layer never holds a CommServe token and reaches the CommServe
+  only through the app's loopback endpoint (C); the app holds the token in memory only (A, Flavour 1); the token
+  is out of the cookie with the gate on the store (B); redaction is shared and app-side (D); the direct probe is
+  retired (E); and the operator now has a connect/status surface (B, this).
+- Remaining work is only the **named, deferred future items**, none in this ADR: RBAC over the principal/capability
+  pair, Flavour 2 (encrypted stored credentials / multi-user), oversized-response tiering, and reactive expiry
+  (flip the store to expired on a CommServe 401).
+
+---
+
 ## 2026-06-02 (ADR-0008 B consolidation — CommServe token out of the cookie, auth gate on the store)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **857 passing** (was 856; +1). **The CommServe token is
