@@ -10,6 +10,31 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-02 (ADR-0008 A — in-process held-token store module, not yet wired)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **837 passing** (was 829; +8 token-store tests).
+
+### Added
+- **`src/cvhealthcheck/token_store.py`** — the app's single in-memory held-token slot (ADR-0008 Flavour 1,
+  no credential at rest). Stdlib only; imports nothing from Flask / web / MCP / `shared.py`, so both the web
+  process and the future loopback endpoint can use it without a circular import. Public surface:
+  `set_active_token(token, *, expires_at=None, principal=None)`, `get_active_token() -> str | None`,
+  `clear_active_token()`, `status() -> dict`. A `threading.Lock` guards the slot (the dev server may serve on
+  multiple threads). **Expiry is enforced in the store** — `get_active_token()` returns `None` once past
+  `expires_at` (never a stale string), and `status()` distinguishes `"expired"` from `"disconnected"` so
+  "expiry is visible, not silent" (ADR-0008 Decision 5) has a home. `get_active_token()` mirrors today's
+  `_current_token()` shape (`str | None`) so the read-seam swap is a drop-in. **Single-process, single-slot**
+  (ADR-0008 Consequences) — a multi-worker deployment would reintroduce cross-process sharing, which this
+  does not solve. Token value never logged or returned by `status()`.
+- `tests/test_token_store.py` (+8): set→get, clear/unset→disconnected, past-expiry→None+expired,
+  future-expiry→connected, metadata round-trip through `status()`, epoch-float expiry, overwrite-replaces-slot.
+
+### Notes
+- **Not yet wired** — nothing imports this module yet (zero behaviour change, like `redaction.py`). Populating
+  it at login and repointing the `_current_token()` reads is the next brief.
+
+---
+
 ## 2026-06-02 (ADR-0008 D — extract user-description redaction to a shared module)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **829 passing** (unchanged — leaf refactor, no behaviour change).
