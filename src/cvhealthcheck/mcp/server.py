@@ -235,12 +235,28 @@ def propose_new_subject(
                      "default_selected": bool, "sort_order": int}
         section_type: findings | table | metric | chart
     extraction_instructions : dict
-        Keys are source types ("html", "csv", "rest", "json").
+        Keys are source types ("html", "csv", "rest", "json",
+        "rest_command_center_api").
         Each value is a dict with:
           - "extractable": bool
           - "non_extractable_reason": str | None  ("charts_only" | "client_side_rendered")
           - "recognition_hints": dict
           - "sections": dict mapping section_id to extraction instruction dict
+        ADR 0009 — Command Center API source ("rest_command_center_api"):
+        use this (NOT "rest") for a subject collected live through the Command
+        Center API, so it is classified as Command Center API rather than
+        flattened to Reports Plus. Its value dict additionally takes:
+          - "endpoint": str — the RELATIVE, read-only Command Center API path to
+            collect from, e.g. "/commandcenter/api/v4/servergroup". Omit to
+            default to the CommServ identity endpoint. The app validates it as
+            relative + read-only before persisting or collecting (an absolute
+            URL, or a path outside "/commandcenter/api/", is rejected — the AI
+            asserts only a classification + a relative path, never a token or a
+            host; ADR 0008/0009 D4).
+        Each section under "sections" sets "output_as": "card" (a single object)
+        or "output_as": "table" (a multi-record collection, with
+        {"table": {"root_key": <list key in the response>,
+        "columns": [{"id": <col>, "field": <dot-path into each element>}]}}).
     ai_notes : str
         Notes on confidence, data quality, empty-export caveats, etc.
     supersedes : int | None

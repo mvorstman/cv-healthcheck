@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-02 (ADR-0009 D1/D2 — MCP-authored + multi-object Command Center API sources)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **876 passing** (was 862; +14). Implements the Accepted ADR-0009 D1/D2 (the decision record landed in the prior commit). `server_groups` is only the throwaway end-to-end test case — not authored or shipped here.
+
+### Added
+- **`cvhealthcheck/extractors/cc_endpoint.py`** — leaf policy module (stdlib only): `validate_cc_endpoint()` resolves/validates a Command Center collect endpoint as **relative + read-only** under `/commandcenter/api/` (rejects absolute URLs, protocol-relative, traversal, scheme/host), defaulting to `/commandcenter/api/CommServ`; plus the `COMMAND_CENTER_SOURCE_TYPE` / `DEFAULT_CC_ENDPOINT` constants (re-exported from `command_center.py`).
+- **D1 — generalized `CommandCenterExtractor`** (one extractor, no parallel producer; ADR 0006 D4.1): (1) collects from a **binding-declared relative endpoint** (`recognition_hints.endpoint`, validated), defaulting to CommServ so `environment` is byte-for-byte unchanged (still via `get_commcell_identity`); any other endpoint is a plain in-process GET. (2) an `output_as="table"` arm projects a multi-record collection (`raw[root_key]`) into rows via the shared nested-path resolver — **structural projection only, no operators** (ADR 0006 D2) — alongside the existing single-record card arm. Feeds the unchanged `result_to_artifact` tail.
+- **D2 — MCP-authored CC-API source**: `propose_new_subject` documents `rest_command_center_api` + an explicit relative `endpoint` field; `create_subject_from_proposal` validates that endpoint relative + read-only and persists it into `recognition_hints` (no schema migration). No labeller change needed (`_SOURCE_TYPE_TO_LABEL` already maps the type).
+- `tests/test_cc_api_multi_object_adr0009.py` (+14): endpoint policy (accept relative; reject absolute / protocol-relative / out-of-namespace / traversal / whitespace / non-str); `_project_table_rows` (column-map select+rename, passthrough, top-level list, degenerate cases); default-endpoint resolution; full propose→persist→extract→`TableSection`; absolute-endpoint rejection rolls back the proposal write.
+
+### Notes
+- **D4 trust boundary unchanged** (ADR 0008): the collect GET stays app-side / in-process with the in-memory token; the MCP layer asserts only a classification + a relative path string, never a token, host, or write. "Read-only" is the GET-only collect contract plus the `/commandcenter/api/` allowlist.
+- The `/v4/servergroup` shape (root key / column fields) is **unverified** until a live capture — nothing about it is hardcoded in the extractor; the per-subject binding carries it.
+- Operator-run acceptance test remains: re-propose a CC-API subject → approve → Collect hits the declared endpoint (not CommServ) and renders a table.
+
+---
+
 ## 2026-06-02 (ADR-0008 B — Connections page; **ADR-0008 COMPLETE end to end**)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **862 passing** (was 857; +5). **This is the last piece —
