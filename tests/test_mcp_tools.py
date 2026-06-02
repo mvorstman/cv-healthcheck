@@ -433,3 +433,89 @@ def test_quiet_sdk_logging_raises_mcp_logger_level() -> None:
     logging.getLogger("mcp").setLevel(logging.INFO)  # pretend it's noisy
     server._quiet_sdk_logging()
     assert logging.getLogger("mcp.server.lowlevel.server").getEffectiveLevel() >= logging.WARNING
+
+
+# ── probe (exploratory Command Center REST GET; never hits the live box here) ──
+
+def _fake_client(result):
+    """A CommvaultApiClient stand-in whose .get() returns a canned ApiResult."""
+    class _Fake:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def get(self, path: str, params: Any = None):
+            return result
+
+    return _Fake
+
+
+def _api_result(**overrides):
+    from cvhealthcheck.api_client import ApiResult
+    base = dict(ok=True, status_code=200, url="https://cc/commandcenter/api/v4/user",
+                data=None, text="", error=None, elapsed_seconds=0.01)
+    base.update(overrides)
+    return ApiResult(**base)
+
+
+def test_probe_passthrough_and_redacts_description(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(server, "_probe_token", lambda: "tok")
+    result = _api_result(
+        data={"users": [{"id": 5, "name": "alice", "description": "topsecretpw"}]},
+        text='{"users":[{"id":5,"name":"alice","description":"topsecretpw"}]}',
+    )
+    monkeypatch.setattr(server, "CommvaultApiClient", _fake_client(result))
+
+    out = server.probe("/commandcenter/api/v4/user")
+    assert out["ok"] is True and out["status_code"] == 200
+    user = out["data"]["users"][0]
+    assert user["id"] == 5 and user["name"] == "alice"           # siblings raw/intact
+    assert user["description"] == "[redacted: 11 chars]"          # redacted
+    assert "text" not in out                                      # raw body dropped (redaction-safe)
+
+
+def test_probe_non_200_returned_not_raised(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(server, "_probe_token", lambda: "tok")
+    result = _api_result(ok=False, status_code=401, data=None, text="Unauthorized", error="Unauthorized")
+    monkeypatch.setattr(server, "CommvaultApiClient", _fake_client(result))
+
+    out = server.probe("/commandcenter/api/v4/user")   # must NOT raise — auth verdict is readable
+    assert out["ok"] is False and out["status_code"] == 401 and out["error"] == "Unauthorized"
+
+
+def test_probe_transport_failure_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(server, "_probe_token", lambda: "tok")
+    # api_client returns status_code=None on a RequestException / unset CV_BASE_URL.
+    result = _api_result(ok=False, status_code=None, data=None, error="Connection refused")
+    monkeypatch.setattr(server, "CommvaultApiClient", _fake_client(result))
+
+    with pytest.raises(ValueError):
+        server.probe("/commandcenter/api/v4/user")
+
+
+def test_probe_writes_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The probe is collect-minus-store: no artifact/store/db write. Make any such
+    call explode, then prove the probe runs clean."""
+    import cvhealthcheck.artifacts.store as store_mod
+
+    def _boom(*_a: Any, **_k: Any):
+        raise AssertionError("probe must not touch store/db")
+
+    monkeypatch.setattr(server, "_probe_token", lambda: "tok")
+    monkeypatch.setattr(store_mod.ArtifactStore, "save_artifact", _boom)
+    monkeypatch.setattr(server, "get_db", _boom)
+    monkeypatch.setattr(server, "CommvaultApiClient", _fake_client(_api_result(data={"x": 1})))
+
+    out = server.probe("/commandcenter/api/CommServ")
+    assert out["status_code"] == 200          # ran fine without any store/db call
+
+
+def test_probe_redaction_is_nested_and_shape_agnostic(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(server, "_probe_token", lambda: "tok")
+    result = _api_result(data={"outer": {"description": "abc", "keep": 1},
+                               "list": [{"description": "de"}]})
+    monkeypatch.setattr(server, "CommvaultApiClient", _fake_client(result))
+
+    out = server.probe("/x")
+    assert out["data"]["outer"]["description"] == "[redacted: 3 chars]"
+    assert out["data"]["outer"]["keep"] == 1
+    assert out["data"]["list"][0]["description"] == "[redacted: 2 chars]"

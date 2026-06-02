@@ -10,6 +10,48 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-02 (MCP — `probe(path)` tool: exploratory Command Center REST GET, store-free)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **Not committed** (held for review + live smoke). **829 passing** (was 824; +5).
+
+### Added
+- **`probe(path: str) -> dict` MCP tool** (`mcp/server.py`) — an authenticated GET against an arbitrary
+  Command Center REST path (e.g. `/commandcenter/api/v4/user`) that returns the response **store-free**
+  (no artifact/catalog/db write, ever). Reuses the existing fetch primitive `CommvaultApiClient.get`;
+  registered in the offload tuple so its blocking call runs in a worker thread (the #35 loop-blocking
+  guard the registration comment already anticipates for "a live REST/CommCell call"). GET only.
+  - **Non-200 is returned readable** (`ok`/`status_code`/`error`/`data` intact) so the first live call
+    doubles as the auth-acceptance check; only a **transport failure** (connection/DNS/timeout, or unset
+    `CV_BASE_URL` → `status_code is None`) raises `ValueError`.
+  - **Redaction:** every user-record `description` is replaced with `[redacted: <n> chars]` (recursive,
+    shape-agnostic — the V4 `/user` shape isn't pinned), all sibling fields raw. The raw `text` field is
+    **dropped** from the result (it's the verbatim pre-redaction body that duplicates `data` for JSON —
+    returning it would bypass redaction). Secret *detection* stays a propose-stage evaluator (field
+    shape, not contents).
+- Tests (`tests/test_mcp_tools.py`, +5, no live calls): passthrough+redaction, sibling-intact,
+  non-200-returned-not-raised, transport→`ValueError`, nested/shape-agnostic redaction, and a
+  writes-nothing guard (any `save_artifact`/`get_db` call explodes).
+
+### Notes
+- **Token model — interim, deliberate (documented in `_probe_token`'s docstring).** The probe authenticates
+  with the operator-maintained, **session-less** token via a single swappable seam `_probe_token()` →
+  `load_login_token()` (`​.login_token`/`CV_LOGIN_TOKEN`) falling back to `load_token()` (`.token`). This is
+  **decoupled from the web Connections flow on purpose**: web connect binds a token to the Flask session
+  (signed cookie) and persists nothing to disk/env (`set_current_token`), so a separate process can't read
+  it. This is **not the end state** — the known destination is a **shared server-side token store** both the
+  web and MCP processes read (Option 3), adopted when the MCP server becomes a routine companion to the web
+  app; a connect-writes-token-to-disk bridge (Option 2) is a possible stopgap that may be skipped. Moving to
+  the shared store swaps `_probe_token` only — `probe` is unaware of the source.
+- **Identity guard deferred (noted, no round-trip added).** Acting-user identity is not cheaply available
+  from an arbitrary-path GET: `ApiResult` carries no acting-user, the V4 `/user` response shape isn't pinned,
+  and a dedicated whoami call would be a round-trip the brief said not to add. Flagged as a follow-up (a
+  `whoami` probe or an acting-user field once a cheap source is confirmed). Surfacing the token *source* was
+  rejected — it would make `probe` care where the token comes from, violating the swappable-seam principle.
+- **`API_MAPPING.md` intentionally NOT updated** — gated on a live `GET /commandcenter/api/v4/user` validation
+  (auth acceptance + actual response shape); the first `probe` call is that check.
+
+---
+
 ## 2026-06-01 (ADR 0007 Phase 3 slice B — retire the live environment builder; environment fully on the declarative path — **ADR 0007 COMPLETE**)
 
 **Branch:** `feature/basic-healthcheck-report-output`
