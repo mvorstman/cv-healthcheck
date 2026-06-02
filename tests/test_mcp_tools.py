@@ -435,87 +435,87 @@ def test_quiet_sdk_logging_raises_mcp_logger_level() -> None:
     assert logging.getLogger("mcp.server.lowlevel.server").getEffectiveLevel() >= logging.WARNING
 
 
-# ── probe (exploratory Command Center REST GET; never hits the live box here) ──
+# ── probe (ADR-0008 E: app-mediated — POSTs the internal endpoint, holds no token) ──
 
-def _fake_client(result):
-    """A CommvaultApiClient stand-in whose .get() returns a canned ApiResult."""
-    class _Fake:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            pass
+class _FakeResp:
+    """A requests.Response stand-in: .status_code, .json(), .text."""
+    def __init__(self, status_code: int, payload: Any, text: str = "") -> None:
+        self.status_code = status_code
+        self._payload = payload
+        self.text = text
 
-        def get(self, path: str, params: Any = None):
-            return result
-
-    return _Fake
-
-
-def _api_result(**overrides):
-    from cvhealthcheck.api_client import ApiResult
-    base = dict(ok=True, status_code=200, url="https://cc/commandcenter/api/v4/user",
-                data=None, text="", error=None, elapsed_seconds=0.01)
-    base.update(overrides)
-    return ApiResult(**base)
+    def json(self):
+        if self._payload is None:
+            raise ValueError("no json")
+        return self._payload
 
 
-def test_probe_passthrough_and_redacts_description(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(server, "_probe_token", lambda: "tok")
-    result = _api_result(
-        data={"users": [{"id": 5, "name": "alice", "description": "topsecretpw"}]},
-        text='{"users":[{"id":5,"name":"alice","description":"topsecretpw"}]}',
-    )
-    monkeypatch.setattr(server, "CommvaultApiClient", _fake_client(result))
-
-    out = server.probe("/commandcenter/api/v4/user")
-    assert out["ok"] is True and out["status_code"] == 200
-    user = out["data"]["users"][0]
-    assert user["id"] == 5 and user["name"] == "alice"           # siblings raw/intact
-    assert user["description"] == "[redacted: 11 chars]"          # redacted
-    assert "text" not in out                                      # raw body dropped (redaction-safe)
+def _patch_post(monkeypatch, *, resp=None, exc=None, captured=None):
+    """Patch requests.post (in the server module) — no real HTTP."""
+    def _post(url, headers=None, json=None, timeout=None):
+        if captured is not None:
+            captured.update({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        if exc is not None:
+            raise exc
+        return resp
+    monkeypatch.setattr(server.requests, "post", _post)
 
 
-def test_probe_non_200_returned_not_raised(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(server, "_probe_token", lambda: "tok")
-    result = _api_result(ok=False, status_code=401, data=None, text="Unauthorized", error="Unauthorized")
-    monkeypatch.setattr(server, "CommvaultApiClient", _fake_client(result))
-
-    out = server.probe("/commandcenter/api/v4/user")   # must NOT raise — auth verdict is readable
-    assert out["ok"] is False and out["status_code"] == 401 and out["error"] == "Unauthorized"
-
-
-def test_probe_transport_failure_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(server, "_probe_token", lambda: "tok")
-    # api_client returns status_code=None on a RequestException / unset CV_BASE_URL.
-    result = _api_result(ok=False, status_code=None, data=None, error="Connection refused")
-    monkeypatch.setattr(server, "CommvaultApiClient", _fake_client(result))
-
-    with pytest.raises(ValueError):
+def test_probe_missing_internal_secret_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CV_INTERNAL_SECRET", raising=False)
+    with pytest.raises(ValueError, match="internal secret not configured"):
         server.probe("/commandcenter/api/v4/user")
 
 
-def test_probe_writes_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The probe is collect-minus-store: no artifact/store/db write. Make any such
-    call explode, then prove the probe runs clean."""
-    import cvhealthcheck.artifacts.store as store_mod
+def test_probe_connected_returns_data_and_sends_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CV_INTERNAL_SECRET", "s3cr3t")
+    captured: dict = {}
+    # The app already redacted `description` before returning; the probe passes it through.
+    resp = _FakeResp(200, {"ok": True, "state": "connected", "status_code": 200,
+                           "data": {"users": [{"name": "alice", "description": "[redacted: 11 chars]"}]},
+                           "error": None})
+    _patch_post(monkeypatch, resp=resp, captured=captured)
 
-    def _boom(*_a: Any, **_k: Any):
-        raise AssertionError("probe must not touch store/db")
-
-    monkeypatch.setattr(server, "_probe_token", lambda: "tok")
-    monkeypatch.setattr(store_mod.ArtifactStore, "save_artifact", _boom)
-    monkeypatch.setattr(server, "get_db", _boom)
-    monkeypatch.setattr(server, "CommvaultApiClient", _fake_client(_api_result(data={"x": 1})))
-
-    out = server.probe("/commandcenter/api/CommServ")
-    assert out["status_code"] == 200          # ran fine without any store/db call
+    out = server.probe("/commandcenter/api/v4/user")
+    assert out["state"] == "connected" and out["ok"] is True and out["status_code"] == 200
+    assert out["data"]["users"][0]["description"] == "[redacted: 11 chars]"   # app-redacted, passed through
+    # The probe holds NO CommServe token — it sends the shared secret + read contract.
+    assert captured["headers"]["X-Internal-Secret"] == "s3cr3t"
+    assert captured["json"] == {
+        "path": "/commandcenter/api/v4/user", "principal": "mcp-operator", "capability": "read",
+    }
 
 
-def test_probe_redaction_is_nested_and_shape_agnostic(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(server, "_probe_token", lambda: "tok")
-    result = _api_result(data={"outer": {"description": "abc", "keep": 1},
-                               "list": [{"description": "de"}]})
-    monkeypatch.setattr(server, "CommvaultApiClient", _fake_client(result))
+def test_probe_disconnected_returns_reconnect_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CV_INTERNAL_SECRET", "s3cr3t")
+    resp = _FakeResp(200, {"ok": False, "state": "disconnected", "status_code": None,
+                           "data": None, "error": "no active token; reconnect"})
+    _patch_post(monkeypatch, resp=resp)
 
     out = server.probe("/x")
-    assert out["data"]["outer"]["description"] == "[redacted: 3 chars]"
-    assert out["data"]["outer"]["keep"] == 1
-    assert out["data"]["list"][0]["description"] == "[redacted: 2 chars]"
+    assert out["state"] == "disconnected" and out["data"] is None
+    assert "reconnect" in out["error"].lower()           # visible-not-silent expiry signal
+
+
+def test_probe_commserve_non_200_surfaced_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CV_INTERNAL_SECRET", "s3cr3t")
+    resp = _FakeResp(200, {"ok": False, "state": "connected", "status_code": 401,
+                           "data": None, "error": "Unauthorized"})
+    _patch_post(monkeypatch, resp=resp)
+
+    out = server.probe("/x")    # our endpoint succeeded; the CommServe verdict rides the envelope
+    assert out["state"] == "connected" and out["status_code"] == 401 and out["ok"] is False
+
+
+def test_probe_app_unreachable_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CV_INTERNAL_SECRET", "s3cr3t")
+    _patch_post(monkeypatch, exc=server.requests.ConnectionError("refused"))
+    with pytest.raises(ValueError, match="could not reach the app"):
+        server.probe("/x")
+
+
+def test_probe_endpoint_guard_rejection_surfaces_clearly(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CV_INTERNAL_SECRET", "s3cr3t")
+    _patch_post(monkeypatch, resp=_FakeResp(403, {"error": "forbidden"}))
+    with pytest.raises(ValueError, match="HTTP 403"):
+        server.probe("/x")

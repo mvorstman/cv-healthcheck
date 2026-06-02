@@ -15,12 +15,13 @@ from __future__ import annotations
 import functools
 import json
 import logging
+import os
 import sqlite3
-from dataclasses import asdict
 from typing import Any
 from uuid import uuid4
 
 import anyio
+import requests
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -53,9 +54,6 @@ from cvhealthcheck.db.staging import (
     reject_staged_artifact as db_reject_staged_artifact,
 )
 from cvhealthcheck.db.subjects import delete_subject as db_delete_subject
-from cvhealthcheck.api_client import CommvaultApiClient
-from cvhealthcheck.auth import load_login_token, load_token
-from cvhealthcheck.redaction import redact_user_descriptions
 
 
 run_migrations()
@@ -346,65 +344,80 @@ def delete_subject(subject_id: str) -> dict:
     return result
 
 
-# ── probe: exploratory Command Center REST GET (no persistence) ──────────────
+# ── probe: app-mediated Command Center REST GET (ADR-0008 E — retired) ───────
+#
+# The probe NO LONGER holds a CommServe token or calls the CommServe directly. It
+# POSTs to the app's loopback internal endpoint with the shared secret; the APP makes
+# the GET with its own held token, redacts, and returns. cv-healthcheck is the trust
+# boundary — the MCP layer reaches the CommServe ONLY through the app.
 
-def _probe_token() -> str | None:
-    """The single, swappable token seam for ``probe``.
-
-    Returns the operator-maintained, **session-less** Command Center token: the login
-    token (``.login_token`` / ``CV_LOGIN_TOKEN`` / ``CV_LOGIN_TOKEN_FILE``), falling
-    back to ``.token`` (``CV_TOKEN_FILE`` / ``CV_TOKEN_PATH``) — both via the existing
-    ``auth`` seam. It never reads the Flask web session (the MCP server is a separate
-    process with no request context).
-
-    TOKEN MODEL — interim and deliberate. This auth is **decoupled from the web
-    Connections flow on purpose**: connecting in the web UI binds a token to the Flask
-    *session* only (``set_current_token`` → signed cookie) and persists nothing to
-    disk/env, so a separate process cannot read it. The operator therefore keeps
-    ``.login_token`` / ``CV_LOGIN_TOKEN`` fresh out-of-band. This is **not** the intended
-    end state: the known destination is a SHARED server-side token store both the web and
-    MCP processes read (Option 3), to be adopted when the MCP server becomes a routine
-    companion to the web app; a connect-writes-token-to-disk bridge (Option 2) is a
-    possible stopgap that may be skipped. Moving to the shared store swaps THIS function
-    only — ``probe`` is unaware of where the token comes from.
-    """
-    return load_login_token() or load_token()
+_INTERNAL_ENDPOINT_DEFAULT = "http://127.0.0.1:5001/internal/commserve"
 
 
 def probe(path: str) -> dict:
-    """Exploratory authenticated GET against a Command Center REST path (e.g.
-    ``/commandcenter/api/v4/user``); returns the raw response with each user
-    ``description`` redacted, and persists NOTHING (no artifact store, catalog, or db
-    write). GET only — no method or body. Auth uses the operator-maintained, session-less
-    token (``.login_token`` / ``CV_LOGIN_TOKEN``), **decoupled from the web Connections
-    flow** — interim; see ``_probe_token``. A non-200 response is returned as a readable
-    dict (``status_code`` / ``error`` intact, so the first live call doubles as the
-    auth-acceptance check); only a transport failure (connection / DNS / timeout, or an
-    unset ``CV_BASE_URL``) raises.
+    """Exploratory read-only GET of a Command Center REST path (e.g.
+    ``/commandcenter/api/v4/user``), **mediated by the app** (ADR-0008). The MCP layer
+    holds NO CommServe token and never calls the CommServe directly: this POSTs to the
+    app's loopback internal endpoint with the shared secret, and the app fetches with its
+    own held token and returns the response **already redacted**. GET-only/read-only is
+    enforced app-side. Persists nothing.
+
+    Returns the redacted ``data`` plus ``status_code`` / ``ok`` / ``error`` so a CommServe
+    non-200 (e.g. 401) is visible, not swallowed. If the app is not connected (the operator
+    is signed out, or the held token expired) it returns a clear ``state`` of
+    ``disconnected`` / ``expired`` with a reconnect message — the visible-not-silent expiry
+    signal. Raises only when it cannot reach or authenticate to the app (missing
+    ``CV_INTERNAL_SECRET``, app unreachable, or a guard rejection).
 
     Parameters
     ----------
     path : str
-        A Command Center REST path under the configured ``CV_BASE_URL`` host, e.g.
-        ``/commandcenter/api/v4/user``.
+        A Command Center REST path, e.g. ``/commandcenter/api/v4/user``.
     """
-    client = CommvaultApiClient(token=_probe_token())
-    result = client.get(path)
+    secret = os.environ.get("CV_INTERNAL_SECRET")
+    if not secret:
+        # No direct fallback by design — the AI never holds a CommServe token.
+        raise ValueError(
+            "internal secret not configured (set CV_INTERNAL_SECRET); the probe reaches "
+            "the CommServe only through the app's internal endpoint"
+        )
+    url = os.environ.get("CV_INTERNAL_ENDPOINT_URL", _INTERNAL_ENDPOINT_DEFAULT)
 
-    # CommvaultApiClient.get() never raises: a transport failure / unset CV_BASE_URL
-    # comes back as status_code=None (there is no HTTP response to read). Surface that as
-    # an exception; a real HTTP non-200 (401/403/5xx) falls through and is returned
-    # readable so the caller can see the auth/permission verdict.
-    if result.status_code is None:
-        raise ValueError(f"probe transport failure for {path!r}: {result.error}")
+    try:
+        resp = requests.post(
+            url,
+            headers={"X-Internal-Secret": secret},
+            json={"path": path, "principal": "mcp-operator", "capability": "read"},
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        raise ValueError(f"probe could not reach the app at {url}: {exc}")
 
-    payload = asdict(result)
-    payload["data"] = redact_user_descriptions(payload.get("data"))
-    # `text` is the verbatim, pre-redaction response body — it duplicates `data` for a
-    # JSON response, so returning it would bypass redaction. Drop it; `data` is the
-    # structured (redacted) form.
-    payload.pop("text", None)
-    return payload
+    if resp.status_code != 200:
+        # 503 not-configured (app side), 403 forbidden (secret mismatch / non-loopback),
+        # 400 bad request — surface the app's reason clearly rather than guessing.
+        try:
+            detail = resp.json().get("error", "")
+        except ValueError:
+            detail = resp.text[:200]
+        raise ValueError(f"app internal endpoint returned HTTP {resp.status_code}: {detail}")
+
+    envelope = resp.json()
+    state = envelope.get("state")
+    if state in ("disconnected", "expired"):
+        return {
+            "state": state,
+            "data": None,
+            "error": "not connected — log in via the app to reconnect",
+        }
+    # Connected: `data` is already redacted by the app; surface the CommServe verdict too.
+    return {
+        "state": state,
+        "ok": envelope.get("ok"),
+        "status_code": envelope.get("status_code"),
+        "data": envelope.get("data"),
+        "error": envelope.get("error"),
+    }
 
 
 # ── Tool registration (ADR 0004 #35 hardening) ──

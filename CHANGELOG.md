@@ -10,6 +10,41 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-02 (ADR-0008 E — retire the probe to the app-mediated endpoint; AI holds no CommServe token)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **856 passing** (was 851). **This makes the direct
+AI-holds-token model (committed at `e193e4b`) superseded in fact, not just on paper — ADR-0008's core is
+complete:** the AI/MCP layer reaches the CommServe **only through the app**.
+
+### Changed
+- **`probe(path)` (`mcp/server.py`) is now app-mediated.** It no longer holds a CommServe token or calls the
+  CommServe directly: it `requests.post`s the app's loopback endpoint `POST /internal/commserve` (default
+  `http://127.0.0.1:5001`, overridable via `CV_INTERNAL_ENDPOINT_URL`) with `X-Internal-Secret`
+  (`CV_INTERNAL_SECRET`) and the read contract `{path, principal:"mcp-operator", capability:"read"}`. The
+  **app** fetches with its own held token and returns the response **already redacted** — so the probe's own
+  `redact_user_descriptions` call is gone (redaction is app-side). Connected → returns `data` + surfaces
+  `status_code`/`ok`/`error` (a CommServe non-200 stays visible); disconnected/expired → a clear
+  "log in via the app to reconnect" message (visible-not-silent); raises only on a missing
+  `CV_INTERNAL_SECRET`, an unreachable app, or a guard rejection (403/503).
+- **Removed the direct-token machinery:** `_probe_token()` and the `CommvaultApiClient` / `load_login_token`
+  / `load_token` / `redact_user_descriptions` imports in `mcp/server.py` (probe was their only user).
+- **`run-mcp.sh`:** dropped the `CV_LOGIN_TOKEN_FILE` export (and there is no `CV_LOGIN_TOKEN` now). It only
+  `source`s `~/.cv-healthcheck-env` for `CV_INTERNAL_SECRET`; the `.login_token` file is simply no longer read
+  (left on disk, untracked).
+
+### Notes
+- Probe tests repointed to mock the **HTTP POST to the endpoint** (no CommServe client): connected (asserts
+  the redacted data passes through + the shared-secret/read contract is sent), disconnected reconnect message,
+  CommServe-non-200 surfaced, missing-secret raises, app-unreachable raises, guard-rejection surfaces.
+- Added `tests/test_redaction.py` (+4) — the shared `redact_user_descriptions` lost its only test home when the
+  probe stopped redacting; gave it direct unit coverage (basic / nested / non-str / scalar passthrough).
+- **Capstone live smoke (operator + AI) still required** — `tests green ≠ works`: add `CV_INTERNAL_SECRET` to
+  `~/.cv-healthcheck-env`, **reconnect the MCP** (re-spawns on the retired-probe code), log in via the browser,
+  then `probe("/commandcenter/api/v4/user")` returns the same redacted data — now fetched through the app with
+  the MCP holding no CommServe token. Deferred (unchanged): the Connections page + cookie consolidation (step 7).
+
+---
+
 ## 2026-06-02 (ADR-0008 C — loopback internal endpoint `POST /internal/commserve`)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **851 passing** (was 839; +12 endpoint tests).
