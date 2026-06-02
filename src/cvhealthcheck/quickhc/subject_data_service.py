@@ -3,11 +3,25 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from cvhealthcheck.artifacts.models import CanonicalArtifact
+from cvhealthcheck.artifacts.enums import ArtifactStatus, ChartType, SourceType
+from cvhealthcheck.artifacts.models import (
+    ArtifactSource,
+    ArtifactSubject,
+    ArtifactSummary,
+    CanonicalArtifact,
+    CardItem,
+    CardSection,
+    ChartSection,
+    FindingsSection,
+    MetricItem,
+    MetricSection,
+    TableColumn,
+    TableSection,
+)
 from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.db.subjects import (
     list_family_versions,
@@ -151,12 +165,201 @@ def build_subject_initial_data(
         category_groups[cat_id]["subjects"].append(built)
 
     cats = list(category_groups.values())
+    staging = _build_staging_shells(db)
 
     return {
         "commcell": commcell_info,
         "cats": cats,
+        "staging": staging,
         "report_url": report_url,
     }
+
+
+# ── Staging zone: pending subject_proposal shells (ADR 0009 Phase 1) ──────────
+#
+# A pending proposal is rendered as an EMPTY structural shell: section titles +
+# types, table header rows, metric labels with placeholder values, etc. — no
+# collected data. The shell is built SERVER-SIDE here (the JS stays a pure
+# renderer): synthesize an empty-bodied CanonicalArtifact from the proposal and
+# run it through artifact_to_view, reusing its canonical→view-token mapping so
+# section types resolve exactly as a collected subject's would.
+
+_PROPOSAL_SOURCE_TYPE: dict[str, SourceType] = {
+    "rest_command_center_api": SourceType.rest_commserve,
+    "rest":  SourceType.rest,
+    "json":  SourceType.json_import,
+    "html":  SourceType.html_import,
+    "csv":   SourceType.csv_import,
+}
+
+
+def _build_staging_shells(db: sqlite3.Connection | None) -> list[dict[str, Any]]:
+    """Pending subject proposals as empty-bodied shell views for the Staging zone.
+
+    Filtered to artifact_type=='subject_proposal' AND status=='pending', so
+    orphaned approved proposals and all artifact_type=='artifact' rows are
+    excluded by construction. No db → no staging (the list_tiles path)."""
+    if db is None:
+        return []
+    from cvhealthcheck.db.staging import list_staged_artifacts
+
+    shells: list[dict[str, Any]] = []
+    for row in list_staged_artifacts(db, status="pending"):
+        if row.get("artifact_type") != "subject_proposal":
+            continue
+        try:
+            proposal = json.loads(row["artifact_json"])
+        except (TypeError, KeyError, json.JSONDecodeError):
+            continue
+        shell = build_proposal_shell(proposal, stage_id=row["stage_id"])
+        if shell is not None:
+            shells.append(shell)
+    return shells
+
+
+def build_proposal_shell(
+    proposal: dict[str, Any], *, stage_id: str
+) -> dict[str, Any] | None:
+    """Turn a subject proposal's artifact_json into an empty-bodied subject view.
+
+    Reuses artifact_to_view's canonical→view-token mapping by synthesizing a
+    CanonicalArtifact with structurally-correct but data-empty sections."""
+    subject_id = proposal.get("subject_id")
+    if not subject_id:
+        return None
+    title = proposal.get("title") or subject_id
+    extraction = proposal.get("extraction_instructions") or {}
+    sections = []
+    for sdef in proposal.get("sections") or []:
+        sec = _shell_section(sdef, extraction)
+        if sec is not None:
+            sections.append(sec)
+
+    artifact = CanonicalArtifact(
+        artifact_type=subject_id,
+        generated_at=datetime.now(timezone.utc),
+        source=ArtifactSource(type=_proposal_source_type(extraction)),
+        subject=ArtifactSubject(id=subject_id, title=title),
+        summary=ArtifactSummary(status=ArtifactStatus.unknown),
+        sections=sections,
+    )
+    view = _canonical_view.artifact_to_view(artifact)
+    # Staging-zone markers (consumed by the JS renderStagingZone()).
+    view["description"] = proposal.get("description") or ""
+    view["subtitle"] = "Pending proposal — not yet collected"
+    view["status"] = "pending"
+    view["is_proposal"] = True
+    view["stage_id"] = stage_id
+    view["created_by"] = "ai"
+    return view
+
+
+def _proposal_source_type(extraction: dict[str, Any]) -> SourceType:
+    for key in ("rest_command_center_api", "rest", "json", "html", "csv"):
+        if key in extraction:
+            return _PROPOSAL_SOURCE_TYPE[key]
+    return SourceType.rest
+
+
+def _shell_section(sdef: dict[str, Any], extraction: dict[str, Any]):
+    """One empty-bodied canonical Section from a proposal's section definition.
+
+    Defensive: a malformed section degrades to a titled empty table rather than
+    breaking the whole shell."""
+    section_id = sdef.get("section_id")
+    if not section_id:
+        return None
+    title = sdef.get("title") or section_id
+    stype = sdef.get("section_type") or "table"
+    spec = _proposal_section_spec(extraction, section_id)
+    try:
+        if stype == "metric":
+            items = [MetricItem(id=mid, label=label, value=None)
+                     for mid, label in _shell_metric_items(spec)]
+            return MetricSection(type="metric", id=section_id, title=title,
+                                 items=items, render_mode="metric")
+        if stype == "card":
+            items = [CardItem(label=label, value=None) for label in _shell_card_labels(spec)]
+            vm = (spec.get("card") or {}).get("view_mode") if isinstance(spec.get("card"), dict) else None
+            return CardSection(type="card", id=section_id, title=title, items=items,
+                               view_mode=vm if vm in ("tiles", "table") else None)
+        if stype == "findings":
+            return FindingsSection(type="findings", id=section_id, title=title, items=[])
+        if stype == "chart":
+            return ChartSection(type="chart", id=section_id, title=title,
+                                chart_type=_shell_chart_type(spec), labels=[], series=[])
+        # "table" and any unknown type → a titled table shell.
+        cols = [TableColumn(id=cid, label=label) for cid, label in _shell_columns(spec)]
+        return TableSection(type="table", id=section_id, title=title, columns=cols,
+                            items=[], empty_message="No data collected")
+    except Exception:
+        return TableSection(type="table", id=section_id, title=title, columns=[],
+                            items=[], empty_message="No data collected")
+
+
+def _proposal_section_spec(extraction: dict[str, Any], section_id: str) -> dict[str, Any]:
+    """The per-section extraction spec, preferring the live REST source types."""
+    ordered = list(("rest_command_center_api", "rest", "json", "html", "csv")) + list(extraction.keys())
+    for key in ordered:
+        src_info = extraction.get(key)
+        if isinstance(src_info, dict):
+            secs = src_info.get("sections")
+            if isinstance(secs, dict) and isinstance(secs.get(section_id), dict):
+                return secs[section_id]
+    return {}
+
+
+def _shell_columns(spec: dict[str, Any]) -> list[tuple[str, str]]:
+    """Column (id, label) pairs from a table spec, tolerant of shape:
+    table.columns (ADR 0009 D2), columns (row_source form), or column_map (HTML)."""
+    cols_src = None
+    table_block = spec.get("table")
+    if isinstance(table_block, dict) and isinstance(table_block.get("columns"), list):
+        cols_src = table_block["columns"]
+    elif isinstance(spec.get("columns"), list):
+        cols_src = spec["columns"]
+    elif isinstance(spec.get("column_map"), list):
+        cols_src = spec["column_map"]
+    out: list[tuple[str, str]] = []
+    for c in cols_src or []:
+        if not isinstance(c, dict):
+            continue
+        cid = c.get("id") or c.get("canonical") or c.get("field") or c.get("label")
+        label = c.get("label") or c.get("canonical") or c.get("id") or c.get("field") or cid
+        if cid:
+            out.append((str(cid), str(label)))
+    return out
+
+
+def _shell_metric_items(spec: dict[str, Any]) -> list[tuple[str, str]]:
+    src = spec.get("metrics") if isinstance(spec.get("metrics"), list) else spec.get("items")
+    out: list[tuple[str, str]] = []
+    for m in src or []:
+        if not isinstance(m, dict):
+            continue
+        mid = m.get("id") or m.get("label")
+        label = m.get("label") or m.get("id")
+        if mid:
+            out.append((str(mid), str(label)))
+    return out
+
+
+def _shell_card_labels(spec: dict[str, Any]) -> list[str]:
+    card = spec.get("card") if isinstance(spec.get("card"), dict) else {}
+    out: list[str] = []
+    for it in card.get("items") or []:
+        if isinstance(it, dict) and it.get("label"):
+            out.append(str(it["label"]))
+    return out
+
+
+def _shell_chart_type(spec: dict[str, Any]) -> ChartType:
+    chart = spec.get("chart") if isinstance(spec.get("chart"), dict) else {}
+    raw = chart.get("chart_type")
+    try:
+        return ChartType(raw) if raw else ChartType.line
+    except ValueError:
+        return ChartType.line
 
 
 def _tile_def_to_dict(tile: Any) -> dict[str, Any]:

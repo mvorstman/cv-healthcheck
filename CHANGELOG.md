@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-02 (ADR-0009 Phase 1 — consolidated `/quick-hc` Staging + Subjects zones)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **884 passing** (was 876 after the ADR-0009 D1/D2 build; +8). **Built, not committed** — pending the in-browser confirmation ("tests green ≠ works"). The old `/quick-hc/staging` page, its template, the `artifact_card` macro, and the nav link are deliberately **left intact** as the fallback (removal is Phase 3).
+
+### Added
+- **Staging zone on `/quick-hc`** (above the existing Subjects / Report-Sections content). Pending subject proposals render as **empty structural shells** — section titles + types, with **table sections showing their header row even when empty** (the one `secBody` enrichment; collected-but-empty tables benefit too), metric sections as labeled placeholders, findings/card/chart as their empty bodies. Built **server-side**: `build_proposal_shell()` (`quickhc/subject_data_service.py`) synthesizes an empty-bodied `CanonicalArtifact` from a proposal's `artifact_json` and runs it through the existing `artifact_to_view`, reusing its canonical→view-token mapping — the JS stays a pure renderer.
+- **Pending-proposal data into `initial_data`** as a new `staging` list, filtered to `artifact_type=='subject_proposal' AND status=='pending'` (`_build_staging_shells`) — orphaned approved proposals and all `artifact`-type rows are excluded by construction.
+- **Two new endpoints** (`web/routes/quick_hc.py`): `POST /quick-hc/proposals/<stage_id>/approve` and `…/reject`, beside each shell's title (approve = primary success-outline, reject = quiet ×). Both route through the **unchanged** `execute_approval` / `reject_staged_artifact` and **redirect to `/quick-hc`** — a full reload re-renders both zones from fresh server state (no DOM surgery) and preserves the localStorage `_test` hide toggle.
+- `tests/test_proposals_routes.py` (+8): approve promotes into the catalog + redirects; reject marks rejected + redirects; double-approve flashes "not pending"; `/quick-hc` lists the pending shell; `build_proposal_shell` keeps table columns with empty rows, degrades gracefully on a garbage section, and returns None without a subject_id; `_build_staging_shells` includes only pending subject_proposals.
+
+### Notes
+- **Explicitly unchanged** (verified): `execute_approval`, `reject_staged_artifact`, `db/staging.py`, the `_test` hide button (`showTestSubjects()` / `TEST_SUBJECTS_KEY` / `renderLeft`), and the entire `/quick-hc/staging` page. The four shared-path suites (`test_staging_routes`, `test_db_staging`, `test_core_solidity`, `test_mcp_tools`) are untouched.
+- Headless render check against the live DB confirms `/quick-hc` serves the staging shell (`is_proposal`, title, `type:table`, header columns) and `/quick-hc/staging` still 200s — but the **in-browser eyeball is the operator's**. A pending `server_groups` proposal (re-proposed as `rest_command_center_api` / `/v4/servergroup`, stage_id `stage_phase1_validate_server_groups`) was seeded for that and left **pending** — approve it in the browser or discard.
+- Deferred to later phases: deleting `/quick-hc/staging` + the nav link (Phase 3); a home for `artifact_type=='artifact'` rows (Phase 2 design).
+
+---
+
 ## 2026-06-02 (ADR-0009 D1/D2 — MCP-authored + multi-object Command Center API sources)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **876 passing** (was 862; +14). Implements the Accepted ADR-0009 D1/D2 (the decision record landed in the prior commit). `server_groups` is only the throwaway end-to-end test case — not authored or shipped here.

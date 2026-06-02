@@ -1,6 +1,9 @@
 // ── INITIAL DATA ──
 let CATS = (window.QUICK_HC_INITIAL_DATA && window.QUICK_HC_INITIAL_DATA.cats) || [];
 const CC = (window.QUICK_HC_INITIAL_DATA && window.QUICK_HC_INITIAL_DATA.commcell) || {};
+// ADR 0009 Phase 1: pending subject proposals (artifact_type=='subject_proposal'
+// AND status=='pending'), built server-side into empty-bodied shell views.
+const STAGING = (window.QUICK_HC_INITIAL_DATA && window.QUICK_HC_INITIAL_DATA.staging) || [];
 
 // ── STATE ──
 let activeId = null;
@@ -334,8 +337,15 @@ function secBody(sec) {
   }
 
   if (sec.type === 'table') {
-    if (!sec.rows || !sec.rows.length) return `<div style="font-size:12px;color:var(--text-3)">${esc(sec.empty_message || 'No data.')}</div>`;
     const hdrs = (sec.columns || []).map(c => `<th>${esc(c)}</th>`).join('');
+    if (!sec.rows || !sec.rows.length) {
+      const msg = esc(sec.empty_message || 'No data.');
+      // ADR 0009 Phase 1: render the header row even with no rows, so a pending-
+      // proposal shell shows its table structure. Bare message only when the
+      // section declares no columns (collected-but-empty tables benefit too).
+      if (!sec.columns || !sec.columns.length) return `<div style="font-size:12px;color:var(--text-3)">${msg}</div>`;
+      return `<table class="wl-table"><thead><tr>${hdrs}</tr></thead><tbody><tr><td colspan="${sec.columns.length}" style="font-size:12px;color:var(--text-3);text-align:center;padding:10px">${msg}</td></tr></tbody></table>`;
+    }
     const body = sec.rows.map(r =>
       `<tr>${r.map(v => `<td style="font-family:var(--mono);font-size:11px">${esc(v != null ? v : '—')}</td>`).join('')}</tr>`
     ).join('');
@@ -416,6 +426,41 @@ function _writeSubjectToHash(id) {
   history.replaceState(null, '', window.location.pathname + window.location.search + next);
 }
 
+// ── STAGING ZONE (ADR 0009 Phase 1) ──
+// Pending proposals as empty structural shells: section titles + types, table
+// header rows, metric labels with placeholders. Built server-side; this is a
+// pure renderer. Approve/reject post to the new endpoints and full-reload.
+function renderStagingZone() {
+  if (!STAGING.length) return '';
+  const cards = STAGING.map(p => {
+    const secs = (p.sections || []).map(sec =>
+      `<div class="staging-shell-sec" style="margin-top:10px">
+         <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
+           <span style="font-size:12px;font-weight:600">${esc(sec.title)}</span>
+           <span style="font-size:10px;font-family:var(--mono);color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">${esc(sec.type)}</span>
+         </div>
+         ${secBody(sec)}
+       </div>`
+    ).join('');
+    const approve = `<form method="post" action="/quick-hc/proposals/${encodeURIComponent(p.stage_id)}/approve" style="display:inline">
+        <button type="submit" style="font:inherit;font-size:12px;padding:5px 14px;border-radius:6px;border:1px solid var(--c-good-fg,#1a7f37);background:transparent;color:var(--c-good-fg,#1a7f37);cursor:pointer">Approve</button>
+      </form>`;
+    const reject = `<form method="post" action="/quick-hc/proposals/${encodeURIComponent(p.stage_id)}/reject" style="display:inline" onsubmit="return confirm('Reject proposal \\'${(p.name || '').replace(/'/g, "\\'")}\\'?')">
+        <button type="submit" title="Reject" aria-label="Reject" style="font:inherit;font-size:16px;line-height:1;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-3);cursor:pointer">×</button>
+      </form>`;
+    return `<div class="cfg-tile" style="margin-bottom:10px;padding:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="cfg-badge-draft">pending</span>
+        <span style="font-size:14px;font-weight:600;flex:1">${esc(p.name)}</span>
+        ${approve}${reject}
+      </div>
+      ${p.description ? `<div style="font-size:12px;color:var(--text-2);margin-top:6px">${esc(p.description)}</div>` : ''}
+      ${secs || '<div style="font-size:12px;color:var(--text-3);margin-top:8px">No sections defined.</div>'}
+    </div>`;
+  }).join('');
+  return `<div class="cfg-sec"><div class="cfg-sec-title">Staging — pending proposals (${STAGING.length})</div>${cards}</div>`;
+}
+
 // ── OVERVIEW ──
 function showOverview() {
   activeId = null; mode = 'overview';
@@ -444,6 +489,7 @@ function showOverview() {
   document.getElementById('right-body').innerHTML = `<div class="cfg-wrap">
     <div class="cfg-title">Quick HealthCheck</div>
     ${subtitle ? `<div style="font-size:12px;color:var(--text-2);margin-top:2px">${esc(subtitle)}</div>` : ''}
+    ${renderStagingZone()}
     <div class="cfg-sec"><div class="cfg-sec-title">Report Sections</div>${subjList}</div>
   </div>`;
 }

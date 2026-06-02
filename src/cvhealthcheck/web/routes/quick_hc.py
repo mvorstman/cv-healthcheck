@@ -131,6 +131,49 @@ def quick_hc():
     )
 
 
+@bp.route("/quick-hc/proposals/<stage_id>/approve", methods=["POST"])
+def quick_hc_proposal_approve(stage_id: str):
+    """Approve a pending subject proposal from the consolidated /quick-hc page.
+
+    Routes through the UNCHANGED execute_approval (shared with the MCP review
+    loop and the still-live /quick-hc/staging page) so the proposal is promoted
+    into the subjects catalog, then full-page redirects to /quick-hc — both zones
+    re-render from fresh server state (ADR 0009 Phase 1; no DOM surgery)."""
+    db = get_db()
+    try:
+        result = _staging_db.execute_approval(db, stage_id, reviewed_by="web")
+    except ValueError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.quick_hc"))
+    finally:
+        db.close()
+    if result.get("type") == "subject_proposal":
+        flash(f"Subject '{result['title']}' v{result['version']} added to catalog.", "success")
+    else:
+        flash(f"Approved staged artifact for {result.get('subject_id')}.", "success")
+    return redirect(url_for("main.quick_hc"))
+
+
+@bp.route("/quick-hc/proposals/<stage_id>/reject", methods=["POST"])
+def quick_hc_proposal_reject(stage_id: str):
+    """Reject a pending subject proposal from the consolidated /quick-hc page.
+
+    Uses the UNCHANGED reject_staged_artifact, then redirects to /quick-hc."""
+    db = get_db()
+    try:
+        updated = _staging_db.reject_staged_artifact(db, stage_id, reviewed_by="web")
+    except ValueError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.quick_hc"))
+    finally:
+        db.close()
+    if updated is None:
+        flash("Proposal not found.", "error")
+    else:
+        flash(f"Rejected proposal for {updated['subject_id']}.", "success")
+    return redirect(url_for("main.quick_hc"))
+
+
 @bp.route("/quick-hc/settings")
 def quick_hc_settings():
     """Placeholder Settings page.
