@@ -5,6 +5,7 @@ from pathlib import Path
 
 from cvhealthcheck.api_client import CommvaultApiClient
 from cvhealthcheck.auth.commvault_auth import SESSION_TOKEN_KEY
+from cvhealthcheck import token_store
 from cvhealthcheck.config import Settings, load_settings
 from cvhealthcheck.license_summary.artifact import build_license_summary_artifact
 from cvhealthcheck.license_summary.models import LicenseSummaryArtifact
@@ -71,8 +72,7 @@ def test_development_routes_require_login() -> None:
 def test_development_routes_render_after_login() -> None:
     app = create_app()
     client = app.test_client()
-    with client.session_transaction() as session:
-        session[SESSION_TOKEN_KEY] = "test-token"
+    token_store.set_active_token("test-token")   # ADR-0008 B: auth via the held-token store
 
     # ADR 0004 phase 6.5 retired the Reports Plus exploration routes; the dev
     # hub itself remains login-guarded (the held Security Assessment cluster).

@@ -99,9 +99,9 @@ def test_set_current_token_populates_store_and_clear_empties_it():
         assert token_store.status()["state"] == "disconnected"
 
 
-def test_set_current_token_leaves_session_cookie_writes_unchanged():
-    """The wiring is an ADDITION — the session cookie still holds the token, customer,
-    and username exactly as before (read seam not repointed this brief)."""
+def test_set_current_token_de_cookie_invariant():
+    """ADR-0008 B: the token lands in the STORE, and the session cookie holds ONLY the
+    non-secret customer/username markers — NOT the token (de-cookie invariant)."""
     from flask import session
     from cvhealthcheck.web.app import create_app
     from cvhealthcheck.auth.commvault_auth import (
@@ -110,6 +110,18 @@ def test_set_current_token_leaves_session_cookie_writes_unchanged():
     app = create_app()
     with app.test_request_context():
         set_current_token("live-tok", customer_id="default", username="operator")
-        assert session[SESSION_TOKEN_KEY] == "live-tok"
+        assert token_store.get_active_token() == "live-tok"       # token in the store
+        assert SESSION_TOKEN_KEY not in session                   # NOT in the cookie
         assert session[SESSION_CUSTOMER_ID_KEY] == "default"
         assert session[SESSION_USERNAME_KEY] == "operator"
+
+
+def test_blank_or_nonstring_token_reads_as_disconnected():
+    """Defense-in-depth (moved from the old cookie check): a blank/whitespace/non-str
+    stored token reads as None and status `disconnected`, not a stale connection."""
+    token_store.set_active_token("   ")
+    assert token_store.get_active_token() is None
+    assert token_store.status()["state"] == "disconnected"
+    token_store.set_active_token("")
+    assert token_store.get_active_token() is None
+    assert token_store.status()["state"] == "disconnected"

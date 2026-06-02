@@ -26,6 +26,7 @@ from cvhealthcheck.security_assessment.validate import (
     is_valid_canonical_finding,
 )
 from cvhealthcheck.auth.commvault_auth import SESSION_TOKEN_KEY
+from cvhealthcheck import token_store
 
 
 def test_canonical_finding_validation_accepts_expected_shape() -> None:
@@ -663,8 +664,7 @@ def test_hidden_history_and_registry_export_endpoints_work(tmp_path, monkeypatch
 
     app = create_app()
     client = app.test_client()
-    with client.session_transaction() as session:
-        session[SESSION_TOKEN_KEY] = "test-token"
+    token_store.set_active_token("test-token")   # ADR-0008 B: auth via the held-token store
 
     history_response = client.get("/security-assessment/history")
     artifact_response = client.get(
@@ -754,8 +754,7 @@ def test_internal_registry_view_renders_artifact_table(tmp_path, monkeypatch) ->
 
     app = create_app()
     client = app.test_client()
-    with client.session_transaction() as session:
-        session[SESSION_TOKEN_KEY] = "test-token"
+    token_store.set_active_token("test-token")   # ADR-0008 B: auth via the held-token store
 
     response = client.get("/development/security-assessment-registry?source_type=csv")
 

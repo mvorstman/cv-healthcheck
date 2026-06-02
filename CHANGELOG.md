@@ -10,6 +10,49 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-02 (ADR-0008 B consolidation — CommServe token out of the cookie, auth gate on the store)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **857 passing** (was 856; +1). **The CommServe token is
+no longer at rest in the browser** — it lives only in the in-process store.
+
+### Changed
+- **De-cookie:** `set_current_token` (`auth/commvault_auth.py`) **no longer writes the token to the session
+  cookie** — only the non-secret `CUSTOMER_ID` / `USERNAME` markers. The token lands solely in the in-process
+  store (`set_active_token`, wired in the prior brief).
+- **Read seam repointed:** `_current_token()` (`web/routes/shared.py`) now returns `get_active_token() or ""`
+  (was `get_current_token()`); its four web consumers (`/collect`, `get_commcell_identity`, `_reportsplus_client`,
+  the dormant `_api_client`) follow automatically, `""` semantics preserved.
+- **Auth gate keyed off the store:** `is_authenticated()` → `get_active_token() is not None`;
+  `is_authenticated_for(cust)` → `get_active_token() is not None and get_current_customer_id() == cust` (the
+  binding customer stays a non-secret cookie marker). `get_current_token()` is now dead (no real callers, reads
+  the now-absent cookie key) — left returning `None` harmlessly.
+- **`token_store` defense-in-depth (the one net production delta vs the original plan):** `get_active_token()`
+  returns `None` for a non-string / blank / whitespace-only stored token, and `status()` reports `disconnected`
+  for it — preserving the old cookie-token whitespace guard at its new home.
+
+### Notes
+- **Lock-out behaviour is honest** (the reason we de-cookied with care): a process restart empties the in-memory
+  store, so the next request is **not-authenticated → `/login` redirect**; a **stale cookie token is ignored**
+  (the gate reads the store, not the cookie) — no false logged-in, no silent failure. Verified via a test-client
+  simulation of the restart scenario (operator browser check still recommended).
+- **Test reshape (guiding principle: move the property, don't drop coverage):**
+  - `test_phase3_auth_customer_bound.py` — **rewritten** to the store model: the `set_current_token` test now
+    asserts the **de-cookie invariant** (token in store, `SESSION_TOKEN_KEY` NOT in the cookie, markers present);
+    `is_authenticated_for` cases keep the binding-required property (store token + matching marker → True;
+    mismatched/missing marker / no token → False); the legacy-unbound-**cookie**-token case became
+    `requires_a_customer_marker` (binding-required, store-side); login/collect tests assert token-to-store.
+  - `test_api_auth_status.py` — repointed to the store (via a new `authenticate` fixture); the whitespace case
+    **retargeted** to a blank **stored** token reading as unauthenticated.
+  - `test_token_store.py` — the brief-#5 cookie-unchanged test **flipped** to the de-cookie invariant; added the
+    blank/whitespace-token-disconnected case.
+  - Mechanical auth-setup pokes (`test_license_summary_web`, `test_platform_foundation`,
+    `test_security_assessment_registry`) switched from `session[SESSION_TOKEN_KEY]=` to populating the store.
+  - **New in `conftest.py`:** an `authenticate(client, …)` fixture (store token + cookie markers) so the next
+    auth change doesn't ripple across files, and an autouse `_reset_token_store` (the store is process-global —
+    a token set in one test must not leak).
+
+---
+
 ## 2026-06-02 (ADR-0008 E — retire the probe to the app-mediated endpoint; AI holds no CommServe token)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **856 passing** (was 851). **This makes the direct

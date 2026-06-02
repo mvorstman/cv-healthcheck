@@ -4,6 +4,7 @@ import io
 
 from cvhealthcheck.license_summary.import_csv import parse_license_summary_csv
 from cvhealthcheck.auth.commvault_auth import SESSION_TOKEN_KEY
+from cvhealthcheck import token_store
 from cvhealthcheck.license_summary.service import persist_license_summary_artifact
 from cvhealthcheck.web.app import create_app
 
@@ -239,8 +240,7 @@ def test_quick_hc_license_summary_collect_calls_service_and_redirects(tmp_path, 
 
     app = create_app()
     client = app.test_client()
-    with client.session_transaction() as session:
-        session[SESSION_TOKEN_KEY] = "test-token"
+    token_store.set_active_token("test-token")   # ADR-0008 B: auth via the held-token store
 
     response = client.post(
         "/quick-hc/license-summary/collect",

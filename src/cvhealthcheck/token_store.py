@@ -78,6 +78,10 @@ def get_active_token() -> str | None:
     with _lock:
         if _held is None:
             return None
+        # Defense-in-depth (mirrors the old cookie check the gate used to do): a
+        # non-string / blank / whitespace-only stored token reads as not-connected.
+        if not (isinstance(_held.token, str) and _held.token.strip()):
+            return None
         if _held.expires_at is not None and datetime.now(timezone.utc) >= _held.expires_at:
             return None
         return _held.token
@@ -96,7 +100,9 @@ def status() -> dict[str, Any]:
     ``"disconnected"`` (never connected / cleared) — which the bare ``None`` from
     ``get_active_token()`` cannot. Never includes the token value."""
     with _lock:
-        if _held is None:
+        # A missing OR blank/non-string token reads as disconnected (mirrors
+        # get_active_token's guard) — there is no live connection to report.
+        if _held is None or not (isinstance(_held.token, str) and _held.token.strip()):
             return {"state": "disconnected", "principal": None,
                     "connected_at": None, "expires_at": None}
         expired = (_held.expires_at is not None
