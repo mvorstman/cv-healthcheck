@@ -142,6 +142,41 @@ def test_delete_subject_ai_created(db: sqlite3.Connection) -> None:
     ).fetchone()[0] == 0
 
 
+def test_delete_subject_reconciles_staged_artifacts(db: sqlite3.Connection) -> None:
+    """Deleting a subject hard-deletes its staged_artifacts rows too, so no
+    orphaned proposal/import survives the delete (the gap that left approved
+    server_groups proposals with no catalog subject). The shared approval path
+    is not involved — only rows are removed."""
+    from cvhealthcheck.db.staging import list_staged_artifacts
+
+    create_subject_from_proposal(db, _sample_proposal("storage_utilization"))
+    # Two staging rows for the subject: a pending proposal + an approved artifact.
+    for stage_id, atype, status in (
+        ("stage-prop-1", "subject_proposal", "pending"),
+        ("stage-art-1", "artifact", "approved"),
+    ):
+        db.execute(
+            "INSERT INTO staged_artifacts (stage_id, subject_id, artifact_type, status,"
+            " artifact_json, created_at) VALUES (?, 'storage_utilization', ?, ?, '{}',"
+            " strftime('%Y-%m-%dT%H:%M:%SZ','now'))",
+            (stage_id, atype, status),
+        )
+    db.commit()
+
+    result = delete_subject(db, "storage_utilization")
+
+    assert result["staging_rows_removed"] == 2
+    assert db.execute(
+        "SELECT COUNT(*) FROM staged_artifacts WHERE subject_id = 'storage_utilization'"
+    ).fetchone()[0] == 0
+    # Post-condition: nothing for the subject resurfaces in the pending queue.
+    pending = [
+        r for r in list_staged_artifacts(db, status="pending")
+        if r["subject_id"] == "storage_utilization"
+    ]
+    assert pending == []
+
+
 def test_delete_subject_system_blocked(db: sqlite3.Connection) -> None:
     with pytest.raises(ValueError, match="system subjects cannot be deleted"):
         delete_subject(db, "security_assessment")

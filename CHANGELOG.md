@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-02 (Fix — `delete_subject` reconciles staging; full `server_groups` reset)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **885 passing** (+1). A logically **separate** change from the ADR-0009 D1/D2 build and Phase 1 — it shares `db/subjects.py` with the still-uncommitted D2 hunk, so the `delete_subject` hunk is staged separately when committing.
+
+### Fixed
+- **`delete_subject` now reconciles the review queue.** It already cascaded `subject_sections` / `subject_sources` / `subject_section_sources` / `subjects`, but left the subject's `staged_artifacts` rows behind — so a delete **orphaned** approved proposals (an approved `subject_proposal` with no catalog subject, which the staging UI / `list_proposed_subjects` misreads as "belongs in the catalog"). It now **hard-deletes** the subject's `staged_artifacts` rows (proposals AND imported `artifact` rows) in the same transaction, and returns `staging_rows_removed`. Chosen over mark-terminal: consistent with the function's "delete all related rows" contract, fully prevents orphan accumulation, and needs no new status value. The shared approval path (`execute_approval` / `reject_staged_artifact`) is untouched.
+- `tests/test_delete.py` (+1): a subject with a pending proposal + an approved artifact staged row → `delete_subject` removes both (`staging_rows_removed == 2`) and nothing for the subject resurfaces in `list_staged_artifacts(status="pending")`.
+
+### Removed
+- **Full `server_groups` data reset (live DB).** Deleted all **3** `staged_artifacts` rows for `server_groups` (the two real approved rows `stage_97a9…` / `stage_9513…` and the Phase-1 seed `stage_phase1_validate_server_groups`) so the next import starts clean. An **exhaustive value scan** confirmed `server_groups` survived in **no other table** (no `subjects` / `subject_sources` / `subject_section_sources` / `subject_sections` / `customer_subject_pin` / `rule_overrides` rows — all already 0). Post: `list_staged_artifacts(subject_id="server_groups")` empty; `list_subjects` has no `server_groups`.
+
+### Notes
+- Root cause of the orphan mess (from the prior read-only diagnosis): promotion always worked, but `delete_subject` never cleaned `staged_artifacts`, so deleted subjects stranded their approved proposals. This closes that gap going forward; the manual wipe clears the existing strand.
+- Sibling cleanup noted, out of scope: `delete_subject` also leaves `customer_subject_pin` / `rule_overrides` rows for a deleted subject — not orphan-visible in the staging queue, but a candidate for the same treatment later.
+
+---
+
 ## 2026-06-02 (ADR-0009 Phase 1 — consolidated `/quick-hc` Staging + Subjects zones)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **884 passing** (was 876 after the ADR-0009 D1/D2 build; +8). **Built, not committed** — pending the in-browser confirmation ("tests green ≠ works"). The old `/quick-hc/staging` page, its template, the `artifact_card` macro, and the nav link are deliberately **left intact** as the fallback (removal is Phase 3).
