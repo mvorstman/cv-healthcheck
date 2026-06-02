@@ -10,6 +10,21 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-02 (ADR-0008 D — extract user-description redaction to a shared module)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **829 passing** (unchanged — leaf refactor, no behaviour change).
+
+### Changed
+- **`redact_user_descriptions` moved out of the MCP probe into `src/cvhealthcheck/redaction.py`** (renamed
+  from the private `mcp/server.py::_redact_user_descriptions`). Self-contained (stdlib only; imports nothing
+  from the MCP/web/Flask layers), so **both** the MCP layer and the future app-mediated loopback endpoint
+  (ADR-0008 C) can import it without a circular dependency — the app-mediated path must redact before
+  returning, so redaction can no longer live only in the MCP module. `mcp/server.py` now imports it and the
+  probe's single call site points at the new name. Logic + recursion are identical; the redaction tests
+  (exercised through `probe`) stay green at 829.
+
+---
+
 ## 2026-06-02 (MCP — `probe(path)` tool: exploratory Command Center REST GET, store-free)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **Not committed** (held for review + live smoke). **829 passing** (was 824; +5).

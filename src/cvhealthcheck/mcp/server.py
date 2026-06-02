@@ -55,6 +55,7 @@ from cvhealthcheck.db.staging import (
 from cvhealthcheck.db.subjects import delete_subject as db_delete_subject
 from cvhealthcheck.api_client import CommvaultApiClient
 from cvhealthcheck.auth import load_login_token, load_token
+from cvhealthcheck.redaction import redact_user_descriptions
 
 
 run_migrations()
@@ -370,26 +371,6 @@ def _probe_token() -> str | None:
     return load_login_token() or load_token()
 
 
-def _redact_user_descriptions(data: Any) -> Any:
-    """Return a copy of ``data`` with every ``description`` string replaced by
-    ``[redacted: <n> chars]``.
-
-    A direct fetch has no human scrub step, and the user ``description`` field is
-    free-text observed carrying secret-like values — keep it out of the transcript.
-    Shape-agnostic (the V4 ``/user`` response shape is not pinned here): walks
-    dicts/lists and redacts any ``description`` wherever it appears. Secret *detection*
-    stays a propose-stage evaluator authored from field shape, not contents."""
-    if isinstance(data, dict):
-        return {
-            k: (f"[redacted: {len(v)} chars]" if k == "description" and isinstance(v, str)
-                else _redact_user_descriptions(v))
-            for k, v in data.items()
-        }
-    if isinstance(data, list):
-        return [_redact_user_descriptions(item) for item in data]
-    return data
-
-
 def probe(path: str) -> dict:
     """Exploratory authenticated GET against a Command Center REST path (e.g.
     ``/commandcenter/api/v4/user``); returns the raw response with each user
@@ -418,7 +399,7 @@ def probe(path: str) -> dict:
         raise ValueError(f"probe transport failure for {path!r}: {result.error}")
 
     payload = asdict(result)
-    payload["data"] = _redact_user_descriptions(payload.get("data"))
+    payload["data"] = redact_user_descriptions(payload.get("data"))
     # `text` is the verbatim, pre-redaction response body — it duplicates `data` for a
     # JSON response, so returning it would bypass redaction. Drop it; `data` is the
     # structured (redacted) form.
