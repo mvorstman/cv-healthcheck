@@ -8,6 +8,7 @@ from flask import has_request_context, session
 from urllib3.exceptions import InsecureRequestWarning
 
 from cvhealthcheck.config import load_settings, warn_if_ssl_verification_disabled
+from cvhealthcheck.token_store import clear_active_token, set_active_token
 
 SESSION_TOKEN_KEY = "commvault_token"
 SESSION_USERNAME_KEY = "commvault_username"
@@ -75,6 +76,12 @@ def set_current_token(token: str, customer_id: str, username: str | None = None)
             session[SESSION_USERNAME_KEY] = cleaned
         else:
             session.pop(SESSION_USERNAME_KEY, None)
+    # ADR-0008 A (wiring): ALSO publish into the process-level held-token store so the
+    # loopback endpoint (brief #6) can read it. Addition only — the session cookie
+    # writes above are unchanged and the read seam is NOT repointed here (that is the
+    # later consolidation step). expires_at=None: login returns only the token, no TTL.
+    principal = username.strip() if isinstance(username, str) and username.strip() else None
+    set_active_token(token, principal=principal, expires_at=None)
 
 
 def get_current_token() -> str | None:
@@ -110,6 +117,10 @@ def clear_current_token() -> None:
         session.pop(SESSION_TOKEN_KEY, None)
         session.pop(SESSION_USERNAME_KEY, None)
         session.pop(SESSION_CUSTOMER_ID_KEY, None)
+    # ADR-0008 A (wiring): also clear the process-level store so it does not outlive
+    # the session. Unconditional — the store is process-scoped, not request-bound;
+    # this is the single chokepoint behind /logout and the auto-clear paths.
+    clear_active_token()
 
 
 def is_authenticated() -> bool:

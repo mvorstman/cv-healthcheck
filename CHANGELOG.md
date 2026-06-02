@@ -10,6 +10,34 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-02 (ADR-0008 A wiring — login populates the held-token store; reads + cookie unchanged)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **839 passing** (was 837; +2 wiring tests).
+
+### Changed
+- **`set_current_token` (`auth/commvault_auth.py`) now ALSO publishes the token into the in-process
+  `token_store`** (`set_active_token(token, principal=<cleaned username>, expires_at=None)`), after the
+  existing session writes — an **addition**, the session cookie writes are byte-for-byte unchanged.
+  `expires_at=None` because `login_to_commvault` returns only the token, no TTL (reactive expiry on a
+  CommServe 401 is a later endpoint-side enhancement).
+- **`clear_current_token` now also calls `clear_active_token()`** so the store never outlives the session.
+  It's the single clear chokepoint behind `/logout` (`basic.py:73`) and the auto-clear paths
+  (`quick_hc.py:214/381/441`, `shared.py:99`); the store-clear is unconditional (the store is
+  process-scoped, not request-bound).
+
+### Notes
+- **Deliberately narrow:** this only *fills* the store so the upcoming loopback endpoint (brief #6) can
+  read it via `get_active_token()`. **No token read is repointed, `is_authenticated()`/`is_authenticated_for()`
+  are untouched, the web path is unchanged.** The read-repoint + de-cookie + gate change is the later
+  consolidation step, done with the Connections-page "reconnect" UI — because the store is in-memory and
+  empties on restart while the cookie survives, repointing reads before that UI exists would turn a restart
+  into a silent failure.
+- Tests authenticate by poking `session[SESSION_TOKEN_KEY]` directly (bypassing `set_current_token`), so
+  those sessions don't fill the store — harmless here (reads unchanged), but a ripple to handle at the
+  consolidation step.
+
+---
+
 ## 2026-06-02 (ADR-0008 A — in-process held-token store module, not yet wired)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **837 passing** (was 829; +8 token-store tests).

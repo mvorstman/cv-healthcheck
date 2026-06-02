@@ -78,3 +78,38 @@ def test_overwrite_replaces_slot():
     token_store.set_active_token("second", principal="b")
     assert token_store.get_active_token() == "second"
     assert token_store.status()["principal"] == "b"
+
+
+# ── ADR-0008 A wiring: login populates the store, logout clears it ──
+
+def test_set_current_token_populates_store_and_clear_empties_it():
+    """`set_current_token` (the login chokepoint) ALSO fills the store; the
+    `clear_current_token` chokepoint (logout + auto-clear paths) empties it."""
+    from cvhealthcheck.web.app import create_app
+    from cvhealthcheck.auth.commvault_auth import set_current_token, clear_current_token
+    app = create_app()
+    with app.test_request_context():
+        set_current_token("live-tok", customer_id="default", username="operator")
+        assert token_store.get_active_token() == "live-tok"
+        st = token_store.status()
+        assert st["state"] == "connected" and st["principal"] == "operator"
+
+        clear_current_token()
+        assert token_store.get_active_token() is None
+        assert token_store.status()["state"] == "disconnected"
+
+
+def test_set_current_token_leaves_session_cookie_writes_unchanged():
+    """The wiring is an ADDITION — the session cookie still holds the token, customer,
+    and username exactly as before (read seam not repointed this brief)."""
+    from flask import session
+    from cvhealthcheck.web.app import create_app
+    from cvhealthcheck.auth.commvault_auth import (
+        set_current_token, SESSION_TOKEN_KEY, SESSION_CUSTOMER_ID_KEY, SESSION_USERNAME_KEY,
+    )
+    app = create_app()
+    with app.test_request_context():
+        set_current_token("live-tok", customer_id="default", username="operator")
+        assert session[SESSION_TOKEN_KEY] == "live-tok"
+        assert session[SESSION_CUSTOMER_ID_KEY] == "default"
+        assert session[SESSION_USERNAME_KEY] == "operator"
