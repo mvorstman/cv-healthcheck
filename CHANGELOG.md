@@ -10,6 +10,43 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-02 (ADR-0008 C — loopback internal endpoint `POST /internal/commserve`)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **851 passing** (was 839; +12 endpoint tests).
+
+### Added
+- **`POST /internal/commserve`** (`src/cvhealthcheck/web/routes/internal.py`) — the single trust-boundary
+  door the AI/MCP layer may call; the **app** makes the CommServe GET with its own held token and returns a
+  redacted envelope. Registered via one import in `routes/main.py` (same `main` blueprint).
+  - **Guards (fail-closed, generic):** missing shared secret → **503** (never serve unguarded); non-loopback
+    `remote_addr` → **403** (defense-in-depth); `X-Internal-Secret` mismatch (constant-time `hmac.compare_digest`)
+    → **403**. All guard failures return a generic `{"error":"forbidden"}` — never revealing which failed; the
+    secret/token are never logged.
+  - **Request contract:** JSON `{path, principal, capability}` (all required strings). `capability` must be
+    `"read"` (GET-only, read-only) else **400**; `path` must be relative (rejects scheme / netloc /
+    protocol-relative) else **400**. `principal` is carried but not yet authorized (RBAC deferred, ADR-0008
+    Decision 6 / future ADR).
+  - **Token + call:** reads `get_active_token()`. **Disconnected/expired → HTTP 200** with
+    `{"ok":false,"state":"disconnected"|"expired","status_code":null,"data":null,"error":"no active token; reconnect"}`
+    and **never constructs a client** (a `None` token would make `CommvaultApiClient` fall back to the `.token`
+    file — the path ADR-0008 kills). Connected → `CommvaultApiClient(token=tok).get(path)` (base_url/SSL from
+    env), returns `{"ok":result.ok,"state":"connected","status_code":...,"data":redact_user_descriptions(result.data),"error":...}`.
+    A CommServe non-200 (incl. 401) **passes through in the envelope** (our endpoint still returns 200) — not
+    translated into a bare endpoint 401.
+- **`Settings.internal_secret`** (`config.py`) from `CV_INTERNAL_SECRET` (default `None`). Operator sets it
+  out-of-band in `~/.cv-healthcheck-env` (sourced into both the app and MCP envs); never in the repo.
+- `tests/test_internal_endpoint.py` (+12, CommServe mocked, no live call): 503-not-configured (+client never
+  built), 403 wrong/missing secret, 403 non-loopback, 400 ×6 (missing fields / bad capability / absolute /
+  protocol-relative path), disconnected-200-no-client, connected-happy-redacts-description, CommServe-401
+  passthrough.
+
+### Notes
+- **MCP not yet repointed** — the probe still calls the CommServe directly; pointing it at this endpoint is
+  the final build step. Deferred in-endpoint (noted in code): oversized-response summarisation and reactive
+  expiry (flip store to expired on a CommServe 401 — needs the auth-failure distinction).
+
+---
+
 ## 2026-06-02 (ADR-0008 A wiring — login populates the held-token store; reads + cookie unchanged)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **839 passing** (was 837; +2 wiring tests).
