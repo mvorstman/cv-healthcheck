@@ -160,6 +160,21 @@ class TableSection(BaseModel):
     # shown when there are no rows (e.g. backup_job_summary's "No jobs in the
     # selected window") instead of the generic "No data.". None -> generic.
     empty_message: str | None          = None
+    # Presentational layout discriminator, mirroring CardSection.view_mode /
+    # MetricSection.render_mode — carried on the artifact from the catalog binding,
+    # honored by artifact_to_view + secBody, never keyed on subject id. "columns"
+    # is the column-header table (default, unchanged); "card" renders a single-row
+    # table as a Field/Value card (e.g. audit_trail retention). Render-only: the
+    # row rules + per-row verdict still fire either way. Omitted from JSON when
+    # default so existing table artifacts stay byte-identical.
+    view_mode: Literal["columns", "card"] = "columns"
+
+    @model_serializer(mode="wrap")
+    def _omit_default_view_mode(self, handler):
+        data = handler(self)
+        if self.view_mode == "columns":
+            data.pop("view_mode", None)
+        return data
 
 
 class ChartSection(BaseModel):

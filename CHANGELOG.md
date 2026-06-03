@@ -10,6 +10,24 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (TableSection.view_mode — single-row table renders as a card)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **982 passing** (was 976; +6). Presentational discriminator (option b); **no change to the rule engine, `validate_row_match_rule`, or the verdict bake** — a card-rendered table still fires its row rules + per-row verdict.
+
+### Added / Changed
+- **`TableSection.view_mode: Literal["columns","card"]` (default `"columns"`)** (`artifacts/models.py`) — mirrors `CardSection.view_mode` / `MetricSection.render_mode`: a presentational layout discriminator carried on the artifact from the catalog binding, never keyed on subject id. A `@model_serializer` **omits it from JSON when default**, so existing table artifacts stay byte-identical.
+- **`result_to_artifact`** reads the mode from the already-plumbed `section_table_specs` (`view_mode="card"` only when the binding says so; any other/absent value → `"columns"`, so a typo never crashes collection).
+- **`artifact_to_view`** passes `view_mode` through the TableSection branch alongside the existing `row_verdicts`/`sev`/`scope_caption`.
+- **`quick_hc.js::secBody`** — new branch: a **single-row** table with `view_mode==='card'` renders as a Field/Value card reusing the existing `meta-grid`/`meta-card` markup (the layout behind CommCell Details), with the section-level verdict pill in the header (`secTile`, from `sec.sev`). Any row count other than exactly one falls through to the column table.
+- `tests/test_table_card_view_mode.py` (+6): model default + omit-when-default serialization + round-trip; collection reads the mode (card / default / bad-value-degrades); the view carries `view_mode` while `row_verdicts` still ride along; JS card-branch render marker.
+
+### Notes
+- **Design point (settled):** a row rule yields one verdict *per row*, so a card shows one **section-level** badge — no per-field dots (unlike the card `view_mode==='table'` path, which has per-field `CardItem.sev`). Correct for `audit_trail`.
+- **`audit_trail` opted into card mode** (runtime binding edit, gitignored): `view_mode:"card"` added to its `table` spec. Re-baked artifact → `TableSection.view_mode=="card"`, **1 row, verdict `good`, 0 findings** (`retention_critical 365` not `< 365`); view = `type:table, view_mode:card, sev:good`.
+- **Validation honesty:** the **live re-collect failed** — the loopback returned `error='no active token; reconnect'` (the connection expired since the earlier live collect this session). The pipeline above was validated against the `auditTrailInfo` payload **captured live earlier** (stable retention settings), substituting only the network call — so binding→extract→project→evaluate→bake→view is exercised end-to-end; only the live HTTP fetch (orthogonal to this presentational change) is unverified this run. Visual confirmation is the operator's after a reconnect + `./start.sh`.
+
+---
+
 ## 2026-06-04 (audit_trail subject built + the CC-API dict-wrap fix validated LIVE)
 
 **Branch:** `feature/basic-healthcheck-report-output`. Catalog/runtime + live-validation pass on top of the dict-wrap collector fix below; **no code change** (the subject + binding are db-driven runtime state, gitignored). **Resolves the "held pending review" caveat in the preceding entry** — the endpoint and shape are now verified live.

@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04 (CC-API dict-wrap collector fix + `audit_trail` subject built & validated live; ADR-0010 slice 3 before it)
+**Last updated:** 2026-06-04 (TableSection `view_mode` — single-row table renders as a card; audit_trail opted in)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *Fix: CC-API table adapter wraps a single-object root_key as one row* (`d1860c4`).
-**Test status:** **976 passing** under `pytest` and `python -m pytest`.
+**Last commit:** *TableSection.view_mode: single-row table renders as a card (option b)* (this commit).
+**Test status:** **982 passing** under `pytest` and `python -m pytest`.
 
 ---
 
@@ -16,7 +16,18 @@
 
 ---
 
-## What was just completed — CC-API dict-wrap fix + `audit_trail` built & validated live
+## What was just completed — TableSection `view_mode` (single-row table → card)
+
+Option (b) from the render-mode map: a presentational discriminator so a single-row table renders as a Field/Value card while **its row rule + per-row verdict keep firing** (the engine, `validate_row_match_rule`, and the verdict bake are untouched).
+
+- **4-file change:** `TableSection.view_mode: Literal["columns","card"]` (`models.py`, omit-when-default serializer) → read from the binding's table spec in `result_to_artifact` → passed through `artifact_to_view` → a `secBody` branch that renders a single-row table as a `meta-grid`/`meta-card` card (section pill in the header). Mirrors `CardSection.view_mode` / `MetricSection.render_mode`.
+- **`audit_trail` opted in** (runtime binding edit, gitignored): `view_mode:"card"`. Re-baked → `view_mode==card`, 1 row, verdict `good`, 0 findings.
+- **⚠ Live re-collect could not run** — the loopback token expired mid-session (`no active token; reconnect`). Validated against the live-captured `auditTrailInfo` payload instead (only the HTTP fetch substituted). **Re-collect `audit_trail` after a fresh Connect to confirm the card renders on the live page** — that's the one unverified step.
+- **Open:** push (several commits ahead); `mcp/server.py` probe-timeout hunk still uncommitted; `audit_trail` rule has no authored `description`.
+
+---
+
+## Earlier this session — CC-API dict-wrap fix + `audit_trail` built & validated live
 
 - **Collector fix (committed `d1860c4`):** `extractors/command_center._project_table_rows` returned an empty table when `root_key` resolved to a **dict** (single-object response); it now auto-wraps a dict as `[obj]`. Unit test covers dict-wrap + the unchanged list path. This was a **gap from inception**, not a regression (`auditTrailInfo` never existed in git; the dict branch was simply never written).
 - **`audit_trail` subject (runtime catalog, gitignored — NOT committed):** fresh build (it never existed). Table section `audit_trail.retention` on `rest_command_center_api`, endpoint `/commandcenter/api/commserv/audittrail`, `root_key auditTrailInfo`, columns `retention_critical/high/medium/low ← retentionFor{Critical,High,Medium,Low}` (camelCase correction vs the brief), orphaned rule `audit_critical_retention_warning` bound.

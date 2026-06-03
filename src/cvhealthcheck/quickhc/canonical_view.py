@@ -132,6 +132,9 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
                 "meta": f"{count} row{'s' if count != 1 else ''}",
                 "included": True,
                 "type": "table",
+                # presentational layout hint from the artifact (default "columns");
+                # "card" renders a single-row table as a Field/Value card in secBody.
+                "view_mode": sec.view_mode,
                 "columns": columns,
                 "rows": rows,
                 "row_verdicts": row_verdicts,

@@ -133,6 +133,9 @@ def result_to_artifact(
                 columns=columns,
                 items=rows,
                 empty_message=spec.get("empty_message"),
+                # presentational hint from the binding; only "card" opts in, any
+                # other/absent value stays the default column table.
+                view_mode="card" if spec.get("view_mode") == "card" else "columns",
             ))
 
     # ADR 0010: row-scope compliance rules → a derived FindingsSection. Runs after

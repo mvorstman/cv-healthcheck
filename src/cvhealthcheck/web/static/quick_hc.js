@@ -337,6 +337,21 @@ function secBody(sec) {
   }
 
   if (sec.type === 'table') {
+    // view_mode 'card' (mirrors CardSection.view_mode): a SINGLE-row table laid
+    // out as a Field/Value card (reusing the meta-grid/meta-card markup) instead
+    // of a column-header table. The section-level verdict pill lives in the header
+    // (secTile, from sec.sev); a row rule yields one verdict per row, so there are
+    // no per-field dots. Any row count other than exactly one falls through to the
+    // column table below.
+    if (sec.view_mode === 'card' && (sec.rows || []).length === 1) {
+      const labels = sec.columns || [];
+      const vals = sec.rows[0] || [];
+      const grid = labels.length === 3 ? 'meta-grid-3' : 'meta-grid-4';
+      const cells = labels.map((label, i) =>
+        `<div class="meta-card"><div class="meta-lbl">${esc(label)}</div><div class="meta-val">${esc(vals[i] != null ? vals[i] : '—')}</div></div>`
+      ).join('');
+      return `<div class="meta-grid ${grid}">${cells}</div>`;
+    }
     // ADR 0010 layout: a per-row STATUS column of verdict dots, when the section
     // carries baked per-row verdicts. The verdict is EXPLICIT — map it directly;
     // only a genuinely ABSENT verdict (null) falls back to info. not_evaluated has
