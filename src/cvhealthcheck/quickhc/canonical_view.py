@@ -107,6 +107,9 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
                 "type": "findings_list",
                 "findings": [_finding_view(f) for f in sec.items],
                 "rows": [],
+                # ADR 0010 layout: section pill = worst finding severity (e.g. the
+                # derived <subject>.compliance section → "Warning"). None → no pill.
+                "sev": _worst_finding_sev(sec.items),
             })
         elif isinstance(sec, TableSection):
             count = len(sec.items)
@@ -115,6 +118,11 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
                 [str(item.get(col.id) if item.get(col.id) is not None else "") for col in sec.columns]
                 for item in sec.items
             ]
+            # ADR 0010 layout: carry the baked per-row _verdict to the view as row
+            # METADATA (row-aligned), NOT as a visible data column — it drives the
+            # STATUS dot. Absent (no rules on this section) → None per row → the dot
+            # falls back to info; the explicit not_evaluated must NOT be that.
+            row_verdicts = [item.get("_verdict") for item in sec.items]
             sections.append({
                 "id": sec_id,
                 "title": sec.title,
@@ -123,6 +131,9 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
                 "type": "table",
                 "columns": columns,
                 "rows": rows,
+                "row_verdicts": row_verdicts,
+                # section pill = worst row verdict EXCLUDING not_evaluated; None → no pill.
+                "sev": _worst_verdict_code(row_verdicts),
                 "empty_message": sec.empty_message,
             })
         elif isinstance(sec, MetricSection):
@@ -572,6 +583,35 @@ def _finding_view(f: Finding, section_label: str | None = None) -> dict[str, str
     else:
         rem = description or section
     return {"sev": sev, "title": str(f.title or ""), "rem": rem}
+
+
+# ADR 0010 layout: roll a section's pill up from its per-row/per-finding verdicts.
+_VERDICT_SEV_RANK = {"good": 0, "warning": 1, "critical": 2}
+_VERDICT_TO_SEV_CODE = {"good": "good", "warning": "warn", "critical": "crit"}
+_SEV_CODE_RANK = {"good": 0, "info": 1, "warn": 2, "crit": 3}
+
+
+def _worst_verdict_code(verdicts: list[Any]) -> str | None:
+    """Section pill from per-row verdicts: worst EXCLUDING ``not_evaluated`` (and
+    absent). Returned as a sev code (good/warn/crit); ``None`` ⇒ no pill."""
+    worst: str | None = None
+    for verdict in verdicts:
+        if verdict in _VERDICT_SEV_RANK and (
+            worst is None or _VERDICT_SEV_RANK[verdict] > _VERDICT_SEV_RANK[worst]
+        ):
+            worst = verdict
+    return _VERDICT_TO_SEV_CODE.get(worst) if worst else None
+
+
+def _worst_finding_sev(findings: list[Finding]) -> str | None:
+    """Section pill from findings: the worst finding severity as a sev code, or
+    ``None`` when there are no findings."""
+    worst: str | None = None
+    for finding in findings:
+        code = _FINDING_SEV.get(finding.severity, "info")
+        if worst is None or _SEV_CODE_RANK[code] > _SEV_CODE_RANK[worst]:
+            worst = code
+    return worst
 
 
 def _parse_percent(value: Any) -> int:

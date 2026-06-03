@@ -394,6 +394,12 @@ html,body{height:100%;background:var(--bg);color:var(--text-1);font-family:var(-
 .vdot-crit{background:var(--red)}
 .vdot-info{background:var(--accent)}
 .vdot-muted{background:var(--text-3)}
+/* ADR 0010: out-of-scope row verdict — an EXPLICIT gray, distinct from info-blue.
+   (Reuses the existing .vdot-legend / .legend-item chrome — CommCell Details
+   unchanged.) */
+.vdot-na{background:var(--text-3)}
+/* The per-row STATUS column on a data table: a narrow, centred dot column. */
+.vdot-col{text-align:center;width:54px}
 .wl-sec-name:first-child{margin-top:0}
 .usage-wrap{background:var(--border-hi);border-radius:2px;height:4px;overflow:hidden;width:80px}
 .usage-fill{height:100%;border-radius:2px}

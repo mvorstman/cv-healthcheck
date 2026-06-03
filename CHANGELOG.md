@@ -10,6 +10,24 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-03 (ADR-0010 — report section layout + per-row verdict rendering (layout slice))
+
+**Branch:** `feature/basic-healthcheck-report-output`. **956 passing** (was 948; +8). Renders the per-row `_verdict` the engine slice bakes; **presentation only** — no engine / scope / rule / verdict change.
+
+### Added / Changed
+- **The pipe:** `artifact_to_view`'s table branch now carries the baked per-row `_verdict` to the view as row metadata `row_verdicts` (row-aligned), **not** as a visible data column, and rolls a section `sev` pill from the worst row verdict **excluding `not_evaluated`**. The findings branch gains the same `sev` (worst finding severity) so the derived `<subject>.compliance` section gets a pill.
+- **STATUS column** on the data table (`quick_hc.js` `secBody`): one verdict dot per row — good→green, warning→amber, critical→red, **`not_evaluated`→gray (`vdot-na`)** — plus a legend gaining a "not evaluated" entry. Rendered only when the section carries `row_verdicts`; tables without verdicts are unchanged.
+- **The explicit-verdict trap, guarded:** the dot maps the verdict **directly**; only a genuinely ABSENT verdict (`null`) falls back to info-blue. `not_evaluated` is its own gray token — out-of-scope rows never paint blue.
+- The card **shell** (header title + `sec.sev` status pill + visibility toggle + legend) is the **existing `secTile` / card chrome reused as-is** — server_groups' table + compliance sections already render through it, so they now match CommCell Details. New CSS: `.vdot-na` (gray), `.vdot-col` (status column).
+- `tests/test_layout_verdict_adr0010.py` (+8): view carries `row_verdicts` (row-aligned, not a data column); pill = worst excluding `not_evaluated` (+ critical>warning, all-not_evaluated → no pill); no-verdict table unchanged; compliance pill = worst finding; render markers assert `not_evaluated`→`vdot-na` and that only `null` falls back to info.
+
+### Notes
+- **Verified headless** against the live page: server_groups table → pill `warn`, `row_verdicts` = {not_evaluated 7, warning 9, good 5}; compliance → pill `warn`, 11 findings — exactly the acceptance (5 green / 9 amber / 7 gray). The stored server_groups artifact was **re-baked** (gitignored runtime state) so verdicts show without a re-collect; a real Collect regenerates the identical bake. The actual dot visuals are the operator's check after `./start.sh`.
+- **Other subjects unchanged:** CommCell Details (`_card_section_view`) and License Summary (`license_summary_to_view`) use their own builders; the table-branch change only adds metadata that non-verdict tables carry as all-`None` (no STATUS column).
+- **Open follow-up:** the scope-authoring MCP tool (`save_section_scope`, or a `scope` arg on `save_rule`'s bind) — scope is still set directly in the catalog.
+
+---
+
 ## 2026-06-03 (ADR-0010 — section-level evaluation scope + per-row verdict (engine slice))
 
 **Branch:** `feature/basic-healthcheck-report-output`. **948 passing** (was 941; +7). An explicit evaluated **population** per section + a real **per-row verdict** — so the report can show good vs not-evaluated rather than infer from the absence of findings. Layout/render is a follow-up slice.

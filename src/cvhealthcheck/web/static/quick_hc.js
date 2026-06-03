@@ -337,19 +337,41 @@ function secBody(sec) {
   }
 
   if (sec.type === 'table') {
-    const hdrs = (sec.columns || []).map(c => `<th>${esc(c)}</th>`).join('');
+    // ADR 0010 layout: a per-row STATUS column of verdict dots, when the section
+    // carries baked per-row verdicts. The verdict is EXPLICIT — map it directly;
+    // only a genuinely ABSENT verdict (null) falls back to info. not_evaluated has
+    // its OWN gray dot and must NOT route through the info fallback (else
+    // out-of-scope rows would paint blue).
+    const hasVerdicts = Array.isArray(sec.row_verdicts) && sec.row_verdicts.length > 0;
+    const vdotClass = v => {
+      if (v == null) return 'vdot-info';   // absent verdict only
+      return {good:'vdot-good', warning:'vdot-warn', critical:'vdot-crit', not_evaluated:'vdot-na'}[v] || 'vdot-info';
+    };
+    const statusTh = hasVerdicts ? '<th class="vdot-col">Status</th>' : '';
+    const hdrs = (sec.columns || []).map(c => `<th>${esc(c)}</th>`).join('') + statusTh;
+    const ncols = (sec.columns || []).length + (hasVerdicts ? 1 : 0);
     if (!sec.rows || !sec.rows.length) {
       const msg = esc(sec.empty_message || 'No data.');
       // ADR 0009 Phase 1: render the header row even with no rows, so a pending-
       // proposal shell shows its table structure. Bare message only when the
       // section declares no columns (collected-but-empty tables benefit too).
-      if (!sec.columns || !sec.columns.length) return `<div style="font-size:12px;color:var(--text-3)">${msg}</div>`;
-      return `<table class="wl-table"><thead><tr>${hdrs}</tr></thead><tbody><tr><td colspan="${sec.columns.length}" style="font-size:12px;color:var(--text-3);text-align:center;padding:10px">${msg}</td></tr></tbody></table>`;
+      if (!ncols) return `<div style="font-size:12px;color:var(--text-3)">${msg}</div>`;
+      return `<table class="wl-table"><thead><tr>${hdrs}</tr></thead><tbody><tr><td colspan="${ncols}" style="font-size:12px;color:var(--text-3);text-align:center;padding:10px">${msg}</td></tr></tbody></table>`;
     }
-    const body = sec.rows.map(r =>
-      `<tr>${r.map(v => `<td style="font-family:var(--mono);font-size:11px">${esc(v != null ? v : '—')}</td>`).join('')}</tr>`
-    ).join('');
-    return `<table class="wl-table"><thead><tr>${hdrs}</tr></thead><tbody>${body}</tbody></table>`;
+    const body = sec.rows.map((r, i) => {
+      const cells = r.map(v => `<td style="font-family:var(--mono);font-size:11px">${esc(v != null ? v : '—')}</td>`).join('');
+      const status = hasVerdicts
+        ? `<td class="vdot-col"><span class="vdot ${vdotClass(sec.row_verdicts[i])}" title="${esc(sec.row_verdicts[i] || 'not evaluated')}"></span></td>`
+        : '';
+      return `<tr>${cells}${status}</tr>`;
+    }).join('');
+    const legend = hasVerdicts ? `<div class="vdot-legend">
+        <span class="legend-item"><span class="vdot vdot-good"></span>good</span>
+        <span class="legend-item"><span class="vdot vdot-warn"></span>warning</span>
+        <span class="legend-item"><span class="vdot vdot-crit"></span>critical</span>
+        <span class="legend-item"><span class="vdot vdot-na"></span>not evaluated</span>
+      </div>` : '';
+    return `<table class="wl-table"><thead><tr>${hdrs}</tr></thead><tbody>${body}</tbody></table>${legend}`;
   }
 
   if (sec.type === 'chart_growth') {
