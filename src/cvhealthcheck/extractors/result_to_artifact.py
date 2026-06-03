@@ -143,9 +143,18 @@ def result_to_artifact(
     # section. Read-only over the rows — the rules never mutate the artifact data.
     table_by_id = {s.id: s for s in sections if isinstance(s, TableSection)}
     compliance_items: list[Finding] = []
+    # ADR 0010 layout slice 2: the Evaluation band's criteria card is derived from
+    # the scope + the bound rules' (id, severity). Bake them per section so the
+    # view builder (artifact-only) can render the criteria + the scope caption.
+    evaluation_meta: dict[str, dict[str, Any]] = {}
     for section_id, row_rules in (result.section_row_rules or {}).items():
         section_rows = result.sections.get(section_id) or []
         scope = (result.section_scope or {}).get(section_id)
+        evaluation_meta[section_id] = {
+            "scope": list(scope or []),
+            "checks": [{"rule_id": r.get("rule_id"), "severity": r.get("severity")}
+                       for r in row_rules],
+        }
         findings, per_row = evaluate_section_rows(row_rules, section_rows, scope=scope, now=now)
         for derived in findings:
             finding = _build_compliance_finding(section_id, derived)
@@ -206,6 +215,8 @@ def result_to_artifact(
     section_failures = getattr(result, "section_failures", None)
     if section_failures:
         metadata["conformance_failures"] = dict(section_failures)
+    if evaluation_meta:
+        metadata["evaluation"] = evaluation_meta   # ADR 0010 layout slice 2
 
     return CanonicalArtifact(
         artifact_type=subject_id,

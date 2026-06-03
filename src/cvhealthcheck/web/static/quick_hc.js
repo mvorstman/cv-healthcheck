@@ -365,13 +365,30 @@ function secBody(sec) {
         : '';
       return `<tr>${cells}${status}</tr>`;
     }).join('');
-    const legend = hasVerdicts ? `<div class="vdot-legend">
-        <span class="legend-item"><span class="vdot vdot-good"></span>good</span>
+    // ADR 0010 slice 2: a muted, right-aligned scope caption on the legend bar —
+    // the always-present safety net (it survives toggling the Evaluation cards out,
+    // since it lives on the data table, not in the Evaluation band).
+    const scopeCap = sec.scope_caption ? `<span class="vdot-legend-scope">Scope: ${esc(sec.scope_caption)}</span>` : '';
+    const legendDots = hasVerdicts ? `<span class="legend-item"><span class="vdot vdot-good"></span>good</span>
         <span class="legend-item"><span class="vdot vdot-warn"></span>warning</span>
         <span class="legend-item"><span class="vdot vdot-crit"></span>critical</span>
-        <span class="legend-item"><span class="vdot vdot-na"></span>not evaluated</span>
-      </div>` : '';
+        <span class="legend-item"><span class="vdot vdot-na"></span>not evaluated</span>` : '';
+    const legend = (hasVerdicts || sec.scope_caption) ? `<div class="vdot-legend">${legendDots}${scopeCap}</div>` : '';
     return `<table class="wl-table"><thead><tr>${hdrs}</tr></thead><tbody>${body}</tbody></table>${legend}`;
+  }
+
+  if (sec.type === 'criteria') {
+    // ADR 0010 slice 2: read-only Evaluation criteria — plain-language scope +
+    // one severity-tagged check sentence per bound rule. No status pill (set on
+    // the section in canonical_view, so secTile shows none).
+    const scope = sec.scope_sentence
+      ? `<div class="crit-block"><div class="crit-label">Scope</div><div class="crit-text">${esc(sec.scope_sentence)}</div></div>`
+      : '';
+    const checks = (sec.checks || []).map(c =>
+      `<div class="crit-check"><span class="m-badge ${SEV_BADGE[c.sev] || ''}">${SEV_LABEL[c.sev] || esc(c.sev)}</span><span class="crit-text">${esc(c.text)}</span></div>`
+    ).join('');
+    const checksBlock = checks ? `<div class="crit-block"><div class="crit-label">Checks</div>${checks}</div>` : '';
+    return `${scope}${checksBlock}` || '<div style="font-size:12px;color:var(--text-3)">No criteria.</div>';
   }
 
   if (sec.type === 'chart_growth') {
@@ -631,8 +648,14 @@ function openConfig(id) {
   // GUID under "CommCell ID". Removed — the expanded environment card section
   // (built from the real GET CommServ response) is now the single source.
 
-  // Section tiles
-  const secTiles = (s.sections || []).map(sec => secTile(s.id, sec, true)).join('');
+  // Section tiles — split into the Report Sections band and the Evaluation band
+  // (ADR 0010 layout slice 2: criteria + findings live under Evaluation).
+  const reportSecs = (s.sections || []).filter(sec => sec.band !== 'evaluation');
+  const evalSecs = (s.sections || []).filter(sec => sec.band === 'evaluation');
+  const secTiles = reportSecs.map(sec => secTile(s.id, sec, true)).join('');
+  const evalBand = evalSecs.length
+    ? `<div class="cfg-sec"><div class="cfg-sec-title">Evaluation</div>${evalSecs.map(sec => secTile(s.id, sec, true)).join('')}</div>`
+    : '';
 
   const includeToggle = `<div class="include-row">
     <span class="include-label">Include in report</span>
@@ -683,6 +706,7 @@ function openConfig(id) {
       <div class="cfg-sec-title">Report Sections</div>
       ${secTiles}
     </div>
+    ${evalBand}
     ${deleteSection}
   </div>`;
   requestAnimationFrame(() => { bindDescriptionEditor(); mountCharts(); });

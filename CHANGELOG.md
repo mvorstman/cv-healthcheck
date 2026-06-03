@@ -10,6 +10,26 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-03 (ADR-0010 — Evaluation band: criteria + findings cards (layout slice 2))
+
+**Branch:** `feature/basic-healthcheck-report-output`. **963 passing** (was 956; +7). Restructures where evaluation lives in the report; **presentation/view only** (no scope/rule/binding/verdict change).
+
+### Added / Changed
+- **New "Evaluation" band** — a peer to Data Source / Report Sections, ordered **after** Report Sections — with TWO independently-includable cards: **"Evaluation criteria"** (read-only) and **"Findings"** (the former Compliance findings list, moved verbatim + retitled). Each is a normal section, so it gets its own include toggle via the existing `secTile`.
+- **The pipe:** `result_to_artifact` bakes a per-section `metadata["evaluation"] = {scope, checks:[{rule_id, severity}]}` from the resolved rules + scope. `artifact_to_view` reads it to: move the `<subject>.compliance` findings into the evaluation band (retitled "Findings", keeps its pill), build the criteria card, set a `band` on every section (default `report`), and add a `scope_caption` to the data table.
+- **"Evaluation criteria" card** — **no status pill** (it describes the assessment, it is not a verdict): a plain-language **Scope** sentence + one severity-tagged **check** sentence per bound rule.
+- **Scope caption** on the data-table legend bar (muted, right-aligned, e.g. "Scope: manual server groups · automatic excluded") — the **always-present safety net**: it lives on the table, so it survives toggling both Evaluation cards out.
+- `quick_hc.js` partitions sections into the Report vs Evaluation bands and renders the `criteria` type + the scope caption; `quick_hc.css` adds the criteria card + caption styling.
+- **Derived phrasing is INTERIM** — one clearly-marked place in `canonical_view.py` maps the scope (`association eq <v>`) and the two named rule ids to sentences. **Not** an inference engine (between / stale_days / … are out of scope).
+- `tests/test_evaluation_band_adr0010.py` (+7): the band ordered after Report with exactly criteria+findings; findings moved out of Report + retitled; criteria scope/checks with no pill; independent toggles; the table scope caption; no-evaluation subjects get no band/criteria/caption (only `.compliance` rebands); render markers.
+
+### Notes
+- **Verified headless** against the live page: server_groups → table (report band) with caption "manual server groups · automatic excluded"; Evaluation band → "Evaluation criteria" (scope sentence + two warning checks, no pill) + "Findings" (11, Warning pill). The stored artifact was re-baked (runtime state); a real Collect bakes the same. The card visuals are the operator's check after `./start.sh`.
+- **Other subjects unchanged:** CommCell Details / License Summary / Security Assessment carry no `evaluation` metadata (or use their own builders) → no Evaluation band, sections default to the report band, captions `None`.
+- **Open follow-up:** an authored rule `description` + scope label (rendered verbatim, replacing the interim derivation) — pairs with the scope-authoring MCP tool, still the open authoring follow-up.
+
+---
+
 ## 2026-06-03 (ADR-0010 — report section layout + per-row verdict rendering (layout slice))
 
 **Branch:** `feature/basic-healthcheck-report-output`. **956 passing** (was 948; +8). Renders the per-row `_verdict` the engine slice bakes; **presentation only** — no engine / scope / rule / verdict change.

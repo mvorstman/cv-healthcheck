@@ -93,6 +93,8 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
     src = artifact.source
     active_src = _SOURCE_TYPE_TO_ID.get(src.type, REST_REPORTS_PLUS_SOURCE_ID)
     subject_id = artifact.subject.id
+    # ADR 0010 layout slice 2: per-section {scope, checks} baked at collection.
+    evaluation = artifact.metadata.get("evaluation") or {}
 
     sections: list[dict] = []
     for sec in artifact.sections:
@@ -134,6 +136,13 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
                 "row_verdicts": row_verdicts,
                 # section pill = worst row verdict EXCLUDING not_evaluated; None → no pill.
                 "sev": _worst_verdict_code(row_verdicts),
+                # Always-present scope caption on the legend bar (safety net — it
+                # survives toggling the Evaluation cards out). None when the section
+                # is not evaluated. ``sec.id`` here is the catalog section_id.
+                "scope_caption": (
+                    _scope_phrases((evaluation[sec.id].get("scope")) or [])[1]
+                    if sec.id in evaluation else None
+                ),
                 "empty_message": sec.empty_message,
             })
         elif isinstance(sec, MetricSection):
@@ -162,6 +171,21 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
             # tiles default — so a card authored view_mode="table" renders as the
             # Field/Value table. Source-agnostic; unset → tiles (unchanged).
             sections.append(_card_section_view(sec, sec_id, view_mode=sec.view_mode or "tiles"))
+
+    # ── ADR 0010 layout slice 2: the Evaluation band ──
+    # Every section defaults to the "report" band; the derived <subject>.compliance
+    # findings MOVE to the "evaluation" band, retitled "Findings". A read-only
+    # "Evaluation criteria" card (no status pill) is built per evaluated section.
+    # Order: report sections, then Evaluation (criteria first, then findings).
+    for s in sections:
+        s.setdefault("band", "report")
+        if s["type"] == "findings_list" and s["id"].endswith(".compliance"):
+            s["band"] = "evaluation"
+            s["title"] = "Findings"
+    criteria = [_evaluation_criteria_view(sid, block) for sid, block in evaluation.items()]
+    report_sections = [s for s in sections if s.get("band") != "evaluation"]
+    eval_findings = [s for s in sections if s.get("band") == "evaluation"]
+    sections = report_sections + criteria + eval_findings
 
     return {
         "id": subject_id,
@@ -612,6 +636,63 @@ def _worst_finding_sev(findings: list[Finding]) -> str | None:
         if worst is None or _SEV_CODE_RANK[code] > _SEV_CODE_RANK[worst]:
             worst = code
     return worst
+
+
+# ── ADR 0010 layout slice 2: INTERIM derived phrasing ────────────────────────
+# Sentences DERIVED from the scope conditions / rule ids for the shapes actually
+# in use. INTERIM — the real fix is an authored `description` on the rule + a
+# scope label, set at authoring time and rendered verbatim (next slice). Keep ALL
+# derivation here, in this one clearly-marked place; do NOT auto-phrase every
+# operator (between / stale_days / … are out of scope).
+_SEV_STR_TO_CODE = {"critical": "crit", "warning": "warn", "info": "info", "good": "good"}
+_RULE_SENTENCE = {
+    "sg_empty_group": "A group must contain at least one server.",
+    "sg_naming_convention": "A group name must follow the GRP_ naming convention.",
+}
+
+
+def _rule_sentence(rule_id: str | None) -> str:
+    return _RULE_SENTENCE.get(rule_id or "") or (f"Rule “{rule_id}”." if rule_id else "Rule.")
+
+
+def _scope_phrases(conditions: list[Any]) -> tuple[str, str]:
+    """(full sentence, short caption) for a scope. INTERIM: handles eq-on-
+    ``association``; an empty scope → "all rows"; anything else → a generic
+    subset phrase."""
+    for cond in conditions or []:
+        if cond.get("target") == "association" and cond.get("operator") == "eq":
+            value = str(cond.get("value", "")).strip().lower()
+            sentence = f"{value.capitalize()} server groups."
+            caption = f"{value} server groups"
+            if value == "manual":
+                sentence += " Automatic groups are excluded from assessment."
+                caption += " · automatic excluded"
+            return sentence, caption
+    if not conditions:
+        return "All rows are assessed.", "all rows"
+    return "A subset of rows is assessed.", "a subset of rows"
+
+
+def _evaluation_criteria_view(section_id: str, block: dict[str, Any]) -> dict[str, Any]:
+    """The read-only "Evaluation criteria" card: a plain-language scope sentence +
+    one severity-tagged check sentence per bound rule. No status pill — it
+    describes the assessment, it is not a verdict."""
+    scope_sentence, _ = _scope_phrases(block.get("scope") or [])
+    checks = [
+        {"sev": _SEV_STR_TO_CODE.get(str(c.get("severity")), "info"),
+         "text": _rule_sentence(c.get("rule_id"))}
+        for c in (block.get("checks") or [])
+    ]
+    return {
+        "id": f"{section_id}.criteria",
+        "title": "Evaluation criteria",
+        "meta": "",
+        "included": True,
+        "type": "criteria",
+        "band": "evaluation",
+        "scope_sentence": scope_sentence,
+        "checks": checks,
+    }
 
 
 def _parse_percent(value: Any) -> int:
