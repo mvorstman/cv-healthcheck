@@ -10,6 +10,20 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (audit_trail subject built + the CC-API dict-wrap fix validated LIVE)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Catalog/runtime + live-validation pass on top of the dict-wrap collector fix below; **no code change** (the subject + binding are db-driven runtime state, gitignored). **Resolves the "held pending review" caveat in the preceding entry** — the endpoint and shape are now verified live.
+
+### Added (runtime catalog — data/app.db, gitignored)
+- **`audit_trail` subject** (fresh build — it never existed in code/catalog/git; only an orphaned, unbound `audit_critical_retention_warning` rule did). One table section `audit_trail.retention` on the `rest_command_center_api` source, endpoint `/commandcenter/api/commserv/audittrail`, `output_as: table`, `root_key: auditTrailInfo`, with the orphaned rule bound via `evaluative.row_rules`. Nothing to supersede (single rule version, was unbound).
+
+### Notes
+- **Endpoint + shape verified live** through the ADR-0008 loopback (`POST /internal/commserve`, app-held token; no CS token ever held here): `/commandcenter/api/commserv/audittrail` → `200`, body `{"auditTrailInfo": {…}}` where `auditTrailInfo` is a **single dict** (`retentionForCritical/High/Medium/Low`). This is a *different* endpoint from the proven ReportsPlus audit **dataset** in `API_MAPPING.md` (event records) — the earlier "differs from the proven dataset / shape unverified" caveat was over-cautious; both are real, distinct endpoints.
+- **Field-name correction vs the brief:** the API returns camelCase `retentionForCritical/High/Medium/Low`, not `retention_critical/...`. The binding maps column id → field accordingly (`retention_critical ← retentionForCritical`, …), so the rule's `retention_critical` target resolves.
+- **Live re-collect** (real `CommandCenterExtractor.extract()`, only `_fetch` routed through the loopback) → the `auditTrailInfo` dict auto-wraps to **exactly 1 row** `{retention_critical: 365, high: 365, medium: 240, low: 120}`, verdict `good`, **0 findings** (`retention_critical < 365` is false at 365 — boundary-compliant). Renders as a Report-band table (1 row, green STATUS dot) + an Evaluation-band criteria card (`Low critical audit retention` · `retention_critical < 365`). Visual check is the operator's after `./start.sh`.
+
+---
+
 ## 2026-06-04 (Fix — CC-API table adapter: single-object root_key → one row)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **976 passing** (was 975; +1). Collector-only fix in the `rest_command_center_api` source adapter; no schema/catalog/view change.

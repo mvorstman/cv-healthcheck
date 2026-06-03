@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-03 (ADR-0010 — **authored rule descriptions + Option-B criteria render** (slice 3) done; scope-authoring follow-up remains)
+**Last updated:** 2026-06-04 (CC-API dict-wrap collector fix + `audit_trail` subject built & validated live; ADR-0010 slice 3 before it)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *ADR 0010 — authored rule descriptions + Option-B criteria render (slice 3)* (this commit).
-**Test status:** **975 passing** under `pytest` and `python -m pytest`.
+**Last commit:** *Fix: CC-API table adapter wraps a single-object root_key as one row* (`d1860c4`).
+**Test status:** **976 passing** under `pytest` and `python -m pytest`.
 
 ---
 
@@ -16,7 +16,16 @@
 
 ---
 
-## What was just completed — authored rule descriptions + Option-B criteria render (slice 3)
+## What was just completed — CC-API dict-wrap fix + `audit_trail` built & validated live
+
+- **Collector fix (committed `d1860c4`):** `extractors/command_center._project_table_rows` returned an empty table when `root_key` resolved to a **dict** (single-object response); it now auto-wraps a dict as `[obj]`. Unit test covers dict-wrap + the unchanged list path. This was a **gap from inception**, not a regression (`auditTrailInfo` never existed in git; the dict branch was simply never written).
+- **`audit_trail` subject (runtime catalog, gitignored — NOT committed):** fresh build (it never existed). Table section `audit_trail.retention` on `rest_command_center_api`, endpoint `/commandcenter/api/commserv/audittrail`, `root_key auditTrailInfo`, columns `retention_critical/high/medium/low ← retentionFor{Critical,High,Medium,Low}` (camelCase correction vs the brief), orphaned rule `audit_critical_retention_warning` bound.
+- **Validated LIVE** through the ADR-0008 loopback (app-held token; no CS token held here): endpoint `200`, `auditTrailInfo` is a single dict → re-collect yields **exactly 1 row** `{critical 365, high 365, medium 240, low 120}`, verdict `good`, **0 findings** (`< 365` false at 365). Renders: Report-band table (1 row) + Evaluation-band criteria card.
+- **Open:** push (now several commits ahead); the `mcp/server.py` probe-timeout hunk is still uncommitted; `audit_trail` has no authored rule `description` (criteria primary falls back to the rule title) — author one to match the slice-3 pattern.
+
+---
+
+## Earlier this branch — authored rule descriptions + Option-B criteria render (slice 3)
 
 The criteria card's per-check **Checks** lines are no longer derived from rule ids. Each check now renders the rule's **authored `description`** (falling back to its static title, **never the raw id**) over a **mechanically-rendered condition** in mono — Option B.
 
