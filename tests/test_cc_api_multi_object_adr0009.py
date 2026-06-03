@@ -136,6 +136,23 @@ def test_project_table_rows_top_level_list_and_degenerate_cases():
     assert _project_table_rows(["x", 2], {}) == [{"value": "x"}, {"value": 2}]
 
 
+def test_project_table_rows_wraps_single_object_under_root_key():
+    """A root_key resolving to a DICT (a single-object response, e.g.
+    ``auditTrailInfo: {...}``) is a one-row table — auto-wrapped as [obj], not an
+    empty table. The existing LIST case is unaffected."""
+    raw = {"auditTrailInfo": {"retention_critical": 90, "retention_high": 365}}
+    spec = {"root_key": "auditTrailInfo",
+            "columns": [{"id": "retention_critical", "field": "retention_critical"},
+                        {"id": "retention_high", "field": "retention_high"}]}
+    # dict-wrap: exactly one row, fields projected
+    assert _project_table_rows(raw, spec) == [{"retention_critical": 90, "retention_high": 365}]
+    # passthrough (no columns) of a single object → one row, unchanged
+    assert _project_table_rows({"obj": {"a": 1}}, {"root_key": "obj"}) == [{"a": 1}]
+    # the existing multi-record LIST path is unchanged
+    list_spec = {"root_key": "items", "columns": [{"id": "Name", "field": "name"}]}
+    assert _project_table_rows(_COLLECTION["raw"], list_spec) == [{"Name": "alpha"}, {"Name": "beta"}]
+
+
 # ── D1 axis 1: endpoint resolution from the binding ───────────────────────────
 
 def test_environment_resolves_to_default_commserv_endpoint(migrated_db_path: Path):

@@ -10,6 +10,20 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (Fix — CC-API table adapter: single-object root_key → one row)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **976 passing** (was 975; +1). Collector-only fix in the `rest_command_center_api` source adapter; no schema/catalog/view change.
+
+### Fixed
+- `extractors/command_center._project_table_rows`: when `root_key` resolved to a **dict** (a single-object response, e.g. `auditTrailInfo: {...}`) the projector hit `if not isinstance(records, list): return []` and emitted an **empty table**. It now auto-wraps a dict as `[obj]` before projecting, so a single-object response becomes a one-row table (columns selected/renamed or passed through, same as the list path). `wrap_object_as_row` is **not** plumbed through the binding, so the dict auto-detect is unconditional. The multi-record list path and all degenerate cases are unchanged.
+- `tests/test_cc_api_multi_object_adr0009.py` (+1): `test_project_table_rows_wraps_single_object_under_root_key` — column-mapped dict-wrap + no-columns passthrough + an explicit assertion the existing list path is unaffected.
+
+### Notes
+- This is a **gap from inception**, not a regression: the dict branch never existed — `_project_table_rows` was introduced (ADR 0009, `5891076`) only ever handling lists; git history shows no prior dict-wrap and `auditTrailInfo` has never appeared in the tree.
+- Discovered while investigating a handover note about an `audit_trail` collector regression. The collector fix is real and lands here; the `audit_trail` **subject does not exist** in code/catalog/git (only an orphaned, unbound `audit_critical_retention_warning` rule), so building/validating that subject is held pending review (its endpoint shape is unverified and differs from the proven ReportsPlus audit dataset in `API_MAPPING.md`).
+
+---
+
 ## 2026-06-03 (ADR-0010 — authored rule descriptions + Option-B criteria render (slice 3))
 
 **Branch:** `feature/basic-healthcheck-report-output`. **975 passing** (was 963; +12). Retires the interim per-rule prose deriver in favour of authored text + a mechanical condition render; **view/data only** (no scope/verdict/binding/engine change beyond the new `description` field).

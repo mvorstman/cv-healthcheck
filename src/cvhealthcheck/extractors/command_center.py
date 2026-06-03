@@ -247,6 +247,12 @@ def _project_table_rows(raw: Any, table_spec: dict[str, Any]) -> list[dict[str, 
         records = raw.get(root_key)
     else:
         records = None
+    # A single-object response under root_key (e.g. ``auditTrailInfo: {...}``) is a
+    # one-row table: wrap the dict as ``[obj]`` before projecting, instead of
+    # silently yielding an empty table. ``wrap_object_as_row`` is not plumbed
+    # through the binding yet, so this dict auto-detect is unconditional.
+    if isinstance(records, dict):
+        records = [records]
     if not isinstance(records, list):
         return []
 
