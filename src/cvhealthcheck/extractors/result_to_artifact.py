@@ -20,7 +20,7 @@ from cvhealthcheck.artifacts.models import (
     TableColumn,
     TableSection,
 )
-from cvhealthcheck.evaluative.row_match import evaluate_section_rows
+from cvhealthcheck.evaluative.row_match import evaluate_section_rows, format_conditions
 from cvhealthcheck.extractors.card_section import build_card_section
 from cvhealthcheck.extractors.chart_section import build_chart_section
 from cvhealthcheck.extractors.html import ExtractionResult
@@ -143,16 +143,19 @@ def result_to_artifact(
     # section. Read-only over the rows — the rules never mutate the artifact data.
     table_by_id = {s.id: s for s in sections if isinstance(s, TableSection)}
     compliance_items: list[Finding] = []
-    # ADR 0010 layout slice 2: the Evaluation band's criteria card is derived from
-    # the scope + the bound rules' (id, severity). Bake them per section so the
-    # view builder (artifact-only) can render the criteria + the scope caption.
+    # ADR 0010 layout slice 2/3: the Evaluation band's criteria card is built from
+    # the scope + the bound rules. Bake each rule's authored `description`, its
+    # `title` (a row template), and the mechanically-formatted `condition_text` per
+    # section so the view builder (artifact-only) renders strings, not derivation.
     evaluation_meta: dict[str, dict[str, Any]] = {}
     for section_id, row_rules in (result.section_row_rules or {}).items():
         section_rows = result.sections.get(section_id) or []
         scope = (result.section_scope or {}).get(section_id)
         evaluation_meta[section_id] = {
             "scope": list(scope or []),
-            "checks": [{"rule_id": r.get("rule_id"), "severity": r.get("severity")}
+            "checks": [{"rule_id": r.get("rule_id"), "severity": r.get("severity"),
+                        "description": r.get("description"), "title": r.get("title"),
+                        "condition_text": format_conditions(r.get("conditions"))}
                        for r in row_rules],
         }
         findings, per_row = evaluate_section_rows(row_rules, section_rows, scope=scope, now=now)

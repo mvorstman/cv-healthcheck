@@ -20,8 +20,14 @@ NOW = datetime(2026, 6, 3, tzinfo=timezone.utc)
 
 _EVAL_META = {"server_groups": {
     "scope": [{"target": "association", "operator": "eq", "value": "MANUAL"}],
-    "checks": [{"rule_id": "sg_empty_group", "severity": "warning"},
-               {"rule_id": "sg_naming_convention", "severity": "warning"}],
+    "checks": [
+        {"rule_id": "sg_empty_group", "severity": "warning",
+         "description": "Every server group must contain at least one server.",
+         "title": "Empty server group: {row.name}", "condition_text": "server_count = 0"},
+        {"rule_id": "sg_naming_convention", "severity": "warning",   # description absent → title fallback
+         "title": "Group {row.name} breaks the naming convention",
+         "condition_text": 'name not contains "GRP_"'},
+    ],
 }}
 
 
@@ -73,8 +79,11 @@ def test_criteria_card_scope_and_checks_no_pill():
     assert "sev" not in crit                                       # criteria has NO pill
     assert crit["scope_sentence"] == "Manual server groups. Automatic groups are excluded from assessment."
     assert crit["checks"] == [
-        {"sev": "warn", "text": "A group must contain at least one server."},
-        {"sev": "warn", "text": "A group name must follow the GRP_ naming convention."},
+        {"sev": "warn", "primary": "Every server group must contain at least one server.",
+         "condition": "server_count = 0"},
+        # description absent → the title's static text (placeholder stripped), never the id
+        {"sev": "warn", "primary": "Group breaks the naming convention",
+         "condition": 'name not contains "GRP_"'},
     ]
 
 def test_each_evaluation_card_has_its_own_include_flag():

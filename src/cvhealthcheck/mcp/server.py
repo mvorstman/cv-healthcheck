@@ -499,9 +499,11 @@ def save_rule(rule: dict, bind: dict | None = None) -> dict:
         ``emit`` ("per_row" | "count"; count needs ``count_operator`` +
         ``count_value``); ``severity`` (critical|warning|info|good); and the
         ``title``/``message`` templates (``{value}/{target}/{count}/{row.<col>}``).
-        Optional: ``recommendation``, ``enabled`` (default true). ``kind`` defaults
-        to "row_match", ``scope`` to "row"; ``version`` is managed automatically
-        (bumped when the body changes).
+        Optional: ``description`` (one authored sentence; rendered verbatim as the
+        criteria card's primary line — falls back to the static `title` text when
+        absent, never the raw id), ``recommendation``, ``enabled`` (default true).
+        ``kind`` defaults to "row_match", ``scope`` to "row"; ``version`` is managed
+        automatically (bumped when the body changes).
     bind : dict | None
         Optional ``{"subject_id", "section_id"}`` — adds the rule's ref onto that
         table section's ``evaluative.row_rules`` (idempotent). Omit to save unbound

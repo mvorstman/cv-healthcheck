@@ -10,6 +10,26 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-03 (ADR-0010 — authored rule descriptions + Option-B criteria render (slice 3))
+
+**Branch:** `feature/basic-healthcheck-report-output`. **975 passing** (was 963; +12). Retires the interim per-rule prose deriver in favour of authored text + a mechanical condition render; **view/data only** (no scope/verdict/binding/engine change beyond the new `description` field).
+
+### Added / Changed
+- **Authored `description` on a rule (DATA).** `save_rule` accepts an optional `description` (string, nullable); it is persisted, returned, and surfaced by `list_rules`. Absent ⇒ null (no extra validation — it rides the rule body, which `save_rule` already stores verbatim). Documented on the MCP `save_rule` tool.
+- **Mechanical condition formatter** — `evaluative/row_match.format_conditions(conditions)`: renders a conditions list as one AND-joined human string, covering **every** supported operator (`eq =`, `ne ≠`, `gt >`, `gte ≥`, `lt <`, `lte ≤`, `contains`, `not contains`, `between <v> and <v2>`, `exists → is set`, `not_exists → is not set`, `stale_days → older than <n> days`). Strings quoted, numbers bare, a `{"ref":col}` rendered as the bare column name. ONE tested place — not inference.
+- **Bake gains the rendered fields.** `result_to_artifact` now bakes each check as `{rule_id, severity, description, title, condition_text}` (the formatter runs at bake; the view renders strings only).
+- **Criteria card = Option B.** Per check: severity badge + a **primary line** + the **condition** underneath in mono/muted. The primary line is the authored `description`, falling back to the rule `title` with its `{row.*}` template placeholders stripped (`canonical_view._title_static`) — **never the raw rule id** (the bug this slice fixes). `quick_hc.js`/`.css` render the two-line check.
+- **Interim prose deriver RETIRED.** `canonical_view._RULE_SENTENCE` / `_rule_sentence` (the hard-coded rule-id→sentence mapping) are removed. The scope-block sentence (`_scope_phrases`) stays as-is for this slice.
+- `tests/test_authored_descriptions_adr0010.py` (+12): formatter one-case-per-operator + quoting/AND-join; bake carries description/title/condition_text (absent ⇒ null); render contract — primary is description / static-title / **never the rule id** (the regression guard); deriver removed; `save_rule` description persists/returns/lists, absent ⇒ null. `test_evaluation_band_adr0010.py` updated to the new check shape.
+
+### Notes
+- **Seeded (runtime, gitignored — the proof):** `server_groups`' three bound rules got authored descriptions — `sg_empty_group` "Every server group must contain at least one server.", `sg_naming_convention` "Manual server group names must follow the GRP_ naming convention.", `sg_rommelgroep_company_1` "Company_1 must not contain a group named “rommelgroep”." `sg_naming_convention`'s redundant `association == MANUAL` condition was dropped (the section scope already gates that population, so this is verdict/finding-neutral) — leaving its criteria condition the substantive `name not contains "GRP_"`.
+- **Verified via the real path** (re-baked stored artifact, runtime state): criteria card Checks → `name not contains "GRP_"` (naming), `name = "rommelgroep" and company = "Company_1"` (rommelgroep, critical), `server_count = 0` (empty), each with its authored description; **no raw rule id**; scope sentence + table caption unchanged. Card visuals are the operator's check after `./start.sh`.
+- **Check ORDER** follows the binding order (naming → rommelgroep → empty), which differs from the acceptance's logical listing — a deterministic authored order is still the open follow-up (bindings were not touched).
+- **Open follow-up:** the scope-authoring MCP tool (`save_section_scope` / a `scope` arg on bind) + an **authored scope label** to retire the remaining interim `_scope_phrases` derivation; an authored check order.
+
+---
+
 ## 2026-06-03 (ADR-0010 — Evaluation band: criteria + findings cards (layout slice 2))
 
 **Branch:** `feature/basic-healthcheck-report-output`. **963 passing** (was 956; +7). Restructures where evaluation lives in the report; **presentation/view only** (no scope/rule/binding/verdict change).

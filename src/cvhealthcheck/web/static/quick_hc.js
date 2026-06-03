@@ -384,8 +384,10 @@ function secBody(sec) {
     const scope = sec.scope_sentence
       ? `<div class="crit-block"><div class="crit-label">Scope</div><div class="crit-text">${esc(sec.scope_sentence)}</div></div>`
       : '';
+    // Option B: severity badge + authored description (the primary line) + the
+    // mechanical condition underneath in mono. Never the raw rule id.
     const checks = (sec.checks || []).map(c =>
-      `<div class="crit-check"><span class="m-badge ${SEV_BADGE[c.sev] || ''}">${SEV_LABEL[c.sev] || esc(c.sev)}</span><span class="crit-text">${esc(c.text)}</span></div>`
+      `<div class="crit-check"><span class="m-badge ${SEV_BADGE[c.sev] || ''}">${SEV_LABEL[c.sev] || esc(c.sev)}</span><div class="crit-check-body"><div class="crit-text">${esc(c.primary)}</div>${c.condition ? `<div class="crit-cond">${esc(c.condition)}</div>` : ''}</div></div>`
     ).join('');
     const checksBlock = checks ? `<div class="crit-block"><div class="crit-label">Checks</div>${checks}</div>` : '';
     return `${scope}${checksBlock}` || '<div style="font-size:12px;color:var(--text-3)">No criteria.</div>';

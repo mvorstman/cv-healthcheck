@@ -172,6 +172,45 @@ def evaluate_section_rows(
     return findings, per_row
 
 
+# ── ADR 0010 slice 3: mechanical condition rendering ─────────────────────────
+# Renders a conditions list as a human string for the criteria card. Mechanical,
+# ONE place, NOT inference — covers every supported operator.
+_OP_SYMBOL = {
+    "eq": "=", "ne": "≠", "gt": ">", "gte": "≥", "lt": "<", "lte": "≤",
+    "contains": "contains", "not_contains": "not contains",
+}
+
+
+def format_conditions(conditions: list[dict[str, Any]] | None) -> str:
+    """A conditions list as a human-readable, AND-joined string — e.g.
+    ``name = "rommelgroep" and company = "Company_1"``."""
+    return " and ".join(_format_condition(c) for c in (conditions or []))
+
+
+def _format_value(value: Any) -> str:
+    if isinstance(value, dict) and "ref" in value:
+        return str(value["ref"])                       # field-to-field ref: bare column name
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(int(value)) if float(value).is_integer() else str(value)
+    return f'"{value}"'                                # string: quoted
+
+
+def _format_condition(cond: dict[str, Any]) -> str:
+    target = cond.get("target", "")
+    op = cond.get("operator")
+    if op == "exists":
+        return f"{target} is set"
+    if op == "not_exists":
+        return f"{target} is not set"
+    if op == "between":
+        return f"{target} between {_format_value(cond.get('value'))} and {_format_value(cond.get('value2'))}"
+    if op == "stale_days":
+        return f"{target} older than {_format_value(cond.get('value'))} days"
+    return f"{target} {_OP_SYMBOL.get(op, op)} {_format_value(cond.get('value'))}"
+
+
 # ── predicate evaluation ──────────────────────────────────────────────────────
 
 def _operand(pred: dict[str, Any], row: dict[str, Any]) -> Any:

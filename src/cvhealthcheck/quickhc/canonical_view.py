@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from cvhealthcheck.artifacts.enums import ArtifactStatus, FindingSeverity, SourceType
@@ -638,21 +639,24 @@ def _worst_finding_sev(findings: list[Finding]) -> str | None:
     return worst
 
 
-# ── ADR 0010 layout slice 2: INTERIM derived phrasing ────────────────────────
-# Sentences DERIVED from the scope conditions / rule ids for the shapes actually
-# in use. INTERIM — the real fix is an authored `description` on the rule + a
-# scope label, set at authoring time and rendered verbatim (next slice). Keep ALL
-# derivation here, in this one clearly-marked place; do NOT auto-phrase every
-# operator (between / stale_days / … are out of scope).
+# ── ADR 0010 criteria card phrasing ──────────────────────────────────────────
+# Each check's PRIMARY line is the rule's AUTHORED `description` (slice 3),
+# falling back to the rule's `title` with its `{row.*}` template placeholders
+# stripped — NEVER the raw rule id. The condition line is the mechanically
+# formatted `condition_text` baked in `result_to_artifact`. The SCOPE sentence is
+# still derived here (interim) — an authored scope label is the scope-authoring
+# slice; `_scope_phrases` stays until then.
 _SEV_STR_TO_CODE = {"critical": "crit", "warning": "warn", "info": "info", "good": "good"}
-_RULE_SENTENCE = {
-    "sg_empty_group": "A group must contain at least one server.",
-    "sg_naming_convention": "A group name must follow the GRP_ naming convention.",
-}
+_TEMPLATE_PLACEHOLDER = re.compile(r"\{[^}]*\}")
 
 
-def _rule_sentence(rule_id: str | None) -> str:
-    return _RULE_SENTENCE.get(rule_id or "") or (f"Rule “{rule_id}”." if rule_id else "Rule.")
+def _title_static(title: str | None) -> str:
+    """A rule `title` is a per-row template (e.g. ``Empty group: {row.name}``);
+    render only its static text for the criteria card."""
+    if not title:
+        return ""
+    stripped = _TEMPLATE_PLACEHOLDER.sub("", title)
+    return re.sub(r"\s+", " ", stripped).strip().rstrip(":·-–— ").strip()
 
 
 def _scope_phrases(conditions: list[Any]) -> tuple[str, str]:
@@ -680,7 +684,8 @@ def _evaluation_criteria_view(section_id: str, block: dict[str, Any]) -> dict[st
     scope_sentence, _ = _scope_phrases(block.get("scope") or [])
     checks = [
         {"sev": _SEV_STR_TO_CODE.get(str(c.get("severity")), "info"),
-         "text": _rule_sentence(c.get("rule_id"))}
+         "primary": c.get("description") or _title_static(c.get("title")) or "Check",
+         "condition": c.get("condition_text") or ""}
         for c in (block.get("checks") or [])
     ]
     return {
