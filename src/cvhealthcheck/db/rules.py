@@ -84,7 +84,241 @@ def load_subject_row_rules(
             resolved = resolve_rule(entry, registry)
             if resolved.get("kind") != "row_match":
                 continue
+            if not resolved.get("enabled", True):
+                continue  # disabled rules don't fire (collection or dry-run)
             bucket = out.setdefault(section_id, [])
             if not any(r.get("rule_id") == resolved.get("rule_id") for r in bucket):
                 bucket.append(resolved)
     return out
+
+
+# ── ADR 0010 Phase 2b: authoring (list / save / bind / delete / validate) ─────
+
+def list_rules(
+    db: sqlite3.Connection,
+    *,
+    subject_id: str | None = None,
+    enabled: bool | None = None,
+) -> list[dict[str, Any]]:
+    """Registered rule definitions. ``subject_id`` filters to rules **bound** to
+    that subject (via section ``evaluative.row_rules`` refs, incl. disabled).
+    ``enabled`` filters on the def's ``enabled`` flag (default True)."""
+    registry = load_rules_registry(db)
+    if subject_id is not None:
+        bound = _subject_bound_rule_ids(db, subject_id)
+        items = [d for rid, d in registry.items() if rid in bound]
+    else:
+        items = list(registry.values())
+    if enabled is not None:
+        items = [d for d in items if bool(d.get("enabled", True)) is bool(enabled)]
+    return sorted(items, key=lambda d: str(d.get("rule_id")))
+
+
+def save_rule(db: sqlite3.Connection, definition: dict[str, Any]) -> dict[str, Any]:
+    """Upsert a rule definition by ``rule_id`` (the body is the JSON blob). Bumps
+    ``version`` when the body changed; preserves the original ``created_by`` on
+    update; defaults ``enabled`` to True. Returns the stored definition.
+
+    Kind-specific validation (``validate_row_match_rule``) is the caller's
+    responsibility — this is the low-level persist."""
+    rule_id = definition.get("rule_id")
+    if not rule_id:
+        raise ValueError("rule_id is required")
+    existing = load_rules_registry(db).get(rule_id)
+    new_def = dict(definition)
+    new_def.setdefault("enabled", True)
+    if existing is None:
+        new_def["created_by"] = new_def.get("created_by", "ai")
+        new_def["version"] = int(new_def.get("version") or 1)
+    else:
+        new_def["created_by"] = existing.get("created_by", new_def.get("created_by", "ai"))
+        prev = {k: v for k, v in existing.items() if k != "version"}
+        cur = {k: v for k, v in new_def.items() if k != "version"}
+        new_def["version"] = existing.get("version", 1) + (1 if cur != prev else 0)
+    db.execute(
+        "INSERT INTO rules (rule_id, definition_json, created_by) VALUES (?, ?, ?) "
+        "ON CONFLICT(rule_id) DO UPDATE SET definition_json = excluded.definition_json",
+        (rule_id, json.dumps(new_def), new_def["created_by"]),
+    )
+    db.commit()
+    return new_def
+
+
+def bind_rule(
+    db: sqlite3.Connection, rule_id: str, subject_id: str, section_id: str
+) -> int:
+    """Add ``{"ref": rule_id}`` to every source binding of (subject, section)'s
+    ``extraction_instructions.evaluative.row_rules`` — idempotent (never a
+    duplicate ref). Returns the number of bindings newly written."""
+    rows = db.execute(
+        "SELECT sss.id AS id, sss.extraction_instructions AS instr "
+        "FROM subject_section_sources sss "
+        "JOIN subject_sources src ON src.id = sss.source_id "
+        "WHERE src.subject_id = ? AND sss.section_id = ?",
+        (subject_id, section_id),
+    ).fetchall()
+    bound = 0
+    for row in rows:
+        try:
+            instr = json.loads(row["instr"]) if row["instr"] else {}
+        except (json.JSONDecodeError, TypeError):
+            instr = {}
+        row_rules = instr.setdefault("evaluative", {}).setdefault("row_rules", [])
+        if not any(e.get("ref") == rule_id for e in row_rules):
+            row_rules.append({"ref": rule_id})
+            db.execute(
+                "UPDATE subject_section_sources SET extraction_instructions = ? WHERE id = ?",
+                (json.dumps(instr), row["id"]),
+            )
+            bound += 1
+    db.commit()
+    return bound
+
+
+def delete_rule(db: sqlite3.Connection, rule_id: str) -> dict[str, Any]:
+    """Delete a registry rule AND strip its ``{ref}`` from every section binding,
+    so a later collection can't hit the loud "unknown ref" on a dangling
+    reference. (There is no findings table — D5; findings live in artifacts — so
+    no FK cascade is involved.)"""
+    stripped = 0
+    rows = db.execute(
+        "SELECT id, extraction_instructions FROM subject_section_sources"
+    ).fetchall()
+    for row in rows:
+        instr_raw = row["extraction_instructions"]
+        if not instr_raw or rule_id not in instr_raw:
+            continue
+        try:
+            instr = json.loads(instr_raw)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        row_rules = (instr.get("evaluative") or {}).get("row_rules") or []
+        kept = [e for e in row_rules if e.get("ref") != rule_id]
+        if len(kept) != len(row_rules):
+            instr["evaluative"]["row_rules"] = kept
+            db.execute(
+                "UPDATE subject_section_sources SET extraction_instructions = ? WHERE id = ?",
+                (json.dumps(instr), row["id"]),
+            )
+            stripped += 1
+    cur = db.execute("DELETE FROM rules WHERE rule_id = ?", (rule_id,))
+    db.commit()
+    return {"deleted": rule_id, "existed": cur.rowcount > 0, "bindings_stripped": stripped}
+
+
+def validate_row_match_rule(
+    db: sqlite3.Connection,
+    definition: dict[str, Any],
+    *,
+    bind: dict[str, str] | None = None,
+) -> None:
+    """Reject a malformed/un-bindable row_match rule at AUTHORING time (raises
+    ValueError) rather than failing silently at collection. ADR 0010 §8."""
+    from cvhealthcheck.evaluative.row_match import COUNT_OPERATORS, KNOWN_OPERATORS
+
+    if not definition.get("rule_id"):
+        raise ValueError("rule_id is required")
+    if definition.get("kind", "row_match") != "row_match":
+        raise ValueError(f"this authors row_match rules; got kind={definition.get('kind')!r}")
+    scope = definition.get("scope", "row")
+    if scope != "row":
+        # TODO: when summary scope lands, scope=summary must reject emit != once (ADR §8).
+        raise ValueError(f"scope {scope!r} is not yet supported (only 'row')")
+    if definition.get("severity") not in ("critical", "warning", "info", "good"):
+        raise ValueError(f"severity must be critical/warning/info/good, got {definition.get('severity')!r}")
+
+    conditions = definition.get("conditions")
+    if not isinstance(conditions, list) or not conditions:
+        raise ValueError("conditions must be a non-empty list")
+    for cond in conditions:
+        op = cond.get("operator")
+        if op not in KNOWN_OPERATORS:
+            raise ValueError(f"unknown operator {op!r} (supported: {sorted(KNOWN_OPERATORS)})")
+        if op == "between" and cond.get("value2") is None:
+            raise ValueError(f"operator 'between' requires value2 (target {cond.get('target')!r})")
+
+    emit = definition.get("emit", "per_row")
+    if emit not in ("per_row", "count"):
+        raise ValueError(f"emit must be 'per_row' or 'count', got {emit!r}")
+    if emit == "count":
+        if definition.get("count_operator") not in COUNT_OPERATORS:
+            raise ValueError("emit=count requires count_operator in lt/lte/gt/gte/eq/ne")
+        if definition.get("count_value") is None:
+            raise ValueError("emit=count requires count_value")
+
+    if bind is not None:
+        subject_id, section_id = bind.get("subject_id"), bind.get("section_id")
+        section = db.execute(
+            "SELECT section_type FROM subject_sections WHERE subject_id = ? AND section_id = ?",
+            (subject_id, section_id),
+        ).fetchone()
+        if section is None:
+            raise ValueError(f"section {section_id!r} is not present on subject {subject_id!r}")
+        if section["section_type"] != "table":
+            raise ValueError(
+                f"a row-scope rule must bind to a table section; "
+                f"{section_id!r} is {section['section_type']!r}"
+            )
+        columns = _section_column_ids(db, subject_id, section_id)
+        if columns:  # only enforce when the section declares its columns
+            referenced: set[str] = set()
+            for cond in conditions:
+                if cond.get("target"):
+                    referenced.add(cond["target"])
+                value = cond.get("value")
+                if isinstance(value, dict) and value.get("ref"):
+                    referenced.add(value["ref"])
+            missing = sorted(c for c in referenced if c not in columns)
+            if missing:
+                raise ValueError(
+                    f"conditions reference columns not in section {section_id!r}: "
+                    f"{missing} (available: {sorted(columns)})"
+                )
+
+
+def _subject_bound_rule_ids(db: sqlite3.Connection, subject_id: str) -> set[str]:
+    """rule_ids referenced by any of the subject's section bindings (incl. disabled)."""
+    rows = db.execute(
+        "SELECT sss.extraction_instructions AS instr FROM subject_section_sources sss "
+        "JOIN subject_sources src ON src.id = sss.source_id WHERE src.subject_id = ?",
+        (subject_id,),
+    ).fetchall()
+    ids: set[str] = set()
+    for row in rows:
+        try:
+            instr = json.loads(row["instr"]) if row["instr"] else {}
+        except (json.JSONDecodeError, TypeError):
+            continue
+        for entry in ((instr.get("evaluative") or {}).get("row_rules")) or []:
+            if entry.get("ref"):
+                ids.add(entry["ref"])
+    return ids
+
+
+def _section_column_ids(db: sqlite3.Connection, subject_id: str, section_id: str) -> set[str]:
+    """The column ids a section's bindings declare (table.columns / columns /
+    column_map), unioned across its sources — the universe a condition target/ref
+    must come from."""
+    rows = db.execute(
+        "SELECT sss.extraction_instructions AS instr FROM subject_section_sources sss "
+        "JOIN subject_sources src ON src.id = sss.source_id "
+        "WHERE src.subject_id = ? AND sss.section_id = ?",
+        (subject_id, section_id),
+    ).fetchall()
+    cols: set[str] = set()
+    for row in rows:
+        try:
+            instr = json.loads(row["instr"]) if row["instr"] else {}
+        except (json.JSONDecodeError, TypeError):
+            continue
+        table = instr.get("table") if isinstance(instr.get("table"), dict) else {}
+        for col in (table.get("columns") or []):
+            if isinstance(col, dict) and col.get("id"):
+                cols.add(col["id"])
+        for col in (instr.get("columns") or []):
+            if isinstance(col, dict) and col.get("id"):
+                cols.add(col["id"])
+        for col in (instr.get("column_map") or []):
+            if isinstance(col, dict) and (col.get("canonical") or col.get("id")):
+                cols.add(col.get("canonical") or col.get("id"))
+    return cols

@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-03 (ADR-0010 Phase 2b — MCP authoring surface for row-scope rules)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **939 passing** (was 929; +10). Completes ADR-0010: row-scope rules are authored/managed via MCP, validated at authoring time.
+
+### Added
+- **MCP tools** (`mcp/server.py`): `evaluate_subject` (dry-run — wraps the Phase-2a service; reads the canonical/approved latest artifact, **not** the staging queue), `list_rules` (`subject_id?` / `enabled?`), `save_rule` (upsert + optional one-call bind), `delete_rule` (removes the registry row + strips its `{ref}` from every binding). Registered through the existing `_run_in_thread` event-loop offload.
+- **`db.rules` authoring helpers**: `save_rule` (upsert by `rule_id`; **bumps `version` on a body change**; preserves `created_by`; `enabled` defaults true), `bind_rule` (idempotent `{ref}` write onto a section's `evaluative.row_rules`), `delete_rule` (delete + strip refs), `list_rules` (subject/enabled filters), and `validate_row_match_rule`. `load_subject_row_rules` now **skips disabled rules**.
+- **Authoring-time validation** — rejected, not silently dropped at collection: unknown operator; `between` without `value2`; `emit:"count"` without `count_operator`/`count_value`; `scope` ≠ "row" (summary scope not yet implemented); and, when binding, a missing section, a non-table section, or a condition target / `{"ref":col}` that isn't a column of that section.
+- `tests/test_rules_mcp_adr0010.py` (+10): version bump on change; list filters (subject/enabled); idempotent bind; unbound save; disabled-not-loaded; delete strips binding; the full a–f + scope rejection matrix; and tool wiring (`save_rule` validates-before-persist; `evaluate_subject` no-artifact preview).
+
+### Notes
+- **Verified live in-process** (the MCP client must reconnect / `pkill -f cv-healthcheck-mcp` to pick up the new tool list): `list_rules()` returns the catalog rules; `evaluate_subject("server_groups")` → 12 findings via the tool.
+- `save_rule` keeps the rule body and the section binding **separable** (bind is optional; one rule can bind to several sections via repeated `save_rule` targets) — the common author+fire case is one call.
+- **ADR-0010 is complete** (Phase 1 core + 2a binding/dry-run + 2b authoring). Deferred (ADR): summary-scope rules (the validator carries the TODO); a count/aggregate kind if cross-row duplicate *detection* is wanted (`row_match` is per-row); a separate findings store only on the D5 revisit trigger (persistent ack surviving re-collection, or cross-engagement trend).
+
+---
+
 ## 2026-06-03 (ADR-0010 Phase 2a — catalog binding + the `evaluate_subject` dry-run)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **929 passing** (was 922; +7). Connects the Phase-1 evaluator to the catalog and proves it live. Stops **before** the MCP authoring surface (Phase 2b).

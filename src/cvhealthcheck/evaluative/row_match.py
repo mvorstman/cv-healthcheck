@@ -51,6 +51,10 @@ _COUNT_OPS = {
 }
 _TEMPLATE_TOKEN = re.compile(r"\{([a-zA-Z0-9_.]+)\}")
 
+# Public aliases for the authoring-time validator (db.rules.validate_row_match_rule).
+KNOWN_OPERATORS = _KNOWN_OPS
+COUNT_OPERATORS = frozenset(_COUNT_OPS)
+
 
 def evaluate_row_rule(
     rule: dict[str, Any],

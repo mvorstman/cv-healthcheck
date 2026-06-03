@@ -54,6 +54,16 @@ from cvhealthcheck.db.staging import (
     reject_staged_artifact as db_reject_staged_artifact,
 )
 from cvhealthcheck.db.subjects import delete_subject as db_delete_subject
+from cvhealthcheck.db.rules import (
+    bind_rule as db_bind_rule,
+    delete_rule as db_delete_rule,
+    list_rules as db_list_rules,
+    save_rule as db_save_rule,
+    validate_row_match_rule,
+)
+from cvhealthcheck.evaluative.subject_eval import (
+    evaluate_subject as _evaluate_subject_service,
+)
 
 
 run_migrations()
@@ -436,6 +446,99 @@ def probe(path: str) -> dict:
     }
 
 
+def evaluate_subject(subject_id: str) -> dict:
+    """Dry-run the subject's enabled row-scope rules over its latest collected
+    artifact and return a findings PREVIEW — persists nothing (ADR 0010). The
+    rules-side parallel to ``probe``: reads the canonical/approved store's latest
+    artifact (not the staging queue), never re-collects, never mutates it.
+
+    Parameters
+    ----------
+    subject_id : str
+        The subject to evaluate, e.g. "server_groups".
+    """
+    db = get_db()
+    try:
+        return _evaluate_subject_service(db, subject_id)
+    finally:
+        db.close()
+
+
+def list_rules(subject_id: str | None = None, enabled: bool | None = None) -> list[dict]:
+    """List registered evaluation rules.
+
+    Parameters
+    ----------
+    subject_id : str | None
+        If given, only rules BOUND to this subject's sections (incl. disabled).
+    enabled : bool | None
+        If given, filter on the rule's ``enabled`` flag.
+    """
+    db = get_db()
+    try:
+        return db_list_rules(db, subject_id=subject_id, enabled=enabled)
+    finally:
+        db.close()
+
+
+def save_rule(rule: dict, bind: dict | None = None) -> dict:
+    """Author (upsert) a row-scope (``kind:"row_match"``) evaluation rule,
+    optionally binding it to a table section in one call.
+
+    Validated at authoring time (rejected, not silently dropped at collection):
+    unknown operator; ``between`` without ``value2``; ``emit:"count"`` without
+    ``count_operator``/``count_value``; ``scope`` other than "row"; and, when
+    binding, a missing section, a non-table section, or a condition target /
+    ``{"ref":col}`` that is not a column of that section.
+
+    Parameters
+    ----------
+    rule : dict
+        The rule definition. Required: ``rule_id``; ``conditions`` (list of
+        ``{target, operator, value?/value2?/{"ref":col}}`` — all AND-ed);
+        ``emit`` ("per_row" | "count"; count needs ``count_operator`` +
+        ``count_value``); ``severity`` (critical|warning|info|good); and the
+        ``title``/``message`` templates (``{value}/{target}/{count}/{row.<col>}``).
+        Optional: ``recommendation``, ``enabled`` (default true). ``kind`` defaults
+        to "row_match", ``scope`` to "row"; ``version`` is managed automatically
+        (bumped when the body changes).
+    bind : dict | None
+        Optional ``{"subject_id", "section_id"}`` — adds the rule's ref onto that
+        table section's ``evaluative.row_rules`` (idempotent). Omit to save unbound
+        (bind later with another ``save_rule`` carrying a target). Rule body and
+        section binding stay separable, so one rule can bind to several sections.
+    """
+    db = get_db()
+    try:
+        validate_row_match_rule(db, rule, bind=bind)
+        saved = db_save_rule(db, rule)
+        bound_sections = 0
+        if bind is not None:
+            bound_sections = db_bind_rule(
+                db, saved["rule_id"], bind["subject_id"], bind["section_id"]
+            )
+        return {"rule": saved, "bound_sections": bound_sections}
+    finally:
+        db.close()
+
+
+def delete_rule(rule_id: str) -> dict:
+    """Delete an evaluation rule from the registry and strip its ``{ref}`` from
+    every section binding (so a later collection can't hit a dangling-ref
+    failure).
+
+    Parameters
+    ----------
+    rule_id : str
+        The rule to delete.
+    """
+    db = get_db()
+    try:
+        return db_delete_rule(db, rule_id)
+    finally:
+        db.close()
+
+
 # ── Tool registration (ADR 0004 #35 hardening) ──
 #
 # FastMCP (mcp 1.27.1) runs a SYNC tool function *inline on the asyncio event
@@ -473,6 +576,10 @@ for _tool in (
     list_proposed_subjects,
     delete_subject,
     probe,
+    evaluate_subject,
+    list_rules,
+    save_rule,
+    delete_rule,
 ):
     mcp.tool()(_run_in_thread(_tool))
 
