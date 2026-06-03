@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-03 (ADR-0010 Phase 2a — catalog binding + the `evaluate_subject` dry-run)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **929 passing** (was 922; +7). Connects the Phase-1 evaluator to the catalog and proves it live. Stops **before** the MCP authoring surface (Phase 2b).
+
+### Added
+- **`db.rules.load_subject_row_rules(db, subject_id, version)`** — resolves a subject's row-rule bindings (`extraction_instructions.evaluative.row_rules: [{"ref": rule_id}]`) against the rules registry into `{section_id: [resolved row_match defs]}` (the ref-from-binding model the metric/card rules use; unknown ref fails loudly; only `kind="row_match"`; deduped per section). Feeds both the dry-run and the extractors.
+- **`evaluative/subject_eval.py` — `evaluate_subject(db, subject_id)`** — the dry-run, the rules-side parallel to `probe`: re-runs the subject's bound row rules over its **latest stored artifact** and returns a findings preview, **persisting nothing** and never touching the artifact (D4/D5). `has_artifact=False` when nothing is collected yet (empty, not an error).
+- **Extractor wiring** — `RESTExtractor` and `CommandCenterExtractor` now set `result.section_row_rules = load_subject_row_rules(...)`, so bound rules fire on a real collection (the canonicalization pass bakes a `<subject>.compliance` FindingsSection).
+- `tests/test_subject_eval_adr0010.py` (+7): binding resolution (+ unknown-ref raise, empty-when-unbound); dry-run fires over the latest artifact with **distinct `row_ref` on same-named rows**; no-artifact is empty-not-error; **persists-nothing** (artifact bytes unchanged); the extractor populates `section_row_rules` and the pass bakes a finding end-to-end.
+
+### Notes
+- **Proven live** against the real catalog (2 rules + bindings authored into `data/app.db`): `evaluate_subject("server_groups")` → **12** empty-group findings incl. **both `rommelgroep` ids 19 & 41 as distinct findings** (row_ref=id — the duplicate-name correctness); `evaluate_subject("users")` → **2** never-logged-in (`last_logged_in == 0`: ids 4, 8). These rules now also fire on the next collection via the extractor wiring.
+- True duplicate *detection* is cross-row (not a per-row predicate) — out of `row_match`'s grain; the `rommelgroep` case is handled as distinct per-row findings, which is exactly the row_ref=id guarantee.
+- **Boundary (Phase 2b):** the MCP authoring surface — `list_rules` / `save_rule` / `delete_rule` / `evaluate_subject` + `save_rule` validation (row rule on a non-table section; `{ref}` to a missing column; `emit=count` without `count_operator`/`count_value`). Rules are authored by direct catalog writes until then.
+
+---
+
 ## 2026-06-03 (ADR-0010 Phase 1 — row-scope evaluation rules: core + canonicalization pass)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **922 passing** (was 885; +37). Layer 5 (evaluation) reconciliation — see `docs/adr/0010-row-scope-evaluation-rules.md` (Accepted). Phase 1 is the **pure evaluation core + the canonicalization integration point**; **no catalog rule fires yet** (catalog binding + MCP authoring is Phase 2).

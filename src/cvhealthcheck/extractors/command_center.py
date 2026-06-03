@@ -35,7 +35,7 @@ import sqlite3
 from typing import Any, Callable
 
 from cvhealthcheck.db.rule_overrides import load_section_overrides
-from cvhealthcheck.db.rules import load_rules_registry
+from cvhealthcheck.db.rules import load_rules_registry, load_subject_row_rules
 from cvhealthcheck.extractors.cc_endpoint import (
     COMMAND_CENTER_SOURCE_TYPE,
     DEFAULT_CC_ENDPOINT,
@@ -75,6 +75,9 @@ class CommandCenterExtractor:
     def extract(self, subject_id: str, version: int = 1) -> ExtractionResult:
         result = ExtractionResult(subject_id=subject_id, source_type=COMMAND_CENTER_SOURCE_TYPE)
         result.rules_registry = load_rules_registry(self._db)
+        # ADR 0010: carry the subject's bound row_match rules so the
+        # result_to_artifact compliance pass fires on this collection.
+        result.section_row_rules = load_subject_row_rules(self._db, subject_id, version)
         result.section_overrides = load_section_overrides(
             self._db, self._customer_id, self._project_id, subject_id, version
         )
