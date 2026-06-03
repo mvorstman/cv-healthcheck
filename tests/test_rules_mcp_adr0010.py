@@ -195,3 +195,25 @@ def test_save_rule_tool_validates_saves_and_binds(server, migrated_db_path: Path
 def test_evaluate_subject_tool_no_artifact_is_empty(server):
     res = server.evaluate_subject("nonexistent_subject_xyz")
     assert res["has_artifact"] is False and res["count"] == 0
+
+
+def test_save_rule_tool_persists_canonical_kind_and_scope(server, migrated_db_path: Path):
+    """A rule authored WITHOUT an explicit kind/scope is stored with the canonical
+    `kind:"row_match"` / `scope:"row"`, so the evaluator's kind check always
+    matches (the divergence that left save_rule-authored rules un-evaluated)."""
+    conn = _conn(migrated_db_path)
+    try:
+        _seed_subject(conn)
+    finally:
+        conn.close()
+    rule = {"rule_id": "nokind",
+            "conditions": [{"target": "server_count", "operator": "eq", "value": 0}],
+            "emit": "per_row", "severity": "warning", "title": "t", "message": "m"}
+    assert "kind" not in rule and "scope" not in rule
+    server.save_rule(rule, bind={"subject_id": "sg", "section_id": "sg.rows"})
+    conn = _conn(migrated_db_path)
+    try:
+        stored = load_rules_registry(conn)["nokind"]
+    finally:
+        conn.close()
+    assert stored["kind"] == "row_match" and stored["scope"] == "row"

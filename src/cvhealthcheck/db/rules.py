@@ -82,7 +82,13 @@ def load_subject_row_rules(
         section_id = row["section_id"]
         for entry in entries:
             resolved = resolve_rule(entry, registry)
-            if resolved.get("kind") != "row_match":
+            # A ref in `evaluative.row_rules` IS a row rule by construction; a def
+            # with no explicit `kind` is treated as row_match — the same default
+            # the authoring validator applies (validate_row_match_rule). Only a def
+            # explicitly some OTHER kind is skipped. (Without this default, a rule
+            # authored via save_rule without an explicit kind binds + lists but is
+            # silently never evaluated — the read/author divergence this fixes.)
+            if resolved.get("kind", "row_match") != "row_match":
                 continue
             if not resolved.get("enabled", True):
                 continue  # disabled rules don't fire (collection or dry-run)

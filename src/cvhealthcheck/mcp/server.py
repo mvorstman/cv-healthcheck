@@ -511,6 +511,10 @@ def save_rule(rule: dict, bind: dict | None = None) -> dict:
     db = get_db()
     try:
         validate_row_match_rule(db, rule, bind=bind)
+        # Persist the canonical kind/scope so the stored def is explicit and the
+        # evaluator's kind check always matches (it defaults missing kind to
+        # row_match too, so old kind-less rules still fire — belt and suspenders).
+        rule = {**rule, "kind": "row_match", "scope": "row"}
         saved = db_save_rule(db, rule)
         bound_sections = 0
         if bind is not None:

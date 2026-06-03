@@ -184,3 +184,63 @@ def test_command_center_extractor_populates_and_fires_row_rules(migrated_db_path
                 if isinstance(s, FindingsSection) and s.id == "_rr_test.compliance")
     assert [f.title for f in comp.items] == ["Empty server group: a"]
     assert comp.items[0].severity.value == "warning"
+
+
+# ── regression: save_rule bind-write → evaluate_subject read MUST round-trip ──
+
+def test_save_rule_bound_round_trip_fires_without_explicit_kind(migrated_db_path: Path, tmp_path: Path):
+    """The bug Phase-2b shipped: a rule authored via save_rule WITHOUT an explicit
+    `kind`, bound to a section that exists under MULTIPLE source types (so the bind
+    fans → bound_sections>1), persisted + listed fine but was silently dropped by
+    the evaluator's `kind == "row_match"` filter. This guards bind-write → eval-read
+    end to end against exactly that shape (mirrors server_groups / rommelgroep)."""
+    from cvhealthcheck.db.rules import bind_rule, save_rule, validate_row_match_rule
+
+    conn = _conn(migrated_db_path)
+    try:
+        # a table section present under TWO source types (rest_command_center_api + json)
+        create_subject_from_proposal(conn, {
+            "subject_id": "_rt", "version": 1, "title": "RT", "description": "d",
+            "category": "operations",
+            "sections": [{"section_id": "_rt.rows", "title": "Rows",
+                          "section_type": "table", "sort_order": 0}],
+            "extraction_instructions": {
+                "rest_command_center_api": {
+                    "extractable": True, "endpoint": "/commandcenter/api/v4/servergroup",
+                    "sections": {"_rt.rows": {"output_as": "table", "table": {"root_key": "items",
+                        "columns": [{"id": "id", "field": "id"}, {"id": "name", "field": "name"},
+                                    {"id": "association", "field": "association"}]}}}},
+                "json": {"extractable": True, "sections": {"_rt.rows": {"output_as": "table",
+                    "table": {"root_key": "items",
+                              "columns": [{"id": "id"}, {"id": "name"}, {"id": "association"}]}}}},
+            }})
+        store = ArtifactStore("default", "default", base_dir=tmp_path / "art")
+        store.save_artifact(CanonicalArtifact(
+            artifact_type="_rt", generated_at=datetime(2026, 6, 3, tzinfo=timezone.utc),
+            source=ArtifactSource(type=SourceType.rest_commserve),
+            subject=ArtifactSubject(id="_rt", title="RT"),
+            summary=ArtifactSummary(status=ArtifactStatus.good),
+            sections=[TableSection(type="table", id="_rt.rows", title="Rows",
+                columns=[TableColumn(id="id", label="ID"), TableColumn(id="name", label="Name"),
+                         TableColumn(id="association", label="Assoc")],
+                items=[{"id": 19, "name": "rommelgroep", "association": "MANUAL"},
+                       {"id": 41, "name": "rommelgroep", "association": "MANUAL"},
+                       {"id": 7, "name": "GRP_x", "association": "MANUAL"},
+                       {"id": 3, "name": "auto", "association": "AUTOMATIC"}])]))
+
+        # authored WITHOUT a "kind" key — the exact trigger
+        rule = {"rule_id": "naming",
+                "conditions": [{"target": "association", "operator": "eq", "value": "MANUAL"},
+                               {"target": "name", "operator": "not_contains", "value": "GRP_"}],
+                "emit": "per_row", "severity": "warning",
+                "title": "Naming: {row.name}", "message": "{row.name}"}
+        assert "kind" not in rule
+        validate_row_match_rule(conn, rule, bind={"subject_id": "_rt", "section_id": "_rt.rows"})
+        save_rule(conn, rule)
+        assert bind_rule(conn, "naming", "_rt", "_rt.rows") == 2   # fanned across both source variants
+
+        res = evaluate_subject(conn, "_rt", store=store)
+        fired = {f["row_ref"] for f in res["findings"] if f["rule_id"] == "naming"}
+        assert fired == {"19", "41"}   # MANUAL non-GRP rows; GRP_x + AUTOMATIC excluded
+    finally:
+        conn.close()

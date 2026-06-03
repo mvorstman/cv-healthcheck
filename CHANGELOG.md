@@ -10,6 +10,20 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-03 (Fix — `save_rule`-authored row rules were never evaluated: `kind` not persisted)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **941 passing** (was 939; +2 regression tests). ADR-0010 follow-up bug.
+
+### Fixed
+- **A `row_match` rule authored + bound via the `save_rule` MCP tool persisted, listed, and bound correctly but was never evaluated** by `evaluate_subject` / collection. Root cause: `save_rule` did not **persist** `kind`, while `load_subject_row_rules` filtered `kind == "row_match"` and silently skipped a kind-less def. The authoring validator defaults a missing `kind` to `row_match` (so the rule passed validation), but the stored def carried no `kind` — an author↔evaluator divergence. (NOT a bind/read **location** divergence: the data showed the `{ref}` correctly placed in the collected source's binding; the `"bound_sections": 2` fan was a red herring.)
+- **Fix (both sides now agree):** `load_subject_row_rules` treats a ref in `evaluative.row_rules` as `row_match` when `kind` is absent (`resolved.get("kind", "row_match")`) — matching the validator's default, so existing kind-less rules fire with **no data repair**; and `save_rule` now persists the canonical `kind:"row_match"` / `scope:"row"` so future stored defs are explicit.
+- **Regression guard (the coverage that was missing):** a true bind-write → eval-read **round-trip** test (`save_rule` + `bind` → `evaluate_subject` → assert the findings appear), on a fixture whose section exists under **two** source types (so the bind fans, `bound_sections == 2`) with a rule authored **without** an explicit `kind` — the exact structural trigger; plus a test that the tool persists canonical kind/scope. The earlier Phase-2b tests only checked persistence/`list_rules` (which agreed) or evaluated a rule bound a different way, so none exercised this path.
+
+### Notes
+- **Verified live** (read-only dry-run, persists nothing, live rule preserved): `evaluate_subject("server_groups")` now `rules_evaluated=2` → `sg_empty_group` (12) **and** `sg_naming_convention` on exactly rows **19 & 41** (both `rommelgroep`, MANUAL non-`GRP_`); those two rows carry both findings (multi-rule-per-row). `sg_naming_convention` is left in place as the live acceptance probe.
+
+---
+
 ## 2026-06-03 (ADR-0010 Phase 2b — MCP authoring surface for row-scope rules)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **939 passing** (was 929; +10). Completes ADR-0010: row-scope rules are authored/managed via MCP, validated at authoring time.
