@@ -19,8 +19,8 @@ from typing import Any
 
 from cvhealthcheck.artifacts.models import TableSection
 from cvhealthcheck.artifacts.store import ArtifactStore
-from cvhealthcheck.db.rules import load_subject_row_rules
-from cvhealthcheck.evaluative.row_match import evaluate_row_rule
+from cvhealthcheck.db.rules import load_subject_row_rules, load_subject_section_scope
+from cvhealthcheck.evaluative.row_match import evaluate_section_rows
 
 
 def evaluate_subject(
@@ -35,24 +35,29 @@ def evaluate_subject(
     artifact's table sections. Returns a preview dict::
 
         {"subject_id", "has_artifact": bool, "rules_evaluated": int,
-         "count": int, "findings": [ {rule_id, severity, row_ref, title,
-         message, recommendation, section_id}, ... ]}
+         "count": int,
+         "findings":     [ {rule_id, severity, row_ref, title, message,
+                            recommendation, section_id}, ... ],
+         "row_verdicts": [ {section_id, row_ref, in_scope, verdict}, ... ]}
 
-    Persists nothing. ``has_artifact=False`` when the subject has no collected
-    artifact yet (preview is empty, not an error)."""
+    ``row_verdicts`` are the same per-row verdicts (good / warning / critical /
+    not_evaluated) that collection bakes onto the artifact rows — so the headless
+    preview matches the baked result. Persists nothing. ``has_artifact=False`` when
+    the subject has no collected artifact yet (preview is empty, not an error)."""
     if version is None:
         from cvhealthcheck.db.subjects import get_subject
         subject = get_subject(db, subject_id)
         version = subject["version"] if subject else 1
 
     row_rules = load_subject_row_rules(db, subject_id, version)
+    section_scope = load_subject_section_scope(db, subject_id, version)
     store = store or ArtifactStore("default", "default")
     try:
         artifact = store.load_latest_artifact(subject_id)
     except FileNotFoundError:
         return {
             "subject_id": subject_id, "has_artifact": False,
-            "rules_evaluated": 0, "count": 0, "findings": [],
+            "rules_evaluated": 0, "count": 0, "findings": [], "row_verdicts": [],
             "note": "no collected artifact to evaluate",
         }
 
@@ -63,18 +68,21 @@ def evaluate_subject(
     }
 
     findings: list[dict[str, Any]] = []
+    row_verdicts: list[dict[str, Any]] = []
     rules_evaluated = 0
     for section_id, rules in row_rules.items():
         rows = table_rows.get(section_id) or []
-        for rule in rules:
-            rules_evaluated += 1
-            for derived in evaluate_row_rule(rule, rows, now=now):
-                derived = dict(derived)
-                derived["section_id"] = section_id
-                findings.append(derived)
+        sec_findings, per_row = evaluate_section_rows(
+            rules, rows, scope=section_scope.get(section_id), now=now
+        )
+        rules_evaluated += len(rules)
+        for derived in sec_findings:
+            findings.append({**derived, "section_id": section_id})
+        for pr in per_row:
+            row_verdicts.append({"section_id": section_id, **pr})
 
     return {
         "subject_id": subject_id, "has_artifact": True,
         "rules_evaluated": rules_evaluated, "count": len(findings),
-        "findings": findings,
+        "findings": findings, "row_verdicts": row_verdicts,
     }

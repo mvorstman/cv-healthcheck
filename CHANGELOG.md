@@ -10,6 +10,22 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-03 (ADR-0010 — section-level evaluation scope + per-row verdict (engine slice))
+
+**Branch:** `feature/basic-healthcheck-report-output`. **948 passing** (was 941; +7). An explicit evaluated **population** per section + a real **per-row verdict** — so the report can show good vs not-evaluated rather than infer from the absence of findings. Layout/render is a follow-up slice.
+
+### Added
+- **Section-level scope (data, not code):** an optional `evaluative.scope` on a section's binding — a list of AND-ed conditions (same shape/operators as `row_match` conditions). A row is IN SCOPE iff it satisfies every scope condition; absent ⇒ all rows in scope (unchanged default). Resolved by `db.rules.load_subject_section_scope`; carried on `ExtractionResult.section_scope` by both REST extractors.
+- **Scoped evaluation + per-row verdict:** `evaluative.row_match.evaluate_section_rows(rules, rows, *, scope)` — bound rules run ONLY on in-scope rows, and every row gets an explicit verdict: out-of-scope → `not_evaluated`; in-scope clean → `good`; in-scope flagged → worst severity (`warning`/`critical`). The shared `matches_conditions` (extracted from the rule matcher) backs both rule and scope predicates.
+- **Verdict baked at canonicalization:** `result_to_artifact` writes the per-row `_verdict` onto the `TableSection` items (D5 — no separate store; the same mechanism as a card field's `sev`; set **explicitly** so `not_evaluated` ≠ `good` ≠ `info`). `evaluate_subject` returns the identical per-row verdicts (`row_verdicts: [{section_id, row_ref, in_scope, verdict}]`) so the dry-run preview matches the baked artifact — and persists nothing.
+- `tests/test_section_scope_adr0010.py` (+7): scope gating; absent-scope no-op; the three verdicts on one fixture; worst-severity roll-up; multi-condition AND scope; the `result_to_artifact` bake; `evaluate_subject` preview consistency.
+
+### Notes
+- **Verified live** (read-only dry-run, persists nothing): `server_groups` scope = `association == "MANUAL"` → findings **14 → 11** (the 3 automatic empty groups 4/5/17 no longer flagged); per-row verdicts **5 good** (7,8,11,13,14), **9 warning** (6,9,10,19,36,37,39,40,41), **7 not_evaluated** (1,2,3,4,5,17,18); `rommelgroep` 19 & 41 still distinct, each warning. The seeded scope + `sg_naming_convention` are left in place as the acceptance probe (gitignored runtime state).
+- **Follow-ups:** the **layout slice** (render per-row `_verdict` — good/warning/critical/not_evaluated — in the report/UI); an **MCP tool to author section scope** (`save_section_scope`, or a `scope` arg on `save_rule`'s bind) — this slice set scope directly in the catalog.
+
+---
+
 ## 2026-06-03 (Fix — `save_rule`-authored row rules were never evaluated: `kind` not persisted)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **941 passing** (was 939; +2 regression tests). ADR-0010 follow-up bug.

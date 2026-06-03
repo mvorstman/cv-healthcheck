@@ -55,6 +55,29 @@ _TEMPLATE_TOKEN = re.compile(r"\{([a-zA-Z0-9_.]+)\}")
 KNOWN_OPERATORS = _KNOWN_OPS
 COUNT_OPERATORS = frozenset(_COUNT_OPS)
 
+# Per-row verdict severity ordering (worst wins).
+_VERDICT_RANK = {"good": 0, "info": 1, "warning": 2, "critical": 3}
+
+
+def matches_conditions(
+    conditions: list[dict[str, Any]] | None,
+    row: dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """True iff ``row`` satisfies EVERY condition (AND). Empty/None ⇒ True. Shared
+    by row_match rule matching AND section scope (ADR 0010 — scope is just a
+    condition list, same operators)."""
+    now = now or datetime.now(timezone.utc)
+    return all(_eval_predicate(p, row, now=now) for p in (conditions or []))
+
+
+def _row_ref(row: dict[str, Any], index: int, id_field: str = "id") -> str:
+    """Stable per-row identifier: the row's id_field, else its index (ADR 0010:
+    id, never name — duplicate names collide, ids don't)."""
+    raw_id = row.get(id_field)
+    return str(raw_id) if not coerce.is_absent(raw_id) else str(index)
+
 
 def evaluate_row_rule(
     rule: dict[str, Any],
@@ -73,7 +96,7 @@ def evaluate_row_rule(
     conditions = rule.get("conditions") or []
     matched: list[tuple[int, dict[str, Any]]] = [
         (i, row) for i, row in enumerate(rows)
-        if isinstance(row, dict) and all(_eval_predicate(p, row, now=now) for p in conditions)
+        if isinstance(row, dict) and matches_conditions(conditions, row, now=now)
     ]
 
     emit = rule.get("emit", "per_row")
@@ -85,13 +108,68 @@ def evaluate_row_rule(
             return [_render(rule, conditions=conditions, count=count)]
         return []
     if emit == "per_row":
-        findings = []
-        for index, row in matched:
-            raw_id = row.get(id_field)
-            row_ref = str(raw_id) if not coerce.is_absent(raw_id) else str(index)
-            findings.append(_render(rule, conditions=conditions, row=row, row_ref=row_ref))
-        return findings
+        return [
+            _render(rule, conditions=conditions, row=row,
+                    row_ref=_row_ref(row, index, id_field))
+            for index, row in matched
+        ]
     raise ValueError(f"row_match emit must be 'per_row' or 'count', got {emit!r}")
+
+
+def evaluate_section_rows(
+    rules: list[dict[str, Any]],
+    rows: list[dict[str, Any]],
+    *,
+    scope: list[dict[str, Any]] | None = None,
+    now: datetime | None = None,
+    id_field: str = "id",
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Evaluate a section's row rules over its EVALUATED POPULATION (ADR 0010).
+
+    A row is IN SCOPE iff it satisfies every ``scope`` condition (absent/empty
+    scope ⇒ all rows in scope — today's behaviour). Rules run ONLY on in-scope
+    rows; out-of-scope rows are assessed by no rule.
+
+    Returns ``(findings, per_row)`` where each ``per_row`` entry is
+    ``{row_ref, in_scope, verdict}`` with verdict, set explicitly per row:
+        out of scope          → "not_evaluated"
+        in scope, no finding  → "good"
+        in scope, finding(s)  → worst severity among that row's findings.
+    Pure — the caller bakes onto the artifact (collection) or returns it
+    (dry-run); ``count`` findings carry no ``row_ref`` and never drive a verdict.
+    """
+    now = now or datetime.now(timezone.utc)
+    refs: list[tuple[str, bool]] = []          # (row_ref, in_scope) per row, in order
+    in_scope_rows: list[dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            refs.append((str(index), False))
+            continue
+        ref = _row_ref(row, index, id_field)
+        in_scope = matches_conditions(scope, row, now=now)
+        refs.append((ref, in_scope))
+        if in_scope:
+            in_scope_rows.append(row)
+
+    findings: list[dict[str, Any]] = []
+    for rule in rules:
+        findings.extend(evaluate_row_rule(rule, in_scope_rows, now=now, id_field=id_field))
+
+    worst: dict[str, str] = {}
+    for finding in findings:
+        ref = finding.get("row_ref")
+        if ref is None:
+            continue
+        sev = finding.get("severity", "info")
+        if ref not in worst or _VERDICT_RANK.get(sev, 0) > _VERDICT_RANK.get(worst[ref], 0):
+            worst[ref] = sev
+
+    per_row = [
+        {"row_ref": ref, "in_scope": in_scope,
+         "verdict": "not_evaluated" if not in_scope else worst.get(ref, "good")}
+        for ref, in_scope in refs
+    ]
+    return findings, per_row
 
 
 # ── predicate evaluation ──────────────────────────────────────────────────────

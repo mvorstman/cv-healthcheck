@@ -20,7 +20,7 @@ from cvhealthcheck.artifacts.models import (
     TableColumn,
     TableSection,
 )
-from cvhealthcheck.evaluative.row_match import evaluate_row_rule
+from cvhealthcheck.evaluative.row_match import evaluate_section_rows
 from cvhealthcheck.extractors.card_section import build_card_section
 from cvhealthcheck.extractors.chart_section import build_chart_section
 from cvhealthcheck.extractors.html import ExtractionResult
@@ -141,15 +141,27 @@ def result_to_artifact(
     # that section's rows. Findings fold into severity_counts + has_findings_section
     # so the summary status reflects them, exactly like a transcribed findings
     # section. Read-only over the rows — the rules never mutate the artifact data.
+    table_by_id = {s.id: s for s in sections if isinstance(s, TableSection)}
     compliance_items: list[Finding] = []
     for section_id, row_rules in (result.section_row_rules or {}).items():
         section_rows = result.sections.get(section_id) or []
-        for rule in row_rules:
-            for derived in evaluate_row_rule(rule, section_rows, now=now):
-                finding = _build_compliance_finding(section_id, derived)
-                compliance_items.append(finding)
-                sev = finding.severity.value
-                severity_counts[sev] = severity_counts.get(sev, 0) + 1
+        scope = (result.section_scope or {}).get(section_id)
+        findings, per_row = evaluate_section_rows(row_rules, section_rows, scope=scope, now=now)
+        for derived in findings:
+            finding = _build_compliance_finding(section_id, derived)
+            compliance_items.append(finding)
+            sev = finding.severity.value
+            severity_counts[sev] = severity_counts.get(sev, 0) + 1
+        # Bake the explicit per-row verdict onto the BUILT TableSection's items
+        # (pydantic copied them at construction, so mutate the section, not the raw
+        # rows). Same canonicalization mechanism as a card field's severity (ADR
+        # 0010 D5 — no separate store). per_row is row-aligned; "not_evaluated"
+        # stays distinct from "good".
+        target = table_by_id.get(section_id)
+        if target is not None:
+            for item, verdict in zip(target.items, per_row):
+                if isinstance(item, dict):
+                    item["_verdict"] = verdict["verdict"]
     if compliance_items:
         has_findings_section = True
         sections.append(FindingsSection(

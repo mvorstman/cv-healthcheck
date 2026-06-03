@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-03 (ADR-0010 follow-up — `save_rule` author→evaluate divergence **fixed** + round-trip guarded)
+**Last updated:** 2026-06-03 (ADR-0010 — section scope + per-row verdict **engine slice** done; **layout slice next**)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *Fix: save_rule-authored row rules were never evaluated (kind not persisted)* (this commit).
-**Test status:** **941 passing** under `pytest` and `python -m pytest`.
+**Last commit:** *ADR 0010 — section-level evaluation scope + per-row verdict (engine slice)* (this commit).
+**Test status:** **948 passing** under `pytest` and `python -m pytest`.
 
 ---
 
@@ -13,41 +13,45 @@
 
 1. `README.md` — what the project is, how to run it.
 2. `HANDOVER.md` (this file) — what to do next.
-3. **`docs/adr/0010-row-scope-evaluation-rules.md`** — the governing ADR (*Accepted*, implemented across Phase 1 / 2a / 2b).
-4. The most recent CHANGELOG entries (2026-06-03: the `save_rule` `kind` fix; Phase 2b / 2a / 1).
+3. **`docs/adr/0010-row-scope-evaluation-rules.md`** — the governing ADR (*Accepted*).
+4. The most recent CHANGELOG entries (2026-06-03: the scope/verdict engine slice; the `save_rule` `kind` fix; Phase 2b/2a/1).
 
 ---
 
-## What was just completed — the `save_rule` evaluation bug
+## What was just completed — scope + per-row verdict (ENGINE slice)
 
-A `row_match` rule authored via the `save_rule` MCP tool **persisted, listed, and bound** but was **never evaluated**. Root cause: `save_rule` didn't persist `kind`, and `load_subject_row_rules` skipped any def whose `kind != "row_match"` — so a rule authored without an explicit `kind` (the natural call) was silently dropped. **Not** a bind/read location bug (the `{ref}` was in the right place; `bound_sections: 2` was a red herring).
+An explicit evaluated **population** per section and a real **per-row verdict**:
 
-**Fix (both sides agree):** the evaluator defaults a missing `kind` to `row_match` for refs in `evaluative.row_rules` (so existing kind-less rules fire with no data repair), and `save_rule` persists canonical `kind:"row_match"` / `scope:"row"`. **Regression-guarded** with a true bind-write→eval-read round-trip test (multi-source section so the bind fans; rule authored without `kind`).
+- **`evaluative.scope`** on a section's binding — AND-ed conditions (same operators as `row_match`). In-scope iff all conditions hold; absent ⇒ all rows in scope. Loaded by `db.rules.load_subject_section_scope`, carried on `ExtractionResult.section_scope`.
+- **`evaluate_section_rows`** — rules run only on in-scope rows; every row gets a verdict (out-of-scope `not_evaluated` / in-scope clean `good` / flagged worst severity). Shared `matches_conditions` backs rule + scope predicates.
+- **Verdict baked** onto `TableSection` items as `_verdict` at canonicalization (D5, no separate store); `evaluate_subject` returns the same `row_verdicts` so the dry-run matches the bake.
+- **Verified live:** `server_groups` scope `association == "MANUAL"` → findings 14→11; verdicts 5 good / 9 warning / 7 not_evaluated; rommelgroep 19 & 41 distinct, each warning.
 
-**Verified live:** `evaluate_subject("server_groups")` → `rules_evaluated=2`; `sg_naming_convention` now fires on exactly rows **19 & 41**, each carrying both findings. The live `sg_naming_convention` rule is left in place as the acceptance probe.
+---
+
+## Single recommended next action — the LAYOUT slice
+
+Render the per-row verdict in the Quick HC report / UI. The data is on the artifact: each `TableSection` row carries `_verdict` ∈ {`good`,`warning`,`critical`,`not_evaluated`}, and `<subject>.compliance` carries the findings.
+
+- The table renderer is `secBody` (`type === 'table'`) in `quick_hc.js`; the verdict has to ride to the view first — `canonical_view.artifact_to_view`'s table branch currently projects only declared `columns` (so `_verdict` is dropped). Decide how the row verdict reaches the view (e.g. a parallel `row_verdicts` list on the section, or a verdict dot per row).
+- **`not_evaluated` must render distinctly** from good and from info — set explicitly, no `?? 'info'` fallback (mirror the CommCell field treatment: `effState = it.sev ?? it.state ?? 'info'`, quick_hc.js:266 — but row verdict must not collapse into that default).
+
+## Other follow-ups
+
+- **MCP tool to author section scope** — `save_section_scope(subject_id, section_id, conditions)`, or a `scope` arg on `save_rule`'s `bind`. This slice set `server_groups` scope **directly** in the catalog (gitignored runtime state); there's no tool yet. Validate scope conditions the same way `validate_row_match_rule` validates rule conditions (operators / between-value2 / columns-exist).
+- Re-author the live rules + scope via the (future) tools so they're explicit/versioned.
 
 ---
 
 ## ⚠️ Uncommitted in the working tree (carry forward)
 
-`src/cvhealthcheck/mcp/server.py` still has an **uncommitted probe read-timeout hardening** from the prior session (the probe-hang investigation): `timeout=30` → `timeout=(5, 30)` on the loopback POST, so the hop fails fast instead of silently hanging. It was **deliberately left out of this commit** (different concern) and out of the previous one ("stop for review"). Decide whether to commit it (its own small commit). The probe investigation concluded the loopback hop is healthy (0.28s); the multi-minute hang the operator saw is the SSH/stdio transport (#35), not the probe code — see that session's report.
+`src/cvhealthcheck/mcp/server.py` still has the **uncommitted probe read-timeout hardening** (`timeout=30 → (5, 30)`) from the probe-hang session — deliberately kept out of the last two commits. Not touched this session. Decide whether to commit it (its own small commit).
 
 ---
 
-## Single recommended next action
-
-ADR-0010 is complete and now hardened. Non-blocking candidates:
-
-1. **Re-author the two live rules via `save_rule`** so they carry `kind`/`version`/`created_by` explicitly (the hand-authored `sg_empty_group` and the kind-less `sg_naming_convention` both work, but re-saving normalizes them). Author a `clients` rule (empty `hostname`) and a `users` locked/disabled rule.
-2. **Surface the `<subject>.compliance` FindingsSection in the Quick HC report / UI** (findings are in the artifact; confirm the report renders them).
-3. **Commit the probe timeout** (see the warning above) if you want it landed.
-4. **Branch review/merge** — ADR-0008/0009/0010 are all complete; consider a review + merge.
-5. Deferred ADR items (only if needed): summary-scope rules (validator carries the TODO); a count/aggregate kind for cross-row duplicate *detection*; a separate findings store only on the D5 revisit trigger.
-
----
-
-## Other notes
-
-- **Settled (do not relitigate):** one `<subject>.compliance` FindingsSection per subject; `row_ref = id, never name`; findings baked in at canonicalization, no separate store (D5); `row_match` is its own evaluator grain (D3).
-- After touching `mcp/server.py` or restarting the MCP server, **the MCP client must reconnect** (`pkill -f cv-healthcheck-mcp`) to pick up the running process / new tool behaviour.
-- Live `data/app.db` carries `sg_empty_group`, `sg_naming_convention` (+ bindings); they fire on the next Collect of `server_groups`. `users_never_logged_in` is bound on `users`.
+## Settled — do not relitigate
+- Scope is **section-level**; every rule bound to the section inherits it.
+- `row_ref = id, never name` (server_groups has two `rommelgroep`, ids 19/41).
+- Verdict baked at canonicalization; no separate findings/verdict store (D5).
+- `row_match` is its own evaluator grain (D3); one `<subject>.compliance` FindingsSection per subject.
+- After touching `mcp/server.py` or restarting the MCP server, **reconnect the client** (`pkill -f cv-healthcheck-mcp`).

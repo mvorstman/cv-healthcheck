@@ -98,6 +98,38 @@ def load_subject_row_rules(
     return out
 
 
+def load_subject_section_scope(
+    db: sqlite3.Connection, subject_id: str, version: int = 1
+) -> dict[str, list[dict[str, Any]]]:
+    """ADR 0010 — the section-level evaluation SCOPE per section, from
+    ``extraction_instructions.evaluative.scope``: a list of AND-ed conditions
+    (same shape/operators as row_match conditions). Absent ⇒ no entry (all rows in
+    scope). First non-empty scope per section wins (scope is section-level — every
+    bound rule inherits it). Feeds both the dry-run and the extractors."""
+    try:
+        rows = db.execute(
+            "SELECT sss.section_id AS section_id,"
+            "       sss.extraction_instructions AS instr "
+            "FROM subject_section_sources sss "
+            "JOIN subject_sources src ON src.id = sss.source_id "
+            "WHERE src.subject_id = ? AND src.subject_version = ?",
+            (subject_id, version),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return {}
+    out: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        try:
+            instructions = json.loads(row["instr"]) if row["instr"] else {}
+        except (json.JSONDecodeError, TypeError):
+            continue
+        scope = (instructions.get("evaluative") or {}).get("scope")
+        section_id = row["section_id"]
+        if isinstance(scope, list) and scope and section_id not in out:
+            out[section_id] = scope
+    return out
+
+
 # ── ADR 0010 Phase 2b: authoring (list / save / bind / delete / validate) ─────
 
 def list_rules(
