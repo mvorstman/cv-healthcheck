@@ -81,6 +81,11 @@ class ExtractionResult:
     # (currently just an optional presentational `empty_message`). Carried to
     # result_to_artifact for the default output_as == "table" path.
     section_table_specs: dict[str, dict] = field(default_factory=dict)
+    # ADR 0010: maps section_id → a list of resolved `row_match` rule definitions
+    # bound to that (table) section. result_to_artifact runs each over the
+    # section's rows and emits a derived FindingsSection (the compliance pass).
+    # Empty for every path with no row-scope rules bound (the default).
+    section_row_rules: dict[str, list[dict]] = field(default_factory=dict)
     # ADR 0004 phase 8 step 2: the rules registry snapshot (rule_id -> definition)
     # loaded from the DB by the extractor and carried to result_to_artifact, where
     # build_metric_section/build_card_section resolve `ref`-based rules. Loading

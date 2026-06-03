@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-03 (ADR-0010 Phase 1 — row-scope evaluation rules: core + canonicalization pass)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **922 passing** (was 885; +37). Layer 5 (evaluation) reconciliation — see `docs/adr/0010-row-scope-evaluation-rules.md` (Accepted). Phase 1 is the **pure evaluation core + the canonicalization integration point**; **no catalog rule fires yet** (catalog binding + MCP authoring is Phase 2).
+
+### Added
+- **`evaluative/row_match.py`** — the row-scope evaluator (ADR 0010 D3): `evaluate_row_rule(rule, rows)` ANDs a list of predicates over each table row and emits findings. Operators `lt/lte/gt/gte/eq/ne/contains/not_contains/exists/not_exists/between/stale_days`; a predicate `value` is a literal or `{"ref": <other column>}` for field-to-field comparison (`used > available`); `emit=per_row` (one finding per matching row, **`row_ref` = the row's `id`, not its name**) or `emit=count` (one finding when the match count satisfies `count_operator`/`count_value`); `{value}/{target}/{count}/{row.<col>}` templating. A new **grain** in the engine package — not a branch in the per-value `engine._evaluate_rule`.
+- **`evaluative/coerce.py`** — centralized value coercion (ADR 0010 D6): `to_number` (leading-numeric out of unit strings `"0 TB"`→0; `"Unlimited"`→+∞; bool rejected), `is_absent` (`N/A`/`-`/``/`null` → a comparison against absent is **false**, not an error; `exists`/`not_exists` test it), `age_days` (ISO **and** unix-epoch — incl. `users.lastLoggedIn` `0`=never) for `stale_days`.
+- **`result_to_artifact` compliance pass** — after the extracted sections are built, runs each section's bound `row_match` rules over its rows and emits a derived **`<subject>.compliance` FindingsSection**, folding severities into the summary (ADR 0006 D1, one canonicalization path). Read-only over the rows; the rules never mutate the artifact. New `ExtractionResult.section_row_rules` carries the bindings; empty for every existing path (the pass is a no-op until a rule is bound).
+- `tests/test_row_match_adr0010.py` (+37): coercion; every operator; AND (all-true vs one-false); field-ref + `Unlimited`; `exists`/absent-is-false; `stale_days` (epoch-0 never + ISO); never-logged-in `eq 0`; `emit=count` threshold; templating; the **`rommelgroep` duplicate-name → distinct `row_ref` 19/41**; and the `result_to_artifact` integration (compliance section + summary status; no rules → no section).
+
+### Notes
+- **D5 accepted** (the key call): findings are a derived **in-artifact** FindingsSection (consistent with the existing engine baking verdicts at collection), **not** a separate store. Consequence: a rule change re-derives on the next collection / in the `evaluate_subject` dry-run, not by rewriting stored artifacts. Revisit a separate store only if persistent finding acknowledgement (surviving re-collection) or cross-engagement trend analysis becomes a goal.
+- **Phase 1 boundary:** nothing populates `section_row_rules` from the catalog yet, so no catalog-authored rule fires on a real collection. Phase 2 wires it: registry `kind:"row_match"` rows + the section binding (`extraction_instructions.evaluative.row_rules: [{ref}]`) + the extractors resolving them, plus the MCP tools `list_rules`/`save_rule`/`delete_rule`/`evaluate_subject`.
+- The original Layer-5 spec's collisions were dropped: no `0005` / second `rules` table (a registry extension instead), no DEVLOG, no separate findings store, and §9 (migrate `environment`) is void — already declarative (migration 0023).
+
+---
+
 ## 2026-06-02 (Fix — `delete_subject` reconciles staging; full `server_groups` reset)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **885 passing** (+1). A logically **separate** change from the ADR-0009 D1/D2 build and Phase 1 — it shares `db/subjects.py` with the still-uncommitted D2 hunk, so the `delete_subject` hunk is staged separately when committing.

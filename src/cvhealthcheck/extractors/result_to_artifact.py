@@ -20,6 +20,7 @@ from cvhealthcheck.artifacts.models import (
     TableColumn,
     TableSection,
 )
+from cvhealthcheck.evaluative.row_match import evaluate_row_rule
 from cvhealthcheck.extractors.card_section import build_card_section
 from cvhealthcheck.extractors.chart_section import build_chart_section
 from cvhealthcheck.extractors.html import ExtractionResult
@@ -134,6 +135,30 @@ def result_to_artifact(
                 empty_message=spec.get("empty_message"),
             ))
 
+    # ADR 0010: row-scope compliance rules → a derived FindingsSection. Runs after
+    # the extracted sections are built (one canonicalization path, ADR 0006 D1):
+    # for each table section with bound row_match rules, evaluate each rule over
+    # that section's rows. Findings fold into severity_counts + has_findings_section
+    # so the summary status reflects them, exactly like a transcribed findings
+    # section. Read-only over the rows — the rules never mutate the artifact data.
+    compliance_items: list[Finding] = []
+    for section_id, row_rules in (result.section_row_rules or {}).items():
+        section_rows = result.sections.get(section_id) or []
+        for rule in row_rules:
+            for derived in evaluate_row_rule(rule, section_rows, now=now):
+                finding = _build_compliance_finding(section_id, derived)
+                compliance_items.append(finding)
+                sev = finding.severity.value
+                severity_counts[sev] = severity_counts.get(sev, 0) + 1
+    if compliance_items:
+        has_findings_section = True
+        sections.append(FindingsSection(
+            type="findings",
+            id=f"{subject_id}.compliance",
+            title="Compliance",
+            items=compliance_items,
+        ))
+
     if not has_findings_section:
         # A metric or card section's verdict drives overall status when there
         # are no findings (e.g. the phase-2/4 test subjects).
@@ -213,6 +238,33 @@ def _build_finding(section_id: str, row: dict[str, Any]) -> Finding:
         recommendation=recommendation,
         vendor_key=vendor_key,
         vendor_id=vendor_id,
+    )
+
+
+def _build_compliance_finding(section_id: str, derived: dict[str, Any]) -> Finding:
+    """ADR 0010: a row_match rule's rendered finding → a canonical Finding.
+
+    The id is stable per (rule_id, row_ref) so re-collection reproduces the same
+    finding ids (and the duplicate-name case is disambiguated by row_ref = id,
+    not name). ``category`` carries the source section_id."""
+    fid = hashlib.sha256(
+        f"{derived.get('rule_id')}:{derived.get('row_ref') or ''}".encode()
+    ).hexdigest()[:12]
+    severity = _SEVERITY_MAP.get(str(derived.get("severity")), FindingSeverity.info)
+    message = derived.get("message") or None
+    if isinstance(message, str) and not message.strip():
+        message = None
+    recommendation = derived.get("recommendation") or None
+    if isinstance(recommendation, str) and not recommendation.strip():
+        recommendation = None
+    return Finding(
+        id=fid,
+        severity=severity,
+        status=FindingStatus.open,
+        category=section_id,
+        title=str(derived.get("title") or ""),
+        description=message,
+        recommendation=recommendation,
     )
 
 
