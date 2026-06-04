@@ -244,7 +244,13 @@ def _project_table_rows(raw: Any, table_spec: dict[str, Any]) -> list[dict[str, 
     if isinstance(raw, list):
         records: Any = raw
     elif isinstance(raw, dict) and root_key:
-        records = raw.get(root_key)
+        # Resolve root_key through the shared nested-path walker, not a flat
+        # `raw.get()` — the column `field` paths below already nest (line ~272),
+        # so this closes that asymmetry: a nested root_key (e.g.
+        # "config.cloud.serviceList") now resolves, while a single-segment key
+        # (auditTrailInfo, …) is byte-identical to the old flat get (missing →
+        # None → []), so existing table subjects are unchanged.
+        records = _resolve_field_path(raw, root_key)
     else:
         records = None
     # A single-object response under root_key (e.g. ``auditTrailInfo: {...}``) is a

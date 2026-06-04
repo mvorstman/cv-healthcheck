@@ -153,6 +153,27 @@ def test_project_table_rows_wraps_single_object_under_root_key():
     assert _project_table_rows(_COLLECTION["raw"], list_spec) == [{"Name": "alpha"}, {"Name": "beta"}]
 
 
+def test_project_table_rows_nested_root_key_path():
+    """A NESTED root_key (dot-path, e.g. metrics_reporting's
+    ``config.cloud.serviceList``) resolves through the shared walker; the column
+    `field` paths also nest (`service.name`). A single-segment root_key stays
+    byte-identical to the old flat get, and a missing nested path → []."""
+    raw = {"config": {"cloud": {"serviceList": [
+        {"enabled": False, "service": {"id": 1, "name": "Health Check"}},
+        {"enabled": True,  "service": {"id": 7, "name": "Proactive Support"}}]}}}
+    spec = {"root_key": "config.cloud.serviceList",
+            "columns": [{"id": "service_name", "field": "service.name"},
+                        {"id": "service_id", "field": "service.id"},
+                        {"id": "enabled", "field": "enabled"}]}
+    assert _project_table_rows(raw, spec) == [
+        {"service_name": "Health Check", "service_id": 1, "enabled": False},
+        {"service_name": "Proactive Support", "service_id": 7, "enabled": True}]
+    # single-segment root_key unchanged (byte-identical to the old flat get)
+    assert _project_table_rows({"items": [{"a": 1}]}, {"root_key": "items"}) == [{"a": 1}]
+    # a missing nested path resolves to None → empty table (not an error)
+    assert _project_table_rows(raw, {"root_key": "config.nope.list"}) == []
+
+
 # ── D1 axis 1: endpoint resolution from the binding ───────────────────────────
 
 def test_environment_resolves_to_default_commserv_endpoint(migrated_db_path: Path):

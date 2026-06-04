@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04 (TableSection `view_mode` — single-row table renders as a card; audit_trail opted in)
+**Last updated:** 2026-06-04 (Fix A — nested root_key resolution + epoch_to_iso coercion; metrics_reporting table now bakes 8 rows)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *TableSection.view_mode: single-row table renders as a card (option b)* (this commit).
-**Test status:** **982 passing** under `pytest` and `python -m pytest`.
+**Last commit:** *Fix A: nested root_key resolution + epoch_to_iso coercion* (this commit).
+**Test status:** **984 passing** under `pytest` and `python -m pytest`.
 
 ---
 
@@ -16,7 +16,22 @@
 
 ---
 
-## What was just completed — TableSection `view_mode` (single-row table → card)
+## What was just completed — Fix A: nested root_key + epoch_to_iso coercion
+
+`metrics_reporting` baked empty due to two binding-vs-reader mismatches; this is the **code half**.
+- **Table:** `_project_table_rows` now resolves `root_key` via `_resolve_field_path` (nested) instead of flat `raw.get()` — a nested `config.cloud.serviceList` resolves; single-segment keys are byte-identical (audit_trail/server_groups unchanged).
+- **Card:** added `epoch_to_iso` as a closed-enum sibling of `hex` in `_coerce_item_value` (ADR 0007 D3) — `"type":"epoch_to_iso"` formats epoch-seconds → ISO 8601 UTC, raw kept. The card reader already coerces, so no new wiring.
+- **Validated** (captured payload — live token expired again, `no active token; reconnect`): services table = **8 rows, service_name 8/8, Health Check id1/enabled-false → warning**. 984 tests.
+
+### ⚠ Next step — Fix B (separate, in chat): re-stage the `status` card binding
+The `status` card is **still empty** (expected). Its binding shape doesn't match `build_card_section`'s contract:
+- uses `card.fields` with per-entry `id`/`field` → the reader wants **`card.items`** with **`label`**/`field`;
+- declares `card.root_key:"config"` → the reader does **not** apply root_key, so each field path must be fully qualified (e.g. `field:"config.metricsReportPackageInstalled"`).
+Re-stage with that shape, and declare **`"type":"epoch_to_iso"`** on the three timestamp fields (`config.lastCollectionTime`, `config.lastUploadTime`, `config.nextUploadTime`) — now supported by this commit.
+
+---
+
+## Earlier this session — TableSection `view_mode` (single-row table → card)
 
 Option (b) from the render-mode map: a presentational discriminator so a single-row table renders as a Field/Value card while **its row rule + per-row verdict keep firing** (the engine, `validate_row_match_rule`, and the verdict bake are untouched).
 

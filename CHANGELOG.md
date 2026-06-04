@@ -10,6 +10,21 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (Fix A — nested root_key resolution + epoch_to_iso coercion)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **984 passing** (was 982; +2). Two generic, additive read-path fixes surfaced by `metrics_reporting` (which baked empty). The card binding-shape half (Fix B) is separate.
+
+### Fixed / Added
+- **Nested `root_key` (table read path).** `extractors/command_center._project_table_rows` now resolves `root_key` through the shared nested-path walker `_resolve_field_path(raw, root_key)` instead of a flat `raw.get(root_key)`. The column `field` paths already nested (`service.name`), so root_key being flat was an asymmetry — a nested `root_key` like `config.cloud.serviceList` silently yielded an empty table. **Behavior-preserving:** a single-segment key (`auditTrailInfo`, `items`, …) resolves byte-identically to the old flat get (missing → `None` → `[]`); same spirit as the prior generic fixes in this path (dict-wrap `d1860c4`, view_mode `5f5f136`).
+- **`epoch_to_iso` coercion (card read path).** Added `epoch_to_iso` as a closed-enum sibling of `hex` in `extractors/card_section._coerce_item_value` (ADR 0007 D3): a card item declaring `"type":"epoch_to_iso"` formats an epoch-**seconds** integer as an ISO 8601 UTC string (`1700000000 → "2023-11-14T22:13:20Z"`), keeping the raw epoch in `raw_value`. Seconds only — no millisecond guessing. The card reader already runs every field value through `_coerce_item_value`, so no new wiring; absent/other `type` and non-integers pass through byte-identical. **Declared in the binding, not a field-name heuristic.**
+- Tests +2: `test_project_table_rows_nested_root_key_path` (nested `a.b.c` resolves to the inner list with `service.name` populated + Health Check id 1/enabled false; single-segment unchanged; missing nested path → `[]`); `test_epoch_to_iso_coercion` (known epoch → ISO + raw kept; undeclared field left an int).
+
+### Notes
+- **Validated end-to-end** against the `metrics_reporting` payload captured live earlier this session (only the HTTP fetch substituted — the live re-collect's loopback token had expired: `error='no active token; reconnect'`): `services` table = **8 rows, `service_name` populated 8/8**, **Health Check (id 1, enabled false) → `warning`** with finding "Health Check cloud service disabled". The `status` card is **still empty (0 items)** — expected; its binding shape (`card.fields`/`id` vs the reader's `card.items`/`label`, and the `root_key` the reader doesn't apply) is **Fix B**, handled separately. `epoch_to_iso` is now available for Fix B to declare on the three timestamp fields.
+- This is the CODE half only; no staged artifacts / subject definitions / rules were touched.
+
+---
+
 ## 2026-06-04 (TableSection.view_mode — single-row table renders as a card)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **982 passing** (was 976; +6). Presentational discriminator (option b); **no change to the rule engine, `validate_row_match_rule`, or the verdict bake** — a card-rendered table still fires its row rules + per-row verdict.

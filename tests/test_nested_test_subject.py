@@ -89,6 +89,19 @@ def test_hex_coercion_unit_test_directly():
     assert sec2.items[0].value == "not-an-int" and sec2.items[0].raw_value is None
 
 
+def test_epoch_to_iso_coercion(): # ADR 0007 D3 closed-enum sibling of hex
+    spec = {"items": [{"label": "T", "field": "t", "type": "epoch_to_iso"}]}
+    # a known epoch-SECONDS value → ISO 8601 UTC; raw epoch kept
+    sec = build_card_section("x.t", "X", spec, [{"t": 1700000000}])
+    assert sec.items[0].value == "2023-11-14T22:13:20Z" and sec.items[0].raw_value == 1700000000
+    # the live metrics_reporting lastCollectionTime value
+    sec2 = build_card_section("x.t", "X", spec, [{"t": 1780040786}])
+    assert sec2.items[0].value == "2026-05-29T07:46:26Z" and sec2.items[0].raw_value == 1780040786
+    # a field WITHOUT the coercion declared is left untouched (still an int)
+    plain = build_card_section("x.t", "X", {"items": [{"label": "T", "field": "t"}]}, [{"t": 1700000000}])
+    assert plain.items[0].value == 1700000000 and plain.items[0].raw_value is None
+
+
 # ── Regression: flat path (_card_test) unchanged ──
 
 def test_card_test_flat_path_unchanged(migrated_db_path: Path):

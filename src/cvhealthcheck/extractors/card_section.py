@@ -50,6 +50,7 @@ raises (loud-fail) via the phase-1 evaluator.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from cvhealthcheck.artifacts.enums import FindingSeverity
@@ -257,11 +258,15 @@ def _coerce_item_value(value: Any, col_type: str | None) -> tuple[Any, Any]:
 
     Returns ``(coerced_value, raw_value)``. ``raw_value`` is the pre-coercion
     value, kept only when a coercion actually reshapes it (else None, so
-    uncoerced items stay byte-identical). The only value today is ``hex``:
-    format an integer as lowercase hex with no ``0x`` prefix (13183 -> "337f").
+    uncoerced items stay byte-identical). Closed enum, added only by explicit
+    decision (not CEL):
+      - ``hex``: format an integer as lowercase hex, no ``0x`` (13183 -> "337f").
+      - ``epoch_to_iso``: format an epoch-SECONDS integer as an ISO 8601 UTC
+        string (1700000000 -> "2023-11-14T22:13:20Z"). Seconds only — the raw
+        value (10-digit) is kept; no millisecond guessing.
     A non-coercible value (None / non-integer) passes through unchanged — never
     crashes. Not CEL; new coercion values are added only by explicit decision."""
-    if col_type != "hex":
+    if col_type not in ("hex", "epoch_to_iso"):
         return value, None
     if value is None or isinstance(value, bool):
         return value, None
@@ -269,4 +274,7 @@ def _coerce_item_value(value: Any, col_type: str | None) -> tuple[Any, Any]:
         n = int(value)
     except (TypeError, ValueError):
         return value, None  # defensive: leave non-integers as-is
-    return format(n, "x"), n
+    if col_type == "hex":
+        return format(n, "x"), n
+    # epoch_to_iso — treat as epoch SECONDS, emit ISO 8601 UTC (Z), keep raw int.
+    return datetime.fromtimestamp(n, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), n
