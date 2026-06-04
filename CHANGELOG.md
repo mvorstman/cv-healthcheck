@@ -10,6 +10,26 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (docs — PROMPT.txt restructured to a timeless operating constitution)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; reorganization — no KEEP rule's meaning changed.
+
+### Added
+- **PROMPT.txt** two new governance sections: **DECISION HIERARCHY** (explicit user instructions override docs; user is final approval authority; the 6-level conflict-authority order: user instructions → Accepted ADRs → PROMPT → ROADMAP → HANDOVER → CHANGELOG; observations/tool-output/reviews advisory only) and **DECISION MAKING** (9-step pre-change checklist: understand behavior → tests → ADRs/roadmap → extend-generic → declarative → escalate uncertainty → verify-first → grep-first → docs-over-chat).
+
+### Changed
+- **PROMPT.txt** restructured into a timeless operating constitution. Final order: PROJECT PURPOSE → ARCHITECTURE PRINCIPLES → PROJECT BOUNDARY → DECISION HIERARCHY → DECISION MAKING → ENGINEERING RULES → DO NOT → VALIDATION REQUIREMENTS → DOCUMENTATION MODEL → START OF SESSION → SESSION WRAP-UP. PROJECT PURPOSE tightened to two paragraphs. PROJECT BOUNDARY moved up into the governance cluster. The IMPORTANT STRATEGIC DIRECTION section was split: "must not assume direct CommServe access" was already a DO-NOT bullet (deduped); "collection must support remote/customer-side execution" folded into ARCHITECTURE PRINCIPLES → collectors/; the rest (central-platform/S3/modes-as-direction) is already covered by ROADMAP and was removed. Timeless navigation principles folded into ARCHITECTURE PRINCIPLES → web/.
+- **PROMPT.txt** ENGINEERING WORKFLOW section folded away: "commit at every green checkpoint / don't batch unrelated changes" merged into the existing SESSION WRAP-UP commit bullet; "Claude Code does the heavy lifting, user reviews/steers" kept as one line under DECISION MAKING.
+- **README.md** gained a "Data Sources & Collection Strategy" section (relocated from PROMPT's REPORTS PLUS / METRICS STRATEGY + COLLECTION STRATEGY — Reports-Plus-as-primary-source, cross-environment caveats, the REST→datasets→reports→uploads→SQL-last order, and the avoid-list).
+- **docs/PATTERNS.md** gained pattern 5 — the metric-visualization Chart.js payload convention (route → server-side payload → metric_detail.html → Chart.js), relocated from PROMPT's METRIC VISUALIZATION.
+- **docs/lab_environment.md** gained a "Lab Realism & Health-Rule Readiness" section (relocated from PROMPT's LAB ENVIRONMENT NOTES — minimal-lab limitations, what stays valid, and the pre-health-rule realism checklist).
+
+### Removed
+- **PROMPT.txt** implementation-state snapshots (all captured in README or obsolete): the "Current Quick HC items" inventory, the Security Assessment state block (report-336 path, "32 total checks…" counts, checklist.py path, legacy-GET-redirect, POST handlers), the License Summary state block, the "Current Quick HC platform notes" (TileDefinition fields, list_tiles(), canonical_view.py, subject_data_service.py fallback), and the "Current UI/product structure direction" item-lists (the nav *principles* were kept; the specific HealthCheck/Customers/Advanced/Development + Quick HC item names were removed). Also removed the OPERATING MODES / DAILY REPORTING / QUICK HEALTHCHECK / FULL HEALTHCHECK prose — already covered by README Strategic Direction and ROADMAP's Operating-Modes initiative.
+
+### Notes
+PROMPT is now state-free (no implementation snapshots, no file/function names except in the ARCHITECTURE boundaries). ROADMAP needed no edit — the operating-modes / central-platform / S3 direction was already present there. Pending (not in this commit's scope): HANDOVER.md line 27 still cites `README:368` for the Security Assessment source-precedence issue, a line removed in README pass 1 (`a9dd98e`); fix on the next HANDOVER refresh.
+
 ## 2026-06-04 (docs — README pass 1: strip session state, collapse lab setup, refresh doc index)
 
 **Branch:** `feature/basic-healthcheck-report-output`. Docs-only; thinning pass — no internals sections moved or deleted (deferred to pass 2).

@@ -286,3 +286,34 @@ Connectivity probe scripts:
 scripts/probe_api.sh
 scripts/probe_dataset_metadata.sh <dataset-guid>
 scripts/probe_dataset_data.sh <dataset-guid>
+
+⸻
+
+Lab Realism & Health-Rule Readiness
+
+The current lab is intentionally minimal.
+
+Current limitations:
+
+* few or no completed backup jobs
+* limited operational history
+* minimal alerting activity
+* limited DDB activity
+* minimal SLA data
+* minimal MediaAgent activity
+
+Because of this:
+
+* discovery work is valid
+* API validation is valid
+* dataset execution validation is valid
+* health-rule conclusions are NOT yet representative
+
+Before health-rule development:
+
+* improve lab realism
+* generate operational activity
+* create backup history
+* generate alerts/failures
+* create realistic storage usage
+* generate SLA trends

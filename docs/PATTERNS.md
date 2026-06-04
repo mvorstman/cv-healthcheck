@@ -122,3 +122,19 @@ themes; the concrete rules live here.)
   return real rows in the current CommCell.
 - **SSL verification defaults ON.** Require an explicit opt-out for
   self-signed lab environments, and warn clearly when insecure mode is used.
+
+---
+
+## 5. Metric visualization uses a shared Chart.js payload pattern
+
+Historical metric pages render through one reusable server-side payload
+pattern, not page-specific JavaScript:
+
+```text
+route -> server-side chart payload -> metric_detail.html -> Chart.js render
+```
+
+Future historical metrics should reuse this pattern — build the chart
+payload server-side and pass it into `metric_detail.html` — instead of
+adding bespoke per-page JavaScript. (The `/metrics/client-growth` page is
+the worked example; see README "Metric Charts" for the how-to.)

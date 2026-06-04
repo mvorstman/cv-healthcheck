@@ -28,6 +28,20 @@ The platform must not assume direct access to customer CommServe systems: the ex
 
 Direction detail (operating-mode evolution, S3 evidence transport, distributed collection) lives in [ROADMAP.md](ROADMAP.md).
 
+## Data Sources & Collection Strategy
+
+Reports Plus / Metrics is a primary strategic data source — especially valuable for trends, historical reporting, SLA analysis, growth and capacity analysis, operational summaries, and multi-CommCell reporting. Private Metrics servers are expected to become major long-term sources. Because dataset GUIDs and report IDs vary across environments (report names are more stable than IDs), report-composition mapping and dataset-execution validation matter more than hardcoded IDs.
+
+Preferred collection order:
+
+1. REST APIs
+2. Reports Plus datasets
+3. Existing reports
+4. Uploaded exports/artifacts
+5. SQL only as a last resort
+
+Avoid unsupported DB-access assumptions, hardcoded environment assumptions, tight coupling to one lab, and assuming reports are identical across environments.
+
 ## Quick HC Foundation
 
 Quick HC is now the main customer-facing report-composition surface for cv-healthcheck and is moving toward the broader HealthCheck primary workspace.
