@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04 (Fix A — nested root_key resolution + epoch_to_iso coercion; metrics_reporting table now bakes 8 rows)
+**Last updated:** 2026-06-04 (engine fix — numeric path segment indexes into a list in _resolve_field_path; commserve_software_cache table now bakes 3 rows)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *Fix A: nested root_key resolution + epoch_to_iso coercion* (this commit).
-**Test status:** **984 passing** under `pytest` and `python -m pytest`.
+**Last commit:** *fix(engine): resolve numeric path segment as list index in _resolve_field_path* (this commit).
+**Test status:** **990 passing** under `pytest` and `python -m pytest`.
 
 ---
 
@@ -16,7 +16,20 @@
 
 ---
 
-## What was just completed — Fix A: nested root_key + epoch_to_iso coercion
+## What was just completed — engine fix: list-index in _resolve_field_path
+
+`_resolve_field_path` (shared ADR-0007 D2 resolver, `metric_section.py`) descended only into dicts, so a numeric segment into a **list** (`commserve_software_cache` table root_key `...cacheContents.0.softwareCacheServicePackDetails`) returned `default` → 0 rows. Now: dict→key (literal `"0"` key wins), list→non-negative integer index (out-of-range/non-numeric → default), else default. Additive — numeric-on-list only ever returned default before. +6 unit tests; **990 passing**.
+- **Verified:** `cache_contents` now renders **3 rows** (WinX64 / linux-x8664 / linux-arm64, SP 11.40.47) — against the captured payload (live re-collect blocked: loopback token expired again).
+
+### ⚠ Open — Fix 2 (separate, NOT code): the `commserve_software_cache` card
+`cache_configuration` ("No card data") + `metrics_reporting`'s `status` card are the **same** root cause: the card binding declares table vocabulary (`columns`, and `root_key` the reader ignores) but `build_card_section` reads `items` with `label`/`field` (fully-qualified paths). Fix is a **v2 card-spec re-stage**, not code:
+- `card.items` (not `columns`/`fields`), each `{"label","field"}` with fully-qualified paths (e.g. `field:"commserveSoftwareCache.cacheFreeSpace"`).
+- For `metrics_reporting` timestamps, declare `"type":"epoch_to_iso"` (already supported, `842d39c`).
+Worth an ADR note: **binding spec vocabulary diverges by section type** (table=`root_key`+`columns`, card=`items`) — the recurring mis-authoring trap.
+
+---
+
+## Earlier this session — Fix A: nested root_key + epoch_to_iso coercion
 
 `metrics_reporting` baked empty due to two binding-vs-reader mismatches; this is the **code half**.
 - **Table:** `_project_table_rows` now resolves `root_key` via `_resolve_field_path` (nested) instead of flat `raw.get()` — a nested `config.cloud.serviceList` resolves; single-segment keys are byte-identical (audit_trail/server_groups unchanged).

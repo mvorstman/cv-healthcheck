@@ -10,6 +10,22 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (fix(engine) — numeric path segment indexes into a list in _resolve_field_path)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **990 passing** (was 984; +6). Global engine fix; additive, no behavior change for existing dict paths.
+
+### Fixed
+- **`extractors/metric_section._resolve_field_path`** — the shared ADR-0007 D2 field-path resolver descended only into dicts, so a path with a numeric segment pointing into a **list** (e.g. `commserve_software_cache`'s table root_key `commserveSoftwareCache.UaInfo.cacheContents.0.softwareCacheServicePackDetails`) hit `.0` against a list and returned `default` → the table rendered **0 rows**. The resolver now: descends a **dict** by key as before (a literal `"0"` key still wins via dict semantics), indexes a **list** by a non-negative integer segment (out-of-range / non-numeric → `default`), and returns `default` for any other mid-path type. Used by every section type (table root_key + columns, card/metric fields).
+- **Purely additive:** a numeric-on-list segment previously only ever returned `default`, so no existing path changes. Same spirit as the recent generic fixes in this path (Fix A nested root_key `842d39c`, dict-wrap `d1860c4`).
+- `tests/test_resolve_field_path.py` (+6, new): list index; nested dict→list→dict→value (the real cache shape); out-of-range → default (incl. custom default); non-numeric/negative on a list → default; literal `"0"` dict key resolves by key; dict-only regression cases.
+
+### Notes
+- **Validated** against the `commserve_software_cache` payload captured live last turn (the live re-collect's loopback token had expired again: `error='no active token; reconnect'`): `cache_contents` table now renders **3 rows** — WinX64 / linux-x8664 / linux-arm64, each SP `11.40.47`. The `cache_configuration` **card is still empty** — that's **Fix 2** (separate), unchanged here.
+- **Diagnosis confirmed (out of scope to fix here):** the original mis-authoring root cause is that the binding **spec vocabulary diverges by section type** — a table declares `root_key` + `columns`, a card declares `items` (and `build_card_section` ignores `root_key`). The `commserve_software_cache` card was authored with `columns`, so it bakes empty. Worth an ADR note later; Fix 2 is a v2 card-spec re-stage, not code.
+- The `.0` positional index makes list-indexing **work**, not **version-correct** (it hardcodes "v11 is first in cacheContents"). Version-predicate vs positional index is a later spec question — left as-is.
+
+---
+
 ## 2026-06-04 (Fix A — nested root_key resolution + epoch_to_iso coercion)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **984 passing** (was 982; +2). Two generic, additive read-path fixes surfaced by `metrics_reporting` (which baked empty). The card binding-shape half (Fix B) is separate.

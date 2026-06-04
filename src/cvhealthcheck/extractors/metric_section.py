@@ -162,13 +162,31 @@ def _resolve_field_path(record: Any, path: str, default: Any = None) -> Any:
 
     A single-segment path behaves exactly like ``record[seg]`` did before — for a
     flat ``field`` this is byte-identical to the old ``row.get(field)`` /
-    ``field in row`` behaviour. Any missing/non-dict segment resolves to
-    ``default`` (None), consistent with today's ``.get()`` semantics."""
+    ``field in row`` behaviour. A missing key / out-of-range index / wrong-type
+    segment resolves to ``default`` (None), consistent with today's ``.get()``
+    semantics.
+
+    A **numeric segment indexes into a list** (e.g.
+    ``...cacheContents.0.softwareCacheServicePackDetails``). Dict semantics win:
+    against a dict, a literal ``"0"`` key still resolves by key. Against a list, a
+    non-negative integer string indexes in (out-of-range / non-numeric ->
+    default). Purely additive — a numeric-on-list segment previously only ever
+    returned default."""
     cur = record
     for seg in path.split("."):
-        if not isinstance(cur, dict) or seg not in cur:
-            return default
-        cur = cur[seg]
+        if isinstance(cur, dict):
+            if seg not in cur:
+                return default
+            cur = cur[seg]                          # dict key wins (a literal "0" key resolves here)
+        elif isinstance(cur, list):
+            if not seg.isdigit():                  # non-negative integer index only
+                return default
+            idx = int(seg)
+            if idx >= len(cur):                    # out of range
+                return default
+            cur = cur[idx]
+        else:
+            return default                         # scalar/None mid-path -> can't descend
     return cur
 
 
