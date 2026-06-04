@@ -313,6 +313,8 @@ Before commits:
 * python -m pytest must pass
 * bash -n scripts/*.sh start.sh must pass
 
+If validation fails, report the exact failing command and failure summary — never claim or pretend success.
+
 Update when appropriate:
 
 * README.md when behavior, stack, or how-to-run changes
@@ -336,6 +338,8 @@ At the start of every new session, read these three files before doing anything 
 * README.md
 * HANDOVER.md
 * ROADMAP.md
+
+Also check git state first: git status / git branch / git log --oneline -5.
 
 If those three files plus the most recent CHANGELOG entry are not enough to pick up productively, that is a handover defect — improve HANDOVER.md at the end of the session.
 

@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04 (docs — removed retired DEVLOG.md from docs/Workflow.md; points to CHANGELOG/HANDOVER)
+**Last updated:** 2026-06-04 (docs — consolidate doc tree: delete 3 orphans, rehome session workflow into PROMPT.txt)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *docs: remove retired DEVLOG.md from workflow; point to CHANGELOG/HANDOVER* (this commit).
+**Last commit:** *docs: consolidate doc tree — delete orphans, rehome workflow into PROMPT.txt* (this commit).
 **Test status:** **1008 passing** (unchanged — docs-only session, no source touched).
 
 ---
@@ -16,27 +16,16 @@
 
 ---
 
-## What was just completed — documentation review & hygiene pass (docs-only)
+## What was just completed — doc-tree consolidation (docs-only)
 
-Reviewed every tracked `*.md`/`*.txt`. **One drift fixed** (README + ROADMAP "no scoring" bullet → reflects ADR-0010 row-scope rules). Ports/paths/commands verified correct; PROMPT/CHANGELOG/HANDOVER/HEALTHCHECK_MATRIX/ADRs current. No source changed.
+- **Deleted 3 true orphans** (git history preserves them): `HANDOVER_TO_CODE.md`, `design/CODEX_HANDOVER_v2.md`, `cv_healthcheck_context.md`. Their only inbound refs were this HANDOVER's prior candidate table (cleared here) + a CHANGELOG history note — no structural/content dependencies.
+- **Rehomed the session workflow into PROMPT.txt** and removed the duplicate `docs/Workflow.md`. PROMPT.txt already covered ~95% (ENGINEERING RULES / DO NOT / VALIDATION REQUIREMENTS / DOCUMENTATION MODEL / START OF SESSION / SESSION WRAP-UP), so per "merge, don't duplicate" I added only the two genuine gaps: the start-of-session git-state check and the validation-honesty rule.
+- **STOPPED on `DATA_SOURCE_MAPPING.md` (kept, not folded):** it's an operating-mode *source-strategy* doc (explicitly "not… implementation"), not validated-API behavior — folding it into API_MAPPING would change that doc's meaning. Its unique content (per-subject source preference across Quick HC / Daily / Full + Operating Mode Guidance) overlaps conceptually with ROADMAP's "Future Architecture: Operating Modes," not API_MAPPING. **Decision needed:** keep as-is (recommended), or fold into ROADMAP — not API_MAPPING. README:450 still points at it (unchanged).
 
-### ⚠ For Michiel — "no longer used" candidates (REPORT ONLY; nothing deleted)
-| candidate | reason | recommendation |
-|---|---|---|
-| `HANDOVER_TO_CODE.md` | one-time design→Code handover (Report Inventory, 05-24); 0 refs; shipped | archive/delete |
-| `design/CODEX_HANDOVER_v2.md` | Codex Quick-HC-UI-rebuild handover (05-20); 0 refs; rebuild shipped; project is Claude Code now | archive/delete |
-| `cv_healthcheck_context.md` | generated "Project Context Report" snapshot (05-23); 0 refs; superseded by README/PROMPT | archive/delete |
-| `docs/review_2026-05-20.md` | dated point-in-time codebase review; ref only by CHANGELOG | archive (keep for history) |
-| `docs/research/license_summary_report_xml_analysis.md` | research input (05-18); 0 refs; research-only | keep (research reference) |
-| `artifact_schema_v1.md` | "v1 Draft" canonical-artifact schema; partly current; ref by context only | keep, refresh status later |
-| `DATA_SOURCE_MAPPING.md` | source strategy (05-15); overlaps API_MAPPING + ROADMAP; still ref'd by README | keep (overlap, not orphan) |
-
-**Not candidates (active):** `docs/refactor_unified_upload_*.md` — that refactor is in-progress (session 3b is a 06-03 stop-and-report). The numbered ADRs + surveys/plans are permanent decision records — keep.
-
-### Flagged factual gaps (NOT changed — your call)
-- **API_MAPPING.md** omits the ADR-0009 live-validated CC endpoints (`commserv/audittrail`, `…/metricsreporting`, `…/addremovesoftware/commservesoftwarecache`, `…/v4/servergroup`). Adding them is sanctioned ("validated API behavior") but left for you to format.
-- ROADMAP/README Phase-3 subject enumerations don't list the new CC-API subjects (historical snapshots — not edited).
-- No documented decision/architecture conflicts with current code were found.
+### Open doc-state notes
+- **`artifact_schema_v1.md` is now a true orphan** (its only inbound ref was the deleted `cv_healthcheck_context.md`). Left in place — "v1 Draft" canonical-artifact schema, partly current; refresh or retire later.
+- **API_MAPPING.md** still omits the ADR-0009 live-validated CC endpoints (`commserv/audittrail`, `…/metricsreporting`, `…/addremovesoftware/commservesoftwarecache`, `…/v4/servergroup`) — sanctioned to add ("validated API behavior"), left for you to format.
+- Two workflow docs still coexist: root `WORKFLOW.md` (methodology) and PROMPT.txt's session workflow (now the per-session home). Not conflicting; consolidate if desired.
 
 ---
 
@@ -160,8 +149,8 @@ The **only** remaining interim derivation is the criteria card's **Scope sentenc
 
 ---
 
-## ⚠️ Uncommitted in the working tree (carry forward)
-`src/cvhealthcheck/mcp/server.py` still has the **uncommitted probe read-timeout hardening** (`timeout=30 → (5, 30)`) from the probe-hang session — untouched again this session. Decide whether to commit it (its own small commit).
+## Working tree
+The probe read-timeout hardening (`timeout=30 → (5, 30)`) was **committed** in `1aa0537` — no longer outstanding. The only untracked items are unrelated `docs/Lab_Environment v1.01*.md` drafts (left alone, not staged).
 
 ---
 

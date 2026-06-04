@@ -10,6 +10,25 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (docs — consolidate doc tree: delete orphans, rehome workflow into PROMPT.txt)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source/schema/behavior change. VERIFY-FIRST: every claim below was proven by `grep` before acting.
+
+### Removed
+- **`HANDOVER_TO_CODE.md`, `design/CODEX_HANDOVER_v2.md`, `cv_healthcheck_context.md`** — shipped/superseded one-off handover & context notes. The 0-ref grep showed their only inbound references were this review's own bookkeeping (the prior HANDOVER candidate table, refreshed this session, + a CHANGELOG history note), not structural/content dependencies — so they are true orphans. git history preserves them.
+- **`docs/Workflow.md`** — the per-session checklist, removed after rehoming its content into PROMPT.txt (the file was already deleted from the working tree).
+
+### Changed
+- **PROMPT.txt** — merged the two session-workflow elements it lacked (it already covered the rest across ENGINEERING RULES / DO NOT / VALIDATION REQUIREMENTS / DOCUMENTATION MODEL / START OF SESSION / SESSION WRAP-UP, so per "merge, don't duplicate" nothing else was added): a start-of-session **git-state check** (`git status / branch / log --oneline -5`) and a **validation-honesty** rule ("report the exact failing command… never pretend success"). DEVLOG-free; the existing "Do not reintroduce DEVLOG.md" note is unchanged.
+
+### Notes
+- **STOPPED on `DATA_SOURCE_MAPPING.md` (kept, not folded)** — it is an operating-mode *source-strategy* doc (explicitly "does not define… implementation"), not validated-API behavior. Folding it into API_MAPPING.md (the validated-API home) would change that doc's meaning; its unique content (per-subject source preference across Quick HC / Daily / Full + Operating Mode Guidance) overlaps conceptually with ROADMAP's "Future Architecture: Operating Modes," not API_MAPPING. Left in place; README:450 reference unchanged. Recommend: keep as-is, or fold into ROADMAP (a separate decision).
+- **Step 5 (gitignore/untrack build noise) was a no-op** — `.gitignore` already has `.pytest_cache/` and `*.egg-info/`, and `git ls-files` showed none tracked.
+- **`artifact_schema_v1.md` is now a true orphan** (its only inbound ref was the deleted `cv_healthcheck_context.md`) — left in place, flagged for later refresh/retire.
+- Left untouched per scope: `docs/adr/*`, `docs/PATTERNS.md`, `docs/data_flow_audit.md`, `docs/research/*`, `docs/refactor_unified_upload_*` (active WIP), `memory/*`, root `WORKFLOW.md` (methodology doc), and the unrelated untracked `docs/Lab_Environment v1.01*.md` drafts.
+
+---
+
 ## 2026-06-04 (docs — remove retired DEVLOG.md from docs/Workflow.md)
 
 **Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source/schema/behavior change. Reconciles the per-session workflow checklist with the DEVLOG-retired decision (PROMPT.txt; retired 2026-05-25).
