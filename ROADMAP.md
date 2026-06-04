@@ -238,6 +238,21 @@ Status: started.
 - Add explicit provenance metadata to canonical artifacts so downstream health logic can distinguish live REST evidence from imported offline evidence.
 - Add evidence confidence concepts so future health scoring can account for source quality, completeness, and collection freshness.
 
+## Near-Term: Version-Aware Rule Evaluation and Version Intelligence
+
+### Version-aware comparison primitive (near-term — enables the rule below and the vision item)
+
+- Add a version-aware compare for `row_match` conditions so rules can express "minimum 11.40.51" correctly (Commvault version = major 11 / feature release 40 / maintenance release 47).
+- Today's operators are lexical/numeric (`eq`/`ne`/`lt`/`contains`/…) and mis-order version strings (e.g. `11.40.9` sorts above `11.40.51`). Needs either a `version_lt`/`version_gte` operator with segment parsing, or a coercion that splits the SP string into comparable parts.
+- Author as an ADR (operator/coercion design + how it parses Commvault SP strings).
+- First consumer: `commserve_software_cache.cache_contents` — flag WinX64 (later all rows) below a minimum SP. Rule deferred until this lands.
+
+### Version intelligence / external baseline matching (later — vision, not scoped yet)
+
+- Pull current Commvault release + maintenance-release info, security advisories, and available updates from an authoritative web source; hold as GLOBAL reference/baseline data, refreshed periodically.
+- Evaluate clients, the software cache, and per-platform SP contents against that live baseline instead of hardcoded thresholds — surface out-of-date SPs, missing security fixes, and available upgrades, matched to the relevant clients/components.
+- Builds on the version-compare primitive above as its comparison engine; the baseline source/refresh/match design is its own future effort.
+
 ## Later Phases
 
 - Collector orchestration
