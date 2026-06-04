@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04 (feat — ADR-0011 version_lt/version_gte operators + version comparator; evaluation-boundary debt recorded)
+**Last updated:** 2026-06-04 (ADR-0011 — Rule 2 authored on commserve_software_cache.cache_contents; version operators landed)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *feat(rules): version-aware comparison primitive + version_lt/version_gte operators (ADR-0011)* (this commit).
-**Test status:** **1014 passing** (was 1008; +6).
+**Last commit:** *docs: ADR-0011 acceptance — Rule 2 authored on cache_contents* (this commit). Code: version operators in `5ad8b64`.
+**Test status:** **1014 passing** (no code change since; Rule 2 is runtime catalog state).
 
 ---
 
@@ -16,16 +16,14 @@
 
 ---
 
-## What was just completed — ADR-0011 version operators
+## What was just completed — ADR-0011 Rule 2 authored (+ version operators)
 
-`version_lt`/`version_gte` row-match operators + the standalone `coerce.parse_version`/`compare_versions` primitive (correct component-wise ordering — fixes the lexical trap where `"11.40.9"` sorted above `"11.40.51"`). Authoring rejects an unparseable version literal (D4); an unparseable row value reads `not_evaluated`, never a false good. **`result_to_artifact` untouched** (the evaluation-boundary cleanup is recorded as deferred debt in ROADMAP, commit 1 of this session). +6 tests; **1014 passing**.
+- **Rule 2 authored** (runtime catalog, `data/app.db`, gitignored — not a code change): `csc_cache_sp_below_min` — `row_match` on `commserve_software_cache.cache_contents`, condition `service_pack version_lt "11.40.51"`, **severity warning**, bound to `cache_contents` (active v4). Michiel chose minimum `11.40.51` + severity `warning`.
+- **Verified by `evaluate_subject` dry-run** over the stored artifact (no live Connect): all **3 cached-SP rows (all `11.40.47`) flag `warning`** (`11.40.47 < 11.40.51`); the pre-existing `cache_configuration` rule still flags `ua_package_cache` critical. Completes the ADR-0011 acceptance test.
+- **Operators (code, `5ad8b64`):** `version_lt`/`version_gte` + the standalone `coerce.parse_version`/`compare_versions` primitive (fixes the lexical trap `11.40.9 < 11.40.51`). D4: unparseable literal rejected at authoring; unparseable row value → `not_evaluated`. `result_to_artifact` untouched (evaluation-boundary debt recorded in ROADMAP).
 
-### ⚠ REQUIRED NEXT STEP (Michiel) — restart the MCP server before authoring Rule 2
-The running `cv-healthcheck-mcp` **caches imported modules**, so `save_rule`/`evaluate_subject` will NOT see `version_lt`/`version_gte` until it's restarted:
-```
-pkill -f cv-healthcheck-mcp     # then reconnect from Claude Desktop
-```
-Until then the chat/MCP layer cannot author Rule 2. After restart, author Rule 2 (`row_match` on `commserve_software_cache.cache_contents`, `{target:"service_pack", operator:"version_lt", value:<minimum>}`, severity + minimum your call), bind it, then `evaluate_subject commserve_software_cache` (dry-run over the stored artifact — no live Connect needed). The 3 stored rows are all `service_pack=11.40.47`; pick a minimum that splits them to actually exercise ordering. Rule 2 was NOT authored here (severity/minimum are authoring choices).
+### ⚠ Remaining (token-gated, optional): live `/quick-hc` re-render
+The dry-run confirms the verdicts on the stored artifact; the pretty live re-render of `commserve_software_cache` on `/quick-hc` is the only token-gated step (a fresh Connect + re-collect, then the 3 cache_contents rows show amber STATUS dots + 3 Findings). Not required for correctness. Note: all 3 rows are identical `11.40.47`, so this rule flags all-or-none — it doesn't exercise the lexical-trap *ordering* on real data (the unit tests do); a future split would need differing per-platform SPs.
 
 ### Earlier this session — final doc-tidy (docs-only)
 

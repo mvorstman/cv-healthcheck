@@ -10,6 +10,15 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (ADR-0011 acceptance — Rule 2 authored on commserve_software_cache.cache_contents)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Runtime catalog + docs; no code change (the operators landed in `5ad8b64`).
+
+### Notes
+- Authored + bound **`csc_cache_sp_below_min`** (runtime, `data/app.db`, gitignored): `row_match` on `commserve_software_cache.cache_contents`, condition `service_pack version_lt "11.40.51"`, severity **warning** (Michiel's minimum + severity choices). `evaluate_subject` dry-run over the stored artifact: all **3 cached-SP rows (`11.40.47`) flag warning** — completes the ADR-0011 acceptance test. The live `/quick-hc` re-render is token-gated (a fresh Connect), not required for correctness. (All 3 rows are identical `11.40.47`, so this rule is all-or-none on real data; the lexical-trap ordering is exercised by the unit tests, not this data.)
+
+---
+
 ## 2026-06-04 (feat(rules) — version-aware comparison primitive + version_lt/version_gte (ADR-0011))
 
 **Branch:** `feature/basic-healthcheck-report-output`. **1014 passing** (was 1008; +6). Localized to the evaluative + authoring layers; **`result_to_artifact` untouched** (the boundary recorded as deferred debt in the prior entry).
