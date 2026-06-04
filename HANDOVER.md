@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04 (fix(rules) — bind path scopes to the active subject version + transpose key/id are valid rule targets)
+**Last updated:** 2026-06-04 (docs — documentation review & hygiene pass; one drift fixed, candidates flagged)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *fix(rules): scope save_rule bind checks to the active version + allow transpose key/id targets* (this commit).
-**Test status:** **1008 passing** under `pytest` and `python -m pytest`.
+**Last commit:** *docs: review pass — sync drifted docs, flag unused files* (this commit).
+**Test status:** **1008 passing** (unchanged — docs-only session, no source touched).
 
 ---
 
@@ -16,7 +16,31 @@
 
 ---
 
-## What was just completed — bind path: active-version scoping + transpose targets
+## What was just completed — documentation review & hygiene pass (docs-only)
+
+Reviewed every tracked `*.md`/`*.txt`. **One drift fixed** (README + ROADMAP "no scoring" bullet → reflects ADR-0010 row-scope rules). Ports/paths/commands verified correct; PROMPT/CHANGELOG/HANDOVER/HEALTHCHECK_MATRIX/ADRs current. No source changed.
+
+### ⚠ For Michiel — "no longer used" candidates (REPORT ONLY; nothing deleted)
+| candidate | reason | recommendation |
+|---|---|---|
+| `HANDOVER_TO_CODE.md` | one-time design→Code handover (Report Inventory, 05-24); 0 refs; shipped | archive/delete |
+| `design/CODEX_HANDOVER_v2.md` | Codex Quick-HC-UI-rebuild handover (05-20); 0 refs; rebuild shipped; project is Claude Code now | archive/delete |
+| `cv_healthcheck_context.md` | generated "Project Context Report" snapshot (05-23); 0 refs; superseded by README/PROMPT | archive/delete |
+| `docs/review_2026-05-20.md` | dated point-in-time codebase review; ref only by CHANGELOG | archive (keep for history) |
+| `docs/research/license_summary_report_xml_analysis.md` | research input (05-18); 0 refs; research-only | keep (research reference) |
+| `artifact_schema_v1.md` | "v1 Draft" canonical-artifact schema; partly current; ref by context only | keep, refresh status later |
+| `DATA_SOURCE_MAPPING.md` | source strategy (05-15); overlaps API_MAPPING + ROADMAP; still ref'd by README | keep (overlap, not orphan) |
+
+**Not candidates (active):** `docs/refactor_unified_upload_*.md` — that refactor is in-progress (session 3b is a 06-03 stop-and-report). The numbered ADRs + surveys/plans are permanent decision records — keep.
+
+### Flagged factual gaps (NOT changed — your call)
+- **API_MAPPING.md** omits the ADR-0009 live-validated CC endpoints (`commserv/audittrail`, `…/metricsreporting`, `…/addremovesoftware/commservesoftwarecache`, `…/v4/servergroup`). Adding them is sanctioned ("validated API behavior") but left for you to format.
+- ROADMAP/README Phase-3 subject enumerations don't list the new CC-API subjects (historical snapshots — not edited).
+- No documented decision/architecture conflicts with current code were found.
+
+---
+
+## Earlier this session — bind path: active-version scoping + transpose targets
 
 `db/rules.py` `validate_row_match_rule` bind block now resolves the **active version** via `get_subject` and scopes the section-type query + `_section_column_ids` to it (`AND subject_version=?`), fixing the bug where binding to `commserve_software_cache.cache_configuration` (card v1-3 → table v4) was rejected as 'card' (unscoped `.fetchone()` picked v1). `_section_column_ids` also admits a transpose section's implicit `id`/`key`/`label`/`value` as valid rule **targets** (decoupled from display, which stays `table.columns`). +6 tests; **1008 passing**. Collection/read path + engine untouched.
 - **Left as follow-up:** `bind_rule` (the WRITE) is still unscoped — writes dead refs into superseded versions (harmless; collection reads only active). Scope it to the active version when convenient (no downside).

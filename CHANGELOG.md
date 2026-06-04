@@ -10,6 +10,19 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (docs — documentation review & hygiene pass)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source/schema/behavior change. (Recorded here, not in a DEVLOG — DEVLOG.md was retired 2026-05-25, per PROMPT.txt; this file + HANDOVER are the log.)
+
+### Changed
+- **README.md / ROADMAP.md** — corrected the one factual drift the review found: the "no scoring or recommendations yet" limitation predated ADR 0010. Now reads "no recommendations yet; scoring is limited to row-scope evaluation rules on table subjects (ADR 0010), not the Reports Plus subjects." No other prose touched.
+
+### Notes
+- **Reviewed** every tracked `*.md`/`*.txt` (excl. `venv/`, `.git/`, and auto-generated `*.pytest_cache/README.md` + `src/*.egg-info/*.txt`). Ports (5001), paths (`~/dev/cv-healthcheck`), and commands in README verified correct. PROMPT.txt is an accurate stable primer (incl. the still-true "DEVLOG/docs-handover retired" note). The canonical docs (CHANGELOG/HANDOVER/HEALTHCHECK_MATRIX/ADRs 0001–0010) are current.
+- **Flagged for Michiel's decision (NOT changed):** (1) API_MAPPING.md is missing the ADR-0009 live-validated Command Center endpoints (`/commandcenter/api/commserv/audittrail`, `…/metricsreporting`, `…/addremovesoftware/commservesoftwarecache`, `…/v4/servergroup`); (2) the subject enumerations in ROADMAP's Phase-3 capability snapshot don't list the new CC-API subjects (server_groups / audit_trail / metrics_reporting / commserve_software_cache) — left as historical snapshots; (3) a set of shipped/superseded handover & context notes proposed for archival (see HANDOVER). No architecture/decision conflicts found.
+
+---
+
 ## 2026-06-04 (fix(rules) — bind path scopes to the active version + recognizes transpose key/id targets)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **1008 passing** (was 1002; +6). Two coupled fixes in `db/rules.py` (authoring/validate path only; the collection/read path and the engine are untouched).

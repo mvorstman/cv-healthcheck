@@ -137,7 +137,7 @@ Current known limitations:
 
 - no PDF export yet
 - no persisted report profiles yet
-- no scoring or recommendations yet
+- no recommendations yet; scoring is limited to row-scope evaluation rules on table subjects (ADR 0010), not the Reports Plus subjects
 - UI selection persistence currently uses localStorage only
 - runtime artifacts remain outside git and are not part of the repository state
 

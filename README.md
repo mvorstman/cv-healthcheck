@@ -213,7 +213,7 @@ Longer term, the same registry-first model is intended to align Quick HC with br
 
 - no PDF export yet
 - no persisted report profiles yet
-- no scoring or recommendations yet
+- no recommendations yet; scoring is limited to row-scope evaluation rules on table subjects (ADR 0010), not the Reports Plus subjects
 - localStorage is currently used for UI selection persistence
 - runtime artifacts remain outside git
 - evidence provenance is intentionally kept out of the customer-facing report output
