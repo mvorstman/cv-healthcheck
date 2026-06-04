@@ -10,6 +10,15 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (docs — Rule 2 confirmed live on /quick-hc)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only.
+
+### Changed
+- **HANDOVER.md** — flipped the Rule 2 note from the token-gated "expected UI result" assumption to a confirmed-live record: `commserve_software_cache` REST re-collected 2026-06-04, `cache_contents` renders 3 amber warning dots + 4 Findings (1 critical + 3 warning), criteria card shows the authored sentence. Token confirmed alive this session.
+
+---
+
 ## 2026-06-04 (docs — add live-validated /v4/servergroup to API_MAPPING)
 
 **Branch:** `feature/basic-healthcheck-report-output`. Docs-only.

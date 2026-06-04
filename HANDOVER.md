@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04 (ADR-0011 — Rule 2 authored on commserve_software_cache.cache_contents; version operators landed)
+**Last updated:** 2026-06-04 (Rule 2 confirmed live on /quick-hc; /v4/servergroup live-captured + added to API_MAPPING)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *docs: ADR-0011 acceptance — Rule 2 authored on cache_contents* (this commit). Code: version operators in `5ad8b64`.
+**Last commit:** *docs: Rule 2 confirmed live on /quick-hc (was: expected)* (this commit). Code: version operators in `5ad8b64`.
 **Test status:** **1014 passing** (no code change since; Rule 2 is runtime catalog state).
 
 ---
@@ -22,8 +22,11 @@
 - **Verified by `evaluate_subject` dry-run** over the stored artifact (no live Connect): all **3 cached-SP rows (all `11.40.47`) flag `warning`** (`11.40.47 < 11.40.51`); the pre-existing `cache_configuration` rule still flags `ua_package_cache` critical. Completes the ADR-0011 acceptance test.
 - **Operators (code, `5ad8b64`):** `version_lt`/`version_gte` + the standalone `coerce.parse_version`/`compare_versions` primitive (fixes the lexical trap `11.40.9 < 11.40.51`). D4: unparseable literal rejected at authoring; unparseable row value → `not_evaluated`. `result_to_artifact` untouched (evaluation-boundary debt recorded in ROADMAP).
 
-### ⚠ Remaining (token-gated, optional): live `/quick-hc` re-render
-The dry-run confirms the verdicts on the stored artifact; the pretty live re-render of `commserve_software_cache` on `/quick-hc` is the only token-gated step (a fresh Connect + re-collect, then the 3 cache_contents rows show amber STATUS dots + 3 Findings). Not required for correctness. Note: all 3 rows are identical `11.40.47`, so this rule flags all-or-none — it doesn't exercise the lexical-trap *ordering* on real data (the unit tests do); a future split would need differing per-platform SPs.
+### Rule 2 confirmed live on `/quick-hc` (commserve_software_cache, REST re-collect 2026-06-04)
+- cache_contents renders 3 amber warning status dots — WinX64 / linux-x8664 / linux-arm64, each 11.40.47
+- Findings: 4 total — 1 critical (UA package cache not zero, cache_configuration, unchanged) + 3 warning (cached service pack below minimum 11.40.51, one per platform)
+- criteria card shows the authored sentence "Cached service packs must be at least 11.40.51." with `service_pack version < "11.40.51"` beneath it
+- token confirmed alive (REST collect succeeded), so the earlier "token-gated" assumption no longer holds
 
 ### Earlier this session — final doc-tidy (docs-only)
 
