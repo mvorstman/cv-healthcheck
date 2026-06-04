@@ -126,31 +126,30 @@ def test_non_transpose_data_table_stays_columns():
     assert sec["view_mode"] == "columns"
 
 
-# ── the JS legend branch (render markers) ─────────────────────────────────────
+# ── the unified table legend (render markers) ─────────────────────────────────
 
 _JS = (Path(__file__).resolve().parents[1] / "src/cvhealthcheck/web/static/quick_hc.js").read_text()
 
-def _legend_literal(name: str) -> str:
-    m = re.search(rf"const {name} = `(.*?)`;", _JS, re.S)
+def _table_legend() -> str:
+    # the single legendDots template in the columns-mode table branch
+    m = re.search(r"const legendDots = hasVerdicts \? `(.*?)` : '';", _JS, re.S)
     return m.group(1) if m else ""
 
-def test_property_legend_is_good_info_warning_critical_not_evaluated():
-    prop = _legend_literal("propLegend")
-    # info present (real state) AND not_evaluated present (kept distinct, e0aa3287)
-    assert ["vdot-good", "vdot-info", "vdot-warn", "vdot-crit", "vdot-na"] == \
-        re.findall(r"vdot-(?:good|info|warn|crit|na)", prop)     # exact order
-    assert "not evaluated" in prop
-    # the legend is keyed on the property view_mode only
-    assert "sec.view_mode === 'property'" in _JS
+def test_unified_table_legend_order_good_warning_critical_not_evaluated_info():
+    legend = _table_legend()
+    # ONE legend, exact order; info present AND not_evaluated present (distinct, e0aa3287)
+    assert ["vdot-good", "vdot-warn", "vdot-crit", "vdot-na", "vdot-info"] == \
+        re.findall(r"vdot-(?:good|info|warn|crit|na)", legend)
+    assert "not evaluated" in legend and ">info</span>" in legend
 
-def test_data_table_legend_unchanged_regression():
-    data = _legend_literal("dataLegend")
-    assert ["vdot-good", "vdot-warn", "vdot-crit", "vdot-na"] == \
-        re.findall(r"vdot-(?:good|info|warn|crit|na)", data)     # good/warn/crit/na, NO info
-    assert "vdot-info" not in data
+def test_legend_no_longer_branches_on_property():
+    # the 5a40e1e two-legend split is gone — every table section (columns AND
+    # property) gets the same legend; the legend no longer keys on view_mode.
+    assert "sec.view_mode === 'property'" not in _JS
+    assert "propLegend" not in _JS and "dataLegend" not in _JS
 
-def test_property_does_not_change_dot_fallback_or_card_routing():
+def test_dot_fallback_and_card_routing_unchanged():
     # info-blue fallback for an absent/unruled verdict is untouched
     assert "[v] || 'vdot-info'" in _JS
-    # "property" does NOT route to the 1-row card path (that stays view_mode==='card' + length 1)
+    # the 1-row card path is untouched (view_mode==='card' + length 1)
     assert "sec.view_mode === 'card' && (sec.rows || []).length === 1" in _JS

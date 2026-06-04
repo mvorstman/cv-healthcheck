@@ -10,6 +10,21 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (fix(view) — unify the table verdict legend to one order; supersedes the 5a40e1e split)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **1002 passing** (unchanged count; the two split-legend tests were replaced by three unified ones). Render-only (JS legend content); no model/view/engine/rule/binding change.
+
+### Changed
+- **One shared verdict legend for EVERY table section** (`quick_hc.js`, columns-mode table branch): **good · warning · critical · not evaluated · info** (exactly this order). The `5a40e1e` two-legend split (a property legend *with* info vs a data-table legend *without*) is removed — `legendDots` no longer branches on `sec.view_mode === 'property'`; the `propLegend`/`dataLegend` consts are gone.
+- **Rationale:** any table's unruled rows fall through to the info-blue dot (`vdotClass(null) → 'vdot-info'`), not just the property table — e.g. `cache_contents` is a plain `columns` data table whose rows show info-blue. So info belongs on every table legend; the `5a40e1e` cut was wrong. Collapsed to one.
+- `tests/test_transpose_property_table.py`: replaced the two split-legend assertions with — the unified legend order good/warning/critical/not evaluated/info (info present + not evaluated present); the split is gone (`view_mode === 'property'`/`propLegend`/`dataLegend` absent from the JS); and the dot-fallback + card-routing regression guard.
+
+### Notes
+- **`view_mode:"property"` stays** (model + `result_to_artifact` unchanged) as the discriminator for the future stacked-tile render — it just **no longer drives the legend**.
+- **Lock honored:** `not_evaluated` (grey) and `info` (blue) remain **separate legend entries with separate colours** (`e0aa3287`) — never merged. Dot colours, the `vdotClass(null)→'vdot-info'` fallback, the 1-row `view_mode==='card'` card path, row layout, and the STATUS column are all untouched.
+
+---
+
 ## 2026-06-04 (feat — "property" table view_mode: transpose section gets the property verdict legend)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **1002 passing** (was 997; +5). Presentation carry (model + collection + view + JS); **no engine/builder/rule/binding change**, no dot colours or verdict computation touched.

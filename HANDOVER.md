@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04 (feat — "property" table view_mode: transpose section shows the property verdict legend good/info/warning/critical/not evaluated)
+**Last updated:** 2026-06-04 (fix(view) — unified table verdict legend: good/warning/critical/not evaluated/info for ALL table sections)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *feat(view): carry "property" table view_mode for the transpose property legend* (this commit).
+**Last commit:** *fix(view): unify the table verdict legend to one order (supersedes the 5a40e1e split)* (this commit).
 **Test status:** **1002 passing** under `pytest` and `python -m pytest`.
 
 ---
@@ -16,7 +16,16 @@
 
 ---
 
-## What was just completed — "property" table view_mode (legend carry)
+## What was just completed — unified table verdict legend
+
+Every table section (columns + property) now shows ONE legend — **good · warning · critical · not evaluated · info** — in `quick_hc.js`. This supersedes the `5a40e1e` two-legend split: any table's unruled rows fall through to the info-blue dot (`vdotClass(null)`), so info belongs on all table legends (the split was the wrong cut). `view_mode:"property"` stays as the discriminator for the future stacked-tile render but no longer drives the legend. Render-only JS; model/view/engine untouched. `not_evaluated` grey stays distinct from info-blue (`e0aa3287`). 1002 passing.
+
+### ⚠ Still pending (Michiel) — author the `commserve_software_cache.cache_configuration` transpose binding
+Unchanged from before: re-stage as `output_as:table` with `table.root_key:"commserveSoftwareCache"`, `table.transpose:[…12 settings…]`, `table.columns:[{id:"label",label:"Setting"},{id:"value",label:"Value"}]` (result_to_artifact then sets `view_mode:"property"` automatically) + author `row_match` rules keyed on `key`+`value` via MCP `save_rule`. Live re-collect needs a fresh Connect (token keeps expiring).
+
+---
+
+## Earlier this session — "property" table view_mode (legend carry, now legend-unified)
 
 `TableSection.view_mode` gained a third value **`"property"`** (Option A). `result_to_artifact` sets it on a transpose section (gated on `spec.transpose`); `canonical_view` forwards it; `quick_hc.js` swaps the columns-mode legend to **good · info · warning · critical · not evaluated** when `view_mode==='property'`, leaving every other table on the unchanged data-table legend. Legend content only — layout, dots, the `vdotClass(null)→info` fallback, and the card path are untouched; `not_evaluated` grey stays distinct from info-blue (`e0aa3287`). +5 tests; **1002 passing**.
 
