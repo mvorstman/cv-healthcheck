@@ -10,6 +10,15 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (docs — add live-validated /v4/servergroup to API_MAPPING)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only.
+
+### Added
+- **API_MAPPING.md** — `/commandcenter/api/v4/servergroup` appended as the 4th ADR-0009 `rest_command_center_api` endpoint (PROVEN), now that it's been **live-captured 2026-06-04** via the ADR-0008 loopback (HTTP 200, `{"serverGroups": [...]}` — a collection of 21 group objects, each `{id, name, association, company, description, isSyncInProgress, serverCount}`; feeds the `server_groups` subject). This was the previously declared-but-unvalidated ADR-0009 acceptance-test endpoint. Existing rows unchanged.
+
+---
+
 ## 2026-06-04 (ADR-0011 acceptance — Rule 2 authored on commserve_software_cache.cache_contents)
 
 **Branch:** `feature/basic-healthcheck-report-output`. Runtime catalog + docs; no code change (the operators landed in `5ad8b64`).
