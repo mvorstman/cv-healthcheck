@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04 (engine fix — numeric path segment indexes into a list in _resolve_field_path; commserve_software_cache table now bakes 3 rows)
+**Last updated:** 2026-06-04 (feat — transpose/property-table materialization: object → N {id,key,label,value} rows, per-row evaluable)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *fix(engine): resolve numeric path segment as list index in _resolve_field_path* (this commit).
-**Test status:** **990 passing** under `pytest` and `python -m pytest`.
+**Last commit:** *feat(engine): transpose/property-table materialization in _project_table_rows* (this commit).
+**Test status:** **997 passing** under `pytest` and `python -m pytest`.
 
 ---
 
@@ -16,7 +16,23 @@
 
 ---
 
-## What was just completed — engine fix: list-index in _resolve_field_path
+## What was just completed — transpose / property-table materialization
+
+`_project_table_rows` (`command_center.py`) now recognizes `table.transpose: [{key,label,field}]`: one object → N rows `{id:key, key, label, value:<obj.field>}` (placed before the dict-wrap). Each setting is a real row with stable `id`=key, so the **existing row-scope engine** gives per-row verdicts (a `row_match` rule keyed on `key`+`value`) — **no engine change**. `result_to_artifact` honors the binding's `table.columns` for transpose display so `id`/`key` don't leak as columns (gated on `transpose`; other sections unchanged). +7 tests; **997 passing**.
+- Renders today as a `Setting | Value` table with per-row STATUS dots (default `columns` mode). Stacked-tile "card look" deferred (the `view_mode:card` branch is 1-row-only + dotless).
+
+### ⚠ Next step (Michiel): re-author `commserve_software_cache.cache_configuration` as a transpose section
+Replace the empty card binding with:
+- `output_as: table`, `table.root_key: "commserveSoftwareCache"`, `table.transpose: [{key,label,field}…]` for the 12 settings, `table.columns: [{id:"label",label:"Setting"},{id:"value",label:"Value"}]`.
+- Author `row_match` rules (`scope:row`) keyed on `key == <setting> AND value <op> …` (MCP `save_rule`). Target the **`key`** (stable), never `label`. Settings with no rule bake `good` (use a section `scope` if only some should show a verdict).
+- This is the same transpose vocabulary the read-only feasibility pass recommended; avoids the card `items` empty-bake trap.
+
+### Still open — Fix 2 (card binding-shape) for `metrics_reporting.status`
+Separate from transpose: that card wants `card.items` (not `columns`) with fully-qualified `field` paths + `"type":"epoch_to_iso"` on the timestamps (already supported, `842d39c`).
+
+---
+
+## Earlier this session — engine fix: list-index in _resolve_field_path
 
 `_resolve_field_path` (shared ADR-0007 D2 resolver, `metric_section.py`) descended only into dicts, so a numeric segment into a **list** (`commserve_software_cache` table root_key `...cacheContents.0.softwareCacheServicePackDetails`) returned `default` → 0 rows. Now: dict→key (literal `"0"` key wins), list→non-negative integer index (out-of-range/non-numeric → default), else default. Additive — numeric-on-list only ever returned default before. +6 unit tests; **990 passing**.
 - **Verified:** `cache_contents` now renders **3 rows** (WinX64 / linux-x8664 / linux-arm64, SP 11.40.47) — against the captured payload (live re-collect blocked: loopback token expired again).

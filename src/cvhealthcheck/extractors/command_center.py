@@ -253,6 +253,25 @@ def _project_table_rows(raw: Any, table_spec: dict[str, Any]) -> list[dict[str, 
         records = _resolve_field_path(raw, root_key)
     else:
         records = None
+
+    # Transpose / property-table (additive): explode ONE object into N rows, one
+    # per declared ``{key, label, field}`` — each setting becomes a real row with a
+    # stable ``id`` (= key), so the existing row-scope engine gives a per-row
+    # verdict (a row_match rule keyed on the ``key`` + ``value`` columns). Declared
+    # transpose wins over the single-object dict-wrap below. ``field`` resolves
+    # nested (+ list index) within the object via the shared walker.
+    transpose = table_spec.get("transpose")
+    if transpose:
+        obj = records if isinstance(records, dict) else (
+            raw if (isinstance(raw, dict) and not root_key) else None)
+        if isinstance(obj, dict):
+            return [
+                {"id": e["key"], "key": e["key"], "label": e.get("label", e["key"]),
+                 "value": _resolve_field_path(obj, e["field"])}
+                for e in transpose
+                if isinstance(e, dict) and e.get("key") is not None and e.get("field") is not None
+            ]
+
     # A single-object response under root_key (e.g. ``auditTrailInfo: {...}``) is a
     # one-row table: wrap the dict as ``[obj]`` before projecting, instead of
     # silently yielding an empty table. ``wrap_object_as_row`` is not plumbed

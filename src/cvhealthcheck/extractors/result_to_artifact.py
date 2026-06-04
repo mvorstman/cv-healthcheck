@@ -124,8 +124,16 @@ def result_to_artifact(
             sections.append(card_section)
             card_sections.append(card_section)
         else:
-            columns = _derive_columns(rows)
             spec = result.section_table_specs.get(section_id, {})
+            # A transpose section carries id/key on each row for ref-stability +
+            # rule targeting; honor its declared display columns so those internal
+            # keys don't leak as columns. Other sections keep deriving from row keys.
+            declared = spec.get("columns") if spec.get("transpose") else None
+            if declared:
+                columns = [TableColumn(id=c["id"], label=c.get("label", c["id"]))
+                           for c in declared if isinstance(c, dict) and c.get("id")]
+            else:
+                columns = _derive_columns(rows)
             sections.append(TableSection(
                 type="table",
                 id=section_id,

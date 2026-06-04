@@ -10,6 +10,22 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (feat — transpose / property-table materialization in _project_table_rows)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **997 passing** (was 990; +7). Additive materialization branch; **reuses the existing row-scope engine + columns render — NO engine change.**
+
+### Added
+- **`table.transpose` (object → N rows).** `extractors/command_center._project_table_rows` recognizes a new `table.transpose: [{key, label, field}]` spec key: when the resolved root object is a dict, it explodes that ONE object into N rows — one `{id: key, key, label, value: <obj.field>}` per declared field (`field` resolves nested + list-index via the shared walker). Placed **before** the single-object dict-wrap, so a declared transpose wins over the 1-row wrap; `label` defaults to `key`; entries missing `key`/`field` are skipped. Each setting becomes a real row with a stable `id` (= key), so a `row_match` rule keyed on the `key` + `value` columns gives an **independent per-row verdict** — the existing row-scope engine, unchanged. This is the N-row sibling of the dict-wrap (`d1860c4`, object → 1 row).
+- **Declared-column display for transpose** (`result_to_artifact`): a transpose section keeps `id`/`key` on each row (for ref-stability + rule targeting) but **honors its binding's `table.columns` for display**, so those internal keys don't leak as columns. Gated on `table.transpose` — every other table section still derives display columns from row keys (`_derive_columns`), unchanged.
+- `tests/test_transpose_property_table.py` (+7): object → N typed rows (int/str/bool, nested paths); label-defaults / incomplete-entry skip; transpose-over-raw (no root_key); dict-wrap regression unchanged without a transpose key; declared columns restrict display while id/key stay on the row; a `key`+`value` rule yields a per-row verdict (in_sync→warning, others→good) with no engine change; verdict bakes per-row end to end.
+
+### Notes
+- **Why this avoids the deferred ADR-0010 field/object-scope engine:** that engine was needed to judge a *card's fields in place* (value-grained, no rows). Transpose materializes fields **as rows**, so the row-scope engine (which exists) gives the per-row dots directly. Confirmed read-only-pass-then-implement.
+- **Renders today in the default `columns` view_mode** — a `Setting | Value` table with a per-row STATUS dot (`quick_hc.js:355-378`). The stacked-tile "card look" is **out of scope** (the `TableSection.view_mode:"card"` branch is 1-row-only + dotless, `:346`); a tile aesthetic is a separate later commit.
+- **No live re-collect / rule authoring this slice** (no token needed). `commserve_software_cache`'s `cache_configuration` can now be re-authored as a transpose section (replacing the empty card) — that binding + its row rules are Michiel's next step (MCP `save_rule`).
+
+---
+
 ## 2026-06-04 (fix(engine) — numeric path segment indexes into a list in _resolve_field_path)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **990 passing** (was 984; +6). Global engine fix; additive, no behavior change for existing dict paths.
