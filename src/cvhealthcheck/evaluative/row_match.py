@@ -43,6 +43,7 @@ _NUMERIC_OPS = frozenset({"lt", "lte", "gt", "gte", "between"})
 _KNOWN_OPS = frozenset({
     "lt", "lte", "gt", "gte", "eq", "ne", "contains", "not_contains",
     "exists", "not_exists", "between", "stale_days",
+    "version_lt", "version_gte",      # ADR 0011 (one shared set → authoring + eval)
 })
 _COUNT_OPS = {
     "lt": lambda a, b: a < b, "lte": lambda a, b: a <= b,
@@ -141,6 +142,7 @@ def evaluate_section_rows(
     now = now or datetime.now(timezone.utc)
     refs: list[tuple[str, bool]] = []          # (row_ref, in_scope) per row, in order
     in_scope_rows: list[dict[str, Any]] = []
+    in_scope_refs: list[str] = []              # row_ref aligned to in_scope_rows
     for index, row in enumerate(rows):
         if not isinstance(row, dict):
             refs.append((str(index), False))
@@ -150,6 +152,7 @@ def evaluate_section_rows(
         refs.append((ref, in_scope))
         if in_scope:
             in_scope_rows.append(row)
+            in_scope_refs.append(ref)
 
     findings: list[dict[str, Any]] = []
     for rule in rules:
@@ -164,11 +167,29 @@ def evaluate_section_rows(
         if ref not in worst or _VERDICT_RANK.get(sev, 0) > _VERDICT_RANK.get(worst[ref], 0):
             worst[ref] = sev
 
-    per_row = [
-        {"row_ref": ref, "in_scope": in_scope,
-         "verdict": "not_evaluated" if not in_scope else worst.get(ref, "good")}
-        for ref, in_scope in refs
-    ]
+    # ADR 0011 D4: an in-scope row whose value a version operator can't parse is
+    # not_evaluated (grey), not a false good. Only rows with NO finding qualify (a
+    # genuine finding always wins). Reuses the existing not_evaluated path.
+    unevaluable: dict[str, str] = {}           # row_ref -> reason
+    for rule in rules:
+        conditions = rule.get("conditions")
+        for ref, row in zip(in_scope_refs, in_scope_rows):
+            if ref in worst or ref in unevaluable:
+                continue
+            if _rule_row_state(conditions, row, now=now) == "unevaluable":
+                unevaluable[ref] = "unparseable version value"
+
+    per_row: list[dict[str, Any]] = []
+    for ref, in_scope in refs:
+        if not in_scope:
+            per_row.append({"row_ref": ref, "in_scope": False, "verdict": "not_evaluated"})
+        elif ref in worst:
+            per_row.append({"row_ref": ref, "in_scope": True, "verdict": worst[ref]})
+        elif ref in unevaluable:
+            per_row.append({"row_ref": ref, "in_scope": True, "verdict": "not_evaluated",
+                            "reason": unevaluable[ref]})
+        else:
+            per_row.append({"row_ref": ref, "in_scope": True, "verdict": "good"})
     return findings, per_row
 
 
@@ -178,6 +199,7 @@ def evaluate_section_rows(
 _OP_SYMBOL = {
     "eq": "=", "ne": "≠", "gt": ">", "gte": "≥", "lt": "<", "lte": "≤",
     "contains": "contains", "not_contains": "not contains",
+    "version_lt": "version <", "version_gte": "version ≥",   # ADR 0011
 }
 
 
@@ -221,7 +243,11 @@ def _operand(pred: dict[str, Any], row: dict[str, Any]) -> Any:
     return value
 
 
-def _eval_predicate(pred: dict[str, Any], row: dict[str, Any], *, now: datetime) -> bool:
+def _predicate_value(pred: dict[str, Any], row: dict[str, Any], *, now: datetime) -> bool | None:
+    """Predicate truth as a tri-state: ``True`` / ``False`` / ``None``. ``None``
+    means the predicate could not be evaluated against this row — ADR 0011 D4: a
+    version operator whose ROW value is unparseable. Only version ops return
+    ``None``; every other operator returns a plain bool."""
     op = pred.get("operator")
     if op not in _KNOWN_OPS:
         raise ValueError(f"unknown predicate operator {op!r}")
@@ -231,6 +257,16 @@ def _eval_predicate(pred: dict[str, Any], row: dict[str, Any], *, now: datetime)
         return not coerce.is_absent(raw)
     if op == "not_exists":
         return coerce.is_absent(raw)
+
+    # ADR 0011: version ops own their (un)parseability BEFORE the generic absent
+    # check — a blank / Unknown / N/A version is UNEVALUABLE (None → not_evaluated),
+    # never a false good. The rule LITERAL is guaranteed parseable (rejected at
+    # authoring time), so None here means the ROW value could not parse.
+    if op in ("version_lt", "version_gte"):
+        cmp = coerce.compare_versions(raw, _operand(pred, row))
+        if cmp is None:
+            return None
+        return cmp < 0 if op == "version_lt" else cmp >= 0
 
     # ADR 0010 D6: a comparison against an absent cell is false, not an error.
     if coerce.is_absent(raw):
@@ -267,6 +303,31 @@ def _eval_predicate(pred: dict[str, Any], row: dict[str, Any], *, now: datetime)
     if op == "gt":
         return left > right
     return left >= right  # gte
+
+
+def _eval_predicate(pred: dict[str, Any], row: dict[str, Any], *, now: datetime) -> bool:
+    """Predicate truth as a plain bool. An unevaluable version predicate (``None``)
+    reads as False here — used by scope gating + finding-match, where an
+    unparseable row must never *match* a rule (no false finding)."""
+    return _predicate_value(pred, row, now=now) is True
+
+
+def _rule_row_state(
+    conditions: list[dict[str, Any]] | None, row: dict[str, Any], *, now: datetime
+) -> str:
+    """ADR 0011 D4 — a row's status for ONE rule: ``"match"`` (all conditions hold
+    → finding), ``"no_match"`` (a condition definitively excludes the row → counts
+    as good), or ``"unevaluable"`` (the row would be in the rule's target but a
+    version operator can't parse its value → not_evaluated). A definitive
+    exclusion wins over unevaluable."""
+    unevaluable = False
+    for p in conditions or []:
+        v = _predicate_value(p, row, now=now)
+        if v is False:
+            return "no_match"
+        if v is None:
+            unevaluable = True
+    return "unevaluable" if unevaluable else "match"
 
 
 def _equal(raw: Any, operand: Any) -> bool:

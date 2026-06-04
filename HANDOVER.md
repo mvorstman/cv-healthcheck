@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04 (docs — PROMPT cross-link + push-confirm; retired artifact_schema_v1; tracked docs/lab_environment.md)
+**Last updated:** 2026-06-04 (feat — ADR-0011 version_lt/version_gte operators + version comparator; evaluation-boundary debt recorded)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *docs: link WORKFLOW from PROMPT, add push-confirm, retire artifact_schema_v1, track lab env doc* (this commit).
-**Test status:** **1008 passing** (unchanged — docs-only session, no source touched).
+**Last commit:** *feat(rules): version-aware comparison primitive + version_lt/version_gte operators (ADR-0011)* (this commit).
+**Test status:** **1014 passing** (was 1008; +6).
 
 ---
 
@@ -16,7 +16,18 @@
 
 ---
 
-## What was just completed — final doc-tidy (docs-only)
+## What was just completed — ADR-0011 version operators
+
+`version_lt`/`version_gte` row-match operators + the standalone `coerce.parse_version`/`compare_versions` primitive (correct component-wise ordering — fixes the lexical trap where `"11.40.9"` sorted above `"11.40.51"`). Authoring rejects an unparseable version literal (D4); an unparseable row value reads `not_evaluated`, never a false good. **`result_to_artifact` untouched** (the evaluation-boundary cleanup is recorded as deferred debt in ROADMAP, commit 1 of this session). +6 tests; **1014 passing**.
+
+### ⚠ REQUIRED NEXT STEP (Michiel) — restart the MCP server before authoring Rule 2
+The running `cv-healthcheck-mcp` **caches imported modules**, so `save_rule`/`evaluate_subject` will NOT see `version_lt`/`version_gte` until it's restarted:
+```
+pkill -f cv-healthcheck-mcp     # then reconnect from Claude Desktop
+```
+Until then the chat/MCP layer cannot author Rule 2. After restart, author Rule 2 (`row_match` on `commserve_software_cache.cache_contents`, `{target:"service_pack", operator:"version_lt", value:<minimum>}`, severity + minimum your call), bind it, then `evaluate_subject commserve_software_cache` (dry-run over the stored artifact — no live Connect needed). The 3 stored rows are all `service_pack=11.40.47`; pick a minimum that splits them to actually exercise ordering. Rule 2 was NOT authored here (severity/minimum are authoring choices).
+
+### Earlier this session — final doc-tidy (docs-only)
 
 - **PROMPT.txt** — added a START-OF-SESSION pointer to `WORKFLOW.md` (read for architecture-sensitive work) and merged WORKFLOW §10.1's **push-and-confirm** rule into the SESSION WRAP-UP push step ("Pushed" is verified, not asserted). `WORKFLOW.md` untouched.
 - **Retired `artifact_schema_v1.md`** (git `rm`; history preserves it) — a "v1 Draft" spec superseded by the live engine-enforced canonical shape (Pydantic models). Re-proved orphan: only non-blocking history/handover mentions.

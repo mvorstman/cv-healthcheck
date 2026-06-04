@@ -252,6 +252,7 @@ def validate_row_match_rule(
 ) -> None:
     """Reject a malformed/un-bindable row_match rule at AUTHORING time (raises
     ValueError) rather than failing silently at collection. ADR 0010 §8."""
+    from cvhealthcheck.evaluative import coerce
     from cvhealthcheck.evaluative.row_match import COUNT_OPERATORS, KNOWN_OPERATORS
 
     if not definition.get("rule_id"):
@@ -274,6 +275,15 @@ def validate_row_match_rule(
             raise ValueError(f"unknown operator {op!r} (supported: {sorted(KNOWN_OPERATORS)})")
         if op == "between" and cond.get("value2") is None:
             raise ValueError(f"operator 'between' requires value2 (target {cond.get('target')!r})")
+        # ADR 0011 D4: a version operator's LITERAL threshold must parse (fail loud
+        # at authoring, same class as an unknown operator). A {ref} value is a
+        # column compared at eval time, not a typed literal — skip the check.
+        if op in ("version_lt", "version_gte"):
+            val = cond.get("value")
+            if not (isinstance(val, dict) and "ref" in val) and coerce.parse_version(val) is None:
+                raise ValueError(
+                    f"operator {op!r} requires a parseable version literal; got value={val!r}"
+                )
 
     emit = definition.get("emit", "per_row")
     if emit not in ("per_row", "count"):

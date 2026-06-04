@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (feat(rules) — version-aware comparison primitive + version_lt/version_gte (ADR-0011))
+
+**Branch:** `feature/basic-healthcheck-report-output`. **1014 passing** (was 1008; +6). Localized to the evaluative + authoring layers; **`result_to_artifact` untouched** (the boundary recorded as deferred debt in the prior entry).
+
+### Added
+- **`evaluative/coerce.parse_version` + `compare_versions`** — the standalone, importable version primitive (ADR-0011 D1/D2): `parse_version` normalizes a dotted string to a left-aligned integer tuple (max leading integer run, optional leading `v`/`SP` token ignored), `None` when there's no numeric component; `compare_versions` pads trailing 0s and returns −1/0/1, or `None` if either operand is unparseable. Lives in `coerce.py`, **not** `result_to_artifact`, so a future live-baseline evaluator reuses it.
+- **`version_lt` + `version_gte` operators** (ADR-0011 D3 — only these two, no `gt`/`lte`/`eq`/`ne` yet). Added to the **single shared** `_KNOWN_OPS`/`KNOWN_OPERATORS` set (so authoring-validation and evaluation accept them together) plus an evaluation dispatch branch in `row_match`, and readable rendering in `format_conditions`.
+- **D4 semantics:** an unparseable **rule literal** is rejected at authoring time by `validate_row_match_rule` (`db/rules.py`), same class as an unknown operator (a `{ref}` value is skipped — it's a column, not a literal). An unparseable **row value** evaluates to **not_evaluated** (grey) with a recorded reason — never a false good/critical. Implemented via a tri-state `_predicate_value` (True/False/None) + `_rule_row_state` + an unevaluable pass in `evaluate_section_rows`; reuses the existing `not_evaluated`/`in_scope` path, no new verdict, no `result_to_artifact` change.
+- `tests/test_version_operators_adr0011.py` (+6): comparator grammar + ordering (incl. the lexical trap `11.40.9 < 11.40.51`, padding, unparseable→sentinel); authoring accepts a valid literal / rejects an unparseable one; evaluation splits below/at/above a minimum and greys an unparseable row (with reason); `version_gte` complement.
+- `docs/adr/0011-version-aware-comparison-operators.md` (Proposed) committed with the feature.
+
+### Notes
+- **Verify-first findings:** operator dispatch is `row_match._eval_predicate` / now `_predicate_value` (`row_match.py:~234`); the authoring whitelist is `db/rules.validate_row_match_rule` (`:273`) consuming `KNOWN_OPERATORS` — which **is** `_KNOWN_OPS` (one shared frozenset, `row_match.py:55`), so a single edit covers both. The stored `commserve_software_cache.cache_contents` version column is **`service_pack`**; all three rows are **"11.40.47"** (WinX64 / linux-x8664 / linux-arm64) — a real Rule-2 minimum must be chosen to split them (e.g. `version_lt "11.40.48"` flags all; pick per intent).
+- **No Rule 2 authored** (deferred to Michiel: severity + minimum are authoring choices). **The running `cv-healthcheck-mcp` caches modules** — it must be restarted (`pkill -f cv-healthcheck-mcp` + reconnect) before `save_rule`/`evaluate_subject` see the new operators.
+
+---
+
 ## 2026-06-04 (docs — record evaluation-boundary as deferred architectural debt)
 
 **Branch:** `feature/basic-healthcheck-report-output`. Docs-only.

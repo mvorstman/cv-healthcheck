@@ -106,3 +106,42 @@ def _from_epoch(seconds: float) -> datetime | None:
         return datetime.fromtimestamp(float(seconds), tz=timezone.utc)
     except (OverflowError, OSError, ValueError):
         return None
+
+
+# ── ADR 0011 — version-aware comparison primitive ─────────────────────────────
+# Standalone + importable: the version_lt / version_gte operators call it now, and
+# a future live-baseline evaluator reuses the same comparator. Lives here (the
+# evaluative value-parsing module), NOT in result_to_artifact.
+
+def parse_version(value: Any) -> tuple[int, ...] | None:
+    """Normalize a dotted version string to a left-aligned integer tuple, or
+    ``None`` when there is no leading numeric component (blank / Unknown /
+    Unlimited / N/A). Ignores an optional leading non-digit token (``v``, ``SP``,
+    …) and takes the maximal leading run of integer components split on ``.``:
+    ``"11.40.51"`` → ``(11, 40, 51)``; ``"v11.40"`` → ``(11, 40)``."""
+    if value is None or isinstance(value, bool):
+        return None
+    s = str(value).strip()
+    m = re.search(r"\d", s)                          # first digit → ignore any leading token
+    if m is None:
+        return None
+    parts: list[int] = []
+    for comp in s[m.start():].split("."):
+        if comp.isdigit():
+            parts.append(int(comp))
+        else:
+            break                                    # stop at the first non-integer component
+    return tuple(parts) if parts else None
+
+
+def compare_versions(a: Any, b: Any) -> int | None:
+    """Component-wise version ordering: ``-1`` / ``0`` / ``1`` for a<b / a==b /
+    a>b, or ``None`` when either operand is unparseable. Missing trailing
+    components count as 0, so ``"11.40"`` == ``"11.40.0"``."""
+    va, vb = parse_version(a), parse_version(b)
+    if va is None or vb is None:
+        return None
+    n = max(len(va), len(vb))
+    va += (0,) * (n - len(va))
+    vb += (0,) * (n - len(vb))
+    return (va > vb) - (va < vb)
