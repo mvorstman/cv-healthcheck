@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (docs — remove retired DEVLOG.md from docs/Workflow.md)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source/schema/behavior change. Reconciles the per-session workflow checklist with the DEVLOG-retired decision (PROMPT.txt; retired 2026-05-25).
+
+### Changed
+- **`docs/Workflow.md`** (the per-session "Follow this workflow…" checklist — newly added to the repo; distinct from the root `WORKFLOW.md` methodology doc) — removed the two `DEVLOG.md` references:
+  - **Read-docs-first list:** dropped `DEVLOG.md`; added `HANDOVER.md` (start-here) + `CHANGELOG.md` (running log); kept README/ROADMAP/API_MAPPING/PROMPT.
+  - **Documentation-updates list:** replaced the `DEVLOG.md` bullet with `CHANGELOG.md: what changed, validation results, commit hash` + `HANDOVER.md: rolling forward note for the next session`; left the ROADMAP/API_MAPPING/README/PROMPT "only if…" bullets intact.
+- No other content in the file changed.
+
+### Notes
+- The earlier "WORKFLOW.md — no DEVLOG refs" review was about the **root `WORKFLOW.md`** (a methodology/philosophy doc with no doc-lists, genuinely DEVLOG-free). The DEVLOG instruction lived in this separate **`docs/Workflow.md`** checklist, which was not in the repo at review time.
+- **Other (active) DEVLOG references left for separate scope:** `docs/adr/0007-…:121` (historical ADR — don't rewrite), `cv_healthcheck_context.md:13` (stale snapshot, already an archival candidate). Historical/retirement mentions in PROMPT.txt + CHANGELOG stay.
+- **Flagged, not changed (out of scope):** `docs/Workflow.md` §5 still shows `git add .`, which conflicts with this project's explicit-staging discipline; and there are now two workflow docs (root `WORKFLOW.md` vs `docs/Workflow.md`) worth reconciling.
+
+---
+
 ## 2026-06-04 (docs — documentation review & hygiene pass)
 
 **Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source/schema/behavior change. (Recorded here, not in a DEVLOG — DEVLOG.md was retired 2026-05-25, per PROMPT.txt; this file + HANDOVER are the log.)

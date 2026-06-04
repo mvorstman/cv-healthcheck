@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04 (docs — documentation review & hygiene pass; one drift fixed, candidates flagged)
+**Last updated:** 2026-06-04 (docs — removed retired DEVLOG.md from docs/Workflow.md; points to CHANGELOG/HANDOVER)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *docs: review pass — sync drifted docs, flag unused files* (this commit).
+**Last commit:** *docs: remove retired DEVLOG.md from workflow; point to CHANGELOG/HANDOVER* (this commit).
 **Test status:** **1008 passing** (unchanged — docs-only session, no source touched).
 
 ---
