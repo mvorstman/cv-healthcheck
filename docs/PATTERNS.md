@@ -102,3 +102,23 @@ that risk.
 Pushes should be append-only — no `--force`, no rebasing pushed
 branches. If a push fails (auth, network, conflict), stop and report
 the failure rather than working around it.
+
+---
+
+## 4. Standing conventions (project invariants)
+
+Enforceable rules that hold across the codebase. (ROADMAP states the
+themes; the concrete rules live here.)
+
+- **No ORM.** The `db/` package uses raw SQL helpers plus numbered
+  migrations — do not introduce an ORM.
+- **`latest.json` is compatibility / cache only.** Prefer registry-backed
+  reads internally; `latest.json` is a fallback, not the source of truth.
+- **Catalog persistence is file-based.** The Reports Plus / dataset
+  catalog lives in `data/catalog/` as JSON — no database for the catalog.
+  (The business/application state DB, `app.db`, is a separate concern.)
+- **License Summary missing-values policy.** Never fabricate absent
+  sections and never guess `license_expiry`; render only sections that
+  return real rows in the current CommCell.
+- **SSL verification defaults ON.** Require an explicit opt-out for
+  self-signed lab environments, and warn clearly when insecure mode is used.

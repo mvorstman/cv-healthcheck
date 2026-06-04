@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (docs — restructure ROADMAP as a strategic roadmap; principles → PATTERNS; status/changelog hygiene)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; structural reorganization — meaning preserved, no direction change.
+
+### Changed
+- **ROADMAP.md** — rebuilt as a strategic roadmap (Vision · Current State · Strategic Themes · Initiatives Now/Next/Later · Sequencing & Dependencies · Known Risks · Deferred Work). Rolled the old phase/task log up to capability/outcome level — completed sub-work is no longer enumerated here (that history stays in CHANGELOG). The evaluation-boundary debt is condensed into Deferred Work, keeping the "deliberate, not a defect" framing.
+- **docs/PATTERNS.md** — relocated the enforceable principles the old ROADMAP carried into a new "Standing conventions (project invariants)" section: no ORM (raw SQL), `latest.json` compatibility/cache-only, file-based catalog (no DB for catalog), the License Summary missing-values policy, and SSL-verification-default-on. None were already stated in PATTERNS (verified by grep). These now live only in PATTERNS.
+- **docs/adr/0011** — Status `Proposed` → `Accepted` (shipped this session: operators + comparator, Rule 2 authored + confirmed live).
+
+### Fixed
+- **CHANGELOG.md** — corrected a stray **future-dated** `## 2026-06-05` heading (today is 2026-06-04) to its real date `## 2026-05-25` (the entry's commits `c06309d`/`b873431`/`6e0b1ed` are all 2026-05-25); it's a real "unified-upload session 4" entry, so the date was fixed, not removed. Not reordered within the consolidation tail; the rest of the tail is left untouched.
+
+### Notes
+- **ADR 0003 and 0006 left unchanged** (flagged, not edited): both already carry a meaningful `## Status` header — 0003 "Implemented (with LS caveat)" (a deliberate nuanced status, not a bare gap), 0006 "Accepted (2026-06-01)". Neither lacked a status; an earlier reconciliation mis-reported them because it grepped only the inline `**Status:**` form, missing the `## Status` header form.
+
+---
+
 ## 2026-06-04 (docs — Rule 2 confirmed live on /quick-hc)
 
 **Branch:** `feature/basic-healthcheck-report-output`. Docs-only.
@@ -2391,7 +2408,9 @@ Session 5b implements Option δ (or whichever option the user picks after review
 
 ---
 
-## 2026-06-05
+## 2026-05-25 (unified-upload session 4 — old upload routes deleted)
+
+<!-- date corrected from a future-typo "2026-06-05"; commits c06309d/b873431/6e0b1ed are 2026-05-25. Left in place within the consolidation tail (not reordered). -->
 
 **Branch:** `feature/basic-healthcheck-report-output`
 **Commits:** `c06309d`, `b873431` (step 2 split — the first commit landed only the template deletion because a `git add` invocation died silently on the already-deleted path; the second commit landed the route bodies and comment updates). `6e0b1ed` (step 3 test cleanup). Plus the wrap-up commit that publishes this entry.

@@ -1,6 +1,6 @@
 # ADR-0011: Version-aware comparison operators for rule evaluation
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-06-04 — shipped: `version_lt`/`version_gte` + the comparison primitive; Rule 2 authored and confirmed live)
 - **Date:** 2026-06-04
 - **Related:** builds the version-compare primitive named in ROADMAP item 1; prerequisite for the live-baseline vision (ROADMAP item 2). Unblocks the deferred "Rule 2" parked at the end of the `commserve_software_cache` rule session.
 
