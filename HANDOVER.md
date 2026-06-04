@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04 (docs — added 3 ADR-0009 validated CC API endpoints to API_MAPPING; /v4/servergroup skipped as unvalidated)
+**Last updated:** 2026-06-04 (docs — PROMPT cross-link + push-confirm; retired artifact_schema_v1; tracked docs/lab_environment.md)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *docs: add ADR-0009 validated Command Center API endpoints to API_MAPPING* (this commit).
+**Last commit:** *docs: link WORKFLOW from PROMPT, add push-confirm, retire artifact_schema_v1, track lab env doc* (this commit).
 **Test status:** **1008 passing** (unchanged — docs-only session, no source touched).
 
 ---
@@ -16,15 +16,20 @@
 
 ---
 
-## What was just completed — doc-tree consolidation (docs-only)
+## What was just completed — final doc-tidy (docs-only)
 
+- **PROMPT.txt** — added a START-OF-SESSION pointer to `WORKFLOW.md` (read for architecture-sensitive work) and merged WORKFLOW §10.1's **push-and-confirm** rule into the SESSION WRAP-UP push step ("Pushed" is verified, not asserted). `WORKFLOW.md` untouched.
+- **Retired `artifact_schema_v1.md`** (git `rm`; history preserves it) — a "v1 Draft" spec superseded by the live engine-enforced canonical shape (Pydantic models). Re-proved orphan: only non-blocking history/handover mentions.
+- **Tracked `docs/lab_environment.md`** — the untracked `docs/Lab_Environment v1.01.md` draft, moved to lowercase-underscore naming after a clean secret scan (no pasted tokens/JWTs/credentials).
+
+### Earlier this session — doc-tree consolidation
 - **Deleted 3 true orphans** (git history preserves them): `HANDOVER_TO_CODE.md`, `design/CODEX_HANDOVER_v2.md`, `cv_healthcheck_context.md`. Their only inbound refs were this HANDOVER's prior candidate table (cleared here) + a CHANGELOG history note — no structural/content dependencies.
 - **Rehomed the session workflow into PROMPT.txt** and removed the duplicate `docs/Workflow.md`. PROMPT.txt already covered ~95% (ENGINEERING RULES / DO NOT / VALIDATION REQUIREMENTS / DOCUMENTATION MODEL / START OF SESSION / SESSION WRAP-UP), so per "merge, don't duplicate" I added only the two genuine gaps: the start-of-session git-state check and the validation-honesty rule.
 - **STOPPED on `DATA_SOURCE_MAPPING.md` (kept, not folded):** it's an operating-mode *source-strategy* doc (explicitly "not… implementation"), not validated-API behavior — folding it into API_MAPPING would change that doc's meaning. Its unique content (per-subject source preference across Quick HC / Daily / Full + Operating Mode Guidance) overlaps conceptually with ROADMAP's "Future Architecture: Operating Modes," not API_MAPPING. **Decision needed:** keep as-is (recommended), or fold into ROADMAP — not API_MAPPING. README:450 still points at it (unchanged).
 
 ### Open doc-state notes
-- **`artifact_schema_v1.md` is now a true orphan** (its only inbound ref was the deleted `cv_healthcheck_context.md`). Left in place — "v1 Draft" canonical-artifact schema, partly current; refresh or retire later.
 - **API_MAPPING.md** — the 3 validated ADR-0009 CC endpoints (`commserv/audittrail`, `…/metricsreporting`, `…/addremovesoftware/commservesoftwarecache`) are now in the table (PROVEN). **`/v4/servergroup` was NOT added** — it's the deferred ADR-0009 acceptance-test capture, shape "unverified until a live capture," no live-200 evidence. Add it once a live `/v4/servergroup` capture confirms it (current token 401s — needs a fresh Connect).
+- **`DATA_SOURCE_MAPPING.md`** still pending your keep-vs-fold-into-ROADMAP decision (not API_MAPPING).
 - Two workflow docs still coexist: root `WORKFLOW.md` (methodology) and PROMPT.txt's session workflow (now the per-session home). Not conflicting; consolidate if desired.
 
 ---

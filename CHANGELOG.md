@@ -10,6 +10,21 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (docs — link WORKFLOW from PROMPT, add push-confirm, retire artifact_schema_v1, track lab env doc)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source/schema/behavior change. Verify-first.
+
+### Changed
+- **PROMPT.txt** — two operational additions: (1) a one-line pointer in START OF SESSION to WORKFLOW.md ("Methodology, workflow stages, and historical lessons live in WORKFLOW.md — read it when doing architecture-sensitive work"); (2) merged WORKFLOW.md §10.1's **push-and-confirm** rule into the SESSION WRAP-UP push step — after pushing, verify the remote actually moved (`git status` in-sync / `origin/<branch>` HEAD matches local) before declaring done; "Pushed" is verified, not asserted. WORKFLOW.md was **not** edited.
+
+### Removed
+- **`artifact_schema_v1.md`** — retired (git history preserves it). It was a "v1 Draft" schema spec, superseded by the **live canonical artifact shape the engine enforces** (the Pydantic models — numeric metric values, `{id,label}` columns, item ids). Re-proved orphan first: zero structural/link refs; the only mentions were this CHANGELOG's own consolidation Note + the rolling HANDOVER, both non-blocking (history/handover, not dependencies).
+
+### Added
+- **`docs/lab_environment.md`** — the previously-untracked `docs/Lab_Environment v1.01.md` lab-environment draft, moved to the repo's lowercase-underscore naming and committed. **Secret-scanned before staging** (authtoken/bearer/access_token/refresh_token = value, JWT `eyJ…`, password/secret/`CV_PASSWORD_B64`/PEM) — **no pasted credentials found** (only documentation of token files/mechanics). Only one draft existed (the earlier `… copy.md` was already gone).
+
+---
+
 ## 2026-06-04 (docs — add ADR-0009 validated Command Center API endpoints to API_MAPPING)
 
 **Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source/schema/behavior change. Verify-first; only endpoints with documented live-200 evidence were asserted.
