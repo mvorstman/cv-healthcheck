@@ -414,7 +414,11 @@ def probe(path: str) -> dict:
             url,
             headers={"X-Internal-Secret": secret},
             json={"path": path, "principal": "mcp-operator", "capability": "read"},
-            timeout=30,
+            # (connect, read): a SHORT connect timeout so an unanswered loopback SYN
+            # (app not listening on this host / a dropped packet) fails FAST with a
+            # clear error instead of hanging silently; the read budget covers the
+            # app's CommServe round-trip. This hop must never silently hang.
+            timeout=(5, 30),
         )
     except requests.RequestException as exc:
         raise ValueError(f"probe could not reach the app at {url}: {exc}")
