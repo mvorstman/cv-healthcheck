@@ -264,3 +264,17 @@ Status: started.
 - Trend analytics
 - Persistence layer
 - Production dashboard
+
+## Known architectural debt: evaluation boundary
+
+The current pipeline intentionally allows some rule/verdict/compliance logic to execute during `result_to_artifact`. This is accepted transitional debt.
+
+Near-term priority remains completing the current rule/version work.
+
+Deferred cleanup:
+- introduce a non-web project/context service
+- move generic collection orchestration out of Flask routes
+- split canonical artifact construction from evaluation/verdict generation
+- keep future health scoring outside `result_to_artifact`
+
+This is not treated as a defect or emergency refactor. It is the planned extraction point before the health/rules engine grows materially.

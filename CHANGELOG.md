@@ -10,6 +10,15 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (docs — record evaluation-boundary as deferred architectural debt)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only.
+
+### Notes
+- Recorded deferred architectural debt (the evaluation boundary — some rule/verdict logic runs in `result_to_artifact`) as a new ROADMAP section; proceeding with the ADR-0011 version operators within the current structure, no refactor.
+
+---
+
 ## 2026-06-04 (docs — link WORKFLOW from PROMPT, add push-confirm, retire artifact_schema_v1, track lab env doc)
 
 **Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source/schema/behavior change. Verify-first.
