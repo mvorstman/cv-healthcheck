@@ -2,9 +2,9 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04 (docs — consolidate doc tree: delete 3 orphans, rehome session workflow into PROMPT.txt)
+**Last updated:** 2026-06-04 (docs — added 3 ADR-0009 validated CC API endpoints to API_MAPPING; /v4/servergroup skipped as unvalidated)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *docs: consolidate doc tree — delete orphans, rehome workflow into PROMPT.txt* (this commit).
+**Last commit:** *docs: add ADR-0009 validated Command Center API endpoints to API_MAPPING* (this commit).
 **Test status:** **1008 passing** (unchanged — docs-only session, no source touched).
 
 ---
@@ -24,7 +24,7 @@
 
 ### Open doc-state notes
 - **`artifact_schema_v1.md` is now a true orphan** (its only inbound ref was the deleted `cv_healthcheck_context.md`). Left in place — "v1 Draft" canonical-artifact schema, partly current; refresh or retire later.
-- **API_MAPPING.md** still omits the ADR-0009 live-validated CC endpoints (`commserv/audittrail`, `…/metricsreporting`, `…/addremovesoftware/commservesoftwarecache`, `…/v4/servergroup`) — sanctioned to add ("validated API behavior"), left for you to format.
+- **API_MAPPING.md** — the 3 validated ADR-0009 CC endpoints (`commserv/audittrail`, `…/metricsreporting`, `…/addremovesoftware/commservesoftwarecache`) are now in the table (PROVEN). **`/v4/servergroup` was NOT added** — it's the deferred ADR-0009 acceptance-test capture, shape "unverified until a live capture," no live-200 evidence. Add it once a live `/v4/servergroup` capture confirms it (current token 401s — needs a fresh Connect).
 - Two workflow docs still coexist: root `WORKFLOW.md` (methodology) and PROMPT.txt's session workflow (now the per-session home). Not conflicting; consolidate if desired.
 
 ---

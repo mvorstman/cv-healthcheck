@@ -10,6 +10,22 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (docs — add ADR-0009 validated Command Center API endpoints to API_MAPPING)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source/schema/behavior change. Verify-first; only endpoints with documented live-200 evidence were asserted.
+
+### Added
+- **API_MAPPING.md** — three ADR-0009 `rest_command_center_api` endpoints appended to the validated-endpoint table (existing 8-column format, host/shape in Notes per the table's convention), all **PROVEN** from live-200 validation earlier on 2026-06-04 via the ADR-0008 loopback against the lab CommServe `192.168.182.129:4433`:
+  - `/commandcenter/api/commserv/audittrail` → `{auditTrailInfo:{retentionForCritical/High/Medium/Low}}` → `audit_trail` subject.
+  - `/commandcenter/api/commserv/metricsreporting` → `{config:{…, cloud.serviceList[8]}}` → `metrics_reporting` subject.
+  - `/commandcenter/api/commserv/addremovesoftware/commservesoftwarecache` → `{commserveSoftwareCache:{cacheFreeSpace, UaInfo.cacheContents[].softwareCacheServicePackDetails}}` → `commserve_software_cache` subject.
+
+### Notes
+- **`/commandcenter/api/v4/servergroup` was NOT added (declared, unvalidated).** ADR-0009 frames it as the *deferred* end-to-end acceptance-test capture, and CHANGELOG (earlier entry) records its shape as "unverified until a live capture" — no live-200 evidence exists. Skipped per the verify-first rule; left for a future live capture.
+- **Verify-first / token state:** a re-probe of all four endpoints this session returned **HTTP 401** — the CS token is expired (whole-connection, every endpoint 401s), not an endpoint failure. The three additions rest on documented earlier-2026-06-04 live-200 validations (CHANGELOG entries + stored `rest_commserve` artifacts), and each row carries the stale-token caveat — consistent with API_MAPPING's existing PROVEN rows (e.g. Client Growth, which is PROVEN despite a current-token 401). No existing API_MAPPING content was reworded or restructured.
+
+---
+
 ## 2026-06-04 (docs — consolidate doc tree: delete orphans, rehome workflow into PROMPT.txt)
 
 **Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source/schema/behavior change. VERIFY-FIRST: every claim below was proven by `grep` before acting.
