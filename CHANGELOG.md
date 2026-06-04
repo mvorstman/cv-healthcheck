@@ -10,6 +10,27 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (docs — README pass 2: relocate internals to owned docs, drop migration history, shrink to overview+index)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source touched. Exactly three new files created.
+
+### Added
+- **docs/architecture/quickhc.md** — owns Quick HC architecture: product surface (HealthCheck/Customers/Advanced/Development), subjects, the unified routing model (import/collect/report routes), report composition + customer-facing report rules, the UI shell, the registry/tile framework (`TileDefinition`/`SectionDefinition` contract, module boundaries, the add-a-subject extension model), business-state separation (`app.db` vs import registries vs canonical artifact storage), and scope/boundaries.
+- **docs/subjects/security_assessment.md** — owns the Security Assessment subject: REST/HTML/CSV sources, the collect→normalize→persist→render model, module layout (`src/cvhealthcheck/security_assessment/`), sections list, the `reportsplus/checklist.py` normalizer role, the registry/persistence model, and the canonical JSON read endpoints.
+- **docs/subjects/license_summary.md** — owns the License Summary subject: CSV/HTML/XLSX/REST-206 sources, module layout (`src/cvhealthcheck/license_summary/`), the artifact + persistence model, the detail-table + workload/category section model, and the missing-values policy (links PATTERNS).
+
+### Changed
+- **README.md** rewritten to its final shape — Project Overview → Scope → Strategic Direction → Data Sources & Collection Strategy → High-Level Architecture (links the three new docs) → Quick Start → Configuration → CLI → Web UI → Documentation Index. Reduced from 759 to ~250 lines. The Documentation Index now describes every home truthfully (README/ROADMAP/PROMPT/HANDOVER/CHANGELOG/the three new docs/API_MAPPING/HEALTHCHECK_MATRIX/DATA_SOURCE_MAPPING/PATTERNS/lab_environment/data_flow_audit/adr).
+- **docs/lab_environment.md** gained the Reports Plus inventory login-token workflow (the `POST /commandcenter/api/Login` → `.login_token` → `CV_LOGIN_TOKEN` flow + the `probe_*_with_login_token.sh` scripts + CLI token precedence), moved out of the README Phase 2 section (its proper home).
+- **HANDOVER.md** refreshed: cleared the stacked stale per-session sections, fixed the dead `README:368` reference for the SA source-precedence issue (now points to `HEALTHCHECK_MATRIX.md` + `docs/subjects/security_assessment.md`), and recorded the settled doc tree (ROADMAP strategic, PROMPT constitution, README pass 1+2, three new docs). Genuine engineering next-actions preserved (scope-label MCP tool; the `cache_configuration` transpose binding; the card-shape re-stages; API_MAPPING `/v4/servergroup`; DATA_SOURCE_MAPPING decision).
+
+### Removed
+- **README.md** "Phase 2: Reports Plus Discovery" and "Phase 2.4: Lab Readiness Baseline" historical narrative — already logged in CHANGELOG `2026-05-11` (Phase 2.1 catalog persistence, 2.2 prioritization, 2.3 candidate validation, 2.4 lab-readiness baseline). Per the mixed-section rule, only the historical narrative was deleted; the operational CLI how-to (`reportsplus reports/datasets/catalog/prioritize/validate-candidates`, `lab readiness`, output paths, validation statuses, readiness states) was preserved under README "CLI".
+- **README.md** large internals sections, now owned by the three new docs: Quick HC Foundation, Customer-Facing Report Composition, UI Foundation, Quick HC Framework, Current Limitations, Business State and Persistence, Reports Plus Security Assessment, License Summary Artifact Pipeline.
+
+### Notes
+Relocate → verify → delete throughout: each new doc was written and its content confirmed present before the corresponding README section was removed. Module paths were verified against the tree before documenting — Security Assessment and License Summary modules live at `src/cvhealthcheck/security_assessment/` and `src/cvhealthcheck/license_summary/` (not under `reportsplus/`, which only holds `checklist.py`). New docs are present-tense architecture (settled fact), with temporal/status language ("now", "current refactor direction", "next logical phase", per-session narration) actively stripped during relocation.
+
 ## 2026-06-04 (docs — PROMPT.txt restructured to a timeless operating constitution)
 
 **Branch:** `feature/basic-healthcheck-report-output`. Docs-only; reorganization — no KEEP rule's meaning changed.

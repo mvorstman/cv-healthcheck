@@ -317,3 +317,49 @@ Before health-rule development:
 * generate alerts/failures
 * create realistic storage usage
 * generate SLA trends
+
+⸻
+
+Reports Plus inventory login token
+
+Reports Plus discovery/catalog endpoints require an Authtoken issued by POST /commandcenter/api/Login. The plain .token value can work for /commandcenter/api while returning HTTP 401 Unauthenticated for Reports Plus inventory endpoints.
+
+Safe manual login-token workflow:
+
+source ~/.cv-healthcheck-env
+cd ~/dev/cv-healthcheck
+
+export CV_USERNAME="your-username"
+export CV_PASSWORD_B64="$(printf '%s' 'your-password' | base64 -w 0)"
+
+curl -k -sS \
+  -H "Accept: application/json" \
+  -H "Content-Type: application/json" \
+  -X POST \
+  -d "{\"username\":\"${CV_USERNAME}\",\"password\":\"${CV_PASSWORD_B64}\"}" \
+  "${CV_BASE_URL%/}/commandcenter/api/Login" > /tmp/cv-healthcheck-login.json
+
+python - <<'PY'
+import json
+from pathlib import Path
+
+body = json.loads(Path("/tmp/cv-healthcheck-login.json").read_text())
+token = body.get("token")
+if not token:
+    raise SystemExit("Login response did not include token")
+Path(".login_token").write_text(token + "\n")
+PY
+
+chmod 600 .login_token
+export CV_LOGIN_TOKEN="$(cat .login_token)"
+unset CV_USERNAME CV_PASSWORD_B64
+rm -f /tmp/cv-healthcheck-login.json
+
+The .login_token file is local-only and must not be committed.
+
+Then test Reports Plus report and dataset inventory with the Login-issued token:
+
+scripts/probe_reports_with_login_token.sh
+scripts/probe_datasets_with_login_token.sh
+
+Inventory CLI precedence: when CV_LOGIN_TOKEN is set, inventory commands use it; otherwise project-local .login_token when present; otherwise the configured .token (Reports Plus inventory calls then return HTTP 401).

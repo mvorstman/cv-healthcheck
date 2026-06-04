@@ -2,9 +2,7 @@
 
 Automated Commvault HealthCheck and analytics exploration tooling.
 
-This project is standalone. It does not import from or integrate with `cv-topology`.
-
-`cv-topology` is now treated as a frozen reference/prototype platform. It can be inspected for Commvault API, Flask, UI, database, topology, and compliance patterns, but active development should happen in this repository.
+This project is standalone. It does not import from or integrate with `cv-topology` — a frozen reference/prototype platform that may be inspected for Commvault API, Flask, UI, database, topology, and compliance patterns, but where active development should not happen.
 
 ## Scope
 
@@ -42,421 +40,27 @@ Preferred collection order:
 
 Avoid unsupported DB-access assumptions, hardcoded environment assumptions, tight coupling to one lab, and assuming reports are identical across environments.
 
-## Quick HC Foundation
+## High-Level Architecture
 
-Quick HC is now the main customer-facing report-composition surface for cv-healthcheck and is moving toward the broader HealthCheck primary workspace.
+Responsibilities are kept separate (full boundaries in [PROMPT.txt](PROMPT.txt) → ARCHITECTURE PRINCIPLES):
 
-The product split is intentional:
+- **Collection** — REST / Reports Plus collectors produce structured artifacts and stay reusable and transportable.
+- **Normalization** — sources normalize to a canonical artifact model shared across acquisition methods.
+- **Evaluation** — row-scope rules score table subjects ([ADR 0010](docs/adr/0010-row-scope-evaluation-rules.md)); evaluation is separate from collection.
+- **Reporting / UI** — Quick HC composes customer-facing reports; Flask routes stay thin.
 
-- HealthCheck is the primary workspace direction.
-- Customers will hold business/customer and engagement state.
-- Advanced will hold deeper workflows outside the default HealthCheck path.
-- Development holds raw/debug/API/report exploration pages, including lab readiness, Reports Plus inventory, report extraction, dataset execution, registry views, and validation tools.
+Quick HC is the customer-facing report-composition surface. Its architecture — product areas, subjects, the registry/tile framework, routing, report composition, and business-state separation — is documented in [docs/architecture/quickhc.md](docs/architecture/quickhc.md). Two subjects have their own pipelines: [Security Assessment](docs/subjects/security_assessment.md) and [License Summary](docs/subjects/license_summary.md).
 
-Current structure direction:
-
-- HealthCheck
-- Customers
-- Advanced
-- Development
-
-Current Quick HC subjects:
-
-- CommCell Details
-- Security Assessment
-- License Summary
-- Client Growth
-- Capacity Licenses
-- Backup Job Summary
-
-Uploads and collection now go through a unified routing layer:
-
-- `POST /quick-hc/<subject_id>/import` is the sole upload route. Subject IDs are underscored (`security_assessment`, `license_summary`, etc.). System subjects with dedicated import functions are dispatched via `src/cvhealthcheck/web/routes/upload_dispatch.py`; AI subjects fall through to the generic dispatcher.
-- `POST /quick-hc/<subject_id>/collect` is the generic REST-collection route (runs `RESTExtractor` against `subject_section_sources` rows in the catalog DB).
-- `POST /quick-hc/security-assessment/collect` and `POST /quick-hc/license-summary/collect` remain as the dedicated REST-collection endpoints for SA and LS (hyphenated; their collection is hardcoded in Python services rather than catalog-described).
-- `GET /quick-hc/security-assessment` and `GET /quick-hc/license-summary` redirect to `/quick-hc#subject=<id>` so the JS workspace re-opens the right tile after the full-page reload.
-
-Each subject now supports:
-
-- an expandable tile on `/quick-hc`
-- customer-facing preview content in the tile body
-- a parent include/exclude control
-- nested section or table selection for report composition
-- composition into `/quick-hc/report`
-
-The Quick HC overview is the place where the user decides which subjects and sections appear in the customer-facing report. Selections are currently remembered in the browser with `localStorage`; there is no server-side saved profile or database persistence for report layouts yet.
-
-Phase 3.0 started with CommCell Identity / Version from:
-
-```text
-GET /commandcenter/api/CommServ
-```
-
-The collector normalizes `hostName`, `csGUID`, `csVersionInfo`, `releaseId`, `osType`, and `timeZone`, then writes the latest local artifact:
-
-```text
-data/catalog/rest/commserv.json
-```
-
-CLI:
+## Quick Start
 
 ```bash
+python -m pip install -e .
 source venv/bin/activate
 source ~/.cv-healthcheck-env
-cv-healthcheck quickhc commcell
+./start.sh                       # Flask UI on http://127.0.0.1:5001
 ```
 
-Flask UI:
-
-```text
-http://127.0.0.1:5001/quick-hc
-http://127.0.0.1:5001/quick-hc/commcell
-http://127.0.0.1:5001/quick-hc/report
-```
-
-### Customer-Facing Report Composition
-
-`/quick-hc/report` now renders only the selected subjects and selected nested sections. The composition pipeline is assembled through `QuickHcReportService` and keeps the core filtering logic out of Jinja templates.
-
-Current report output capabilities include:
-
-- CommCell Details environment metadata
-- Security Assessment summary counters
-- Security Assessment critical or warning highlight output
-- Security Assessment optional all-findings section
-- License Summary workload sections
-- License Summary other-license detail tables with compact usage summaries
-- License Summary agent or feature detail tables without progress bars
-- Client Growth summary metrics
-- Client Growth Chart.js history visualization
-- Client Growth monthly summary table
-- Capacity Licenses summary and latest table inclusion
-
-Customer-facing report rules:
-
-- no artifact paths
-- no dataset GUIDs
-- no HTTP status values
-- no raw/debug extraction fields
-- evidence and source metadata stay internal only
-
-### UI Foundation
-
-The current UI foundation work is moving the Flask surface from isolated pages to a cleaner product shell:
-
-- app shell layout with sidebar and topbar
-- sidebar navigation with `Connect to CS`, `Quick HC`, and `Development`
-- active navigation states
-- global design tokens
-- global light/dark theme toggle with persisted preference
-- topbar theme toggle plus a Back action that prefers browser history and falls back to `/quick-hc`
-- responsive shell behavior
-- visual separation between customer-facing Quick HC pages and internal/development pages
-
-The shell now exposes the connection/login route through the sidebar as `Connect to CS` instead of a separate `Login` navigation label.
-
-Quick HC itself now uses full-width expandable subject tiles, per-section cards, nested include/exclude controls, and theme-aware customer-facing previews.
-
-The current refactor direction is registry-first rather than renderer-first. Quick HC tile and section metadata is now moving through shared dataclasses and a central registry so new subjects can be added with less duplication across routes, templates, and report composition code, while preserving the existing customer-facing UX.
-
-Detail pages now also use a standardized Source Provenance block so supported acquisition paths are visible consistently across tiles. Available or validated sources remain active, while unavailable, not implemented, not tested, or not applicable sources are rendered in a muted state instead of being hidden.
-
-### Quick HC Framework
-
-Current Quick HC framework structure:
-
-```text
-src/cvhealthcheck/quickhc/
-  models.py
-  registry.py
-  report_service.py
-  overview_service.py
-
-src/cvhealthcheck/web/templates/
-  quick_hc.html
-  partials/
-    quickhc_tile.html
-    quickhc_section_card.html
-    quickhc/previews/
-      commcell.html
-      security_assessment.html
-      license_summary.html
-      client_growth.html
-      capacity_license.html
-```
-
-The current registry layer uses shared dataclasses:
-
-- `TileDefinition`: subject-level metadata such as tile ID, title, subtitle/description, source type, service name, artifact type, preview renderer name, report renderer name, category/category label, detail endpoint, import URL, collect URL, and registry-derived section/default-selection helpers.
-- `SectionDefinition`: nested report-section metadata such as stable section ID, label, default-selection flag, and logical renderer names.
-
-Current boundaries are intentional:
-
-- `quickhc/models.py`: shared Quick HC metadata models only.
-- `quickhc/registry.py`: the single source of truth for tile IDs, section IDs, labels, subtitles, default selections, and logical renderer names.
-- `quickhc/report_service.py`: backend report composition and filtering only.
-- `quickhc/canonical_view.py`: translation layer from canonical artifacts into the Quick HC JavaScript view-model contract.
-- `quickhc/overview_service.py`: overview-only preview shaping for the `/quick-hc` dashboard, including the explicit preview-renderer mapping that turns tile metadata into preview payloads.
-- `web/routes/quick_hc.py`: thin route layer that passes already-shaped data into templates.
-- `web/templates/quick_hc.html`: top-level overview composition only.
-- `web/templates/partials/quickhc_tile.html`: reusable outer tile shell.
-- `web/templates/partials/quickhc_section_card.html`: reusable nested section-card shell.
-- `web/templates/partials/quickhc/previews/*.html`: subject-specific preview bodies only.
-
-The current extension model for future tiles is:
-
-1. Add or update `TileDefinition` and `SectionDefinition` entries in `quickhc/registry.py`.
-2. Register a preview builder and a report builder that consume the tile metadata contract instead of duplicating tile IDs or labels elsewhere.
-3. Keep `report_service.py` as the backend source of filtered report data.
-4. Add a subject preview partial when a new overview subject needs one.
-5. Keep renderer orchestration explicit rather than dynamically resolving Jinja templates from registry values.
-
-Quick HC initial subject data is now registry-driven through `quickhc.registry.list_tiles()`, with explicit tile-id loader and builder dispatch in `subject_data_service.py`.
-
-Import and collect action URLs now come from `TileDefinition.import_url` and `TileDefinition.collect_url` metadata. Quick HC frontend forms still render through initial subject data rather than hardcoding those URLs directly in the main template.
-
-The next logical phase remains controlled renderer orchestration. The platform now has the first hardened version of that boundary through explicit Python-side renderer mappings; the remaining work is to formalize those mappings further without switching to direct dynamic Jinja includes.
-
-Longer term, the same registry-first model is intended to align Quick HC with broader orchestration surfaces such as scheduled reporting, future MCP-driven report assembly, and eventually multi-surface report composition without duplicating tile metadata in each layer.
-
-### Current Limitations
-
-- no PDF export yet
-- no persisted report profiles yet
-- no recommendations yet; scoring is limited to row-scope evaluation rules on table subjects (ADR 0010), not the Reports Plus subjects
-- localStorage is currently used for UI selection persistence
-- runtime artifacts remain outside git
-- evidence provenance is intentionally kept out of the customer-facing report output
-
-### Business State and Persistence
-
-Application/business state is now intentionally separate from import registries and canonical artifact storage.
-
-- `data/app.db` was added for business/application state.
-- The new `src/cvhealthcheck/db/` package supports customers and engagements using raw SQL and lightweight schema/migration files.
-- Import registries and canonical artifact storage remain separate from `data/app.db`.
-- Canonical artifact persistence remains under the existing artifact/import storage paths and service layers rather than moving into the new business DB.
-
-## Reports Plus Security Assessment
-
-Security Assessment is integrated from Reports Plus report 336.
-
-Security Assessment now supports multi-source ingestion with a shared canonical artifact model. Supported sources are:
-
-- REST
-- HTML export import
-- CSV export import
-
-All three sources feed the same collect -> normalize -> persist -> render path. The canonical artifact is the normalized evidence contract shared across REST, HTML, and CSV so the UI and downstream health logic can render one consistent structure regardless of acquisition method.
-
-Security Assessment and License Summary now also expose canonical JSON read endpoints for debugging and future UI integration:
-
-- `GET /api/security-assessment/canonical`
-- `GET /api/license-summary/canonical`
-
-Endpoint pattern:
-
-```text
-/commandcenter/api/cr/reportsplusengine/reports/336
-/commandcenter/api/cr/reportsplusengine/datasets/<guid>
-/commandcenter/api/cr/reportsplusengine/datasets/<guid>/data
-```
-
-The normalized local artifact is:
-
-```text
-data/catalog/reportsplus/report_336_security_assessment_normalized.json
-```
-
-Latest persisted multi-source artifacts are now stored as:
-
-```text
-data/imports/security_assessment/latest.json
-data/imports/security_assessment/latest_rest.json
-data/imports/security_assessment/latest_html.json
-data/imports/security_assessment/latest_csv.json
-```
-
-Imported HTML and CSV sources are intended to support offline evidence ingestion and browser-driven upload workflows when live REST access is unavailable or unsuitable.
-
-Under the current UI, the Security Assessment backend has been refactored into a persistent artifact foundation:
-
-- `models.py`: strict schema layer for customer/CommCell/import/artifact/finding models
-- `normalize.py`: field cleanup and canonical mapping only
-- `validate.py`: noise rejection, validity checks, and deduplication
-- `artifact.py`: canonical artifact building, unique artifact persistence, and `latest.json` compatibility writes
-- `registry.py`: SQLite artifact registry
-- `service.py`: orchestration used by Flask routes and future non-UI collectors
-
-Compatibility is intentionally preserved during this phase. The current UI still works through `latest.json`, but each import/refresh now also writes a unique artifact JSON file and registers it in SQLite so the long-term read path can shift to:
-
-```text
-registry -> active artifact -> artifact file
-```
-
-Current registry/compatibility outputs include:
-
-```text
-data/imports/security_assessment/artifact_registry.sqlite3
-data/catalog/security_assessment/<artifact_id>.json
-data/catalog/security_assessment/latest.json
-data/catalog/security_assessment/latest_<source_type>.json
-```
-
-Registry stabilization notes:
-
-- The registry database path is deterministic: `data/imports/security_assessment/artifact_registry.sqlite3`.
-- SQLite schema creation is idempotent and runs on demand.
-- Registry reads now prefer scoped active-artifact selection first, then load the referenced artifact file.
-- Compatibility fallback only uses `latest.json` when the scoped registry entry or artifact file is unavailable.
-- Active selection is scoped so different customers and CommCells do not overwrite or select each other’s artifacts.
-- The registry layer uses simple SQLite hardening (`foreign_keys`, `busy_timeout`, `WAL`) but does not yet introduce a migration framework.
-- A registry export utility exists for audit/debugging; destructive cleanup is not implemented.
-
-Historical/read-path foundation added on top of the registry layer:
-
-- Registry helpers now support listing artifacts, fetching the latest artifact within scope, fetching the active artifact within scope, and listing report/import runs.
-- Service-layer reads now prefer registry-backed artifact loading over `latest.json`.
-- A lightweight `SecurityAssessmentService` exposes current-state, history, and artifact-by-id/run retrieval methods for future UI and reporting use.
-- Hidden internal/debug history tooling exists without changing the visible page flow:
-  the JSON endpoints require an authenticated session and remain read-only.
-  `/security-assessment/history`
-  `/security-assessment/registry-export`
-- A simple internal viewer is available from the Development page at
-  `/development/security-assessment-registry`.
-
-Additional metadata now tracked for artifacts/import runs:
-
-- `created_at`
-- `last_accessed_at`
-- `retention_policy`
-- `imported_by`
-- `import_method`
-- `source_metadata`
-
-Retention intent for this phase:
-
-- Keep all artifact files by default.
-- Treat `latest.json` only as a compatibility pointer, not the system of record.
-- Future cleanup must not delete active artifacts without explicit operator action.
-
-Discovered sections:
-
-- Access Security
-- Auditing
-- Platform Security
-- Company and Owners Security
-- Capabilities
-- Hardening
-
-The reusable checklist normalizer lives in `src/cvhealthcheck/reportsplus/checklist.py`. It normalizes status values, strips unsafe HTML from remarks, extracts safe action links, and groups checks for Quick HC display.
-
-Recent ingestion hardening added canonical field enforcement, noise rejection, deduplication, header/footer filtering, and strict HTML table parsing limited to validated `thead` headers plus `tbody`/`tr`/`td` extraction.
-
-Development/debug page:
-
-```text
-http://127.0.0.1:5001/reportsplus/security-assessment
-```
-
-## License Summary Artifact Pipeline
-
-License Summary now has a separate artifact pipeline built on the same registry-backed persistence pattern used by Security Assessment.
-
-Supported sources are:
-
-- CSV export import
-- HTML export import
-- XLSX API viewer recording import
-- REST dataset extraction through Reports Plus report 206
-
-The current implementation is now exposed through the existing Quick HC License Summary page without redesigning the broader application. It preserves the existing detail tables and also supports workload/category summary sections when they are present in imports or returned by live REST collection.
-
-Observed detail-table sections:
-
-- Other Licenses - current usage details
-- Agent and Feature Licenses - current usage details
-
-Observed workload/category summary sections:
-
-- Capacity Licenses
-- Operating Instance Licenses
-- Virtualization Licenses
-- User Licenses
-- Data Insights Licenses
-- Air Gap Protect Licenses
-- Other Licenses
-
-Current package layout:
-
-- `models.py`: canonical `LicenseSummaryArtifact`, `OtherLicense`, `AgentFeatureLicense`, and workload-summary models
-- `import_csv.py`: multi-section CSV parsing
-- `import_html.py`: HTML table extraction by validated header shape
-- `collect_rest.py`: REST report 206 normalization plus XLSX recording import
-- `validate.py`: canonical row validity filters
-- `artifact.py`: artifact construction and compatibility writes
-- `service.py`: upload orchestration and registry-backed read path
-
-Current outputs include:
-
-```text
-data/imports/license_summary/artifact_registry.sqlite3
-data/catalog/license_summary/<artifact_id>.json
-data/catalog/license_summary/latest.json
-data/catalog/license_summary/latest_<source_type>.json
-```
-
-Current Quick HC behavior:
-
-- The page renders workload summary sections separately from the existing detail tables.
-- Live REST collection discovers summary/category datasets dynamically from report 206 and renders only sections with real returned rows.
-- Some summary datasets may be unavailable or fail in a given CommCell; the UI intentionally omits those sections instead of fabricating them.
-- In the current lab CommCell, sections such as `Operating Instance Licenses`, `Data Insights Licenses`, and `Other Licenses` render from live REST collection, while `Capacity Licenses` may be absent because the upstream dataset fails there.
-- `license_expiry` remains `N/A` in the UI when report 206 does not return a value.
-
-The License Summary canonical artifact currently focuses on acquisition, normalization, provenance, and persistence only. No scoring, compliance rules, recommendations, or trend analytics are implemented yet.
-
-License Summary now also has:
-
-- a canonical adapter
-- canonical side-write for live REST collection
-- canonical side-write for file import
-- Quick HC translation support through `quickhc/canonical_view.py`
-
-Current pending follow-up:
-
-- finish routing Security Assessment and License Summary subject shaping more completely through `quickhc/canonical_view.py` inside `subject_data_service.py` while preserving the existing legacy fallback path during migration
-
-## Metric Charts
-
-Historical metric pages use Chart.js through a reusable server-side payload pattern:
-
-```text
-route -> server-side chart payload -> metric_detail.html -> Chart.js render
-```
-
-`/metrics/client-growth` renders a mixed chart with a line for total clients and bars for monthly additions/removals. Future historical metrics should reuse this pattern by passing chart payloads into `metric_detail.html`; do not add page-specific JavaScript unless the shared pattern is insufficient.
-
-This is the project's documentation index. Direction and operating model:
-
-- [ROADMAP.md](ROADMAP.md) — strategic direction: vision, themes, initiatives (Now/Next/Later), sequencing, known risks, and architectural debt. Direction detail lives here, not in this README.
-- [PROMPT.txt](PROMPT.txt) — how this project operates: engineering rules, validation requirements, and the session workflow.
-- [HANDOVER.md](HANDOVER.md) — current working state and what's next (overwritten each session).
-- [docs/lab_environment.md](docs/lab_environment.md) — lab connection, SSL, token, environment-file, and probe-script setup.
-
-Source and evaluation catalogs:
-
-- [DATA_SOURCE_MAPPING.md](DATA_SOURCE_MAPPING.md) is the operating-mode source strategy. It documents which datasource should be used per healthcheck subject across Quick HC, Daily Reporting, and Full Healthcheck, including REST, Reports Plus / Metrics, and import/manual fallbacks.
-- [API_MAPPING.md](API_MAPPING.md) is the technical collection and source catalog. It tracks what data can be collected, where it comes from, required authentication and parameters, and whether the source is proven.
-- [HEALTHCHECK_MATRIX.md](HEALTHCHECK_MATRIX.md) is the health evaluation and rule catalog. It tracks the health questions, required collected data, evaluation rules, severities, and reporting categories.
-
-Patterns, audit, and decisions:
-
-- [docs/PATTERNS.md](docs/PATTERNS.md) — project-wide patterns and standing conventions to know before adding new code (writes converge to canonical / reads stay diverse; verify before write; push regularly; the project invariants).
-- [docs/data_flow_audit.md](docs/data_flow_audit.md) — read-only audit of where data lives on disk and which code paths read/write each location.
-- [docs/adr/](docs/adr/) — Architecture Decision Records (ADR 0001–0011). Required reading before touching the areas they govern.
-
-The API mapping feeds the collector capability layer. The health matrix consumes collected data and feeds the health rule engine, reports, and UI.
+Then open `http://127.0.0.1:5001/quick-hc`. Lab connection and token setup are in [docs/lab_environment.md](docs/lab_environment.md).
 
 ## Configuration
 
@@ -466,127 +70,67 @@ Set the Commvault Command Center base URL:
 export CV_BASE_URL=https://192.168.182.129:4433
 ```
 
-Place an authentication token in `.token` at the project root. The file can contain either:
+Place an authentication token in `.token` at the project root, either plain or JSON:
 
 ```text
 plain-token-value
 ```
 
-or:
-
 ```json
 {"access_token": "plain-token-value"}
 ```
 
-It may also contain a JSON `refresh_token`; current lab probes and Reports Plus calls use `access_token`.
+It may also contain a JSON `refresh_token`; lab probes and Reports Plus calls use `access_token`.
 
-SSL verification is enabled by default. Disable it only for isolated lab usage:
+SSL verification is enabled by default. Disable it only for isolated lab usage; the clients log a warning when it is off:
 
 ```bash
 export CV_VERIFY_SSL=false
 ```
 
-When `CV_VERIFY_SSL=false`, the clients now log a warning so insecure lab behavior is not silent.
+Lab connection, SSL, token-file, environment-file, the shared login helper, and the connectivity probe scripts are documented in [docs/lab_environment.md](docs/lab_environment.md) — the lab is Commvault v11.40 at `https://192.168.182.129:4433` (self-signed).
 
-## Lab Environment Connection Setup
+## CLI
 
-Lab connection, SSL, token-file, environment-file setup, the shared login helper, and the connectivity probe scripts live in [docs/lab_environment.md](docs/lab_environment.md). The lab is Commvault v11.40 at `https://192.168.182.129:4433` (self-signed — use `CV_VERIFY_SSL=false`).
-
-Quick connect:
+Install for local development and load the lab settings:
 
 ```bash
-export CV_BASE_URL=https://192.168.182.129:4433   # self-signed lab; CV_VERIFY_SSL=false
-printf '%s\n' 'plain-token-value' > .token && chmod 600 .token
-source ~/.cv-healthcheck-env
-```
-
-## Phase 2: Reports Plus Discovery
-
-Reports Plus discovery moves cv-healthcheck from a single known dataset toward a local inventory of Reports Plus reports and datasets.
-
-Reports Plus discovery and catalog endpoints require an `Authtoken` issued by `POST /commandcenter/api/Login`. The current `.token` value can work for `/commandcenter/api` while returning HTTP 401 `Unauthenticated` for Reports Plus inventory endpoints.
-
-Safe manual login-token workflow:
-
-```bash
-source ~/.cv-healthcheck-env
-cd ~/dev/cv-healthcheck
-
-export CV_USERNAME="your-username"
-export CV_PASSWORD_B64="$(printf '%s' 'your-password' | base64 -w 0)"
-
-curl -k -sS \
-  -H "Accept: application/json" \
-  -H "Content-Type: application/json" \
-  -X POST \
-  -d "{\"username\":\"${CV_USERNAME}\",\"password\":\"${CV_PASSWORD_B64}\"}" \
-  "${CV_BASE_URL%/}/commandcenter/api/Login" > /tmp/cv-healthcheck-login.json
-
-python - <<'PY'
-import json
-from pathlib import Path
-
-body = json.loads(Path("/tmp/cv-healthcheck-login.json").read_text())
-token = body.get("token")
-if not token:
-    raise SystemExit("Login response did not include token")
-Path(".login_token").write_text(token + "\n")
-PY
-
-chmod 600 .login_token
-export CV_LOGIN_TOKEN="$(cat .login_token)"
-unset CV_USERNAME CV_PASSWORD_B64
-rm -f /tmp/cv-healthcheck-login.json
-```
-
-Then test Reports Plus report and dataset inventory with the Login-issued token:
-
-```bash
-scripts/probe_reports_with_login_token.sh
-scripts/probe_datasets_with_login_token.sh
-```
-
-The `.login_token` file is local-only and must not be committed.
-
-List Reports Plus reports as formatted JSON:
-
-```bash
+python -m pip install -e .
 source venv/bin/activate
 source ~/.cv-healthcheck-env
+```
+
+Core commands:
+
+```bash
+cv-healthcheck api ping                 # ping the API
+cv-healthcheck quickhc commcell         # CommCell identity / version (Quick HC CommCell subject)
+cv-healthcheck reportsplus metadata --dataset-guid <guid>
+
+cv-healthcheck reportsplus data \
+  --dataset-guid <guid> \
+  --fields "[MonthStart],[Added],[Removed],[Total]" \
+  --limit 100 \
+  --parameter showDeconfigClients=0 \
+  --parameter includePsuedoClients=0
+```
+
+### Reports Plus inventory & catalog
+
+Reports Plus inventory endpoints require a Login-issued `Authtoken` — see [docs/lab_environment.md](docs/lab_environment.md) (Reports Plus inventory login token). When `CV_LOGIN_TOKEN` is set, inventory commands use it; otherwise project-local `.login_token`; otherwise the configured `.token`, which returns HTTP 401 for inventory endpoints.
+
+List reports/datasets (JSON or `--summary`):
+
+```bash
 cv-healthcheck reportsplus reports
-```
-
-Show a compact report inventory summary:
-
-```bash
 cv-healthcheck reportsplus reports --summary
-```
-
-Summary columns:
-
-- `reportId`
-- `reportName`
-- `guid`
-- `deployed`
-- `viewable`
-- `editable`
-- `isMetrics`
-
-List Reports Plus datasets as formatted JSON:
-
-```bash
 cv-healthcheck reportsplus datasets
-```
-
-Show a compact dataset inventory summary:
-
-```bash
 cv-healthcheck reportsplus datasets --summary
 ```
 
-When `CV_LOGIN_TOKEN` is set, inventory commands use it. Otherwise they use project-local `.login_token` when present. If neither exists, they fall back to the configured `.token`; Reports Plus inventory calls are expected to fail with HTTP 401 in that mode.
+Summary columns: `reportId`, `reportName`, `guid`, `deployed`, `viewable`, `editable`, `isMetrics`.
 
-Build local Reports Plus catalog files:
+Build local catalog files:
 
 ```bash
 cv-healthcheck reportsplus catalog reports
@@ -594,127 +138,29 @@ cv-healthcheck reportsplus catalog datasets
 cv-healthcheck reportsplus catalog all
 ```
 
-Successful catalog calls write local JSON catalogs and summaries:
+Writes `data/catalog/{reports,datasets,reports_summary,datasets_summary,health_candidates}.json`. Summary files add a heuristic `relevance` tag (a discovery aid, not a health rule).
 
-```text
-data/catalog/reports.json
-data/catalog/datasets.json
-data/catalog/reports_summary.json
-data/catalog/datasets_summary.json
-data/catalog/health_candidates.json
-```
-
-Raw catalog files contain:
-
-- `collected_at`
-- `source_endpoint`
-- `record_count`
-- `records`
-
-Summary files extract stable fields from the raw Reports Plus inventory and add a simple heuristic `relevance` tag such as `Storage`, `Jobs`, `SLA`, `Audit`, `Security`, `Infrastructure`, `Tenant`, `Metrics`, or `Unknown`. These tags are only discovery aids for future healthcheck design; they are not health rules.
-
-Prioritize local healthcheck candidates from generated catalog summaries:
+Prioritize and validate healthcheck candidates:
 
 ```bash
 cv-healthcheck reportsplus catalog prioritize
 cv-healthcheck reportsplus catalog show-priority
-```
-
-This writes:
-
-```text
-data/catalog/health_candidate_priority.json
-```
-
-Priority is heuristic and transparent. It favors SLA, failed or backup jobs, storage capacity, infrastructure utilization, readiness, MediaAgent/library/DDB signals, and audit/security candidates. It does not implement health rules.
-
-Validate whether prioritized dataset candidates can execute safely:
-
-```bash
-cv-healthcheck reportsplus catalog validate-candidates --priority HIGH --limit 5
+cv-healthcheck reportsplus catalog validate-candidates --priority HIGH --limit 5   # --all for every priority
 cv-healthcheck reportsplus catalog show-validation
 ```
 
-Use `--all` to include all priorities. Validation writes:
+Writes `data/catalog/health_candidate_priority.json` and `data/catalog/execution_validation.json`. Validation statuses: `EXECUTABLE` (HTTP 200 with a valid record set, including empty), `NEEDS_PARAMS` (required params lacked safe defaults), `FAILS` (error / invalid response), `SKIPPED` (not a dataset / no GUID). Generated catalog files are local runtime artifacts and are not committed.
 
-```text
-data/catalog/execution_validation.json
-```
-
-Validation statuses:
-
-- `EXECUTABLE`: dataset data endpoint returned HTTP 200 with fields and a valid record set, including an empty set.
-- `NEEDS_PARAMS`: required dataset parameters were present but missing safe literal/default values.
-- `FAILS`: endpoint returned an error or an invalid response.
-- `SKIPPED`: candidate is not a dataset or has no dataset GUID.
-
-Generated catalog JSON files are local runtime artifacts and are not committed.
-
-## Phase 2.4: Lab Readiness Baseline
-
-Lab readiness summarizes whether the current lab has enough discovered and executable data to continue toward healthcheck rule development. It is a baseline assessment only: it does not implement health rules, does not create a database, and does not store credentials.
-
-Run the readiness assessment:
+### Lab readiness
 
 ```bash
 cv-healthcheck lab readiness
 cv-healthcheck lab readiness --json
 ```
 
-The assessment writes the latest local result to:
+Writes `data/labreadiness/latest.json`. Readiness states: `NOT_READY` (base API / inventory unreachable), `READY_FOR_DISCOVERY` (APIs reachable, no dataset-execution validation), `READY_FOR_DATA_EXECUTION` (discovery + execution work, operational activity incomplete), `READY_FOR_HEALTH_RULE_TESTING` (enough operational evidence to begin). It is a baseline assessment only: it implements no health rules, creates no database, and stores no credentials.
 
-```text
-data/labreadiness/latest.json
-```
-
-Readiness states:
-
-- `NOT_READY`: base API or Reports Plus inventory is not reachable.
-- `READY_FOR_DISCOVERY`: APIs are reachable, but dataset execution validation is not available.
-- `READY_FOR_DATA_EXECUTION`: discovery and dataset execution work, but operational lab activity is incomplete.
-- `READY_FOR_HEALTH_RULE_TESTING`: enough operational evidence exists to begin health-rule testing.
-
-The baseline currently uses live API reachability, existing Reports Plus catalog files, existing execution validation output, and conservative operational activity indicators. Unknown object counts remain explicit until a proven source is mapped.
-
-## CLI
-
-Install for local development:
-
-```bash
-python -m pip install -e .
-```
-
-Activate the development environment and load the lab settings:
-
-```bash
-source venv/bin/activate
-source ~/.cv-healthcheck-env
-```
-
-Ping the API:
-
-```bash
-cv-healthcheck api ping
-```
-
-Fetch Reports Plus dataset metadata:
-
-```bash
-cv-healthcheck reportsplus metadata --dataset-guid 979eba7f-8c67-420c-a27e-85ed82066514:8ac30a77-3de2-4968-86c1-ade4b02c85a4
-```
-
-Fetch Reports Plus dataset data:
-
-```bash
-cv-healthcheck reportsplus data \
-  --dataset-guid 979eba7f-8c67-420c-a27e-85ed82066514:8ac30a77-3de2-4968-86c1-ade4b02c85a4 \
-  --fields "[MonthStart],[Added],[Removed],[Total]" \
-  --limit 100 \
-  --parameter showDeconfigClients=0 \
-  --parameter includePsuedoClients=0
-```
-
-## Flask UI
+## Web UI
 
 Start the operational-style Flask UI:
 
@@ -723,15 +169,9 @@ Start the operational-style Flask UI:
 ./start.sh DEBUG
 ```
 
-`start.sh` loads `~/.cv-healthcheck-env` when present, stops previous `python run.py` or `flask run` instances, generates a fresh `CV_SECRET_KEY`, sets `CV_LOG_LEVEL`, activates `venv`, ensures runtime directories exist, and starts the app with:
+`start.sh` loads `~/.cv-healthcheck-env` when present, stops previous `python run.py` / `flask run` instances, generates a fresh `CV_SECRET_KEY`, sets `CV_LOG_LEVEL`, activates `venv`, ensures runtime directories exist, and runs `flask run --host="${CV_WEB_HOST}" --port="${CV_WEB_PORT}"`. Defaults: `CV_WEB_HOST=0.0.0.0`, `CV_WEB_PORT=5001`, log level `INFO`.
 
-```bash
-flask run --host="${CV_WEB_HOST}" --port="${CV_WEB_PORT}"
-```
-
-Defaults are `CV_WEB_HOST=0.0.0.0`, `CV_WEB_PORT=5001`, and log level `INFO`. Override the host or port by exporting `CV_WEB_HOST` or `CV_WEB_PORT` before running the script.
-
-For manual development, run the UI on port 5001. The `cv-topology` project may use port 5000, so cv-healthcheck can use 5001 during lab work:
+For manual development (cv-topology may use port 5000, so cv-healthcheck uses 5001):
 
 ```bash
 source venv/bin/activate
@@ -749,11 +189,27 @@ Customer-facing pages:
 Internal / development pages (raw API + Reports Plus exploration, lab readiness):
 
 - `/api/test`
-- `/reportsplus/reports`
-- `/reportsplus/reports/<report_id_or_guid>`
-- `/reportsplus/datasets`
-- `/reportsplus/dataset/<dataset_guid>`
-- `/reportsplus/data/<dataset_guid>`
-- `/reportsplus/health-candidates`
-- `/reportsplus/execution-validation`
+- `/reportsplus/reports`, `/reportsplus/reports/<report_id_or_guid>`
+- `/reportsplus/datasets`, `/reportsplus/dataset/<dataset_guid>`, `/reportsplus/data/<dataset_guid>`
+- `/reportsplus/health-candidates`, `/reportsplus/execution-validation`
 - `/lab-readiness`
+
+Historical metric pages (e.g. `/metrics/client-growth`) render through a shared server-side Chart.js payload pattern — see [docs/PATTERNS.md](docs/PATTERNS.md) (§5).
+
+## Documentation Index
+
+- **README.md** — what the project is and how to run it (this file).
+- [ROADMAP.md](ROADMAP.md) — strategic direction: vision, and initiatives Now / Next / Later.
+- [PROMPT.txt](PROMPT.txt) — how we operate: decision hierarchy, decision-making, engineering & validation rules, the documentation model, and the session workflow.
+- [HANDOVER.md](HANDOVER.md) — current working state and the single recommended next action (overwritten each session).
+- [CHANGELOG.md](CHANGELOG.md) — append-only history.
+- [docs/architecture/quickhc.md](docs/architecture/quickhc.md) — Quick HC architecture (product surface, registry/tile framework, routing, report composition, business state).
+- [docs/subjects/security_assessment.md](docs/subjects/security_assessment.md) — Security Assessment subject (report 336; multi-source canonical pipeline).
+- [docs/subjects/license_summary.md](docs/subjects/license_summary.md) — License Summary subject (CSV / HTML / XLSX / REST-206 pipeline).
+- [API_MAPPING.md](API_MAPPING.md) — validated collection/source catalog: what can be collected, from where, with which auth/params, and whether proven.
+- [HEALTHCHECK_MATRIX.md](HEALTHCHECK_MATRIX.md) — health evaluation / rule catalog: health questions, required data, rules, severities, reporting categories.
+- [DATA_SOURCE_MAPPING.md](DATA_SOURCE_MAPPING.md) — operating-mode source strategy: which datasource per subject across Quick HC / Daily / Full.
+- [docs/PATTERNS.md](docs/PATTERNS.md) — project-wide patterns and standing conventions to know before adding code.
+- [docs/lab_environment.md](docs/lab_environment.md) — lab setup, connection, token, and realism.
+- [docs/data_flow_audit.md](docs/data_flow_audit.md) — on-disk data-flow audit.
+- [docs/adr/](docs/adr/) — Architecture Decision Records (0001–0011). Required reading before touching the areas they govern.
