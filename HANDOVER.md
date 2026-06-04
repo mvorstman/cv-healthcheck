@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04 (fix(view) — unified table verdict legend: good/warning/critical/not evaluated/info for ALL table sections)
+**Last updated:** 2026-06-04 (fix(rules) — bind path scopes to the active subject version + transpose key/id are valid rule targets)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *fix(view): unify the table verdict legend to one order (supersedes the 5a40e1e split)* (this commit).
-**Test status:** **1002 passing** under `pytest` and `python -m pytest`.
+**Last commit:** *fix(rules): scope save_rule bind checks to the active version + allow transpose key/id targets* (this commit).
+**Test status:** **1008 passing** under `pytest` and `python -m pytest`.
 
 ---
 
@@ -16,7 +16,17 @@
 
 ---
 
-## What was just completed — unified table verdict legend
+## What was just completed — bind path: active-version scoping + transpose targets
+
+`db/rules.py` `validate_row_match_rule` bind block now resolves the **active version** via `get_subject` and scopes the section-type query + `_section_column_ids` to it (`AND subject_version=?`), fixing the bug where binding to `commserve_software_cache.cache_configuration` (card v1-3 → table v4) was rejected as 'card' (unscoped `.fetchone()` picked v1). `_section_column_ids` also admits a transpose section's implicit `id`/`key`/`label`/`value` as valid rule **targets** (decoupled from display, which stays `table.columns`). +6 tests; **1008 passing**. Collection/read path + engine untouched.
+- **Left as follow-up:** `bind_rule` (the WRITE) is still unscoped — writes dead refs into superseded versions (harmless; collection reads only active). Scope it to the active version when convenient (no downside).
+
+### ⚠ Next step (Michiel) — the v4 binding + rules are now unblocked
+With this fix, `save_rule` can bind a `row_match` rule (keyed on `key`+`value`) to the v4 `cache_configuration` transpose table. Author the rules via MCP `save_rule`; the v4 `table.transpose`/`table.columns` binding is already live (v4 active). Live re-collect needs a fresh Connect (token keeps expiring).
+
+---
+
+## Earlier this session — unified table verdict legend
 
 Every table section (columns + property) now shows ONE legend — **good · warning · critical · not evaluated · info** — in `quick_hc.js`. This supersedes the `5a40e1e` two-legend split: any table's unruled rows fall through to the info-blue dot (`vdotClass(null)`), so info belongs on all table legends (the split was the wrong cut). `view_mode:"property"` stays as the discriminator for the future stacked-tile render but no longer drives the legend. Render-only JS; model/view/engine untouched. `not_evaluated` grey stays distinct from info-blue (`e0aa3287`). 1002 passing.
 

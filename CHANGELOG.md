@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (fix(rules) — bind path scopes to the active version + recognizes transpose key/id targets)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **1008 passing** (was 1002; +6). Two coupled fixes in `db/rules.py` (authoring/validate path only; the collection/read path and the engine are untouched).
+
+### Fixed
+- **Active-version scoping (the reported bug).** `validate_row_match_rule`'s bind block resolved the bound section's `section_type` (and `_section_column_ids`) with an **unscoped** `WHERE subject_id=? AND section_id=?`. `subject_sections` holds one row per version, so `.fetchone()` returned the lowest-rowid (oldest) version — and binding a row rule to `commserve_software_cache.cache_configuration` (card v1–3 → **table v4**, v4 active) was wrongly rejected as `'card'`. The bind block now resolves the **active version once via `get_subject`** (the same helper the collector uses) and scopes both lookups with `AND subject_version = ?` / `AND src.subject_version = ?` — mirroring `load_subject_row_rules`/`load_subject_section_scope`. A subject with no active version raises a clear error.
+
+### Added
+- **Transpose key/id are valid rule targets.** With the lookup now scoped to v4, `_section_column_ids` validates targets against v4's `table.columns` (display = Setting/Value only). A row rule on a transpose property table legitimately targets the stable `key`/`id` (the locked "target key, never label" principle), so `_section_column_ids` now also admits the transpose rows' **implicit** columns — `id`, `key`, `label`, `value` — when the section's extraction block has `table.transpose`. **Targetability and display are decoupled**: the implicit keys are valid *targets* but are NOT added to the *displayed* columns (display stays driven by `table.columns`); the line is drawn entirely in `_section_column_ids` (target validation), with no change to `result_to_artifact`, the materializer, or the engine.
+- `tests/test_bind_version_scoping.py` (+6): bind succeeds on the active (table) v4 although the unscoped query still returns v1's `'card'`; `_section_column_ids` returns the active version's columns only (no cross-version union, no v1 `free_space` leak); a `key`+`value` rule binds end-to-end while a bogus target is still rejected; no-active-version raises; single-version table bind unchanged (regression).
+
+### Notes
+- **`bind_rule` (the WRITE, `:192-197`) was deliberately left unscoped** (the task marked it optional). It still writes the `{ref}` into every version's binding incl. superseded — harmless dead data (collection reads only the active version's binding, which gets the ref), so the goal "bind to v4 succeeds and fires" is met. Scoping it to the active version is a recommended follow-up (no downside; just stops the dead writes).
+- Why existing rules never hit the bug: `audit_trail`/`server_groups`/`users` are single-version; `metrics_reporting` is 2-version but its bound section types are stable across versions. `commserve_software_cache` is the first subject that is multi-version **and** changed a bound section's type across versions.
+
+---
+
 ## 2026-06-04 (fix(view) — unify the table verdict legend to one order; supersedes the 5a40e1e split)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **1002 passing** (unchanged count; the two split-legend tests were replaced by three unified ones). Render-only (JS legend content); no model/view/engine/rule/binding change.

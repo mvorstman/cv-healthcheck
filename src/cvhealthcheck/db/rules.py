@@ -285,10 +285,21 @@ def validate_row_match_rule(
             raise ValueError("emit=count requires count_value")
 
     if bind is not None:
+        from cvhealthcheck.db.subjects import get_subject
         subject_id, section_id = bind.get("subject_id"), bind.get("section_id")
+        # Scope all section lookups to the ACTIVE subject version (the same version
+        # the collection path resolves via get_subject). subject_sections holds one
+        # row per version, and a section's type/columns can differ across versions
+        # (e.g. cache_configuration: card v1-3 → table v4); an unscoped lookup picks
+        # the lowest-rowid (oldest) version and would reject a valid bind.
+        active = get_subject(db, subject_id)
+        if active is None:
+            raise ValueError(f"subject {subject_id!r} has no active version to bind to")
+        version = active["version"]
         section = db.execute(
-            "SELECT section_type FROM subject_sections WHERE subject_id = ? AND section_id = ?",
-            (subject_id, section_id),
+            "SELECT section_type FROM subject_sections"
+            " WHERE subject_id = ? AND section_id = ? AND subject_version = ?",
+            (subject_id, section_id, version),
         ).fetchone()
         if section is None:
             raise ValueError(f"section {section_id!r} is not present on subject {subject_id!r}")
@@ -297,7 +308,7 @@ def validate_row_match_rule(
                 f"a row-scope rule must bind to a table section; "
                 f"{section_id!r} is {section['section_type']!r}"
             )
-        columns = _section_column_ids(db, subject_id, section_id)
+        columns = _section_column_ids(db, subject_id, section_id, version)
         if columns:  # only enforce when the section declares its columns
             referenced: set[str] = set()
             for cond in conditions:
@@ -333,15 +344,24 @@ def _subject_bound_rule_ids(db: sqlite3.Connection, subject_id: str) -> set[str]
     return ids
 
 
-def _section_column_ids(db: sqlite3.Connection, subject_id: str, section_id: str) -> set[str]:
+def _section_column_ids(
+    db: sqlite3.Connection, subject_id: str, section_id: str, version: int
+) -> set[str]:
     """The column ids a section's bindings declare (table.columns / columns /
-    column_map), unioned across its sources — the universe a condition target/ref
-    must come from."""
+    column_map) for the ACTIVE ``version``, unioned across its sources — the
+    universe a condition target/ref must come from.
+
+    A transpose property section ALSO admits the implicit per-row keys
+    (``id``/``key``/``label``/``value`` — see ``_project_table_rows``) as valid
+    rule TARGETS, even though only ``table.columns`` drives DISPLAY (Setting/Value).
+    Targetability and display are decoupled here: a rule keyed on the stable
+    ``key``/``id`` (target the key, never the label) validates without those keys
+    leaking into the rendered columns."""
     rows = db.execute(
         "SELECT sss.extraction_instructions AS instr FROM subject_section_sources sss "
         "JOIN subject_sources src ON src.id = sss.source_id "
-        "WHERE src.subject_id = ? AND sss.section_id = ?",
-        (subject_id, section_id),
+        "WHERE src.subject_id = ? AND src.subject_version = ? AND sss.section_id = ?",
+        (subject_id, version, section_id),
     ).fetchall()
     cols: set[str] = set()
     for row in rows:
@@ -359,4 +379,6 @@ def _section_column_ids(db: sqlite3.Connection, subject_id: str, section_id: str
         for col in (instr.get("column_map") or []):
             if isinstance(col, dict) and (col.get("canonical") or col.get("id")):
                 cols.add(col.get("canonical") or col.get("id"))
+        if table.get("transpose"):           # implicit per-row target columns
+            cols.update({"id", "key", "label", "value"})
     return cols
