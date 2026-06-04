@@ -384,10 +384,20 @@ function secBody(sec) {
     // the always-present safety net (it survives toggling the Evaluation cards out,
     // since it lives on the data table, not in the Evaluation band).
     const scopeCap = sec.scope_caption ? `<span class="vdot-legend-scope">Scope: ${esc(sec.scope_caption)}</span>` : '';
-    const legendDots = hasVerdicts ? `<span class="legend-item"><span class="vdot vdot-good"></span>good</span>
+    // A "property" (transpose) table swaps ONLY the legend: info is a real verdict
+    // state (the info-blue fallback on unruled rows), while not_evaluated stays a
+    // DISTINCT grey (e0aa3287). Every other table keeps the unchanged data-table
+    // legend. Layout + dot rendering are identical to columns mode.
+    const propLegend = `<span class="legend-item"><span class="vdot vdot-good"></span>good</span>
+        <span class="legend-item"><span class="vdot vdot-info"></span>info</span>
         <span class="legend-item"><span class="vdot vdot-warn"></span>warning</span>
         <span class="legend-item"><span class="vdot vdot-crit"></span>critical</span>
-        <span class="legend-item"><span class="vdot vdot-na"></span>not evaluated</span>` : '';
+        <span class="legend-item"><span class="vdot vdot-na"></span>not evaluated</span>`;
+    const dataLegend = `<span class="legend-item"><span class="vdot vdot-good"></span>good</span>
+        <span class="legend-item"><span class="vdot vdot-warn"></span>warning</span>
+        <span class="legend-item"><span class="vdot vdot-crit"></span>critical</span>
+        <span class="legend-item"><span class="vdot vdot-na"></span>not evaluated</span>`;
+    const legendDots = hasVerdicts ? (sec.view_mode === 'property' ? propLegend : dataLegend) : '';
     const legend = (hasVerdicts || sec.scope_caption) ? `<div class="vdot-legend">${legendDots}${scopeCap}</div>` : '';
     return `<table class="wl-table"><thead><tr>${hdrs}</tr></thead><tbody>${body}</tbody></table>${legend}`;
   }

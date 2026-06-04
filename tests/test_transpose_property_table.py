@@ -5,10 +5,14 @@ NO engine change. Fixture-based; never reads app.db.
 """
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 from cvhealthcheck.evaluative.row_match import evaluate_section_rows
 from cvhealthcheck.extractors.command_center import _project_table_rows
 from cvhealthcheck.extractors.html import ExtractionResult
 from cvhealthcheck.extractors.result_to_artifact import result_to_artifact
+from cvhealthcheck.quickhc.canonical_view import artifact_to_view
 
 # a single object (the commserve_software_cache shape), heterogeneous field types
 OBJ = {"commserveSoftwareCache": {
@@ -93,3 +97,60 @@ def test_transpose_verdict_bakes_per_row_end_to_end():
                if s.type == "table")
     assert {r["key"]: r["_verdict"] for r in tbl.items} == \
         {"free_space": "good", "ua_package_cache": "good", "in_sync": "warning"}
+
+
+# ── view_mode "property" carry: model → view ──────────────────────────────────
+
+def _data_table_result():
+    """A NORMAL data table (no transpose) — the regression baseline."""
+    r = ExtractionResult(subject_id="sg", source_type="rest")
+    r.sections["rows"] = [{"id": 1, "name": "a"}]
+    r.section_output_types["rows"] = "table"
+    r.section_titles["rows"] = "Rows"
+    return r
+
+def test_transpose_section_view_mode_property_through_to_view():
+    art = result_to_artifact(_result(), "csc", "CSC")
+    tbl = next(s for s in art.sections if s.type == "table")
+    assert tbl.view_mode == "property"
+    assert tbl.model_dump()["view_mode"] == "property"          # serialized (not the omitted default)
+    sec = next(s for s in artifact_to_view(art)["sections"] if s["type"] == "table")
+    assert sec["view_mode"] == "property"                        # survives into the JS section object
+
+def test_non_transpose_data_table_stays_columns():
+    art = result_to_artifact(_data_table_result(), "sg", "SG")
+    tbl = next(s for s in art.sections if s.type == "table")
+    assert tbl.view_mode == "columns"                            # unchanged default
+    assert "view_mode" not in tbl.model_dump()                  # omitted-when-default, byte-identical
+    sec = next(s for s in artifact_to_view(art)["sections"] if s["type"] == "table")
+    assert sec["view_mode"] == "columns"
+
+
+# ── the JS legend branch (render markers) ─────────────────────────────────────
+
+_JS = (Path(__file__).resolve().parents[1] / "src/cvhealthcheck/web/static/quick_hc.js").read_text()
+
+def _legend_literal(name: str) -> str:
+    m = re.search(rf"const {name} = `(.*?)`;", _JS, re.S)
+    return m.group(1) if m else ""
+
+def test_property_legend_is_good_info_warning_critical_not_evaluated():
+    prop = _legend_literal("propLegend")
+    # info present (real state) AND not_evaluated present (kept distinct, e0aa3287)
+    assert ["vdot-good", "vdot-info", "vdot-warn", "vdot-crit", "vdot-na"] == \
+        re.findall(r"vdot-(?:good|info|warn|crit|na)", prop)     # exact order
+    assert "not evaluated" in prop
+    # the legend is keyed on the property view_mode only
+    assert "sec.view_mode === 'property'" in _JS
+
+def test_data_table_legend_unchanged_regression():
+    data = _legend_literal("dataLegend")
+    assert ["vdot-good", "vdot-warn", "vdot-crit", "vdot-na"] == \
+        re.findall(r"vdot-(?:good|info|warn|crit|na)", data)     # good/warn/crit/na, NO info
+    assert "vdot-info" not in data
+
+def test_property_does_not_change_dot_fallback_or_card_routing():
+    # info-blue fallback for an absent/unruled verdict is untouched
+    assert "[v] || 'vdot-info'" in _JS
+    # "property" does NOT route to the 1-row card path (that stays view_mode==='card' + length 1)
+    assert "sec.view_mode === 'card' && (sec.rows || []).length === 1" in _JS

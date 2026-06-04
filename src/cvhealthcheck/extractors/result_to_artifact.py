@@ -125,10 +125,11 @@ def result_to_artifact(
             card_sections.append(card_section)
         else:
             spec = result.section_table_specs.get(section_id, {})
+            is_transpose = bool(spec.get("transpose"))
             # A transpose section carries id/key on each row for ref-stability +
             # rule targeting; honor its declared display columns so those internal
             # keys don't leak as columns. Other sections keep deriving from row keys.
-            declared = spec.get("columns") if spec.get("transpose") else None
+            declared = spec.get("columns") if is_transpose else None
             if declared:
                 columns = [TableColumn(id=c["id"], label=c.get("label", c["id"]))
                            for c in declared if isinstance(c, dict) and c.get("id")]
@@ -141,9 +142,11 @@ def result_to_artifact(
                 columns=columns,
                 items=rows,
                 empty_message=spec.get("empty_message"),
-                # presentational hint from the binding; only "card" opts in, any
-                # other/absent value stays the default column table.
-                view_mode="card" if spec.get("view_mode") == "card" else "columns",
+                # presentational layout hint. A transpose section is a "property"
+                # table (columns layout + property verdict legend); otherwise the
+                # binding's "card" opts in; anything else stays the default columns.
+                view_mode=("property" if is_transpose
+                           else "card" if spec.get("view_mode") == "card" else "columns"),
             ))
 
     # ADR 0010: row-scope compliance rules → a derived FindingsSection. Runs after

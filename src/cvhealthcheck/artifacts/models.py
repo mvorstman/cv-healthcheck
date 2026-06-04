@@ -164,10 +164,12 @@ class TableSection(BaseModel):
     # MetricSection.render_mode — carried on the artifact from the catalog binding,
     # honored by artifact_to_view + secBody, never keyed on subject id. "columns"
     # is the column-header table (default, unchanged); "card" renders a single-row
-    # table as a Field/Value card (e.g. audit_trail retention). Render-only: the
-    # row rules + per-row verdict still fire either way. Omitted from JSON when
-    # default so existing table artifacts stay byte-identical.
-    view_mode: Literal["columns", "card"] = "columns"
+    # table as a Field/Value card (e.g. audit_trail retention); "property" is a
+    # transpose/property table — same columns layout, but the property verdict
+    # legend (good/info/warning/critical/not evaluated). Render-only: the row rules
+    # + per-row verdict still fire either way. Omitted from JSON when default so
+    # existing table artifacts stay byte-identical.
+    view_mode: Literal["columns", "card", "property"] = "columns"
 
     @model_serializer(mode="wrap")
     def _omit_default_view_mode(self, handler):

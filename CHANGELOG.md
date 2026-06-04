@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (feat — "property" table view_mode: transpose section gets the property verdict legend)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **1002 passing** (was 997; +5). Presentation carry (model + collection + view + JS); **no engine/builder/rule/binding change**, no dot colours or verdict computation touched.
+
+### Added / Changed
+- **`TableSection.view_mode` gains `"property"`** (`models.py`) alongside `columns`/`card` — a third presentational value on the existing discriminator (no new field; omit-when-default serializer unchanged, so non-property tables stay byte-identical).
+- **`result_to_artifact`** sets `view_mode="property"` on a **transpose** section (gated on the existing `spec.get("transpose")`); every other table section keeps its prior value (`card` opt-in, else default `columns`).
+- **`canonical_view`** already forwards `sec.view_mode` (`:137`) — `"property"` passes through to the JS section object untouched (no change).
+- **`quick_hc.js`** columns-mode table branch: when `sec.view_mode === 'property'`, the legend is **good · info · warning · critical · not evaluated**; every other table keeps the unchanged data-table legend (**good · warning · critical · not evaluated**). **Legend content ONLY** — layout, the STATUS column, dot rendering, the `vdotClass(null) → 'vdot-info'` fallback, and the 1-row `view_mode==='card'` card path are all untouched. "property" does not route to the card path.
+- `tests/test_transpose_property_table.py` (+5): transpose section serializes `view_mode=="property"` through model + canonical view; a non-transpose data table stays `"columns"` (omitted default); the property legend is exactly good/info/warning/critical/not evaluated (ordered, info present); the data-table legend is unchanged (no info — regression guard); the info-blue fallback + card routing are untouched.
+
+### Notes
+- **Why a transpose property table wanted its own legend:** it renders through the columns-mode table branch, and its unruled rows fall through to the info-blue dot (`vdotClass(null)`), so info is a real verdict state on it — but the data-table legend omits info. The fix surfaces info in the legend for property tables only.
+- **Locks honored:** `not_evaluated` (grey) stays visually **distinct** from info-blue (`e0aa3287`) — the property legend *adds* info, it does not merge grey into blue or alter grey semantics. Data-table sections (e.g. `server_groups`) are opt-out by construction (only `view_mode==='property'` switches the legend).
+
+---
+
 ## 2026-06-04 (feat — transpose / property-table materialization in _project_table_rows)
 
 **Branch:** `feature/basic-healthcheck-report-output`. **997 passing** (was 990; +7). Additive materialization branch; **reuses the existing row-scope engine + columns render — NO engine change.**

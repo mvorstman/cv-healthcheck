@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04 (feat — transpose/property-table materialization: object → N {id,key,label,value} rows, per-row evaluable)
+**Last updated:** 2026-06-04 (feat — "property" table view_mode: transpose section shows the property verdict legend good/info/warning/critical/not evaluated)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *feat(engine): transpose/property-table materialization in _project_table_rows* (this commit).
-**Test status:** **997 passing** under `pytest` and `python -m pytest`.
+**Last commit:** *feat(view): carry "property" table view_mode for the transpose property legend* (this commit).
+**Test status:** **1002 passing** under `pytest` and `python -m pytest`.
 
 ---
 
@@ -16,7 +16,16 @@
 
 ---
 
-## What was just completed — transpose / property-table materialization
+## What was just completed — "property" table view_mode (legend carry)
+
+`TableSection.view_mode` gained a third value **`"property"`** (Option A). `result_to_artifact` sets it on a transpose section (gated on `spec.transpose`); `canonical_view` forwards it; `quick_hc.js` swaps the columns-mode legend to **good · info · warning · critical · not evaluated** when `view_mode==='property'`, leaving every other table on the unchanged data-table legend. Legend content only — layout, dots, the `vdotClass(null)→info` fallback, and the card path are untouched; `not_evaluated` grey stays distinct from info-blue (`e0aa3287`). +5 tests; **1002 passing**.
+
+### ⚠ Still pending (Michiel) — author the `commserve_software_cache.cache_configuration` transpose binding
+The materialization + property legend are in place, but the live subject's card is **not yet re-authored** as a transpose section. Re-stage as `output_as:table` with `table.root_key:"commserveSoftwareCache"`, `table.transpose:[…12 settings…]`, `table.columns:[{id:"label",label:"Setting"},{id:"value",label:"Value"}]` (result_to_artifact then sets `view_mode:"property"` automatically), and author `row_match` rules keyed on `key`+`value` via MCP `save_rule`. Until then, `cache_configuration` still renders the empty card. A live re-collect needs a fresh Connect (token keeps expiring).
+
+---
+
+## Earlier this session — transpose / property-table materialization
 
 `_project_table_rows` (`command_center.py`) now recognizes `table.transpose: [{key,label,field}]`: one object → N rows `{id:key, key, label, value:<obj.field>}` (placed before the dict-wrap). Each setting is a real row with stable `id`=key, so the **existing row-scope engine** gives per-row verdicts (a `row_match` rule keyed on `key`+`value`) — **no engine change**. `result_to_artifact` honors the binding's `table.columns` for transpose display so `id`/`key` don't leak as columns (gated on `transpose`; other sections unchanged). +7 tests; **997 passing**.
 - Renders today as a `Setting | Value` table with per-row STATUS dots (default `columns` mode). Stacked-tile "card look" deferred (the `view_mode:card` branch is 1-row-only + dotless).
