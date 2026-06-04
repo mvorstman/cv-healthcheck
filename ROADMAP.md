@@ -2,7 +2,13 @@
 
 ## Vision
 
-The database-driven platform for Commvault operational health assessment & reporting: adding a new report type requires zero code — all subjects, sections, extraction, and compliance rules live in the database. Collect from any source (REST/HTML/CSV/JSON), normalize to canonical artifacts, evaluate against rules and live baselines, and compose customer-facing reports.
+The database-driven platform for Commvault operational health assessment and reporting.
+
+The database is the primary source of truth for subject definitions, extraction instructions, report definitions, and evaluation rules.
+
+New report types should be added through authoring rather than software development wherever practical.
+
+The platform collects from multiple sources, normalizes to canonical artifacts, evaluates against rules and baselines, and composes customer-facing reports.
 
 ## Current State
 
@@ -28,15 +34,20 @@ The stable "why" behind the work.
 
 *Status: In Progress.*
 
-- **Rules & Evaluation maturity** — summary-scope evaluation; display coercions (byte/bool).
-- **Quick HC canonical pipeline completion** — renderer orchestration; retire the legacy subject-shaping fallback once canonical parity is proven; the Security Assessment source-precedence fix.
+- **Rules & Evaluation maturity**
+  - *Goal:* increase rule expressiveness and consistency across all canonical section types.
+  - *Success:* Rules can be authored, versioned, bound, evaluated, and surfaced without code changes. Evaluation supports row-scope and summary-scope rules across all canonical section types.
+- **Quick HC canonical pipeline completion**
+  - *Goal:* a single canonical render path across REST/HTML/CSV, with the legacy subject-shaping fallback retired once parity is validated.
 
 ## Initiatives — Next
 
 *Status: Planned.*
 
-- **Report Output framework** — docx/PDF composition and report profiles; de-bespoke the renderer-to-builder mapping.
+- **Report Output framework** — docx/PDF composition and report profiles.
+  - *Success:* Customer reports can be generated entirely from canonical artifacts and report definitions without subject-specific report builders.
 - **Subject Inventory convergence** — migrate the system subjects into the database Report Inventory as seed data; grow subject coverage via MCP.
+  - *Success:* A new report type can be added through catalog/MCP authoring without Python code changes. System subjects are represented in the same inventory model as user-authored subjects.
 
 ## Initiatives — Later
 
@@ -52,16 +63,26 @@ The stable "why" behind the work.
 
 Platform Foundation [done] → Data Collection [done] → Rules/Evaluation [in progress] → Reporting → Analytics.
 
-Cross-cutting: the version-compare primitive (done, ADR-0011) gates Version Intelligence.
+- Reporting depends on stable evaluation outputs, so Rules/Evaluation precedes Reporting.
+- Analytics depends on accumulated historical reporting data, so Reporting precedes Analytics.
+- Cross-cutting: the version-compare primitive (shipped, ADR-0011) gates Version Intelligence.
 
 ## Known Risks
 
-- Evaluation logic currently couples into `result_to_artifact` — this will strain as the rules engine grows.
-- The project/context boundary leaks into non-web layers.
+Genuine forward uncertainties.
+
+- Version Intelligence depends on an external Commvault release/advisory data source whose format and access may change.
+- Distributed collection (customer-side collectors → S3) may introduce tenant-isolation and evidence-integrity complexity.
+
+## Known Architectural Debt
+
+Deferred, deliberate — not defects.
+
+- Evaluation logic currently couples into the artifact-construction stage; extract a separate evaluation stage before the rules engine grows materially.
+- Project-context boundary leaks into non-web layers; introduce a non-web project/context service.
+- Registry-concept consolidation.
 
 ## Deferred Work
 
-- **Evaluation-boundary extraction** — recorded debt; deliberate, not a defect (full reasoning in CHANGELOG / the prior debt note). This is the planned extraction point before the health/rules engine grows materially.
-- **Registry-concept consolidation.**
 - **S3 collector code** — blocked-by-design until the source/collector contracts stabilize.
 - **Multi-tenancy** — one CommCell per customer for v1.

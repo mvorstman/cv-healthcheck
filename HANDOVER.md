@@ -2,10 +2,10 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-04 (Rule 2 confirmed live on /quick-hc; /v4/servergroup live-captured + added to API_MAPPING)
+**Last updated:** 2026-06-04 (ROADMAP refined to a strategic roadmap; principles in PATTERNS; Now-initiative task detail captured here)
 **Branch:** `feature/basic-healthcheck-report-output`
-**Last commit:** *docs: Rule 2 confirmed live on /quick-hc (was: expected)* (this commit). Code: version operators in `5ad8b64`.
-**Test status:** **1014 passing** (no code change since; Rule 2 is runtime catalog state).
+**Last commit:** *docs: refine ROADMAP (vision database-first, success criteria, risks/debt split, sequencing); sync HANDOVER* (this commit). Code: version operators in `5ad8b64`.
+**Test status:** **1014 passing** (docs-only since; Rule 2 is runtime catalog state).
 
 ---
 
@@ -16,7 +16,19 @@
 
 ---
 
-## What was just completed — ADR-0011 Rule 2 authored (+ version operators)
+## What was just completed — ROADMAP refinement + doc-state
+
+- **ROADMAP.md is now a strategic roadmap** (Vision · Current State · Strategic Themes · Initiatives Now/Next/Later · Sequencing & Dependencies · Known Risks · Known Architectural Debt · Deferred Work). Vision softened to **database-first** (not database-only — "authoring rather than software development *wherever practical*"). Three initiatives carry **Success criteria** (Rules & Evaluation maturity; Report Output framework; Subject Inventory convergence); the exploratory Later initiatives deliberately have none. Known Risks split from Architectural Debt (no double-listing). Initiatives are capability/outcome level — **no file/function names in ROADMAP**.
+- **Enforceable principles live in `docs/PATTERNS.md`** ("Standing conventions" — no ORM, `latest.json` cache-only, file-based catalog, LS missing-values policy, SSL default-on), not in ROADMAP.
+
+### Now-initiative task detail — deliberately kept OUT of ROADMAP (don't lose it)
+Captured here so the strategic ROADMAP stays capability-level:
+- **Rules & Evaluation maturity:** summary-scope evaluation (the `db/rules.py:264` TODO — `scope=summary` must reject `emit != once`, ADR-0010 §8); display coercions (byte / bool, the ADR-0007 `type`-coercion family alongside `hex`/`epoch_to_iso`).
+- **Quick HC canonical pipeline completion:** renderer-orchestration layer; retire the legacy subject-shaping fallback (`subject_data_service.py`) once canonical parity is validated; the Security Assessment REST/source-precedence fix (still open per README:368 / HEALTHCHECK_MATRIX).
+
+---
+
+## Earlier this session — ADR-0011 Rule 2 authored (+ version operators)
 
 - **Rule 2 authored** (runtime catalog, `data/app.db`, gitignored — not a code change): `csc_cache_sp_below_min` — `row_match` on `commserve_software_cache.cache_contents`, condition `service_pack version_lt "11.40.51"`, **severity warning**, bound to `cache_contents` (active v4). Michiel chose minimum `11.40.51` + severity `warning`.
 - **Verified by `evaluate_subject` dry-run** over the stored artifact (no live Connect): all **3 cached-SP rows (all `11.40.47`) flag `warning`** (`11.40.47 < 11.40.51`); the pre-existing `cache_configuration` rule still flags `ua_package_cache` critical. Completes the ADR-0011 acceptance test.
