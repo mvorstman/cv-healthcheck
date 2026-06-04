@@ -10,6 +10,21 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (docs — README pass 1: strip session state, collapse lab setup, refresh doc index)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; thinning pass — no internals sections moved or deleted (deferred to pass 2).
+
+### Removed
+- **README** session/lab-run state: the "Session Validation" block (stale `483 tests passing` / "May 24, 2026 session" — current count is tracked in HANDOVER); the Security Assessment "Current artifact summary" counts (transient lab artifact state); the Security Assessment "Current unresolved issue" paragraph (REST/source-precedence — a live issue item, already captured in HANDOVER); and three UI-Foundation "now does X" per-session refactor narration paragraphs.
+
+### Changed
+- **README** "Lab Environment Connection Setup" collapsed to a pointer + a 3-line quick-connect; the full connection/token/login-helper/probe-script detail now lives in **docs/lab_environment.md** (no new file — appended a "Connection & Token Setup" section there with the env-file, token-file, login-helper, and probe-script steps that were genuinely unique to the README section).
+- **README** "Architecture Documents" refreshed into a proper documentation index: added ROADMAP.md, PROMPT.txt, HANDOVER.md, and docs/lab_environment.md links; updated the ADR note from "0001 / 0002" to the current "0001–0011" range (links `docs/adr/`, no inline enumeration); kept DATA_SOURCE_MAPPING / API_MAPPING / HEALTHCHECK_MATRIX / PATTERNS / data_flow_audit.
+- **README** "Strategic Direction" condensed: kept the three operating modes (one line each) and the no-direct-CommServe-access constraint; trimmed repetition and the S3-transport detail, pointing to ROADMAP for direction detail.
+
+### Notes
+Pass 1 deliberately leaves the large internals sections in place (Quick HC Foundation/Framework, Report Composition, UI Foundation, Current Limitations, Business State, Security Assessment, License Summary, Metric Charts, Phase 2, Phase 2.4 Lab Readiness) for a pass-2 relocation once the target docs/ tree is approved. The login-token curl workflow lives in the protected Phase 2 section and was left untouched.
+
 ## 2026-06-04 (docs — restructure ROADMAP as a strategic roadmap; principles → PATTERNS; status/changelog hygiene)
 
 **Branch:** `feature/basic-healthcheck-report-output`. Docs-only; structural reorganization — meaning preserved, no direction change.

@@ -18,15 +18,15 @@ Initial focus:
 
 ## Strategic Direction
 
-cv-healthcheck is being shaped around three operating modes:
+cv-healthcheck is shaped around three operating modes:
 
-- Daily Reporting: recurring operational reporting from Reports Plus / Metrics, email, and existing trend datasets.
-- Quick HealthCheck: fast, minimally invasive assessment using Metrics trend data, REST API collection, and uploaded snapshots.
-- Full HealthCheck: comprehensive, evidence-driven analysis using Metrics, REST APIs, uploaded operational snapshots, and expanded collectors.
+- Daily Reporting: recurring operational reporting from Reports Plus / Metrics, email, and trend datasets.
+- Quick HealthCheck: fast, minimally invasive assessment using Metrics trend data, REST collection, and uploaded snapshots.
+- Full HealthCheck: comprehensive, evidence-driven analysis across Metrics, REST APIs, uploaded snapshots, and expanded collectors.
 
-Private Metrics / Reports Plus servers are a primary strategic trend and reporting source, especially for historical growth, SLA visibility, capacity analysis, operational summaries, and multi-CommCell reporting.
+The platform must not assume direct access to customer CommServe systems: the expected model is central analysis over accessible Metrics / Reports Plus data plus customer-side REST collectors that upload structured snapshots or evidence artifacts.
 
-The central cv-healthcheck/reporting platform must not assume direct access to customer CommServe systems. The expected real-world model is central analysis over accessible Metrics / Reports Plus data plus customer-side REST collectors that gather live configuration/state and upload structured snapshots or evidence artifacts, potentially through S3. S3 is planned as a transport and evidence store; S3 collection code is not implemented yet.
+Direction detail (operating-mode evolution, S3 evidence transport, distributed collection) lives in [ROADMAP.md](ROADMAP.md).
 
 ## Quick HC Foundation
 
@@ -147,10 +147,6 @@ The current refactor direction is registry-first rather than renderer-first. Qui
 
 Detail pages now also use a standardized Source Provenance block so supported acquisition paths are visible consistently across tiles. Available or validated sources remain active, while unavailable, not implemented, not tested, or not applicable sources are rendered in a muted state instead of being hidden.
 
-The next extraction step is now in place on the overview template as well: the repeated outer Quick HC subject-card shell is rendered through a shared partial, and the reusable section-card wrapper now lives in its own partial too. Preview extraction now covers CommCell, Security Assessment, License Summary, Client Growth, and Capacity License via explicit partials, and the current platform layer now hardens that structure with explicit preview-builder and report-builder mappings keyed by registry metadata rather than ad hoc per-route wiring.
-
-Because Quick HC now depends on a registry-first metadata contract, dedicated integrity tests now verify tile IDs, section IDs, required tile metadata, default-selection safety, and alignment between the registry and report-service selection constants before any renderer abstraction is introduced.
-
 ### Quick HC Framework
 
 Current Quick HC framework structure:
@@ -226,14 +222,6 @@ Application/business state is now intentionally separate from import registries 
 - The new `src/cvhealthcheck/db/` package supports customers and engagements using raw SQL and lightweight schema/migration files.
 - Import registries and canonical artifact storage remain separate from `data/app.db`.
 - Canonical artifact persistence remains under the existing artifact/import storage paths and service layers rather than moving into the new business DB.
-
-### Session Validation
-
-Current local validation for the May 24, 2026 session:
-
-- `python -m compileall src`
-- `pytest`
-- `483` tests passing
 
 ## Reports Plus Security Assessment
 
@@ -351,21 +339,11 @@ The reusable checklist normalizer lives in `src/cvhealthcheck/reportsplus/checkl
 
 Recent ingestion hardening added canonical field enforcement, noise rejection, deduplication, header/footer filtering, and strict HTML table parsing limited to validated `thead` headers plus `tbody`/`tr`/`td` extraction.
 
-Current artifact summary:
-
-- Total checks: 32
-- Critical: 2
-- Warning: 0
-- Info: 18
-- Good: 12
-
 Development/debug page:
 
 ```text
 http://127.0.0.1:5001/reportsplus/security-assessment
 ```
-
-Current unresolved issue: imported HTML and CSV artifacts appear to render correctly when REST is unavailable, but noisy text may still appear when the REST source is active. The remaining defect is believed to be in REST/live source interaction, source precedence, stale artifact selection, or an alternate render/load path rather than the offline import normalization pipeline itself.
 
 ## License Summary Artifact Pipeline
 
@@ -445,14 +423,24 @@ route -> server-side chart payload -> metric_detail.html -> Chart.js render
 
 `/metrics/client-growth` renders a mixed chart with a line for total clients and bars for monthly additions/removals. Future historical metrics should reuse this pattern by passing chart payloads into `metric_detail.html`; do not add page-specific JavaScript unless the shared pattern is insufficient.
 
-## Architecture Documents
+This is the project's documentation index. Direction and operating model:
+
+- [ROADMAP.md](ROADMAP.md) — strategic direction: vision, themes, initiatives (Now/Next/Later), sequencing, known risks, and architectural debt. Direction detail lives here, not in this README.
+- [PROMPT.txt](PROMPT.txt) — how this project operates: engineering rules, validation requirements, and the session workflow.
+- [HANDOVER.md](HANDOVER.md) — current working state and what's next (overwritten each session).
+- [docs/lab_environment.md](docs/lab_environment.md) — lab connection, SSL, token, environment-file, and probe-script setup.
+
+Source and evaluation catalogs:
 
 - [DATA_SOURCE_MAPPING.md](DATA_SOURCE_MAPPING.md) is the operating-mode source strategy. It documents which datasource should be used per healthcheck subject across Quick HC, Daily Reporting, and Full Healthcheck, including REST, Reports Plus / Metrics, and import/manual fallbacks.
 - [API_MAPPING.md](API_MAPPING.md) is the technical collection and source catalog. It tracks what data can be collected, where it comes from, required authentication and parameters, and whether the source is proven.
 - [HEALTHCHECK_MATRIX.md](HEALTHCHECK_MATRIX.md) is the health evaluation and rule catalog. It tracks the health questions, required collected data, evaluation rules, severities, and reporting categories.
-- [docs/PATTERNS.md](docs/PATTERNS.md) — two project-wide patterns to know before adding new code: writes converge to canonical / reads stay diverse, and verify before write.
+
+Patterns, audit, and decisions:
+
+- [docs/PATTERNS.md](docs/PATTERNS.md) — project-wide patterns and standing conventions to know before adding new code (writes converge to canonical / reads stay diverse; verify before write; push regularly; the project invariants).
 - [docs/data_flow_audit.md](docs/data_flow_audit.md) — read-only audit of where data lives on disk and which code paths read/write each location.
-- [docs/adr/](docs/adr/) — Architecture Decision Records (ADR 0001 source-building fork, ADR 0002 customer and project entities). Required reading before touching the areas they govern.
+- [docs/adr/](docs/adr/) — Architecture Decision Records (ADR 0001–0011). Required reading before touching the areas they govern.
 
 The API mapping feeds the collector capability layer. The health matrix consumes collected data and feeds the health rule engine, reports, and UI.
 
@@ -488,84 +476,14 @@ When `CV_VERIFY_SSL=false`, the clients now log a warning so insecure lab behavi
 
 ## Lab Environment Connection Setup
 
-The lab Command Center and Web Server are available at:
+Lab connection, SSL, token-file, environment-file setup, the shared login helper, and the connectivity probe scripts live in [docs/lab_environment.md](docs/lab_environment.md). The lab is Commvault v11.40 at `https://192.168.182.129:4433` (self-signed — use `CV_VERIFY_SSL=false`).
 
-```text
-https://192.168.182.129:4433
-```
-
-Use the direct IP for Rocky VM testing. The gateway name is `gw02`, but DNS resolution for `gw02` may fail from Rocky. The lab uses a self-signed certificate, so local lab work may require explicitly setting `CV_VERIFY_SSL=false`. The known lab version is Commvault v11.40.
-
-Create a user-local environment file:
+Quick connect:
 
 ```bash
-cp env.example ~/.cv-healthcheck-env
-```
-
-Recommended `~/.cv-healthcheck-env` contents:
-
-```bash
-export CV_BASE_URL="https://192.168.182.129:4433"
-export CV_VERIFY_SSL="false"
-export CV_TIMEOUT="60"
-export CV_TOKEN_FILE="$HOME/dev/cv-healthcheck/.token"
-```
-
-Load it before running CLI commands, scripts, or the Flask UI:
-
-```bash
+export CV_BASE_URL=https://192.168.182.129:4433   # self-signed lab; CV_VERIFY_SSL=false
+printf '%s\n' 'plain-token-value' > .token && chmod 600 .token
 source ~/.cv-healthcheck-env
-```
-
-Create the project-local token file:
-
-```bash
-cd ~/dev/cv-healthcheck
-printf '%s\n' 'plain-token-value' > .token
-chmod 600 .token
-```
-
-The `.token` file may contain plain text or JSON:
-
-```json
-{"access_token": "plain-token-value", "refresh_token": "optional-refresh-token"}
-```
-
-Verify the token file is configured and present:
-
-```bash
-test -n "$CV_TOKEN_FILE" && test -f "$CV_TOKEN_FILE" && ls -l "$CV_TOKEN_FILE"
-```
-
-Authentication currently uses the `Authtoken` header for known Reports Plus and API ping tests. The existing `cv-topology` project uses `Authorization: Bearer`; cv-healthcheck is structured so a future auth-header option can be added if needed.
-
-A shared login helper exists outside this repository:
-
-```bash
-export CV_BASE_URL="https://example:4433"
-export CV_USERNAME="admin"
-export CV_PASSWORD_B64="$(printf '%s' 'password' | base64 -w 0)"
-source ~/dev/scripts/cv-env.sh
-```
-
-This retrieves a fresh `CV_TOKEN` into the current shell and does not print the token.
-
-Verify API connectivity:
-
-```bash
-scripts/probe_api.sh
-```
-
-Verify the proven Reports Plus metadata endpoint:
-
-```bash
-scripts/probe_dataset_metadata.sh 979eba7f-8c67-420c-a27e-85ed82066514:8ac30a77-3de2-4968-86c1-ade4b02c85a4
-```
-
-Verify the proven Reports Plus dataset data endpoint:
-
-```bash
-scripts/probe_dataset_data.sh 979eba7f-8c67-420c-a27e-85ed82066514:8ac30a77-3de2-4968-86c1-ade4b02c85a4
 ```
 
 ## Phase 2: Reports Plus Discovery

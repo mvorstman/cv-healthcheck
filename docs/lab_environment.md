@@ -244,3 +244,45 @@ Documentation structure:
 
 * API_MAPPING.md = technical capability inventory
 * HEALTHCHECK_MATRIX.md = operational health evaluation inventory
+
+⸻
+
+Connection & Token Setup
+
+User-local environment file:
+
+cp env.example ~/.cv-healthcheck-env
+
+Recommended ~/.cv-healthcheck-env contents:
+
+export CV_BASE_URL="https://192.168.182.129:4433"
+export CV_VERIFY_SSL="false"
+export CV_TIMEOUT="60"
+export CV_TOKEN_FILE="$HOME/dev/cv-healthcheck/.token"
+
+Load it before CLI commands, scripts, or the Flask UI:
+
+source ~/.cv-healthcheck-env
+
+Project-local token file:
+
+cd ~/dev/cv-healthcheck
+printf '%s\n' 'plain-token-value' > .token
+chmod 600 .token
+
+Verify the token file is present:
+
+test -n "$CV_TOKEN_FILE" && test -f "$CV_TOKEN_FILE" && ls -l "$CV_TOKEN_FILE"
+
+Shared login helper (outside this repo) — retrieves a fresh CV_TOKEN into the current shell without printing it:
+
+export CV_BASE_URL="https://example:4433"
+export CV_USERNAME="admin"
+export CV_PASSWORD_B64="$(printf '%s' 'password' | base64 -w 0)"
+source ~/dev/scripts/cv-env.sh
+
+Connectivity probe scripts:
+
+scripts/probe_api.sh
+scripts/probe_dataset_metadata.sh <dataset-guid>
+scripts/probe_dataset_data.sh <dataset-guid>
