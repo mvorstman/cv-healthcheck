@@ -10,6 +10,24 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-05 (refactor(web) — retire /connections; header pill modal is the sole connect surface)
+
+**Branch:** `main`. Surface consolidation; no change to the auth chokepoints themselves.
+
+### Removed
+- **`GET /connections` and `POST /connections/disconnect`** (`web/routes/basic.py`) — the standalone connection page and its disconnect action. The now-unused `get_current_username` import was dropped from `basic.py` with them.
+- **`templates/connections.html`** — the page template (deleted whole).
+- **"Connections" sidebar nav link** (`templates/base.html`) — removed; the sidebar-footer "Sign out" button is unchanged.
+- **`tests/test_connections_page.py`** — the 5 route tests from 7214ea7 (deleted whole), since the page they covered no longer exists.
+
+### Changed
+- **ADR-0008 updated** — the connect/disconnect surface it originally described as a dedicated `/connections` page is now the header connect pill / its modal (`/api/login` to connect, `/logout` to disconnect). Both references in the ADR ("the connection UI", "the same connection page later") were amended.
+
+### Notes
+- **Same chokepoints, fewer surfaces (ADR-0008).** The pill modal already routes through the canonical token lifecycle: Connect → `/api/login` → `login_to_commvault` + `set_current_token` (publishes into the in-process `token_store`); Disconnect → `/logout` → `clear_current_token()`; badge state → `/api/auth/status` → `is_authenticated()` → `get_active_token()` (same `token_store` slot the retired page read via `status()`). No bespoke connect path existed on the page, so removing it drops UI only — no behavior.
+- **Disconnect is not single-surfaced.** The sidebar-footer "Sign out" button (`base.html`) also POSTs `/logout`, so the pill modal is the sole *connect* surface but shares the *disconnect* path with the footer button. Both hit the same `clear_current_token()` chokepoint — no drift risk; left as-is by design.
+- **Connection target was always informational.** The page's read-only target panel showed the env-managed `~/.cv-healthcheck-env` CommCell URL, which was never UI-editable; nothing editable was lost.
+
 ## 2026-06-05 (refactor(catalog) — export category vocabulary to shared db.categories module)
 
 **Branch:** `refactor/category-vocabulary`. Behavior-preserving refactor; no functional change.

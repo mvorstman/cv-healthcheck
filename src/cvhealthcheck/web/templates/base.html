@@ -40,10 +40,6 @@
              class="sidebar-link{% if 'quick_hc' in ep or 'metrics_' in ep %} is-active{% endif %}">
             HealthCheck
           </a>
-          <a href="{{ url_for('main.connections') }}"
-             class="sidebar-link{% if 'connections' in ep %} is-active{% endif %}">
-            Connections
-          </a>
         </nav>
         <div class="sidebar-footer">
           <form method="post" action="{{ url_for('main.logout') }}">

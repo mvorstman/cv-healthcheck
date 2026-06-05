@@ -51,7 +51,10 @@ cv-healthcheck is the trust boundary between the AI/MCP layer and the CommServe.
    two). It is a single slot today, so a multi-user store can replace it later without
    disturbing the endpoint, MCP, or redaction.
 5. Token expiry is **visible, not silent**: a dead held token surfaces as
-   "disconnected — reconnect" on the connection UI, and the internal endpoint returns
+   "disconnected — reconnect" on the header connect pill / its modal (the connect/
+   disconnect surface — `/api/login` to connect, `/logout` to disconnect; the
+   standalone `/connections` page this ADR originally described was retired and its
+   role folded into the pill modal), and the internal endpoint returns
    a clean "expired" signal rather than a bare 401. This lands on existing pieces —
    CommvaultApiClient.get already surfaces status_code, and /api/auth/status already
    carries connection state — so no new machinery is required to interpret a held-token
@@ -76,7 +79,8 @@ secret on disk is not a contradiction of it.
 
 Flavour 1 over Flavour 2 (encrypted per-user service accounts): Flavour 1 holds only a
 short-lived token minted at Connect, never a password. Flavour 2 is deferred to if/when
-this becomes multi-user and layers onto the same connection page later.
+this becomes multi-user and layers onto the same connect surface (the header pill modal)
+later.
 
 ## Consequences
 - **The token store is single-process-scoped.** An in-memory slot lives in one process;
