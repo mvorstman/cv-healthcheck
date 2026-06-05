@@ -400,6 +400,101 @@ def test_propose_new_subject_proposal_json_roundtrips(patch_db: None) -> None:
 
 
 # ---------------------------------------------------------------------------
+# propose_new_subject — domain labels (Phase 3 authoring path)
+# ---------------------------------------------------------------------------
+
+def _subject_row_id(db_path: Path, subject_id: str, version: int) -> int:
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT id FROM subjects WHERE subject_id = ? AND version = ?",
+            (subject_id, version),
+        ).fetchone()
+        assert row is not None, f"expected {subject_id} v{version} to exist"
+        return row["id"]
+    finally:
+        conn.close()
+
+
+def _labels_by_version(subject_id: str) -> dict[int, list[str]]:
+    return {
+        s["version"]: s["labels"]
+        for s in server.list_subjects()
+        if s["subject_id"] == subject_id
+    }
+
+
+def test_propose_with_valid_labels_persists_on_approval(patch_db: None) -> None:
+    result = server.propose_new_subject(
+        **_proposal_kwargs(), labels=["governance", "compliance"]
+    )
+    server.approve_staged_artifact(result["stage_id"])
+
+    by_version = _labels_by_version("storage_utilization")
+    # Ordered by sort_order (compliance=1, governance=2), regardless of input order.
+    assert by_version[1] == ["compliance", "governance"]
+    # Surfaces through the read-side filter too.
+    filtered = {s["subject_id"] for s in server.list_subjects(label="compliance")}
+    assert "storage_utilization" in filtered
+
+
+def test_propose_unknown_label_rejected_nothing_staged(patch_db: None) -> None:
+    with pytest.raises(ValueError, match="unknown domain label"):
+        server.propose_new_subject(**_proposal_kwargs(), labels=["not_a_real_label"])
+    # All-or-nothing at authoring: no staged_artifacts proposal was written.
+    assert server.list_proposed_subjects() == []
+
+
+def test_propose_mixed_valid_and_invalid_fully_rejected(patch_db: None) -> None:
+    with pytest.raises(ValueError, match="not_a_real_label"):
+        server.propose_new_subject(
+            **_proposal_kwargs(), labels=["compliance", "not_a_real_label"]
+        )
+    assert server.list_proposed_subjects() == []
+
+
+def test_propose_without_labels_is_backward_compatible(patch_db: None) -> None:
+    # No labels arg → behaves exactly as before; the subject lands with labels == [].
+    result = server.propose_new_subject(**_proposal_kwargs())
+    server.approve_staged_artifact(result["stage_id"])
+    assert _labels_by_version("storage_utilization")[1] == []
+
+
+def test_labels_attach_per_version_without_bleed(patch_db: None, db_path: Path) -> None:
+    v1 = server.propose_new_subject(**_proposal_kwargs(), labels=["compliance"])
+    server.approve_staged_artifact(v1["stage_id"])
+    v1_id = _subject_row_id(db_path, "storage_utilization", 1)
+
+    kwargs_v2 = _proposal_kwargs()
+    kwargs_v2["version"] = 2
+    v2 = server.propose_new_subject(
+        **kwargs_v2, supersedes=v1_id, labels=["backup"]
+    )
+    server.approve_staged_artifact(v2["stage_id"])
+
+    by_version = _labels_by_version("storage_utilization")
+    assert by_version[1] == ["compliance"]   # superseded version keeps its own
+    assert by_version[2] == ["backup"]        # new version gets the new label
+
+
+def test_repropose_relabel_replaces_and_clears_stale(patch_db: None) -> None:
+    first = server.propose_new_subject(
+        **_proposal_kwargs(), labels=["compliance", "governance"]
+    )
+    server.approve_staged_artifact(first["stage_id"])
+
+    # Re-propose the same (subject_id, version) with a different label set.
+    second = server.propose_new_subject(**_proposal_kwargs(), labels=["backup"])
+    server.approve_staged_artifact(second["stage_id"])
+
+    by_version = _labels_by_version("storage_utilization")
+    # INSERT OR REPLACE → ON DELETE CASCADE cleared the old labels; only the new
+    # set remains, with no duplicates.
+    assert by_version[1] == ["backup"]
+
+
+# ---------------------------------------------------------------------------
 # list_proposed_subjects
 # ---------------------------------------------------------------------------
 

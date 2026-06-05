@@ -39,7 +39,7 @@ The stable "why" behind the work.
   - *Success:* Rules can be authored, versioned, bound, evaluated, and surfaced without code changes. Evaluation supports row-scope and summary-scope rules across all canonical section types.
 - **Quick HC canonical pipeline completion**
   - *Goal:* a single canonical render path across REST/HTML/CSV, with the legacy subject-shaping fallback retired once parity is validated.
-- **Domain Labels** (catalog classification) — in progress; Phases 1–2 landed (schema + MCP read path: `labels` in `list_subjects` and a read-side `label` filter). Next: Phase 3 (MCP authoring). See ADR-0012.
+- **Domain Labels** (catalog classification) — in progress; Phases 1–3 landed (schema + MCP read path + authoring path: `labels` on `propose_new_subject` with loud reject-unknown). Next: Phase 4 (sparse backfill of existing subjects). See ADR-0012.
 
 ## Initiatives — Next
 

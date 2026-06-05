@@ -45,7 +45,7 @@ from cvhealthcheck.artifacts.models import CanonicalArtifact
 from cvhealthcheck.db.section_types import SUPPORTED_SECTION_TYPES
 from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.db import get_db
-from cvhealthcheck.db.domain_labels import subject_labels_map
+from cvhealthcheck.db.domain_labels import domain_label_vocabulary, subject_labels_map
 from cvhealthcheck.db.migrations import run_migrations
 from cvhealthcheck.db.staging import (
     create_staged_artifact,
@@ -244,6 +244,7 @@ def propose_new_subject(
     supersedes: int | None = None,
     change_notes: str | None = None,
     related_subjects: list[str] | None = None,
+    labels: list[str] | None = None,
 ) -> dict:
     """
     Propose a new subject (report type) for the Report Inventory.
@@ -295,23 +296,47 @@ def propose_new_subject(
         What changed from the superseded version.
     related_subjects : list[str] | None
         subject_id values of related subjects (e.g. dashboard to drill-down).
+    labels : list[str] | None
+        Optional domain labels (the additive classification axis, ADR-0012),
+        e.g. ["compliance", "governance"]. Each must be in the domain-label
+        vocabulary or the proposal is rejected (loud, at authoring time);
+        they persist onto the subject's version row when the proposal is
+        approved. Distinct from `category` (the single, primary axis).
     """
-    proposal_json = json.dumps({
-        "subject_id": subject_id,
-        "version": version,
-        "title": title,
-        "description": description,
-        "category": category,
-        "sections": sections,
-        "extraction_instructions": extraction_instructions,
-        "supersedes": supersedes,
-        "change_notes": change_notes,
-        "related_subjects": related_subjects or [],
-    })
+    # De-dupe (preserve order) and loud-validate against the vocabulary at
+    # authoring time, before anything is staged — an unknown label rejects the
+    # whole proposal, writing nothing (ADR-0012 authoring-side guard; the
+    # subject_domain_labels FK is the separate structural guard at approval).
+    labels = list(dict.fromkeys(labels or []))
 
     stage_id = f"stage_{uuid4().hex}"
     db = get_db()
     try:
+        if labels:
+            vocabulary = domain_label_vocabulary(db)
+            unknown = [lbl for lbl in labels if lbl not in vocabulary]
+            if unknown:
+                raise ValueError(
+                    "unknown domain label(s): "
+                    + ", ".join(repr(u) for u in unknown)
+                    + "; valid labels: "
+                    + ", ".join(sorted(vocabulary))
+                )
+
+        proposal_json = json.dumps({
+            "subject_id": subject_id,
+            "version": version,
+            "title": title,
+            "description": description,
+            "category": category,
+            "sections": sections,
+            "extraction_instructions": extraction_instructions,
+            "supersedes": supersedes,
+            "change_notes": change_notes,
+            "related_subjects": related_subjects or [],
+            "labels": labels,
+        })
+
         db.execute(
             """
             INSERT INTO staged_artifacts

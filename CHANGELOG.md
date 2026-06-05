@@ -10,6 +10,20 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-05 (feat(mcp) — accept + validate domain labels on propose_new_subject (Domain Labels Phase 3))
+
+**Branch:** `feature/domain-labels`. Authoring path + persist point + tests; no backfill, `category` unchanged, read path unchanged.
+
+### Added
+- **Optional `labels` arg on `propose_new_subject`** — domain labels (the additive axis, ADR-0012) authored alongside a subject. De-duped (order-preserving) and **loud-validated against the vocabulary at authoring time, before staging**: an unknown label raises `ValueError` naming the offender(s) and lists the valid labels, and **nothing is written** (all-or-nothing). Accepted labels travel in the proposal JSON.
+- **Persist at approval** — `create_subject_from_proposal` writes the accepted labels into `subject_domain_labels` keyed on the new `subjects.id`, inside its existing transaction. `INSERT OR REPLACE` + the Phase-1 FK `ON DELETE CASCADE` means re-proposing a version replaces its label set (no stale rows, no duplicates); superseding attaches labels to the new version's row without bleeding into the superseded one.
+
+### Notes
+- **Two-guard model (ADR-0012):** loud authoring-side validation at `propose_new_subject`, and the structural `subject_domain_labels.label` FK at persist. The lifecycle forces the split — `propose_new_subject` only stages a proposal; the `subjects` row (and its id) is created later at approval. There is deliberately **no second vocabulary pre-check** in `create_subject_from_proposal`; a stale/hand-crafted proposal that reaches approval with a bad label hits the FK, and a targeted 2-line wrap re-raises that one `IntegrityError` as `ValueError("proposal references a label not in the vocabulary")` (the transaction rolls back — nothing written).
+- The read filter stays graceful-empty (Phase 2, unchanged); only the authoring path is loud.
+- **Backlog — `category` is not validated at authoring.** `propose_new_subject` accepts any `category` and `create_subject_from_proposal` silently title-cases unknowns via the function-local `_LABELS` (display only, no rejection). Left unchanged here per ADR-0012 / scope (category behavior is out of scope for Domain Labels); recorded so the finding isn't lost. The loud label guard stands on its own ADR-0012 authority — it is a new pattern, not a mirror of category.
+- **Backlog (carried):** export the `category` `_LABELS` constant (function-local in `db/subjects.py::create_subject_from_proposal`, against a free-text column) to a shared importable source, so the disjointness invariant references one source of truth rather than a mirrored copy in the test.
+
 ## 2026-06-05 (feat(mcp) — domain labels in list_subjects + read-side label filter (Domain Labels Phase 2))
 
 **Branch:** `feature/domain-labels`. MCP read path + tests; no authoring/backfill, `category` unchanged.
