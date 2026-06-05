@@ -8,7 +8,7 @@ The database is the primary source of truth for subject definitions, extraction 
 
 New report types should be added through authoring rather than software development wherever practical.
 
-The platform collects from multiple sources, normalizes to canonical artifacts, evaluates against rules and baselines, and composes customer-facing reports.
+The platform collects from multiple sources, normalizes to canonical artifacts, evaluates against rules and baselines, and composes customer-facing reports as read-only views over canonical subjects.
 
 ## Current State
 
@@ -27,6 +27,7 @@ The stable "why" behind the work.
 - Database as single source of truth (zero-code report-type addition)
 - Separation of collection / evaluation / reporting
 - Evidence integrity & provenance
+- Reports as read-only views over canonical subjects (ADR-0013)
 - Source-agnostic extensibility
 - Verify-first / curl-first engineering discipline
 
@@ -34,6 +35,9 @@ The stable "why" behind the work.
 
 *Status: In Progress.*
 
+- **Customer/Project Context Isolation** — gating report-correctness item; precedes the Report Output framework (Next).
+  - *Goal:* report generation never mixes data between customers or projects.
+  - *Success:* every artifact read, write, report render, upload/import, evaluation, and composition selection is explicitly scoped to one (customer, project) or explicitly global by design; no cross-customer read fallback; environment/CommCell evidence is scoped, not a global single file; report-composition selections are scoped; operating on customer data requires an explicit active context (or "Default" is an unmistakable single-tenant lab mode).
 - **Rules & Evaluation maturity**
   - *Goal:* increase rule expressiveness and consistency across all canonical section types.
   - *Success:* Rules can be authored, versioned, bound, evaluated, and surfaced without code changes. Evaluation supports row-scope and summary-scope rules across all canonical section types.
@@ -46,7 +50,10 @@ The stable "why" behind the work.
 *Status: Planned.*
 
 - **Report Output framework** — docx/PDF composition and report profiles.
-  - *Success:* Customer reports can be generated entirely from canonical artifacts and report definitions without subject-specific report builders.
+  - *Depends on:* Customer/Project Context Isolation (Now) — thin Report Profiles and docx/PDF output do not proceed until the HIGH cross-customer risks are closed.
+  - *Direction:* ADR-0013 governs this work: canonical subjects are the foundation; reports are read-only views; canonical artifacts are never mutated by report/customer overrides.
+  - *First slice:* introduce only a thin Report Profile view contract — selected subjects, selected sections, and view mode. Do not build full profile persistence/schema, contextual evaluation, health-domain consumers, or compliance profiles in this slice.
+  - *Success:* Customer reports can be generated entirely from canonical artifacts and thin report definitions without subject-specific report builders, without rewriting verdicts, provenance, source metadata, or canonical artifact data.
 - **Subject Inventory convergence** — migrate the system subjects into the database Report Inventory as seed data; grow subject coverage via MCP.
   - *Success:* A new report type can be added through catalog/MCP authoring without Python code changes. System subjects are represented in the same inventory model as user-authored subjects.
 
@@ -55,6 +62,8 @@ The stable "why" behind the work.
 *Status: Proposed.*
 
 - **Version Intelligence** — live Commvault release / maintenance-release / advisory baseline matching (builds on the shipped version-compare primitive).
+- **Contextual Evaluation** — advisory, lifecycle, supportability, policy, and compliance-profile evaluation outside canonical artifacts; deferred until an explicit evaluation context is designed.
+- **Health Domains and Compliance Profiles** — consumers over subjects / labels / evaluations, including possible NIS2 mapping; deferred until there is a second genuinely different report/profile need.
 - **Distributed Collection & Operating Modes** — Daily Reporting and Full HealthCheck modes; customer-side REST collectors → S3 evidence store → central analysis.
 - **Evidence Confidence scoring** — source-quality/freshness weighting (the provenance metadata is already in place).
 - **Report-Definition (XML) parser** — a generic Commvault report-definition parser.
@@ -65,6 +74,8 @@ The stable "why" behind the work.
 Platform Foundation [done] → Data Collection [done] → Rules/Evaluation [in progress] → Reporting → Analytics.
 
 - Reporting depends on stable evaluation outputs, so Rules/Evaluation precedes Reporting.
+- Reporting must not mix customer/project data, so Customer/Project Context Isolation (Now) precedes the Report Output framework.
+- The first Reporting slice is intentionally thin under ADR-0013: view selection over canonical subjects first; contextual evaluation, Health Domains, and compliance profiles later.
 - Analytics depends on accumulated historical reporting data, so Reporting precedes Analytics.
 - Cross-cutting: the version-compare primitive (shipped, ADR-0011) gates Version Intelligence.
 
@@ -87,3 +98,6 @@ Deferred, deliberate — not defects.
 
 - **S3 collector code** — blocked-by-design until the source/collector contracts stabilize.
 - **Multi-tenancy** — one CommCell per customer for v1.
+- **Full report-profile persistence/schema** — deferred; first Report Profile is an in-memory/view contract only.
+- **Contextual advisory/lifecycle engine** — deferred; it must not be hidden inside report composition.
+- **Health Domain / compliance profile consumers** — deferred; Domain Labels exist, but the first consumer is not designed yet.

@@ -243,7 +243,6 @@ Key rules:
 Documentation structure:
 
 * API_MAPPING.md = technical capability inventory
-* HEALTHCHECK_MATRIX.md = operational health evaluation inventory
 
 ⸻
 

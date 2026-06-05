@@ -207,9 +207,8 @@ Historical metric pages (e.g. `/metrics/client-growth`) render through a shared 
 - [docs/subjects/security_assessment.md](docs/subjects/security_assessment.md) — Security Assessment subject (report 336; multi-source canonical pipeline).
 - [docs/subjects/license_summary.md](docs/subjects/license_summary.md) — License Summary subject (CSV / HTML / XLSX / REST-206 pipeline).
 - [API_MAPPING.md](API_MAPPING.md) — validated collection/source catalog: what can be collected, from where, with which auth/params, and whether proven.
-- [HEALTHCHECK_MATRIX.md](HEALTHCHECK_MATRIX.md) — health evaluation / rule catalog: health questions, required data, rules, severities, reporting categories.
 - [DATA_SOURCE_MAPPING.md](DATA_SOURCE_MAPPING.md) — operating-mode source strategy: which datasource per subject across Quick HC / Daily / Full.
 - [docs/PATTERNS.md](docs/PATTERNS.md) — project-wide patterns and standing conventions to know before adding code.
 - [docs/lab_environment.md](docs/lab_environment.md) — lab setup, connection, token, and realism.
 - [docs/data_flow_audit.md](docs/data_flow_audit.md) — on-disk data-flow audit.
-- [docs/adr/](docs/adr/) — Architecture Decision Records (0001–0011). Required reading before touching the areas they govern.
+- [docs/adr/](docs/adr/) — Architecture Decision Records (0001–0013). Required reading before touching the areas they govern.
