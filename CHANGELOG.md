@@ -10,6 +10,20 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-05 (feat(catalog) — domain-label vocabulary + association schema (Domain Labels Phase 1))
+
+**Branch:** `feature/domain-labels`. Schema + tests only; no MCP/authoring change, no subject labeled.
+
+### Added
+- **Migration `0029_domain_labels.sql`** — a second, additive classification axis for subjects. `domain_label` controlled-vocabulary table (`label` PK, `display_label`, `description`, `sort_order`), seeded with exactly four terms: `compliance`/Compliance, `governance`/Governance, `backup`/Backup, `reporting`/Reporting. `subject_domain_labels` many-to-many association (`subject_row_id` → `subjects.id` `ON DELETE CASCADE`; `label` → `domain_label.label`; `UNIQUE(subject_row_id, label)`; index on `label`). No association rows seeded — backfill is a later phase.
+- **`db/domain_labels.py`** — read accessors over the vocabulary: `list_domain_labels(db)` (ordered rows) and `domain_label_vocabulary(db)` (slug set). Reused by later phases (authoring-side reject-unknown, MCP read path) and the tests.
+- **`tests/test_domain_labels_migration.py`** (9 tests) — migration applies + recorded; seeded exactly four; association empty; FK rejects unknown label and unknown subject row; valid insert succeeds; `UNIQUE` blocks duplicates; accessor returns the four terms; the disjointness invariant.
+
+### Notes
+- The `domain_label` vocabulary is **disjoint** from the `category` vocabulary (`identity/security/licensing/performance/operations/storage`) → the two axes are **additive-only by construction**; a test asserts the intersection is empty and must never silently regress.
+- **Finding / backlog:** the `category` vocabulary is a **function-local `_LABELS` constant** inside `db/subjects.py::create_subject_from_proposal`, against a **free-text `category` column** (no DB enum). The disjointness test therefore *mirrors* those six terms as a documented reference set (plus a data-driven cross-check of `SELECT DISTINCT category FROM subjects`). Backlog: export `_LABELS` to a shared importable source so the invariant references one source of truth rather than a mirrored copy.
+- The FK on `subject_domain_labels.label` is the structural guard that an unknown label can never be associated; the authoring-side reject-unknown check is deferred to Phase 3 (adding it now would be dead code crossing the phase boundary).
+
 ## 2026-06-04 (docs — README pass 2: relocate internals to owned docs, drop migration history, shrink to overview+index)
 
 **Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source touched. Exactly three new files created.

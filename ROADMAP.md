@@ -39,6 +39,7 @@ The stable "why" behind the work.
   - *Success:* Rules can be authored, versioned, bound, evaluated, and surfaced without code changes. Evaluation supports row-scope and summary-scope rules across all canonical section types.
 - **Quick HC canonical pipeline completion**
   - *Goal:* a single canonical render path across REST/HTML/CSV, with the legacy subject-shaping fallback retired once parity is validated.
+- **Domain Labels** (catalog classification) — in progress; Phase 1 schema landed (an additive label axis alongside the single-valued `category`).
 
 ## Initiatives — Next
 
