@@ -163,6 +163,29 @@ def create_subject_from_proposal(db: sqlite3.Connection, proposal: dict) -> dict
             ),
         )
 
+        # Domain labels (ADR-0012): attach the proposal's labels to THIS version's
+        # row. They were loud-validated at authoring (propose_new_subject); here the
+        # Phase-1 FK is the structural guard. INSERT OR REPLACE above gives a new
+        # subjects.id and cascades any prior labels away, so re-proposing a version
+        # replaces its label set rather than accumulating.
+        labels = proposal.get("labels") or []
+        if labels:
+            new_row_id = db.execute(
+                "SELECT id FROM subjects WHERE subject_id = ? AND version = ?",
+                (subject_id, version),
+            ).fetchone()["id"]
+            try:
+                for lbl in labels:
+                    db.execute(
+                        "INSERT INTO subject_domain_labels"
+                        " (subject_row_id, label) VALUES (?, ?)",
+                        (new_row_id, lbl),
+                    )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError(
+                    "proposal references a label not in the vocabulary"
+                ) from exc
+
         for section in sections:
             validate_section_type(
                 section["section_type"],

@@ -10,6 +10,71 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-05 (feat(catalog) — backfill domain labels for active subjects (Domain Labels Phase 4))
+
+**Branch:** `feature/domain-labels`. Data migration + test maintenance only; no schema change, no source change, `category` untouched.
+
+### Added
+- **Migration `0030_domain_label_backfill.sql`** — the approved sparse label set (ADR-0012), 8 assignments onto each target's **active** version row:
+  - `security_assessment` → compliance, governance
+  - `audit_trail` → compliance, governance
+  - `users` → governance
+  - `metrics_reporting` → governance
+  - `backup_job_summary` → backup
+  - `client_growth` → reporting
+- **`tests/test_domain_label_backfill_migration.py`** (6 tests) — seeded targets carry their planned labels; non-targets unlabeled; categories unchanged; idempotent re-apply; absent targets are safe no-ops.
+
+### Changed
+- **Test maintenance** (the backfill makes the seeded test catalog non-empty): repointed Phase-2 read tests off the now-labeled seeded subjects and made the filter assertions **consistency-based** (expected computed from the association data, not hardcoded), so neither this backfill nor a future one re-breaks them; the zero-member case now seeds a fresh *valid* vocabulary term (distinct from the unknown-label path); the Phase-1 "association seeded empty" test became a structural no-orphans check; migration-count guardrail `29 → 30`.
+
+### Notes
+- **Backfill via data migration**, consistent with the Phase-1 vocabulary seed. It resolves each target by `subject_id` + `status='active'` at apply time (not a hardcoded id), and `INSERT OR IGNORE` makes it idempotent.
+- **Labels attach to each target's active version at backfill time and, per ADR-0012, do not follow a future supersede** — a re-proposed version re-authors its own labels (the new version row starts unlabeled).
+- **Runtime-only finding:** 4 of the 8 rows target **AI-authored runtime subjects** (`audit_trail`, `users`, `metrics_reporting`) that exist only in the real `app.db`, not in the migration-seeded catalog. So on a fresh catalog `0030` labels only the **3 seeded targets** (4 rows); the 4 runtime rows land only where those subjects exist (the real catalog), verified by the post-commit live read smoke — they are not exercised by the test-DB suite.
+- **Backlog (catalog reconstructibility):** the above means the seeded migrations + `0030` cannot fully reconstruct the labeled catalog from scratch — part of the label state depends on runtime-authored subjects. This is the same gap the **Subject Inventory convergence** initiative targets (migrate the system/AI subjects into the database Report Inventory as seed data); once those subjects are seed-represented, `0030`-style backfills become fully reconstructible. Tracked there.
+
+## 2026-06-05 (feat(mcp) — accept + validate domain labels on propose_new_subject (Domain Labels Phase 3))
+
+**Branch:** `feature/domain-labels`. Authoring path + persist point + tests; no backfill, `category` unchanged, read path unchanged.
+
+### Added
+- **Optional `labels` arg on `propose_new_subject`** — domain labels (the additive axis, ADR-0012) authored alongside a subject. De-duped (order-preserving) and **loud-validated against the vocabulary at authoring time, before staging**: an unknown label raises `ValueError` naming the offender(s) and lists the valid labels, and **nothing is written** (all-or-nothing). Accepted labels travel in the proposal JSON.
+- **Persist at approval** — `create_subject_from_proposal` writes the accepted labels into `subject_domain_labels` keyed on the new `subjects.id`, inside its existing transaction. `INSERT OR REPLACE` + the Phase-1 FK `ON DELETE CASCADE` means re-proposing a version replaces its label set (no stale rows, no duplicates); superseding attaches labels to the new version's row without bleeding into the superseded one.
+
+### Notes
+- **Two-guard model (ADR-0012):** loud authoring-side validation at `propose_new_subject`, and the structural `subject_domain_labels.label` FK at persist. The lifecycle forces the split — `propose_new_subject` only stages a proposal; the `subjects` row (and its id) is created later at approval. There is deliberately **no second vocabulary pre-check** in `create_subject_from_proposal`; a stale/hand-crafted proposal that reaches approval with a bad label hits the FK, and a targeted 2-line wrap re-raises that one `IntegrityError` as `ValueError("proposal references a label not in the vocabulary")` (the transaction rolls back — nothing written).
+- The read filter stays graceful-empty (Phase 2, unchanged); only the authoring path is loud.
+- **Backlog — `category` is not validated at authoring.** `propose_new_subject` accepts any `category` and `create_subject_from_proposal` silently title-cases unknowns via the function-local `_LABELS` (display only, no rejection). Left unchanged here per ADR-0012 / scope (category behavior is out of scope for Domain Labels); recorded so the finding isn't lost. The loud label guard stands on its own ADR-0012 authority — it is a new pattern, not a mirror of category.
+- **Backlog (carried):** export the `category` `_LABELS` constant (function-local in `db/subjects.py::create_subject_from_proposal`, against a free-text column) to a shared importable source, so the disjointness invariant references one source of truth rather than a mirrored copy in the test.
+
+## 2026-06-05 (feat(mcp) — domain labels in list_subjects + read-side label filter (Domain Labels Phase 2))
+
+**Branch:** `feature/domain-labels`. MCP read path + tests; no authoring/backfill, `category` unchanged.
+
+### Added
+- **`list_subjects` returns `labels`** — each subject carries a `labels` list of domain-label slugs (always present; `[]` when none), populated from a single bulk query (`db/domain_labels.subject_labels_map`, `subject_row_id` → ordered slugs; avoids N+1).
+- **`list_subjects(label=…)` read filter** — returns only subjects carrying that label.
+
+### Notes
+- The filter is **graceful-empty by design**: an unknown or zero-member label returns `[]` with no exception. Authoring-side reject-unknown is deferred to Phase 3.
+- Additive only — `id` is fetched to key the label map and popped before returning, so the output gains `labels` and nothing else; `category`/`category_label` unchanged.
+- Labels attach to `subjects.id` (the per-version row); `list_subjects` does not collapse versions, so superseded versions carry their own labels.
+- The two-axis classification (`category` single/primary vs `labels` many/additive, disjoint vocabularies) is recorded in **ADR-0012** (committed separately).
+
+## 2026-06-05 (feat(catalog) — domain-label vocabulary + association schema (Domain Labels Phase 1))
+
+**Branch:** `feature/domain-labels`. Schema + tests only; no MCP/authoring change, no subject labeled.
+
+### Added
+- **Migration `0029_domain_labels.sql`** — a second, additive classification axis for subjects. `domain_label` controlled-vocabulary table (`label` PK, `display_label`, `description`, `sort_order`), seeded with exactly four terms: `compliance`/Compliance, `governance`/Governance, `backup`/Backup, `reporting`/Reporting. `subject_domain_labels` many-to-many association (`subject_row_id` → `subjects.id` `ON DELETE CASCADE`; `label` → `domain_label.label`; `UNIQUE(subject_row_id, label)`; index on `label`). No association rows seeded — backfill is a later phase.
+- **`db/domain_labels.py`** — read accessors over the vocabulary: `list_domain_labels(db)` (ordered rows) and `domain_label_vocabulary(db)` (slug set). Reused by later phases (authoring-side reject-unknown, MCP read path) and the tests.
+- **`tests/test_domain_labels_migration.py`** (9 tests) — migration applies + recorded; seeded exactly four; association empty; FK rejects unknown label and unknown subject row; valid insert succeeds; `UNIQUE` blocks duplicates; accessor returns the four terms; the disjointness invariant.
+
+### Notes
+- The `domain_label` vocabulary is **disjoint** from the `category` vocabulary (`identity/security/licensing/performance/operations/storage`) → the two axes are **additive-only by construction**; a test asserts the intersection is empty and must never silently regress.
+- **Finding / backlog:** the `category` vocabulary is a **function-local `_LABELS` constant** inside `db/subjects.py::create_subject_from_proposal`, against a **free-text `category` column** (no DB enum). The disjointness test therefore *mirrors* those six terms as a documented reference set (plus a data-driven cross-check of `SELECT DISTINCT category FROM subjects`). Backlog: export `_LABELS` to a shared importable source so the invariant references one source of truth rather than a mirrored copy.
+- The FK on `subject_domain_labels.label` is the structural guard that an unknown label can never be associated; the authoring-side reject-unknown check is deferred to Phase 3 (adding it now would be dead code crossing the phase boundary).
+
 ## 2026-06-04 (docs — README pass 2: relocate internals to owned docs, drop migration history, shrink to overview+index)
 
 **Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source touched. Exactly three new files created.

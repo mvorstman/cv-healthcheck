@@ -165,6 +165,112 @@ def test_list_subjects_status_filter_returns_empty_for_proposed(patch_db: None) 
     assert proposed == []
 
 
+# --- Domain Labels Phase 2 (MCP read path) -----------------------------------
+# subject_domain_labels is empty in production (backfill is Phase 4), so these
+# exercise the populated path by inserting association rows directly.
+
+def _label_subject(db_path: Path, subject_id: str, labels: list[str]) -> int:
+    """Attach domain labels to a subject's active row; return its subjects.id."""
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        row = conn.execute(
+            "SELECT id FROM subjects WHERE subject_id = ? ORDER BY version LIMIT 1",
+            (subject_id,),
+        ).fetchone()
+        assert row is not None, f"seeded subject {subject_id!r} expected"
+        row_id = row["id"]
+        for lbl in labels:
+            conn.execute(
+                "INSERT INTO subject_domain_labels (subject_row_id, label) VALUES (?, ?)",
+                (row_id, lbl),
+            )
+        conn.commit()
+        return row_id
+    finally:
+        conn.close()
+
+
+def test_list_subjects_every_subject_has_labels_key(patch_db: None) -> None:
+    subjects = server.list_subjects()
+    assert subjects
+    # Always present, never null/missing; a list in every case.
+    assert all("labels" in s for s in subjects)
+    assert all(isinstance(s["labels"], list) for s in subjects)
+    # A subject not touched by the Phase-4 backfill has an empty list.
+    by_id = {s["subject_id"]: s["labels"] for s in subjects}
+    assert by_id["license_summary"] == []
+
+
+def test_list_subjects_labels_populated_in_deterministic_order(
+    patch_db: None, db_path: Path
+) -> None:
+    # license_summary is not touched by the Phase-4 backfill — a clean canvas.
+    # Insert in reverse sort_order to prove the accessor orders by sort_order.
+    _label_subject(db_path, "license_summary", ["governance", "compliance"])
+    subjects = {s["subject_id"]: s for s in server.list_subjects()}
+    assert subjects["license_summary"]["labels"] == ["compliance", "governance"]
+    # Another untouched subject stays empty.
+    assert subjects["capacity_license"]["labels"] == []
+
+
+def test_list_subjects_label_filter_returns_only_matching(
+    patch_db: None, db_path: Path
+) -> None:
+    # Use subjects the Phase-4 backfill does not touch, and assert the filter
+    # equals the association data itself — robust to the backfill (and any future
+    # one), not a hardcoded set.
+    _label_subject(db_path, "license_summary", ["compliance"])
+    _label_subject(db_path, "capacity_license", ["compliance", "reporting"])
+    _label_subject(db_path, "environment", ["backup"])
+
+    filtered = {s["subject_id"] for s in server.list_subjects(label="compliance")}
+    expected = {
+        s["subject_id"] for s in server.list_subjects() if "compliance" in s["labels"]
+    }
+    assert filtered == expected
+    assert {"license_summary", "capacity_license"} <= filtered  # the fixture ones
+    # category/category_label survive the filter unchanged.
+    for s in server.list_subjects(label="compliance"):
+        assert s["category"] and s["category_label"]
+        assert "compliance" in s["labels"]
+
+
+def test_list_subjects_label_filter_zero_members_is_empty(
+    patch_db: None, db_path: Path
+) -> None:
+    # A *valid* vocabulary term with zero members — distinct from an unknown
+    # label (covered separately). Seed a fresh term, assign it to no subject.
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        conn.execute(
+            "INSERT INTO domain_label (label, display_label, sort_order)"
+            " VALUES ('unassigned_term', 'Unassigned', 99)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    # Consistent with the association data (no subject carries it) → empty, no error.
+    assert [s for s in server.list_subjects() if "unassigned_term" in s["labels"]] == []
+    assert server.list_subjects(label="unassigned_term") == []
+
+
+def test_list_subjects_label_filter_unknown_label_is_empty(patch_db: None) -> None:
+    # Not in the vocabulary at all → empty, no exception (reject-unknown is Phase 3).
+    assert server.list_subjects(label="not_a_real_label") == []
+
+
+def test_list_subjects_category_fields_unchanged(patch_db: None) -> None:
+    subjects = server.list_subjects()
+    sample = subjects[0]
+    # Existing fields preserved exactly; `id` not leaked into the output shape.
+    assert {"subject_id", "version", "title", "description", "category",
+            "category_label", "status", "created_by", "labels"} == set(sample.keys())
+    assert "id" not in sample
+
+
 def test_save_staged_artifact_saves_valid_artifact(
     patch_db: None,
 ) -> None:
@@ -314,6 +420,101 @@ def test_propose_new_subject_proposal_json_roundtrips(patch_db: None) -> None:
     assert proposal["proposal"]["subject_id"] == "storage_utilization"
     assert proposal["proposal"]["category"] == "storage"
     assert len(proposal["proposal"]["sections"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# propose_new_subject — domain labels (Phase 3 authoring path)
+# ---------------------------------------------------------------------------
+
+def _subject_row_id(db_path: Path, subject_id: str, version: int) -> int:
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT id FROM subjects WHERE subject_id = ? AND version = ?",
+            (subject_id, version),
+        ).fetchone()
+        assert row is not None, f"expected {subject_id} v{version} to exist"
+        return row["id"]
+    finally:
+        conn.close()
+
+
+def _labels_by_version(subject_id: str) -> dict[int, list[str]]:
+    return {
+        s["version"]: s["labels"]
+        for s in server.list_subjects()
+        if s["subject_id"] == subject_id
+    }
+
+
+def test_propose_with_valid_labels_persists_on_approval(patch_db: None) -> None:
+    result = server.propose_new_subject(
+        **_proposal_kwargs(), labels=["governance", "compliance"]
+    )
+    server.approve_staged_artifact(result["stage_id"])
+
+    by_version = _labels_by_version("storage_utilization")
+    # Ordered by sort_order (compliance=1, governance=2), regardless of input order.
+    assert by_version[1] == ["compliance", "governance"]
+    # Surfaces through the read-side filter too.
+    filtered = {s["subject_id"] for s in server.list_subjects(label="compliance")}
+    assert "storage_utilization" in filtered
+
+
+def test_propose_unknown_label_rejected_nothing_staged(patch_db: None) -> None:
+    with pytest.raises(ValueError, match="unknown domain label"):
+        server.propose_new_subject(**_proposal_kwargs(), labels=["not_a_real_label"])
+    # All-or-nothing at authoring: no staged_artifacts proposal was written.
+    assert server.list_proposed_subjects() == []
+
+
+def test_propose_mixed_valid_and_invalid_fully_rejected(patch_db: None) -> None:
+    with pytest.raises(ValueError, match="not_a_real_label"):
+        server.propose_new_subject(
+            **_proposal_kwargs(), labels=["compliance", "not_a_real_label"]
+        )
+    assert server.list_proposed_subjects() == []
+
+
+def test_propose_without_labels_is_backward_compatible(patch_db: None) -> None:
+    # No labels arg → behaves exactly as before; the subject lands with labels == [].
+    result = server.propose_new_subject(**_proposal_kwargs())
+    server.approve_staged_artifact(result["stage_id"])
+    assert _labels_by_version("storage_utilization")[1] == []
+
+
+def test_labels_attach_per_version_without_bleed(patch_db: None, db_path: Path) -> None:
+    v1 = server.propose_new_subject(**_proposal_kwargs(), labels=["compliance"])
+    server.approve_staged_artifact(v1["stage_id"])
+    v1_id = _subject_row_id(db_path, "storage_utilization", 1)
+
+    kwargs_v2 = _proposal_kwargs()
+    kwargs_v2["version"] = 2
+    v2 = server.propose_new_subject(
+        **kwargs_v2, supersedes=v1_id, labels=["backup"]
+    )
+    server.approve_staged_artifact(v2["stage_id"])
+
+    by_version = _labels_by_version("storage_utilization")
+    assert by_version[1] == ["compliance"]   # superseded version keeps its own
+    assert by_version[2] == ["backup"]        # new version gets the new label
+
+
+def test_repropose_relabel_replaces_and_clears_stale(patch_db: None) -> None:
+    first = server.propose_new_subject(
+        **_proposal_kwargs(), labels=["compliance", "governance"]
+    )
+    server.approve_staged_artifact(first["stage_id"])
+
+    # Re-propose the same (subject_id, version) with a different label set.
+    second = server.propose_new_subject(**_proposal_kwargs(), labels=["backup"])
+    server.approve_staged_artifact(second["stage_id"])
+
+    by_version = _labels_by_version("storage_utilization")
+    # INSERT OR REPLACE → ON DELETE CASCADE cleared the old labels; only the new
+    # set remains, with no duplicates.
+    assert by_version[1] == ["backup"]
 
 
 # ---------------------------------------------------------------------------
