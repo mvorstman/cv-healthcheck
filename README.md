@@ -186,16 +186,6 @@ Customer-facing pages:
 - `/quick-hc/commcell` — CommCell identity detail
 - `/quick-hc/report` — composed customer-facing report
 
-Internal / development pages (raw API + Reports Plus exploration, lab readiness):
-
-- `/api/test`
-- `/reportsplus/reports`, `/reportsplus/reports/<report_id_or_guid>`
-- `/reportsplus/datasets`, `/reportsplus/dataset/<dataset_guid>`, `/reportsplus/data/<dataset_guid>`
-- `/reportsplus/health-candidates`, `/reportsplus/execution-validation`
-- `/lab-readiness`
-
-Historical metric pages (e.g. `/metrics/client-growth`) render through a shared server-side Chart.js payload pattern — see [docs/PATTERNS.md](docs/PATTERNS.md) (§5).
-
 ## Documentation Index
 
 - **README.md** — what the project is and how to run it (this file).

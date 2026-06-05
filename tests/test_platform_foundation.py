@@ -5,7 +5,6 @@ from pathlib import Path
 
 from cvhealthcheck.api_client import CommvaultApiClient
 from cvhealthcheck.auth.commvault_auth import SESSION_TOKEN_KEY
-from cvhealthcheck import token_store
 from cvhealthcheck.config import Settings, load_settings
 from cvhealthcheck.license_summary.artifact import build_license_summary_artifact
 from cvhealthcheck.license_summary.models import LicenseSummaryArtifact
@@ -22,7 +21,6 @@ def test_route_split_keeps_expected_endpoints_registered() -> None:
     assert rules["/quick-hc"] == "main.quick_hc"
     assert rules["/quick-hc/license-summary"] == "main.quick_hc_license_summary"
     assert rules["/quick-hc/backup-job-summary"] == "main.quick_hc_backup_job_summary"
-    assert rules["/development"] == "main.development"
 
 
 def test_quick_hc_and_report_pages_still_render() -> None:
@@ -51,34 +49,6 @@ def test_workspace_loads_localtime_helper_before_quick_hc_js() -> None:
     assert lt != -1, "localtime.js not referenced on the standalone workspace page"
     assert qhc != -1
     assert lt < qhc, "localtime.js must load before quick_hc.js (fmtUtc needs window.fmtLocalTime)"
-
-
-def test_development_routes_require_login() -> None:
-    app = create_app()
-    client = app.test_client()
-
-    # ADR 0004 phase 6.5 retired the Reports Plus exploration routes; the dev
-    # hub itself remains login-guarded (the held Security Assessment cluster).
-    for path in (
-        "/development",
-    ):
-        response = client.get(path)
-        assert response.status_code == 302
-        assert "/login" in response.headers["Location"]
-
-
-def test_development_routes_render_after_login() -> None:
-    app = create_app()
-    client = app.test_client()
-    token_store.set_active_token("test-token")   # ADR-0008 B: auth via the held-token store
-
-    # ADR 0004 phase 6.5 retired the Reports Plus exploration routes; the dev
-    # hub itself remains login-guarded (the held Security Assessment cluster).
-    for path in (
-        "/development",
-    ):
-        response = client.get(path)
-        assert response.status_code == 200
 
 
 def test_security_assessment_artifact_includes_version_fields() -> None:

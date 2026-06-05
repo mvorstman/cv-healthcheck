@@ -10,6 +10,24 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-05 (refactor(web) — retire the vestigial /development hub)
+
+**Branch:** `main`. Removes the last dev-workspace remnant; all its sub-tools were retired in prior passes.
+
+### Removed
+- **`GET /development`** — deleted `web/routes/development.py` (the file was down to this one route) and dropped its `from . import development` line from `routes/main.py`. No blueprint to unregister: route modules share one `main` blueprint, so removing the import is the deregistration. No orphaned imports — the view's `bp`/`login_required`/`render_template` are shared `shared.py` exports used by every other route module.
+- **`templates/development.html`** — the hub page (deleted whole). It had degenerated to a husk: a "tools retired" subtitle and two links that both pointed back at `/quick-hc`.
+- **Both inbound "Dev tools" links:** the `base.html` sidebar-footer link (including its now-dead `{% if 'development' in ep or 'security_assessment_registry' in ep %}` is-active clause — both endpoints are gone) and the `quick_hc.html` workspace left-nav link.
+- **`.sidebar-dev-link` CSS** (3 rules: base, `:hover`, `.is-active`) in `styles.css` — styled only the removed footer link.
+
+### Changed
+- **Docs:** trimmed the stale "Internal / development pages" section of `README.md` (it listed `/api/test`, `/reportsplus/*`, `/lab-readiness`, `/metrics/client-growth` — all already-retired URLs, and it never listed `/development` itself). Left dated snapshots, `data_flow_audit.md`, the ADR-0004 phase plan, and `architecture/quickhc.md`.
+- **Tests:** dropped the `/development` route-map assertion from `test_platform_foundation.py` (kept the `/quick-hc*` ones); deleted `test_development_routes_require_login` and `test_development_routes_render_after_login` (both had narrowed to a single `/development` loop); dropped the now-unused `token_store` import from the file.
+
+### Notes
+- **`lnav-sm` was not shared after all.** The brief expected the workspace "Dev tools" link's `lnav-sm` class to be shared with other nav items, so the instruction was to remove only the `<a>` line and keep the class. On removal it turned out the Dev tools link was its **only** user, leaving `.lnav-sm` (`quick_hc.css:139,144`) as **orphaned dead CSS**. Left in place this pass per the explicit scope; flagged as a one-line follow-up cleanup (symmetric with the `.sidebar-dev-link` rules removed here).
+- After this, there is **no "Dev tools" entry point anywhere** — correct, since the page was empty. `/development` now 404s; `/quick-hc` and `base.html` pages render with no `BuildError`.
+
 ## 2026-06-05 (refactor(web) — retire the entire dev Security Assessment surface)
 
 **Branch:** `main`. Removes the dev SA cluster + its two registry siblings; closes the consumer-sweep backlog from d5d4227.

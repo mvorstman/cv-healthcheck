@@ -45,10 +45,6 @@
           <form method="post" action="{{ url_for('main.logout') }}">
             <button type="submit" class="sidebar-logout">Sign out</button>
           </form>
-          <a href="{{ url_for('main.development') }}"
-             class="sidebar-dev-link{% if 'development' in ep or 'security_assessment_registry' in ep %} is-active{% endif %}">
-            Dev tools
-          </a>
         </div>
       </aside>
       <div class="main">

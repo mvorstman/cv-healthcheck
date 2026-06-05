@@ -187,28 +187,6 @@ h5 {
   color: var(--text-primary);
 }
 
-.sidebar-dev-link {
-  display: block;
-  margin-top: 0.25rem;
-  padding: 0.35rem 0.5rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  text-decoration: none;
-  border-radius: 6px;
-  opacity: 0.6;
-}
-
-.sidebar-dev-link:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-  opacity: 1;
-}
-
-.sidebar-dev-link.is-active {
-  color: var(--accent);
-  opacity: 1;
-}
-
 .main {
   margin-left: 210px;
   flex: 1;
