@@ -84,14 +84,23 @@ def test_domain_label_seeded_with_exactly_four_terms(migrated_db_path: Path) -> 
         db.close()
 
 
-def test_subject_domain_labels_seeded_empty(migrated_db_path: Path) -> None:
-    """Phase 1 creates the association table but labels no subject."""
+def test_subject_domain_labels_rows_are_structurally_valid(migrated_db_path: Path) -> None:
+    """Migration 0029 creates the association empty; a later phase (the 0030
+    backfill) populates it. Whatever rows exist must each resolve to a real
+    subject row AND a real vocabulary label — the FK guarantee, which holds
+    regardless of how many labels the backfill assigns."""
     db = get_db(migrated_db_path)
     try:
-        count = db.execute(
-            "SELECT COUNT(*) AS c FROM subject_domain_labels"
+        orphans = db.execute(
+            """
+            SELECT COUNT(*) AS c
+            FROM subject_domain_labels sdl
+            LEFT JOIN subjects s     ON s.id = sdl.subject_row_id
+            LEFT JOIN domain_label dl ON dl.label = sdl.label
+            WHERE s.id IS NULL OR dl.label IS NULL
+            """
         ).fetchone()["c"]
-        assert count == 0
+        assert orphans == 0
     finally:
         db.close()
 

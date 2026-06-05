@@ -39,7 +39,7 @@ The stable "why" behind the work.
   - *Success:* Rules can be authored, versioned, bound, evaluated, and surfaced without code changes. Evaluation supports row-scope and summary-scope rules across all canonical section types.
 - **Quick HC canonical pipeline completion**
   - *Goal:* a single canonical render path across REST/HTML/CSV, with the legacy subject-shaping fallback retired once parity is validated.
-- **Domain Labels** (catalog classification) — in progress; Phases 1–3 landed (schema + MCP read path + authoring path: `labels` on `propose_new_subject` with loud reject-unknown). Next: Phase 4 (sparse backfill of existing subjects). See ADR-0012.
+- **Domain Labels** (catalog classification) — **v1 complete** (schema · MCP read · MCP author · sparse backfill; ADR-0012). The additive label axis alongside the single-valued `category` is in place; the first downstream consumer (report profiles / health domains / rule packs reading the labels) is future work.
 
 ## Initiatives — Next
 

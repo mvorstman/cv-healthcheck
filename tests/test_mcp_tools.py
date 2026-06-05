@@ -195,31 +195,42 @@ def _label_subject(db_path: Path, subject_id: str, labels: list[str]) -> int:
 def test_list_subjects_every_subject_has_labels_key(patch_db: None) -> None:
     subjects = server.list_subjects()
     assert subjects
-    # Always present, never null/missing; empty list when the subject has none.
+    # Always present, never null/missing; a list in every case.
     assert all("labels" in s for s in subjects)
-    assert all(s["labels"] == [] for s in subjects)  # nothing labeled yet
+    assert all(isinstance(s["labels"], list) for s in subjects)
+    # A subject not touched by the Phase-4 backfill has an empty list.
+    by_id = {s["subject_id"]: s["labels"] for s in subjects}
+    assert by_id["license_summary"] == []
 
 
 def test_list_subjects_labels_populated_in_deterministic_order(
     patch_db: None, db_path: Path
 ) -> None:
+    # license_summary is not touched by the Phase-4 backfill — a clean canvas.
     # Insert in reverse sort_order to prove the accessor orders by sort_order.
-    _label_subject(db_path, "security_assessment", ["governance", "compliance"])
+    _label_subject(db_path, "license_summary", ["governance", "compliance"])
     subjects = {s["subject_id"]: s for s in server.list_subjects()}
-    assert subjects["security_assessment"]["labels"] == ["compliance", "governance"]
-    # Other subjects are unaffected.
-    assert subjects["license_summary"]["labels"] == []
+    assert subjects["license_summary"]["labels"] == ["compliance", "governance"]
+    # Another untouched subject stays empty.
+    assert subjects["capacity_license"]["labels"] == []
 
 
 def test_list_subjects_label_filter_returns_only_matching(
     patch_db: None, db_path: Path
 ) -> None:
-    _label_subject(db_path, "security_assessment", ["compliance"])
-    _label_subject(db_path, "license_summary", ["compliance", "reporting"])
-    _label_subject(db_path, "backup_job_summary", ["backup"])
+    # Use subjects the Phase-4 backfill does not touch, and assert the filter
+    # equals the association data itself — robust to the backfill (and any future
+    # one), not a hardcoded set.
+    _label_subject(db_path, "license_summary", ["compliance"])
+    _label_subject(db_path, "capacity_license", ["compliance", "reporting"])
+    _label_subject(db_path, "environment", ["backup"])
 
-    ids = {s["subject_id"] for s in server.list_subjects(label="compliance")}
-    assert ids == {"security_assessment", "license_summary"}
+    filtered = {s["subject_id"] for s in server.list_subjects(label="compliance")}
+    expected = {
+        s["subject_id"] for s in server.list_subjects() if "compliance" in s["labels"]
+    }
+    assert filtered == expected
+    assert {"license_summary", "capacity_license"} <= filtered  # the fixture ones
     # category/category_label survive the filter unchanged.
     for s in server.list_subjects(label="compliance"):
         assert s["category"] and s["category_label"]
@@ -229,9 +240,21 @@ def test_list_subjects_label_filter_returns_only_matching(
 def test_list_subjects_label_filter_zero_members_is_empty(
     patch_db: None, db_path: Path
 ) -> None:
-    _label_subject(db_path, "security_assessment", ["compliance"])
-    # 'reporting' is a real vocabulary term with no members here.
-    assert server.list_subjects(label="reporting") == []
+    # A *valid* vocabulary term with zero members — distinct from an unknown
+    # label (covered separately). Seed a fresh term, assign it to no subject.
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        conn.execute(
+            "INSERT INTO domain_label (label, display_label, sort_order)"
+            " VALUES ('unassigned_term', 'Unassigned', 99)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    # Consistent with the association data (no subject carries it) → empty, no error.
+    assert [s for s in server.list_subjects() if "unassigned_term" in s["labels"]] == []
+    assert server.list_subjects(label="unassigned_term") == []
 
 
 def test_list_subjects_label_filter_unknown_label_is_empty(patch_db: None) -> None:

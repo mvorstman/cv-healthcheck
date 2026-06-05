@@ -155,7 +155,7 @@ def test_all_seeded_subjects_are_active(fresh_db: Path) -> None:
 
 def test_migration_status_reports_all_applied(fresh_db: Path) -> None:
     statuses = migration_status(db_path=fresh_db)
-    assert len(statuses) == 29  # 0029: domain-label vocabulary + subject association (Domain Labels ph1)
+    assert len(statuses) == 30  # 0030: sparse domain-label backfill for active subjects (Domain Labels ph4)
     assert all(s["status"] == "applied" for s in statuses)
     migration_ids = [s["migration_id"] for s in statuses]
     assert migration_ids == sorted(migration_ids)

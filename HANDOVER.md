@@ -2,51 +2,39 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-05 (Domain Labels Phase 3 — MCP authoring path landed)
+**Last updated:** 2026-06-05 (Domain Labels v1 complete — schema · read · author · backfill)
 **Branch:** `feature/domain-labels` (off `feature/basic-healthcheck-report-output`)
-**Last commit:** *feat(mcp): accept + validate domain labels on propose_new_subject (Phase 3)*.
-**Test status:** **1035 passing** (was 1029; +6 new Phase 3 tests).
+**Last commit:** *feat(catalog): backfill domain labels for active subjects (Phase 4)*.
+**Test status:** **1041 passing** (was 1035; +6 new Phase 4 tests).
 
 ---
 
-## What was just completed — Domain Labels Phases 1–3
+## What was just completed — Domain Labels v1 (ADR-0012)
 
-A second, additive classification axis for subjects (ADR-0012, `docs/adr/0012-two-axis-subject-classification.md`): `subjects.category` is the single / primary axis; domain labels are additive and many-valued; vocabularies are disjoint.
+A second, additive classification axis for subjects. `subjects.category` is the single / primary axis; domain labels are additive and many-valued; the two vocabularies are disjoint. Now functionally complete end-to-end:
 
-- **Phase 1 (schema)** — migration `0029_domain_labels.sql`: `domain_label` vocabulary (compliance/governance/backup/reporting) + `subject_domain_labels` association (FK to `subjects.id`, `ON DELETE CASCADE`; FK to `domain_label.label`; `UNIQUE`). `db/domain_labels.py` read accessors.
-- **Phase 2 (MCP read)** — `list_subjects` returns `labels` per subject (`[]` when none, via bulk `subject_labels_map`); optional graceful-empty `label` filter.
-- **Phase 3 (MCP authoring)** — optional `labels` on `propose_new_subject`, **loud-validated at authoring** (unknown → `ValueError`, nothing staged); persisted into `subject_domain_labels` at approval keyed on the new `subjects.id` (two-guard model: loud authoring validation + structural FK).
+- **Phase 1 (`0029`)** — `domain_label` vocabulary (compliance/governance/backup/reporting) + `subject_domain_labels` association; `db/domain_labels.py` accessors.
+- **Phase 2** — `list_subjects` returns `labels` per subject; graceful-empty `label` filter.
+- **Phase 3** — `labels` on `propose_new_subject`, loud-validated at authoring; persisted at approval (two-guard: loud authoring validation + structural FK).
+- **Phase 4 (`0030`)** — sparse backfill of the approved set onto active version rows (8 assignments across 6 subjects); idempotent; `category` untouched.
 
-Settled (do not relitigate): `category` unchanged; labels additive; vocabularies disjoint; read filter graceful-empty; authoring validation loud; labels attach to the per-version `subjects.id` (no version bleed; re-propose replaces via cascade).
+The post-commit live read smoke confirmed the real-catalog result (incl. the 4 runtime-only rows that the test-DB suite cannot exercise — see CHANGELOG Phase 4 Notes).
 
 ---
 
-## Single recommended next action — Phase 4 (sparse backfill)
+## Decisions for Michiel (no further build queued)
 
-Apply the **approved sparse label set** to existing subjects via a new migration (next number **0030**), `category` untouched, data-only (no schema change):
+1. **Merge `feature/domain-labels`** into the base branch — that's your release call (not done here). The branch holds: `36d9d41` (P1) · `fe9e111` (P2) · `f7a9bf5` (ADR-0012) · `17ce251` (P3) · the Phase-4 commit.
+2. **What's next** — either the **first downstream consumer** of labels (report profiles / health domains / rule packs that read the labels), or return to the parked **Rules & Evaluation** work: summary-scope evaluation (`db/rules.py:264` TODO — `scope=summary` must reject `emit != once`, ADR-0010 §8) and display coercions (byte/bool, the ADR-0007 `type`-coercion family).
 
-| subject_id | labels |
-|---|---|
-| `security_assessment` | compliance, governance |
-| `audit_trail` | compliance, governance |
-| `users` | governance |
-| `metrics_reporting` | governance |
-| `backup_job_summary` | backup |
-| `client_growth` | reporting |
-
-Per ADR-0012 / the plan. Implementation notes:
-- Backfill targets each subject's **active** version row (`subjects.id`) — resolve the id by `subject_id` + `status='active'` (or the relevant version) at migration time; do not hardcode ids.
-- Use `INSERT OR IGNORE INTO subject_domain_labels` so re-runs are idempotent; the FK guarantees only vocabulary labels land.
-- Verify each target subject exists in the seeded/real catalog before relying on it (some — e.g. `users`, `metrics_reporting`, `audit_trail` — are AI-authored runtime subjects; confirm presence and decide whether the backfill is a seed migration vs. runtime data). **If a target subject_id is absent from the migration-seeded catalog, stop and confirm scope** — a migration can only backfill rows it can resolve.
-- Tests: each listed subject surfaces its labels via `list_subjects` / `list_subjects(label=…)`; `category`/`category_label` unchanged; idempotent re-run.
-
-## Backlog
-- **`category` not validated at authoring** — `propose_new_subject` accepts any category; `create_subject_from_proposal` silently title-cases unknowns (`_LABELS`, display only). Left unchanged per ADR-0012 / scope; revisit separately if category should become a closed vocabulary.
-- **Export `_LABELS`** to a shared importable source so the disjointness invariant references one source of truth (the test currently mirrors the six terms).
+## Standing backlog
+- **Export `_LABELS`** (the `category` vocabulary) from its function-local spot in `db/subjects.py::create_subject_from_proposal` to a shared importable source, so the disjointness invariant references one source of truth (the test currently mirrors the six terms).
+- **`propose_new_subject` does not validate `category`** — it accepts any value and `create_subject_from_proposal` silently title-cases unknowns (`_LABELS`, display only). Left unchanged per ADR-0012 / scope; revisit only if `category` should become a closed vocabulary.
+- **Catalog reconstructibility** — `0030` backfills 4 rows onto AI-authored runtime subjects (`audit_trail`/`users`/`metrics_reporting`) that aren't seed-represented, so a from-scratch migration can't fully reconstruct the labeled catalog. Resolves naturally under **Subject Inventory convergence** (seed-represent the system/AI subjects).
 
 ---
 
 ## Settled — do not relitigate
-- Migrations are forward-only numbered SQL (`schema_migrations`); no down-migrations. Next number is **0030**.
+- Migrations are forward-only numbered SQL (`schema_migrations`); no down-migrations. Next number is **0031**.
 - Connections come from `db/database.get_db` (`row_factory = Row`, `PRAGMA foreign_keys = ON`).
-- The MCP server is **stdio** transport, spawned by the client. After changing `mcp/server.py`, restart the MCP client so it respawns one fresh instance (a bash relaunch of a stdio server does not persist). `pkill -f cv-healthcheck-mcp` clears stale duplicates.
+- The MCP server is **stdio** transport, spawned by the client. After changing `mcp/server.py`, restart the client so it respawns one fresh instance. **Don't `pkill -f cv-healthcheck-mcp` from a shell whose own command line contains that string — it self-matches and kills the shell; kill by PID instead.**

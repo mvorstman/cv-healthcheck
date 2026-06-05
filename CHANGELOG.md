@@ -10,6 +10,29 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-05 (feat(catalog) — backfill domain labels for active subjects (Domain Labels Phase 4))
+
+**Branch:** `feature/domain-labels`. Data migration + test maintenance only; no schema change, no source change, `category` untouched.
+
+### Added
+- **Migration `0030_domain_label_backfill.sql`** — the approved sparse label set (ADR-0012), 8 assignments onto each target's **active** version row:
+  - `security_assessment` → compliance, governance
+  - `audit_trail` → compliance, governance
+  - `users` → governance
+  - `metrics_reporting` → governance
+  - `backup_job_summary` → backup
+  - `client_growth` → reporting
+- **`tests/test_domain_label_backfill_migration.py`** (6 tests) — seeded targets carry their planned labels; non-targets unlabeled; categories unchanged; idempotent re-apply; absent targets are safe no-ops.
+
+### Changed
+- **Test maintenance** (the backfill makes the seeded test catalog non-empty): repointed Phase-2 read tests off the now-labeled seeded subjects and made the filter assertions **consistency-based** (expected computed from the association data, not hardcoded), so neither this backfill nor a future one re-breaks them; the zero-member case now seeds a fresh *valid* vocabulary term (distinct from the unknown-label path); the Phase-1 "association seeded empty" test became a structural no-orphans check; migration-count guardrail `29 → 30`.
+
+### Notes
+- **Backfill via data migration**, consistent with the Phase-1 vocabulary seed. It resolves each target by `subject_id` + `status='active'` at apply time (not a hardcoded id), and `INSERT OR IGNORE` makes it idempotent.
+- **Labels attach to each target's active version at backfill time and, per ADR-0012, do not follow a future supersede** — a re-proposed version re-authors its own labels (the new version row starts unlabeled).
+- **Runtime-only finding:** 4 of the 8 rows target **AI-authored runtime subjects** (`audit_trail`, `users`, `metrics_reporting`) that exist only in the real `app.db`, not in the migration-seeded catalog. So on a fresh catalog `0030` labels only the **3 seeded targets** (4 rows); the 4 runtime rows land only where those subjects exist (the real catalog), verified by the post-commit live read smoke — they are not exercised by the test-DB suite.
+- **Backlog (catalog reconstructibility):** the above means the seeded migrations + `0030` cannot fully reconstruct the labeled catalog from scratch — part of the label state depends on runtime-authored subjects. This is the same gap the **Subject Inventory convergence** initiative targets (migrate the system/AI subjects into the database Report Inventory as seed data); once those subjects are seed-represented, `0030`-style backfills become fully reconstructible. Tracked there.
+
 ## 2026-06-05 (feat(mcp) — accept + validate domain labels on propose_new_subject (Domain Labels Phase 3))
 
 **Branch:** `feature/domain-labels`. Authoring path + persist point + tests; no backfill, `category` unchanged, read path unchanged.
