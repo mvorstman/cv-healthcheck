@@ -165,6 +165,89 @@ def test_list_subjects_status_filter_returns_empty_for_proposed(patch_db: None) 
     assert proposed == []
 
 
+# --- Domain Labels Phase 2 (MCP read path) -----------------------------------
+# subject_domain_labels is empty in production (backfill is Phase 4), so these
+# exercise the populated path by inserting association rows directly.
+
+def _label_subject(db_path: Path, subject_id: str, labels: list[str]) -> int:
+    """Attach domain labels to a subject's active row; return its subjects.id."""
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        row = conn.execute(
+            "SELECT id FROM subjects WHERE subject_id = ? ORDER BY version LIMIT 1",
+            (subject_id,),
+        ).fetchone()
+        assert row is not None, f"seeded subject {subject_id!r} expected"
+        row_id = row["id"]
+        for lbl in labels:
+            conn.execute(
+                "INSERT INTO subject_domain_labels (subject_row_id, label) VALUES (?, ?)",
+                (row_id, lbl),
+            )
+        conn.commit()
+        return row_id
+    finally:
+        conn.close()
+
+
+def test_list_subjects_every_subject_has_labels_key(patch_db: None) -> None:
+    subjects = server.list_subjects()
+    assert subjects
+    # Always present, never null/missing; empty list when the subject has none.
+    assert all("labels" in s for s in subjects)
+    assert all(s["labels"] == [] for s in subjects)  # nothing labeled yet
+
+
+def test_list_subjects_labels_populated_in_deterministic_order(
+    patch_db: None, db_path: Path
+) -> None:
+    # Insert in reverse sort_order to prove the accessor orders by sort_order.
+    _label_subject(db_path, "security_assessment", ["governance", "compliance"])
+    subjects = {s["subject_id"]: s for s in server.list_subjects()}
+    assert subjects["security_assessment"]["labels"] == ["compliance", "governance"]
+    # Other subjects are unaffected.
+    assert subjects["license_summary"]["labels"] == []
+
+
+def test_list_subjects_label_filter_returns_only_matching(
+    patch_db: None, db_path: Path
+) -> None:
+    _label_subject(db_path, "security_assessment", ["compliance"])
+    _label_subject(db_path, "license_summary", ["compliance", "reporting"])
+    _label_subject(db_path, "backup_job_summary", ["backup"])
+
+    ids = {s["subject_id"] for s in server.list_subjects(label="compliance")}
+    assert ids == {"security_assessment", "license_summary"}
+    # category/category_label survive the filter unchanged.
+    for s in server.list_subjects(label="compliance"):
+        assert s["category"] and s["category_label"]
+        assert "compliance" in s["labels"]
+
+
+def test_list_subjects_label_filter_zero_members_is_empty(
+    patch_db: None, db_path: Path
+) -> None:
+    _label_subject(db_path, "security_assessment", ["compliance"])
+    # 'reporting' is a real vocabulary term with no members here.
+    assert server.list_subjects(label="reporting") == []
+
+
+def test_list_subjects_label_filter_unknown_label_is_empty(patch_db: None) -> None:
+    # Not in the vocabulary at all → empty, no exception (reject-unknown is Phase 3).
+    assert server.list_subjects(label="not_a_real_label") == []
+
+
+def test_list_subjects_category_fields_unchanged(patch_db: None) -> None:
+    subjects = server.list_subjects()
+    sample = subjects[0]
+    # Existing fields preserved exactly; `id` not leaked into the output shape.
+    assert {"subject_id", "version", "title", "description", "category",
+            "category_label", "status", "created_by", "labels"} == set(sample.keys())
+    assert "id" not in sample
+
+
 def test_save_staged_artifact_saves_valid_artifact(
     patch_db: None,
 ) -> None:

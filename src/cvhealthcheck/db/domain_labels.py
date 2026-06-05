@@ -46,3 +46,29 @@ def list_domain_labels(db: sqlite3.Connection) -> list[dict]:
 def domain_label_vocabulary(db: sqlite3.Connection) -> set[str]:
     """Return the set of valid domain-label slugs."""
     return {r["label"] for r in db.execute("SELECT label FROM domain_label")}
+
+
+def subject_labels_map(db: sqlite3.Connection) -> dict[int, list[str]]:
+    """Map ``subject_row_id`` -> ordered domain-label slugs, in a single query.
+
+    Built from one join over ``subject_domain_labels`` and ``domain_label``,
+    ordered by ``sort_order`` (nulls last) then ``label`` so a subject's labels
+    have a deterministic order. Subjects with no labels are absent from the map —
+    callers default to ``[]``.
+
+    Use this instead of a per-subject lookup: a caller listing every subject
+    would otherwise issue one query per subject (N+1).
+    """
+    rows = db.execute(
+        """
+        SELECT sdl.subject_row_id AS subject_row_id, sdl.label AS label
+        FROM subject_domain_labels AS sdl
+        JOIN domain_label AS dl ON dl.label = sdl.label
+        ORDER BY sdl.subject_row_id,
+                 dl.sort_order IS NULL, dl.sort_order, dl.label
+        """
+    ).fetchall()
+    result: dict[int, list[str]] = {}
+    for r in rows:
+        result.setdefault(r["subject_row_id"], []).append(r["label"])
+    return result

@@ -45,6 +45,7 @@ from cvhealthcheck.artifacts.models import CanonicalArtifact
 from cvhealthcheck.db.section_types import SUPPORTED_SECTION_TYPES
 from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.db import get_db
+from cvhealthcheck.db.domain_labels import subject_labels_map
 from cvhealthcheck.db.migrations import run_migrations
 from cvhealthcheck.db.staging import (
     create_staged_artifact,
@@ -109,12 +110,19 @@ def get_canonical_schema() -> dict:
     return _canonical_schema()
 
 
-def list_subjects(status: str | None = None) -> list[dict]:
-    """List all subjects in the Report Inventory catalog."""
+def list_subjects(status: str | None = None, label: str | None = None) -> list[dict]:
+    """List all subjects in the Report Inventory catalog.
+
+    Each subject carries a ``labels`` list of domain-label slugs (``[]`` when the
+    subject has none — the key is always present). The optional ``label`` filter
+    returns only subjects carrying that label; an unknown or zero-member label
+    yields an empty result with no error (the read path never raises —
+    authoring-side reject-unknown is a separate, later concern).
+    """
     db = get_db()
     try:
         query = (
-            "SELECT subject_id, version, title, description, category,"
+            "SELECT id, subject_id, version, title, description, category,"
             " category_label, status, created_by FROM subjects"
         )
         params: list[str] = []
@@ -122,7 +130,19 @@ def list_subjects(status: str | None = None) -> list[dict]:
             query += " WHERE status = ?"
             params.append(status)
         query += " ORDER BY category, title"
-        return [dict(row) for row in db.execute(query, params)]
+        rows = [dict(row) for row in db.execute(query, params)]
+
+        labels_map = subject_labels_map(db)
+        result: list[dict] = []
+        for row in rows:
+            # `id` is fetched only to key the label lookup; it is not part of the
+            # public subject shape, so pop it before returning.
+            row_id = row.pop("id")
+            row["labels"] = labels_map.get(row_id, [])
+            if label is not None and label not in row["labels"]:
+                continue
+            result.append(row)
+        return result
     finally:
         db.close()
 

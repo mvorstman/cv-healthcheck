@@ -10,6 +10,20 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-05 (feat(mcp) — domain labels in list_subjects + read-side label filter (Domain Labels Phase 2))
+
+**Branch:** `feature/domain-labels`. MCP read path + tests; no authoring/backfill, `category` unchanged.
+
+### Added
+- **`list_subjects` returns `labels`** — each subject carries a `labels` list of domain-label slugs (always present; `[]` when none), populated from a single bulk query (`db/domain_labels.subject_labels_map`, `subject_row_id` → ordered slugs; avoids N+1).
+- **`list_subjects(label=…)` read filter** — returns only subjects carrying that label.
+
+### Notes
+- The filter is **graceful-empty by design**: an unknown or zero-member label returns `[]` with no exception. Authoring-side reject-unknown is deferred to Phase 3.
+- Additive only — `id` is fetched to key the label map and popped before returning, so the output gains `labels` and nothing else; `category`/`category_label` unchanged.
+- Labels attach to `subjects.id` (the per-version row); `list_subjects` does not collapse versions, so superseded versions carry their own labels.
+- The two-axis classification (`category` single/primary vs `labels` many/additive, disjoint vocabularies) is recorded in **ADR-0012** (committed separately).
+
 ## 2026-06-05 (feat(catalog) — domain-label vocabulary + association schema (Domain Labels Phase 1))
 
 **Branch:** `feature/domain-labels`. Schema + tests only; no MCP/authoring change, no subject labeled.

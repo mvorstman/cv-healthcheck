@@ -2,38 +2,35 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-05 (Domain Labels Phase 1 — catalog schema landed)
+**Last updated:** 2026-06-05 (Domain Labels Phase 2 — MCP read path landed; ADR-0012 recorded)
 **Branch:** `feature/domain-labels` (off `feature/basic-healthcheck-report-output`)
-**Last commit:** *feat(catalog): domain-label vocabulary + association schema (Phase 1)* (this commit).
-**Test status:** **1023 passing** (was 1014; +9 new domain-label tests).
+**Last commit:** *feat(mcp): expose domain labels in list_subjects + label filter (Phase 2)*, then *docs(adr): record two-axis subject classification (ADR-0012)*.
+**Test status:** **1029 passing** (was 1023; +6 new Phase 2 tests).
 
 ---
 
-## What was just completed — Domain Labels Phase 1 (schema only)
+## What was just completed — Domain Labels Phases 1–2
 
-A second, additive classification axis for subjects. `subjects.category` stays the single / primary axis; domain labels are the additive, many-valued axis.
+A second, additive classification axis for subjects: `subjects.category` is the single / primary axis; domain labels are the additive, many-valued axis. Vocabularies are disjoint by construction. Recorded in **`docs/adr/0012-two-axis-subject-classification.md`**.
 
-- **Migration `0029_domain_labels.sql`** — `domain_label` vocabulary (`label` PK, `display_label`, `description`, `sort_order`), seeded with four terms (compliance / governance / backup / reporting); `subject_domain_labels` association (`subject_row_id` → `subjects.id` `ON DELETE CASCADE`, `label` → `domain_label.label`, `UNIQUE(subject_row_id, label)`, `label` index). **No subject is labeled** — backfill is Phase 4.
-- **`db/domain_labels.py`** — read accessors `list_domain_labels(db)` / `domain_label_vocabulary(db)`.
-- **9 tests** in `tests/test_domain_labels_migration.py` + the migration-count guardrail `28 → 29` in `test_migrations.py`.
+- **Phase 1 (schema)** — migration `0029_domain_labels.sql`: `domain_label` vocabulary (seeded compliance/governance/backup/reporting) + `subject_domain_labels` association (`subject_row_id` → `subjects.id` `ON DELETE CASCADE`, FK on `label`, `UNIQUE(subject_row_id, label)`). `db/domain_labels.py` read accessors. No subject labeled.
+- **Phase 2 (MCP read)** — `list_subjects` returns `labels` per subject (always present; `[]` when none), via the bulk `subject_labels_map(db)` (one query, no N+1); optional `label` filter that is graceful-empty (unknown/zero-member → `[]`, never raises). Additive only; `category`/`category_label` unchanged; `list_subjects` does not collapse versions, so labels attach to the per-version `subjects.id`.
 
-Settled (do not relitigate): `category` unchanged; labels additive; vocabularies disjoint (asserted); the FK is the structural guard against unknown labels.
+Settled (do not relitigate): `category` unchanged; labels additive; vocabularies disjoint; read filter never raises (reject-unknown is authoring-side, Phase 3).
 
 ---
 
-## Single recommended next action — Phase 2 (MCP read path)
+## Single recommended next action — Phase 3 (MCP authoring)
 
-Surface domain labels through the MCP **read** path, two changes:
-1. `list_subjects` includes a `labels: [..]` list per subject (always present; `[]` when none), via a **bulk** accessor in `db/domain_labels.py` (`subject_labels_map(db) -> dict[int, list[str]]`, one query — avoid N+1).
-2. `list_subjects` gains an optional `label` filter — graceful-empty (an unknown/zero-member label returns `[]` with **no exception**; reject-unknown is Phase 3, authoring-side).
+Wire domain labels into the authoring path:
+1. Add an optional `labels` argument to `propose_new_subject` (and the proposal/create flow) that associates the given labels with the new subject row.
+2. **Reject unknown labels at authoring time** — validate each supplied label against the vocabulary via the existing accessor (`db/domain_labels.domain_label_vocabulary`), raising a clear error on an unknown term. This is the authoring-side guard that complements the structural FK; the read path stays graceful-empty.
 
-Additive only; `category`/`category_label` and every existing field unchanged. Touches the MCP read path + the bulk accessor + tests only. **Versioning hard stop:** labels attach to `subjects.id` (the per-version row) — if `list_subjects` collapses/dedupes versions, stop and explain label behavior for superseded versions before writing code. Restart the MCP server after the change (`pkill -f cv-healthcheck-mcp`).
+Touches the authoring path + validation + tests only. After the change, restart the MCP server (`pkill -f cv-healthcheck-mcp`) and reconnect the client, or it serves stale modules. **Note:** two MCP server instances were observed running (PIDs from this session) — worth consolidating to one on restart.
 
-## Later phases (not this branch yet)
-- **Phase 3 (MCP authoring):** `labels` arg on `propose_new_subject` + reject-unknown-label validation wired to the accessor.
-- **Phase 4:** backfill subject → label assignments.
-- **ADR:** the two-axis classification (category single/primary vs labels many/additive, disjoint) is still unwritten — sensible to capture around Phase 2/3.
-- **Backlog:** export the `category` `_LABELS` constant (currently function-local in `db/subjects.py::create_subject_from_proposal`, against a free-text column) to a shared importable source so the disjointness invariant references one source of truth.
+## Later phases / backlog
+- **Phase 4:** backfill subject → label assignments (data, not schema).
+- **Backlog:** export the `category` `_LABELS` constant (function-local in `db/subjects.py::create_subject_from_proposal`, against a free-text column) to a shared importable source, so the disjointness invariant references one source of truth rather than a mirrored copy in the test.
 
 ---
 
