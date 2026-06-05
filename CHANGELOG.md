@@ -10,6 +10,25 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-05 (refactor(web) — retire the entire dev Security Assessment surface)
+
+**Branch:** `main`. Removes the dev SA cluster + its two registry siblings; closes the consumer-sweep backlog from d5d4227.
+
+### Removed
+- **The whole dev SA route surface in `web/routes/development.py`:** bare view `GET /security-assessment`, legacy alias `GET /reportsplus/security-assessment`, upload `POST /security-assessment/import`, and both registry siblings `GET /security-assessment/history` + `GET /security-assessment/registry-export`. The file's SA section empties out; **14 now-unused imports dropped** (only `bp`, `login_required`, `render_template` remain, used by `/development`).
+- **`templates/security_assessment.html`** — the dev SA page (deleted whole); it was the sole renderer.
+- **Dev-workspace SA link + section** (`templates/development.html`) and corrected the page subtitle (it no longer claims the SA tools "remain here pending their dedicated retirement pass").
+
+### Changed
+- **Consumer sweep run (the d5d4227 backlog item): clean.** Grepped MCP (`src/cvhealthcheck/mcp/`), CLI (`cli.py`), and `scripts/` for the sibling endpoints + their underlying functions (`SecurityAssessmentService.get_history`, `export_security_assessment_registry`). No MCP/CLI/automation consumer — only the dev routes (removed), tests, and docs. So the siblings retired with the cluster instead of staying backlogged.
+- **5 import-behavior tests converted to direct-function unit tests** (`test_security_assessment_import.py`). The dev `/security-assessment/import` route that drove them is gone, and the workspace SA upload routes through the **generic extractor** (`_unified_dispatcher_upload` → `extract_file` → canonical store), *not* `import_security_assessment_upload` — so the route could not be repointed without changing the code path under test. The tests now call `import_security_assessment_upload` directly, keeping the importer's behavioral assertions (returned artifact, raw file saved, legacy-not-written, and the importer-emitted messages "No file selected." / "Unsupported file type." / "HTML import produced no findings."). The two "HTML/CSV import completed" strings were the dev route's success flash (route layer, not the importer) and fall away with the route round-trip.
+- **Tests trimmed:** deleted `test_flask_page_uses_imported_artifact_when_present` (legacy dead-data reader — the page read `latest.json`, which fresh imports no longer write); deleted the two sibling-only registry tests (`test_hidden_history_and_registry_export_endpoints_work`, `test_internal_registry_routes_require_login` — the latter had no non-sibling branches left after d5d4227, so "strip" became "delete"); dropped the `GET /security-assessment == 200` line from `test_platform_foundation.py`'s render loop.
+- **Docs:** trimmed `docs/subjects/security_assessment.md` (removed the internal history/registry tooling block + the dev-page URL) and dropped the now-stale `API_MAPPING.md` SA history/debug-read-API row. Left the dated `docs/review_2026-05-20.md` snapshot and CHANGELOG history.
+
+### Notes
+- **New backlog — retire-vs-keep `import_security_assessment_upload`.** With the dev route gone, the bespoke SA importer (`import_security_assessment_upload` + the `parse_security_assessment_html/csv` parsers) is **route-orphaned** — the workspace SA upload uses the generic extractor. It's now exercised only by the converted unit tests. Whether to retire it (and its parsers) or keep it as a supported library function is deferred pending a consumer sweep of `parse_security_assessment_html/csv` (which may have other callers).
+- **`/api/security-assessment/canonical` untouched** — it lives in `quick_hc_api.py`, reads the canonical project store, and still returns the canonical artifact (verified 200).
+
 ## 2026-06-05 (refactor(web) — retire the dev-only /development/security-assessment-registry view)
 
 **Branch:** `main`. Removes a self-contained read-only debug surface; no live consumer touched.

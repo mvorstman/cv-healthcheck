@@ -3,6 +3,8 @@ from __future__ import annotations
 import io
 import json
 
+import pytest
+
 from cvhealthcheck.auth.commvault_auth import SESSION_TOKEN_KEY
 from cvhealthcheck.security_assessment.import_csv import parse_security_assessment_csv
 from cvhealthcheck.security_assessment.import_html import parse_security_assessment_html
@@ -14,6 +16,7 @@ from cvhealthcheck.security_assessment.normalize import (
 from cvhealthcheck.security_assessment.service import (
     SecurityAssessmentImportError,
     SecurityAssessmentService,
+    import_security_assessment_upload,
 )
 from cvhealthcheck.web.app import create_app
 
@@ -315,91 +318,42 @@ def test_writer_updates_latest_json_artifacts(tmp_path) -> None:
     assert latest_payload["finding_count"] == 6
 
 
-def test_flask_page_uses_imported_artifact_when_present(tmp_path, monkeypatch) -> None:
-    artifact = parse_security_assessment_csv(
-        CSV_SAMPLE,
-        source_file="/tmp/security-assessment.csv",
-    )
-    write_security_assessment_artifact(artifact, catalog_dir=tmp_path)
-
-    import cvhealthcheck.security_assessment.artifact as artifact_module
-    import cvhealthcheck.reportsplus.security_assessment as security_assessment_module
-    import cvhealthcheck.security_assessment.service as service_module
-
-    monkeypatch.setattr(
-        artifact_module,
-        "SECURITY_ASSESSMENT_CATALOG_DIR",
-        tmp_path,
-    )
-    monkeypatch.setattr(
-        security_assessment_module,
-        "SECURITY_ASSESSMENT_CATALOG_DIR",
-        tmp_path,
-    )
-    monkeypatch.setattr(
-        service_module,
-        "SECURITY_ASSESSMENT_CATALOG_DIR",
-        tmp_path,
-    )
-    monkeypatch.setattr(
-        service_module,
-        "SECURITY_ASSESSMENT_REGISTRY_PATH",
-        tmp_path / "registry.sqlite3",
-    )
-
-    app = create_app()
-    response = app.test_client().get("/security-assessment")
-
-    assert response.status_code == 200
-    body = response.get_data(as_text=True)
-    assert "CSV" in body
-    assert "/tmp/security-assessment.csv" in body
-    assert "MFA enabled" in body
-
-
-def test_flask_upload_imports_html_and_redirects(tmp_path, monkeypatch) -> None:
+# The dev /security-assessment/import route that used to drive these was
+# retired with the whole dev SA surface; the workspace SA upload now uses the
+# generic extractor, so import_security_assessment_upload is route-orphaned.
+# These unit-test the importer's behavior directly (returned artifact, raw file
+# saved, legacy-not-written) — the old "HTML/CSV import completed" success
+# string was the dev route's flash, not the importer's, so it falls away with
+# the route round-trip.
+def test_html_upload_imports_and_persists(tmp_path, monkeypatch) -> None:
     _patch_security_assessment_paths(tmp_path, monkeypatch)
 
-    app = create_app()
-    response = app.test_client().post(
-        "/security-assessment/import",
-        data={
-            "assessment_file": (io.BytesIO(HTML_SAMPLE.encode("utf-8")), "assessment.html")
-        },
-        content_type="multipart/form-data",
-        follow_redirects=True,
+    artifact = import_security_assessment_upload(
+        io.BytesIO(HTML_SAMPLE.encode("utf-8")),
+        original_filename="assessment.html",
     )
 
-    assert response.status_code == 200
-    body = response.get_data(as_text=True)
-    assert "HTML import completed" in body
-    # Option A — legacy store is no longer written on new imports. The
-    # legacy /security-assessment development page reads only legacy, so it
-    # no longer renders fresh-import data; the Quick HC canonical surface
-    # is the authoritative read path.
+    assert artifact["source_type"] == "html"
+    assert int(artifact.get("finding_count") or 0) > 0
+    # Option A — fresh imports no longer write the legacy per-domain store.
     assert not (tmp_path / "catalog" / "latest_html.json").exists()
     assert not (tmp_path / "catalog" / "latest.json").exists()
+    # Raw upload is saved to the imports dir.
     saved_files = list((tmp_path / "imports").glob("*.html"))
     assert len(saved_files) == 1
 
 
-def test_flask_upload_imports_csv_and_redirects(tmp_path, monkeypatch) -> None:
+def test_csv_upload_imports_and_persists(tmp_path, monkeypatch) -> None:
     _patch_security_assessment_paths(tmp_path, monkeypatch)
 
-    app = create_app()
-    response = app.test_client().post(
-        "/security-assessment/import",
-        data={
-            "assessment_file": (io.BytesIO(CSV_SAMPLE.encode("utf-8")), "assessment.csv")
-        },
-        content_type="multipart/form-data",
-        follow_redirects=True,
+    artifact = import_security_assessment_upload(
+        io.BytesIO(CSV_SAMPLE.encode("utf-8")),
+        original_filename="assessment.csv",
     )
 
-    assert response.status_code == 200
-    body = response.get_data(as_text=True)
-    assert "CSV import completed" in body
-    # Option A — legacy store is no longer written on new imports.
+    assert artifact["source_type"] == "csv"
+    assert int(artifact.get("finding_count") or 0) > 0
+    # Option A — fresh imports no longer write the legacy per-domain store.
     assert not (tmp_path / "catalog" / "latest_csv.json").exists()
     assert not (tmp_path / "catalog" / "latest.json").exists()
     saved_files = list((tmp_path / "imports").glob("*.csv"))
@@ -489,56 +443,32 @@ def test_fresh_security_assessment_import_creates_no_legacy_artifact_files(
     assert canonical_files, "canonical store should have received the artifact"
 
 
-def test_flask_upload_rejects_missing_file(tmp_path, monkeypatch) -> None:
+def test_upload_rejects_missing_file(tmp_path, monkeypatch) -> None:
     _patch_security_assessment_paths(tmp_path, monkeypatch)
 
-    app = create_app()
-    response = app.test_client().post(
-        "/security-assessment/import",
-        data={},
-        content_type="multipart/form-data",
-        follow_redirects=True,
-    )
-
-    assert response.status_code == 200
-    assert "No file selected." in response.get_data(as_text=True)
+    with pytest.raises(SecurityAssessmentImportError, match="No file selected."):
+        import_security_assessment_upload(io.BytesIO(b""), original_filename="")
 
 
-def test_flask_upload_rejects_unsupported_extension(tmp_path, monkeypatch) -> None:
+def test_upload_rejects_unsupported_extension(tmp_path, monkeypatch) -> None:
     _patch_security_assessment_paths(tmp_path, monkeypatch)
 
-    app = create_app()
-    response = app.test_client().post(
-        "/security-assessment/import",
-        data={
-            "assessment_file": (io.BytesIO(b"not valid"), "assessment.txt")
-        },
-        content_type="multipart/form-data",
-        follow_redirects=True,
-    )
-
-    assert response.status_code == 200
-    assert "Unsupported file type." in response.get_data(as_text=True)
+    with pytest.raises(SecurityAssessmentImportError, match="Unsupported file type."):
+        import_security_assessment_upload(
+            io.BytesIO(b"not valid"), original_filename="assessment.txt"
+        )
 
 
-def test_flask_upload_rejects_empty_findings(tmp_path, monkeypatch) -> None:
+def test_upload_rejects_empty_findings(tmp_path, monkeypatch) -> None:
     _patch_security_assessment_paths(tmp_path, monkeypatch)
 
-    app = create_app()
-    response = app.test_client().post(
-        "/security-assessment/import",
-        data={
-            "assessment_file": (
-                io.BytesIO(b"<html><head><title>Security Assessment</title></head><body></body></html>"),
-                "assessment.html",
-            )
-        },
-        content_type="multipart/form-data",
-        follow_redirects=True,
-    )
-
-    assert response.status_code == 200
-    assert "HTML import produced no findings." in response.get_data(as_text=True)
+    empty_html = b"<html><head><title>Security Assessment</title></head><body></body></html>"
+    with pytest.raises(
+        SecurityAssessmentImportError, match="HTML import produced no findings."
+    ):
+        import_security_assessment_upload(
+            io.BytesIO(empty_html), original_filename="assessment.html"
+        )
 
 
 def _patch_security_assessment_paths(tmp_path, monkeypatch) -> None:

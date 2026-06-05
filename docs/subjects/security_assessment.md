@@ -94,16 +94,3 @@ Canonical JSON read endpoint (authenticated, read-only):
 ```text
 GET /api/security-assessment/canonical
 ```
-
-Internal history/registry tooling (authenticated, read-only; does not change the visible page flow):
-
-```text
-/security-assessment/history
-/security-assessment/registry-export
-```
-
-Development/debug page:
-
-```text
-http://127.0.0.1:5001/reportsplus/security-assessment
-```

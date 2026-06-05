@@ -36,7 +36,6 @@ def test_quick_hc_and_report_pages_still_render() -> None:
     assert client.get("/quick-hc/license-summary").status_code == 302
     assert client.get("/quick-hc/security-assessment").status_code == 302
     assert client.get("/quick-hc/backup-job-summary").status_code == 200
-    assert client.get("/security-assessment").status_code == 200
 
 
 def test_workspace_loads_localtime_helper_before_quick_hc_js() -> None:
