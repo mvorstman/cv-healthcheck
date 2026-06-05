@@ -2,23 +2,17 @@
 
 *Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
 
-**Last updated:** 2026-06-05 (Domain Labels v1 merged to main)
-**Branch:** `main` (the feature branches are merged in)
-**Merge state:** Domain Labels v1 reached `main` via two release merges — `b200657` (feature/basic-healthcheck-report-output) then `8e5effe` (feature/domain-labels). This entry is a docs refresh committed on top.
-**Test status:** **1041 passing** on `main`.
+**Last updated:** 2026-06-05 (category vocabulary exported to shared `db.categories`)
+**Branch:** `refactor/category-vocabulary` (off `main` at `e6feabb`) — pushed, **not merged** (separate decision).
+**Test status:** **1041 passing**.
 
 ---
 
-## What was just completed — Domain Labels v1 (ADR-0012), merged to main
+## What was just completed — category vocabulary → shared source (refactor only)
 
-A second, additive classification axis for subjects. `subjects.category` is the single / primary axis; domain labels are additive and many-valued; the two vocabularies are disjoint. Complete end-to-end and now on `main`:
+The function-local `_LABELS` dict in `db/subjects.py::create_subject_from_proposal` is lifted to `db/categories.py` as `CATEGORY_LABELS` (slug → display) + a derived `CATEGORY_VOCABULARY` (frozenset of slugs). `create_subject_from_proposal` imports it; the Domain Labels disjointness test now imports `CATEGORY_VOCABULARY` from the shared source instead of mirroring the six terms. Behavior-preserving (`CATEGORY_LABELS` == former `_LABELS`; unknown categories still accepted/title-cased). This **closes the "export `_LABELS`" backlog item.**
 
-- **Phase 1 (`0029`)** — `domain_label` vocabulary (compliance/governance/backup/reporting) + `subject_domain_labels` association; `db/domain_labels.py` accessors.
-- **Phase 2** — `list_subjects` returns `labels` per subject; graceful-empty `label` filter.
-- **Phase 3** — `labels` on `propose_new_subject`, loud-validated at authoring; persisted at approval (two-guard: loud authoring validation + structural FK).
-- **Phase 4 (`0030`)** — sparse backfill of the approved set onto active version rows (8 assignments across 6 subjects); idempotent; `category` untouched. Live read smoke confirmed the real-catalog result (incl. the 4 runtime-only rows the test-DB suite cannot exercise — see CHANGELOG Phase 4 Notes).
-
-The five DL commits (`36d9d41` P1 · `fe9e111` P2 · `f7a9bf5` ADR-0012 · `17ce251` P3 · `59f30b5` P4) are intact under the `8e5effe` merge (no squash).
+`main` itself is unchanged — it still holds Domain Labels v1 at `e6feabb` (the two release merges `b200657` then `8e5effe`). This branch awaits its own merge decision.
 
 ---
 
@@ -29,16 +23,15 @@ No further build is queued. Pick the direction:
 1. **First downstream consumer of labels** — report profiles / health domains / rule packs that *read* the labels (the v1 axis is in place but nothing consumes it yet). — or —
 2. **Return to parked Rules & Evaluation** — summary-scope evaluation (`db/rules.py:264` TODO: `scope=summary` must reject `emit != once`, ADR-0010 §8) and display coercions (byte/bool, the ADR-0007 `type`-coercion family).
 
-**Recommended-but-not-started** (small, do anytime): export `_LABELS` to a shared importable source — it firms up the disjointness invariant (see backlog).
-
-## Standing backlog (carried forward)
-- **Export `_LABELS`** (the `category` vocabulary) from its function-local spot in `db/subjects.py::create_subject_from_proposal` to a shared importable source, so the disjointness invariant references one source of truth (the test currently mirrors the six terms).
-- **`propose_new_subject` does not validate `category`** — it accepts any value; `create_subject_from_proposal` silently title-cases unknowns (`_LABELS`, display only). Left unchanged per ADR-0012 / scope; revisit only if `category` should become a closed vocabulary.
+## Standing backlog
+- **`propose_new_subject` does not validate `category`** — it accepts any value; `create_subject_from_proposal` silently title-cases unknowns via `CATEGORY_LABELS` (display only). Left unchanged per ADR-0012 / scope; revisit only if `category` should become a closed vocabulary (the vocabulary is now importable, so this would be a small follow-up).
 - **Catalog reconstructibility** — `0030` backfills 4 rows onto AI-authored runtime subjects (`audit_trail`/`users`/`metrics_reporting`) that aren't seed-represented, so a from-scratch migration can't fully reconstruct the labeled catalog. Resolves naturally under **Subject Inventory convergence** (seed-represent the system/AI subjects).
+- **Registry-tile `category_label` literals** — `quickhc/registry.py` carries per-tile `category_label="…"` strings (e.g. "Identity", "Licensing") not yet sourced from `CATEGORY_LABELS`. Candidate for the same consolidation onto the shared source.
 
 ---
 
 ## Settled — do not relitigate
 - Migrations are forward-only numbered SQL (`schema_migrations`); no down-migrations. Next number is **0031**.
 - Connections come from `db/database.get_db` (`row_factory = Row`, `PRAGMA foreign_keys = ON`).
+- The category vocabulary lives in `db/categories.py` (`CATEGORY_LABELS` / `CATEGORY_VOCABULARY`) — the single source of truth; don't re-mirror it.
 - The MCP server is **stdio** transport, spawned by the client. After changing `mcp/server.py`, restart the client so it respawns one fresh instance. **Don't `pkill -f cv-healthcheck-mcp` from a shell whose own command line contains that string — it self-matches and kills the shell; kill by PID instead.**

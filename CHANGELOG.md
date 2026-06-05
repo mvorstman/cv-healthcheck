@@ -10,6 +10,18 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-05 (refactor(catalog) — export category vocabulary to shared db.categories module)
+
+**Branch:** `refactor/category-vocabulary`. Behavior-preserving refactor; no functional change.
+
+### Changed
+- **`_LABELS` lifted to an importable module** — the function-local category-vocabulary dict inside `db/subjects.py::create_subject_from_proposal` now lives in `db/categories.py` as `CATEGORY_LABELS` (slug → display) plus a derived `CATEGORY_VOCABULARY` (frozenset of slugs). `create_subject_from_proposal` imports and uses it; the display-label expression is unchanged.
+- **Disjointness invariant now references the real category vocabulary** — `tests/test_domain_labels_migration.py` imports `CATEGORY_VOCABULARY` from `db.categories` instead of a hand-mirrored copy, so the Domain Labels disjointness test (`category ∩ domain-label == ∅`) tracks the authoritative term set and fails by construction if a colliding category is ever added.
+
+### Notes
+- **Behavior-preserving:** `CATEGORY_LABELS` equals the former `_LABELS` exactly; known categories keep their display labels, unknown categories are still accepted and title-cased. **`category` is still not validated at authoring** — that backlog item remains open (this refactor only relocated the vocabulary; it added no validation).
+- **New backlog line:** `quickhc/registry.py` carries per-tile `category_label="…"` literals (e.g. "Identity", "Licensing") — a separate set of hand-written category display strings not yet sourced from `CATEGORY_LABELS`. Candidate for the same consolidation onto the shared source.
+
 ## 2026-06-05 (feat(catalog) — backfill domain labels for active subjects (Domain Labels Phase 4))
 
 **Branch:** `feature/domain-labels`. Data migration + test maintenance only; no schema change, no source change, `category` untouched.

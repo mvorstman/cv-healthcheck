@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from cvhealthcheck.db.categories import CATEGORY_VOCABULARY
 from cvhealthcheck.db.database import get_db
 from cvhealthcheck.db.domain_labels import (
     domain_label_vocabulary,
@@ -23,19 +24,10 @@ from cvhealthcheck.db.domain_labels import (
 # The four seeded domain-label terms (migration 0029).
 EXPECTED_LABELS = {"compliance", "governance", "backup", "reporting"}
 
-# The `category` vocabulary as defined today — the `_LABELS` constant inside
-# `cvhealthcheck.db.subjects.create_subject_from_proposal`. Mirrored here as the
-# disjointness reference; `category` is free-text in the schema (no DB enum), so
-# this code constant is the authoritative term set. If a category term is ever
-# added that collides with a domain label, this test must fail.
-CATEGORY_VOCABULARY = {
-    "identity",
-    "security",
-    "licensing",
-    "performance",
-    "operations",
-    "storage",
-}
+# `CATEGORY_VOCABULARY` is imported from the single source of truth
+# (`cvhealthcheck.db.categories`) rather than mirrored here, so the disjointness
+# invariant below tracks the real category vocabulary: if a category term is ever
+# added that collides with a domain label, this test fails.
 
 
 def _a_subject_row_id(db: sqlite3.Connection) -> int:

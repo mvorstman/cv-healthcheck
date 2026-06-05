@@ -10,6 +10,7 @@ from cvhealthcheck.extractors.cc_endpoint import (
     validate_cc_endpoint,
 )
 
+from .categories import CATEGORY_LABELS
 from .section_types import validate_section_type
 
 
@@ -133,15 +134,7 @@ def create_subject_from_proposal(db: sqlite3.Connection, proposal: dict) -> dict
     change_notes = proposal.get("change_notes")
     related_subjects = proposal.get("related_subjects") or []
 
-    _LABELS = {
-        "identity": "Identity",
-        "security": "Security",
-        "licensing": "Licensing",
-        "performance": "Performance",
-        "operations": "Operations",
-        "storage": "Storage",
-    }
-    category_label = _LABELS.get(category, category.title())
+    category_label = CATEGORY_LABELS.get(category, category.title())
 
     try:
         db.execute(
