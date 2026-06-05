@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (pending ratification). On acceptance: **Accepted (YYYY-MM-DD)**.
+Accepted (2026-06-01).
 
 ## Date
 
@@ -44,10 +44,12 @@ The declarative `extraction_instructions` surface is **bounded to stable source 
 - source/section recognition (`recognition_hints`, `title_contains`, selectors)
 - table/section selection (`table_selector`, `section_title_selector`, `section_title_match`)
 - column mapping (`column_map`: source → canonical name + type)
-- null coercion (`null_values`); type coercion (string/int/float/timestamp)
+- null coercion (`null_values`); type coercion (string/int/float/timestamp/hex)
 - static parameters
 - findings severity via the existing declarative `status_to_severity` mapping
 - the existing evaluative primitives: CEL-derived values and threshold verdicts evaluated inside `build_metric_section` / `build_card_section`
+
+`hex` (integer → lowercase hex string) was admitted to the coercion set via the D3 gate (ADR 0007): it is a pure, fixed-shape, source-agnostic, unit-tested transform. Coercion values are added to this list **only after individually clearing D3** — the list grows one gated transform at a time, never by category.
 
 A bounded "formula" surface **already exists** (CEL-derived values, threshold rules). The rule is therefore *not* "config must never contain formulas." It is: **keep expressiveness bounded to these existing, named, unit-tested primitives. Do not add a second formula mechanism or an arbitrary transform language.**
 
@@ -124,6 +126,7 @@ The declarative model has boundaries, and that is **healthy**. Bespoke Python is
 - ADR 0001 — Source-building fork retained; upload routing unified.
 - ADR 0003 — REST extractor with credentials (License Summary bespoke caveat).
 - ADR 0004 — Three-face metadata vocabulary (evaluative layer; phase 8 outstanding).
+- ADR 0007 — Declarative single-object source + environment migration: the worked example that exercised the D3 gate. Nested-path field selection and `hex` coercion each cleared D3 individually; the boundary extends to single-object Command Center API sources without widening CEL.
 - Security Assessment migration — PRs `0c9920e` (report re-author onto `get_canonical()`), `24523df` (bespoke-path removal).
 - Backlog #36 — retirement of the held SA dev-cluster unit.
 - Superseded proposal — "Standardized Source Import Framework" (see *Context*).

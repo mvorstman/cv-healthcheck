@@ -15,6 +15,8 @@
         }
       })();
     </script>
+    <!-- Display-only: render stored-UTC timestamps in the browser's local zone. -->
+    <script src="{{ url_for('static', filename='localtime.js') }}"></script>
   </head>
   <body>
     {% include "partials/active_project_selector.html" %}
@@ -37,6 +39,10 @@
           <a href="{{ url_for('main.quick_hc') }}"
              class="sidebar-link{% if 'quick_hc' in ep or 'metrics_' in ep %} is-active{% endif %}">
             HealthCheck
+          </a>
+          <a href="{{ url_for('main.connections') }}"
+             class="sidebar-link{% if 'connections' in ep %} is-active{% endif %}">
+            Connections
           </a>
         </nav>
         <div class="sidebar-footer">

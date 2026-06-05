@@ -102,6 +102,33 @@ def test_every_tile_has_at_least_one_source_with_valid_canonical_id(tiles_db: sq
             )
 
 
+def test_environment_surfaces_command_center_tab_with_collect_url(tiles_db: sqlite3.Connection) -> None:
+    """ADR 0007 ph3 follow-on (BUG 1 + row-7 display): environment's generic source
+    tabs map the rest_command_center_api row (row 22) to a "REST / Command Center
+    API" tab WITH a collect_url, and the stale plain-'rest' row (row 7) is
+    suppressed so the user sees ONE correct source tab."""
+    env = next(t for t in get_tiles(tiles_db) if t["id"] == "environment")
+    by_id = {s["id"]: s for s in env["sources"]}
+    # The command-center tab is present with the shared /collect url.
+    cc = by_id.get(REST_COMMAND_CENTER_API_SOURCE_ID)
+    assert cc is not None, "command-center source tab missing"
+    assert cc["source_type"] == "rest_command_center_api"
+    assert cc["label"] == "REST / Command Center API"
+    assert cc["collect_url"] == "/quick-hc/environment/collect"
+    # The stale plain-'rest' tab is suppressed when a command-center source exists.
+    assert REST_REPORTS_PLUS_SOURCE_ID not in by_id
+    assert [s["id"] for s in env["sources"]] == [REST_COMMAND_CENTER_API_SOURCE_ID]
+
+
+def test_command_center_suppression_does_not_affect_non_cc_subjects(tiles_db: sqlite3.Connection) -> None:
+    """The plain-'rest' suppression is keyed on the presence of a command-center
+    source, so subjects without one keep their REST / Reports Plus tab."""
+    cg = next(t for t in get_tiles(tiles_db) if t["id"] == "client_growth")
+    ids = {s["id"] for s in cg["sources"]}
+    assert REST_COMMAND_CENTER_API_SOURCE_ID not in ids   # no CC source -> no suppression
+    assert REST_REPORTS_PLUS_SOURCE_ID in ids             # reports-plus tab intact
+
+
 def test_get_tiles_includes_all_system_subjects(tiles_db: sqlite3.Connection) -> None:
     tiles = get_tiles(tiles_db)
     tile_ids = {t["id"] for t in tiles}

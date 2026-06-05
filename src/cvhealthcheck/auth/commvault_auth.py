@@ -8,6 +8,7 @@ from flask import has_request_context, session
 from urllib3.exceptions import InsecureRequestWarning
 
 from cvhealthcheck.config import load_settings, warn_if_ssl_verification_disabled
+from cvhealthcheck.token_store import clear_active_token, get_active_token, set_active_token
 
 SESSION_TOKEN_KEY = "commvault_token"
 SESSION_USERNAME_KEY = "commvault_username"
@@ -67,7 +68,9 @@ def set_current_token(token: str, customer_id: str, username: str | None = None)
     cleaned_customer = (customer_id or "").strip()
     if not cleaned_customer:
         raise ValueError("set_current_token requires a non-empty customer_id")
-    session[SESSION_TOKEN_KEY] = token
+    # ADR-0008 B: the CommServe token is NO LONGER written to the session cookie — it
+    # lands only in the in-process store (set_active_token below). The cookie keeps only
+    # the non-secret CUSTOMER_ID / USERNAME markers.
     session[SESSION_CUSTOMER_ID_KEY] = cleaned_customer
     if username is not None:
         cleaned = username.strip()
@@ -75,6 +78,12 @@ def set_current_token(token: str, customer_id: str, username: str | None = None)
             session[SESSION_USERNAME_KEY] = cleaned
         else:
             session.pop(SESSION_USERNAME_KEY, None)
+    # ADR-0008 A (wiring): ALSO publish into the process-level held-token store so the
+    # loopback endpoint (brief #6) can read it. Addition only — the session cookie
+    # writes above are unchanged and the read seam is NOT repointed here (that is the
+    # later consolidation step). expires_at=None: login returns only the token, no TTL.
+    principal = username.strip() if isinstance(username, str) and username.strip() else None
+    set_active_token(token, principal=principal, expires_at=None)
 
 
 def get_current_token() -> str | None:
@@ -110,20 +119,25 @@ def clear_current_token() -> None:
         session.pop(SESSION_TOKEN_KEY, None)
         session.pop(SESSION_USERNAME_KEY, None)
         session.pop(SESSION_CUSTOMER_ID_KEY, None)
+    # ADR-0008 A (wiring): also clear the process-level store so it does not outlive
+    # the session. Unconditional — the store is process-scoped, not request-bound;
+    # this is the single chokepoint behind /logout and the auto-clear paths.
+    clear_active_token()
 
 
 def is_authenticated() -> bool:
-    return get_current_token() is not None
+    # ADR-0008 B: the gate is keyed off the in-process held token, not the cookie.
+    return get_active_token() is not None
 
 
 def is_authenticated_for(customer_id: str) -> bool:
-    """Return True iff there's a token AND it is bound to ``customer_id``.
+    """Return True iff there's a held token AND it is bound to ``customer_id``.
 
-    Stricter than ``is_authenticated``: a token bound to a different
-    customer (or a legacy unbound token, e.g. set in tests via the
-    raw session key) returns False here.
+    Stricter than ``is_authenticated``: the token lives in the store; the binding
+    customer is the non-secret marker still kept in the session cookie. A held token
+    with a missing / mismatched customer marker returns False here.
     """
-    if get_current_token() is None:
+    if get_active_token() is None:
         return False
     bound = get_current_customer_id()
     return bound is not None and bound == customer_id

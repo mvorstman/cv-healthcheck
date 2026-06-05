@@ -1,6 +1,9 @@
 // ── INITIAL DATA ──
 let CATS = (window.QUICK_HC_INITIAL_DATA && window.QUICK_HC_INITIAL_DATA.cats) || [];
 const CC = (window.QUICK_HC_INITIAL_DATA && window.QUICK_HC_INITIAL_DATA.commcell) || {};
+// ADR 0009 Phase 1: pending subject proposals (artifact_type=='subject_proposal'
+// AND status=='pending'), built server-side into empty-bodied shell views.
+const STAGING = (window.QUICK_HC_INITIAL_DATA && window.QUICK_HC_INITIAL_DATA.staging) || [];
 
 // ── STATE ──
 let activeId = null;
@@ -334,12 +337,81 @@ function secBody(sec) {
   }
 
   if (sec.type === 'table') {
-    if (!sec.rows || !sec.rows.length) return `<div style="font-size:12px;color:var(--text-3)">${esc(sec.empty_message || 'No data.')}</div>`;
-    const hdrs = (sec.columns || []).map(c => `<th>${esc(c)}</th>`).join('');
-    const body = sec.rows.map(r =>
-      `<tr>${r.map(v => `<td style="font-family:var(--mono);font-size:11px">${esc(v != null ? v : '—')}</td>`).join('')}</tr>`
+    // view_mode 'card' (mirrors CardSection.view_mode): a SINGLE-row table laid
+    // out as a Field/Value card (reusing the meta-grid/meta-card markup) instead
+    // of a column-header table. The section-level verdict pill lives in the header
+    // (secTile, from sec.sev); a row rule yields one verdict per row, so there are
+    // no per-field dots. Any row count other than exactly one falls through to the
+    // column table below.
+    if (sec.view_mode === 'card' && (sec.rows || []).length === 1) {
+      const labels = sec.columns || [];
+      const vals = sec.rows[0] || [];
+      const grid = labels.length === 3 ? 'meta-grid-3' : 'meta-grid-4';
+      const cells = labels.map((label, i) =>
+        `<div class="meta-card"><div class="meta-lbl">${esc(label)}</div><div class="meta-val">${esc(vals[i] != null ? vals[i] : '—')}</div></div>`
+      ).join('');
+      return `<div class="meta-grid ${grid}">${cells}</div>`;
+    }
+    // ADR 0010 layout: a per-row STATUS column of verdict dots, when the section
+    // carries baked per-row verdicts. The verdict is EXPLICIT — map it directly;
+    // only a genuinely ABSENT verdict (null) falls back to info. not_evaluated has
+    // its OWN gray dot and must NOT route through the info fallback (else
+    // out-of-scope rows would paint blue).
+    const hasVerdicts = Array.isArray(sec.row_verdicts) && sec.row_verdicts.length > 0;
+    const vdotClass = v => {
+      if (v == null) return 'vdot-info';   // absent verdict only
+      return {good:'vdot-good', warning:'vdot-warn', critical:'vdot-crit', not_evaluated:'vdot-na'}[v] || 'vdot-info';
+    };
+    const statusTh = hasVerdicts ? '<th class="vdot-col">Status</th>' : '';
+    const hdrs = (sec.columns || []).map(c => `<th>${esc(c)}</th>`).join('') + statusTh;
+    const ncols = (sec.columns || []).length + (hasVerdicts ? 1 : 0);
+    if (!sec.rows || !sec.rows.length) {
+      const msg = esc(sec.empty_message || 'No data.');
+      // ADR 0009 Phase 1: render the header row even with no rows, so a pending-
+      // proposal shell shows its table structure. Bare message only when the
+      // section declares no columns (collected-but-empty tables benefit too).
+      if (!ncols) return `<div style="font-size:12px;color:var(--text-3)">${msg}</div>`;
+      return `<table class="wl-table"><thead><tr>${hdrs}</tr></thead><tbody><tr><td colspan="${ncols}" style="font-size:12px;color:var(--text-3);text-align:center;padding:10px">${msg}</td></tr></tbody></table>`;
+    }
+    const body = sec.rows.map((r, i) => {
+      const cells = r.map(v => `<td style="font-family:var(--mono);font-size:11px">${esc(v != null ? v : '—')}</td>`).join('');
+      const status = hasVerdicts
+        ? `<td class="vdot-col"><span class="vdot ${vdotClass(sec.row_verdicts[i])}" title="${esc(sec.row_verdicts[i] || 'not evaluated')}"></span></td>`
+        : '';
+      return `<tr>${cells}${status}</tr>`;
+    }).join('');
+    // ADR 0010 slice 2: a muted, right-aligned scope caption on the legend bar —
+    // the always-present safety net (it survives toggling the Evaluation cards out,
+    // since it lives on the data table, not in the Evaluation band).
+    const scopeCap = sec.scope_caption ? `<span class="vdot-legend-scope">Scope: ${esc(sec.scope_caption)}</span>` : '';
+    // ONE shared legend for EVERY table section (columns + property): any table's
+    // unruled rows can fall through to the info-blue dot (vdotClass(null) →
+    // 'vdot-info'), so info belongs on every table legend. not_evaluated (grey)
+    // stays a DISTINCT entry from info-blue (e0aa3287) — separate colours, never
+    // merged. Legend content only; layout + dot rendering unchanged.
+    const legendDots = hasVerdicts ? `<span class="legend-item"><span class="vdot vdot-good"></span>good</span>
+        <span class="legend-item"><span class="vdot vdot-warn"></span>warning</span>
+        <span class="legend-item"><span class="vdot vdot-crit"></span>critical</span>
+        <span class="legend-item"><span class="vdot vdot-na"></span>not evaluated</span>
+        <span class="legend-item"><span class="vdot vdot-info"></span>info</span>` : '';
+    const legend = (hasVerdicts || sec.scope_caption) ? `<div class="vdot-legend">${legendDots}${scopeCap}</div>` : '';
+    return `<table class="wl-table"><thead><tr>${hdrs}</tr></thead><tbody>${body}</tbody></table>${legend}`;
+  }
+
+  if (sec.type === 'criteria') {
+    // ADR 0010 slice 2: read-only Evaluation criteria — plain-language scope +
+    // one severity-tagged check sentence per bound rule. No status pill (set on
+    // the section in canonical_view, so secTile shows none).
+    const scope = sec.scope_sentence
+      ? `<div class="crit-block"><div class="crit-label">Scope</div><div class="crit-text">${esc(sec.scope_sentence)}</div></div>`
+      : '';
+    // Option B: severity badge + authored description (the primary line) + the
+    // mechanical condition underneath in mono. Never the raw rule id.
+    const checks = (sec.checks || []).map(c =>
+      `<div class="crit-check"><span class="m-badge ${SEV_BADGE[c.sev] || ''}">${SEV_LABEL[c.sev] || esc(c.sev)}</span><div class="crit-check-body"><div class="crit-text">${esc(c.primary)}</div>${c.condition ? `<div class="crit-cond">${esc(c.condition)}</div>` : ''}</div></div>`
     ).join('');
-    return `<table class="wl-table"><thead><tr>${hdrs}</tr></thead><tbody>${body}</tbody></table>`;
+    const checksBlock = checks ? `<div class="crit-block"><div class="crit-label">Checks</div>${checks}</div>` : '';
+    return `${scope}${checksBlock}` || '<div style="font-size:12px;color:var(--text-3)">No criteria.</div>';
   }
 
   if (sec.type === 'chart_growth') {
@@ -416,6 +488,41 @@ function _writeSubjectToHash(id) {
   history.replaceState(null, '', window.location.pathname + window.location.search + next);
 }
 
+// ── STAGING ZONE (ADR 0009 Phase 1) ──
+// Pending proposals as empty structural shells: section titles + types, table
+// header rows, metric labels with placeholders. Built server-side; this is a
+// pure renderer. Approve/reject post to the new endpoints and full-reload.
+function renderStagingZone() {
+  if (!STAGING.length) return '';
+  const cards = STAGING.map(p => {
+    const secs = (p.sections || []).map(sec =>
+      `<div class="staging-shell-sec" style="margin-top:10px">
+         <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
+           <span style="font-size:12px;font-weight:600">${esc(sec.title)}</span>
+           <span style="font-size:10px;font-family:var(--mono);color:var(--text-3);text-transform:uppercase;letter-spacing:.05em">${esc(sec.type)}</span>
+         </div>
+         ${secBody(sec)}
+       </div>`
+    ).join('');
+    const approve = `<form method="post" action="/quick-hc/proposals/${encodeURIComponent(p.stage_id)}/approve" style="display:inline">
+        <button type="submit" style="font:inherit;font-size:12px;padding:5px 14px;border-radius:6px;border:1px solid var(--c-good-fg,#1a7f37);background:transparent;color:var(--c-good-fg,#1a7f37);cursor:pointer">Approve</button>
+      </form>`;
+    const reject = `<form method="post" action="/quick-hc/proposals/${encodeURIComponent(p.stage_id)}/reject" style="display:inline" onsubmit="return confirm('Reject proposal \\'${(p.name || '').replace(/'/g, "\\'")}\\'?')">
+        <button type="submit" title="Reject" aria-label="Reject" style="font:inherit;font-size:16px;line-height:1;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-3);cursor:pointer">×</button>
+      </form>`;
+    return `<div class="cfg-tile" style="margin-bottom:10px;padding:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="cfg-badge-draft">pending</span>
+        <span style="font-size:14px;font-weight:600;flex:1">${esc(p.name)}</span>
+        ${approve}${reject}
+      </div>
+      ${p.description ? `<div style="font-size:12px;color:var(--text-2);margin-top:6px">${esc(p.description)}</div>` : ''}
+      ${secs || '<div style="font-size:12px;color:var(--text-3);margin-top:8px">No sections defined.</div>'}
+    </div>`;
+  }).join('');
+  return `<div class="cfg-sec"><div class="cfg-sec-title">Staging — pending proposals (${STAGING.length})</div>${cards}</div>`;
+}
+
 // ── OVERVIEW ──
 function showOverview() {
   activeId = null; mode = 'overview';
@@ -444,6 +551,7 @@ function showOverview() {
   document.getElementById('right-body').innerHTML = `<div class="cfg-wrap">
     <div class="cfg-title">Quick HealthCheck</div>
     ${subtitle ? `<div style="font-size:12px;color:var(--text-2);margin-top:2px">${esc(subtitle)}</div>` : ''}
+    ${renderStagingZone()}
     <div class="cfg-sec"><div class="cfg-sec-title">Report Sections</div>${subjList}</div>
   </div>`;
 }
@@ -477,10 +585,10 @@ function openConfig(id) {
   const vi = s.version_info || {};
   const versions = vi.versions || [];
   const activeVer = vi.active || s.id;
+  // "Last collected" used to live here (below the card); it now renders INSIDE
+  // the source card next to Collect (see srcPanel below) — action + last-run as
+  // one unit. The Template dropdown stays here, below the card, untouched.
   let provRows = '';
-  if (s.last_collected) {
-    provRows += `<div class="src-meta-row"><span>Last collected</span><span>${esc(fmtUtc(s.last_collected))}</span></div>`;
-  }
   if (versions.length) {
     const opts = versions.map(v =>
       `<option value="${esc(v)}"${v === activeVer ? ' selected' : ''}>${esc(v)}</option>`
@@ -547,6 +655,13 @@ function openConfig(id) {
         </form>
       </div>`;
     }
+
+    // Last collected — INSIDE the source card, grouped with Collect (action +
+    // last-run as one unit). Renders whether or not there's a Collect action.
+    // fmtUtc delegates to window.fmtLocalTime, so this stays in browser-local time.
+    if (s.last_collected) {
+      srcPanel += `<div class="src-meta-row src-last-collected" style="margin-top:8px"><span>Last collected</span><span>${esc(fmtUtc(s.last_collected))}</span></div>`;
+    }
     srcPanel += `</div>`;
   }
 
@@ -556,8 +671,14 @@ function openConfig(id) {
   // GUID under "CommCell ID". Removed — the expanded environment card section
   // (built from the real GET CommServ response) is now the single source.
 
-  // Section tiles
-  const secTiles = (s.sections || []).map(sec => secTile(s.id, sec, true)).join('');
+  // Section tiles — split into the Report Sections band and the Evaluation band
+  // (ADR 0010 layout slice 2: criteria + findings live under Evaluation).
+  const reportSecs = (s.sections || []).filter(sec => sec.band !== 'evaluation');
+  const evalSecs = (s.sections || []).filter(sec => sec.band === 'evaluation');
+  const secTiles = reportSecs.map(sec => secTile(s.id, sec, true)).join('');
+  const evalBand = evalSecs.length
+    ? `<div class="cfg-sec"><div class="cfg-sec-title">Evaluation</div>${evalSecs.map(sec => secTile(s.id, sec, true)).join('')}</div>`
+    : '';
 
   const includeToggle = `<div class="include-row">
     <span class="include-label">Include in report</span>
@@ -608,6 +729,7 @@ function openConfig(id) {
       <div class="cfg-sec-title">Report Sections</div>
       ${secTiles}
     </div>
+    ${evalBand}
     ${deleteSection}
   </div>`;
   requestAnimationFrame(() => { bindDescriptionEditor(); mountCharts(); });
@@ -726,9 +848,13 @@ function mountCharts() {
   });
 }
 
-// Format an ISO timestamp as "YYYY-MM-DD HH:MM UTC" for the source tile.
+// Format a stored UTC ISO timestamp for display. Delegates to the shared
+// localtime.js helper so the workspace renders timestamps in the browser's LOCAL
+// timezone with a zone label (display-only; storage stays UTC). Falls back to a
+// UTC render only if localtime.js somehow isn't loaded.
 function fmtUtc(iso) {
   if (!iso) return '';
+  if (window.fmtLocalTime) return window.fmtLocalTime(iso);
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
   const p = n => String(n).padStart(2, '0');

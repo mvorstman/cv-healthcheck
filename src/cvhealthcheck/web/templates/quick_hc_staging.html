@@ -13,7 +13,7 @@
     <dl class="staging-meta-grid">
       <div class="staging-meta-item">
         <dt>Created</dt>
-        <dd>{{ artifact.created_at }}</dd>
+        <dd>{{ localtime_span(artifact.created_at) }}</dd>
       </div>
       {% if artifact.source_file %}
         <div class="staging-meta-item">
@@ -30,7 +30,7 @@
       {% if artifact.reviewed_at %}
         <div class="staging-meta-item">
           <dt>Reviewed at</dt>
-          <dd>{{ artifact.reviewed_at }}</dd>
+          <dd>{{ localtime_span(artifact.reviewed_at) }}</dd>
         </div>
       {% endif %}
       {% if artifact.reviewed_by %}

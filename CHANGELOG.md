@@ -10,6 +10,1151 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-04 (docs — README pass 2: relocate internals to owned docs, drop migration history, shrink to overview+index)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source touched. Exactly three new files created.
+
+### Added
+- **docs/architecture/quickhc.md** — owns Quick HC architecture: product surface (HealthCheck/Customers/Advanced/Development), subjects, the unified routing model (import/collect/report routes), report composition + customer-facing report rules, the UI shell, the registry/tile framework (`TileDefinition`/`SectionDefinition` contract, module boundaries, the add-a-subject extension model), business-state separation (`app.db` vs import registries vs canonical artifact storage), and scope/boundaries.
+- **docs/subjects/security_assessment.md** — owns the Security Assessment subject: REST/HTML/CSV sources, the collect→normalize→persist→render model, module layout (`src/cvhealthcheck/security_assessment/`), sections list, the `reportsplus/checklist.py` normalizer role, the registry/persistence model, and the canonical JSON read endpoints.
+- **docs/subjects/license_summary.md** — owns the License Summary subject: CSV/HTML/XLSX/REST-206 sources, module layout (`src/cvhealthcheck/license_summary/`), the artifact + persistence model, the detail-table + workload/category section model, and the missing-values policy (links PATTERNS).
+
+### Changed
+- **README.md** rewritten to its final shape — Project Overview → Scope → Strategic Direction → Data Sources & Collection Strategy → High-Level Architecture (links the three new docs) → Quick Start → Configuration → CLI → Web UI → Documentation Index. Reduced from 759 to ~250 lines. The Documentation Index now describes every home truthfully (README/ROADMAP/PROMPT/HANDOVER/CHANGELOG/the three new docs/API_MAPPING/HEALTHCHECK_MATRIX/DATA_SOURCE_MAPPING/PATTERNS/lab_environment/data_flow_audit/adr).
+- **docs/lab_environment.md** gained the Reports Plus inventory login-token workflow (the `POST /commandcenter/api/Login` → `.login_token` → `CV_LOGIN_TOKEN` flow + the `probe_*_with_login_token.sh` scripts + CLI token precedence), moved out of the README Phase 2 section (its proper home).
+- **HANDOVER.md** refreshed: cleared the stacked stale per-session sections, fixed the dead `README:368` reference for the SA source-precedence issue (now points to `HEALTHCHECK_MATRIX.md` + `docs/subjects/security_assessment.md`), and recorded the settled doc tree (ROADMAP strategic, PROMPT constitution, README pass 1+2, three new docs). Genuine engineering next-actions preserved (scope-label MCP tool; the `cache_configuration` transpose binding; the card-shape re-stages; API_MAPPING `/v4/servergroup`; DATA_SOURCE_MAPPING decision).
+
+### Removed
+- **README.md** "Phase 2: Reports Plus Discovery" and "Phase 2.4: Lab Readiness Baseline" historical narrative — already logged in CHANGELOG `2026-05-11` (Phase 2.1 catalog persistence, 2.2 prioritization, 2.3 candidate validation, 2.4 lab-readiness baseline). Per the mixed-section rule, only the historical narrative was deleted; the operational CLI how-to (`reportsplus reports/datasets/catalog/prioritize/validate-candidates`, `lab readiness`, output paths, validation statuses, readiness states) was preserved under README "CLI".
+- **README.md** large internals sections, now owned by the three new docs: Quick HC Foundation, Customer-Facing Report Composition, UI Foundation, Quick HC Framework, Current Limitations, Business State and Persistence, Reports Plus Security Assessment, License Summary Artifact Pipeline.
+
+### Notes
+Relocate → verify → delete throughout: each new doc was written and its content confirmed present before the corresponding README section was removed. Module paths were verified against the tree before documenting — Security Assessment and License Summary modules live at `src/cvhealthcheck/security_assessment/` and `src/cvhealthcheck/license_summary/` (not under `reportsplus/`, which only holds `checklist.py`). New docs are present-tense architecture (settled fact), with temporal/status language ("now", "current refactor direction", "next logical phase", per-session narration) actively stripped during relocation.
+
+## 2026-06-04 (docs — PROMPT.txt restructured to a timeless operating constitution)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; reorganization — no KEEP rule's meaning changed.
+
+### Added
+- **PROMPT.txt** two new governance sections: **DECISION HIERARCHY** (explicit user instructions override docs; user is final approval authority; the 6-level conflict-authority order: user instructions → Accepted ADRs → PROMPT → ROADMAP → HANDOVER → CHANGELOG; observations/tool-output/reviews advisory only) and **DECISION MAKING** (9-step pre-change checklist: understand behavior → tests → ADRs/roadmap → extend-generic → declarative → escalate uncertainty → verify-first → grep-first → docs-over-chat).
+
+### Changed
+- **PROMPT.txt** restructured into a timeless operating constitution. Final order: PROJECT PURPOSE → ARCHITECTURE PRINCIPLES → PROJECT BOUNDARY → DECISION HIERARCHY → DECISION MAKING → ENGINEERING RULES → DO NOT → VALIDATION REQUIREMENTS → DOCUMENTATION MODEL → START OF SESSION → SESSION WRAP-UP. PROJECT PURPOSE tightened to two paragraphs. PROJECT BOUNDARY moved up into the governance cluster. The IMPORTANT STRATEGIC DIRECTION section was split: "must not assume direct CommServe access" was already a DO-NOT bullet (deduped); "collection must support remote/customer-side execution" folded into ARCHITECTURE PRINCIPLES → collectors/; the rest (central-platform/S3/modes-as-direction) is already covered by ROADMAP and was removed. Timeless navigation principles folded into ARCHITECTURE PRINCIPLES → web/.
+- **PROMPT.txt** ENGINEERING WORKFLOW section folded away: "commit at every green checkpoint / don't batch unrelated changes" merged into the existing SESSION WRAP-UP commit bullet; "Claude Code does the heavy lifting, user reviews/steers" kept as one line under DECISION MAKING.
+- **README.md** gained a "Data Sources & Collection Strategy" section (relocated from PROMPT's REPORTS PLUS / METRICS STRATEGY + COLLECTION STRATEGY — Reports-Plus-as-primary-source, cross-environment caveats, the REST→datasets→reports→uploads→SQL-last order, and the avoid-list).
+- **docs/PATTERNS.md** gained pattern 5 — the metric-visualization Chart.js payload convention (route → server-side payload → metric_detail.html → Chart.js), relocated from PROMPT's METRIC VISUALIZATION.
+- **docs/lab_environment.md** gained a "Lab Realism & Health-Rule Readiness" section (relocated from PROMPT's LAB ENVIRONMENT NOTES — minimal-lab limitations, what stays valid, and the pre-health-rule realism checklist).
+
+### Removed
+- **PROMPT.txt** implementation-state snapshots (all captured in README or obsolete): the "Current Quick HC items" inventory, the Security Assessment state block (report-336 path, "32 total checks…" counts, checklist.py path, legacy-GET-redirect, POST handlers), the License Summary state block, the "Current Quick HC platform notes" (TileDefinition fields, list_tiles(), canonical_view.py, subject_data_service.py fallback), and the "Current UI/product structure direction" item-lists (the nav *principles* were kept; the specific HealthCheck/Customers/Advanced/Development + Quick HC item names were removed). Also removed the OPERATING MODES / DAILY REPORTING / QUICK HEALTHCHECK / FULL HEALTHCHECK prose — already covered by README Strategic Direction and ROADMAP's Operating-Modes initiative.
+
+### Notes
+PROMPT is now state-free (no implementation snapshots, no file/function names except in the ARCHITECTURE boundaries). ROADMAP needed no edit — the operating-modes / central-platform / S3 direction was already present there. Pending (not in this commit's scope): HANDOVER.md line 27 still cites `README:368` for the Security Assessment source-precedence issue, a line removed in README pass 1 (`a9dd98e`); fix on the next HANDOVER refresh.
+
+## 2026-06-04 (docs — README pass 1: strip session state, collapse lab setup, refresh doc index)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; thinning pass — no internals sections moved or deleted (deferred to pass 2).
+
+### Removed
+- **README** session/lab-run state: the "Session Validation" block (stale `483 tests passing` / "May 24, 2026 session" — current count is tracked in HANDOVER); the Security Assessment "Current artifact summary" counts (transient lab artifact state); the Security Assessment "Current unresolved issue" paragraph (REST/source-precedence — a live issue item, already captured in HANDOVER); and three UI-Foundation "now does X" per-session refactor narration paragraphs.
+
+### Changed
+- **README** "Lab Environment Connection Setup" collapsed to a pointer + a 3-line quick-connect; the full connection/token/login-helper/probe-script detail now lives in **docs/lab_environment.md** (no new file — appended a "Connection & Token Setup" section there with the env-file, token-file, login-helper, and probe-script steps that were genuinely unique to the README section).
+- **README** "Architecture Documents" refreshed into a proper documentation index: added ROADMAP.md, PROMPT.txt, HANDOVER.md, and docs/lab_environment.md links; updated the ADR note from "0001 / 0002" to the current "0001–0011" range (links `docs/adr/`, no inline enumeration); kept DATA_SOURCE_MAPPING / API_MAPPING / HEALTHCHECK_MATRIX / PATTERNS / data_flow_audit.
+- **README** "Strategic Direction" condensed: kept the three operating modes (one line each) and the no-direct-CommServe-access constraint; trimmed repetition and the S3-transport detail, pointing to ROADMAP for direction detail.
+
+### Notes
+Pass 1 deliberately leaves the large internals sections in place (Quick HC Foundation/Framework, Report Composition, UI Foundation, Current Limitations, Business State, Security Assessment, License Summary, Metric Charts, Phase 2, Phase 2.4 Lab Readiness) for a pass-2 relocation once the target docs/ tree is approved. The login-token curl workflow lives in the protected Phase 2 section and was left untouched.
+
+## 2026-06-04 (docs — restructure ROADMAP as a strategic roadmap; principles → PATTERNS; status/changelog hygiene)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; structural reorganization — meaning preserved, no direction change.
+
+### Changed
+- **ROADMAP.md** — rebuilt as a strategic roadmap (Vision · Current State · Strategic Themes · Initiatives Now/Next/Later · Sequencing & Dependencies · Known Risks · Deferred Work). Rolled the old phase/task log up to capability/outcome level — completed sub-work is no longer enumerated here (that history stays in CHANGELOG). The evaluation-boundary debt is condensed into Deferred Work, keeping the "deliberate, not a defect" framing.
+- **docs/PATTERNS.md** — relocated the enforceable principles the old ROADMAP carried into a new "Standing conventions (project invariants)" section: no ORM (raw SQL), `latest.json` compatibility/cache-only, file-based catalog (no DB for catalog), the License Summary missing-values policy, and SSL-verification-default-on. None were already stated in PATTERNS (verified by grep). These now live only in PATTERNS.
+- **docs/adr/0011** — Status `Proposed` → `Accepted` (shipped this session: operators + comparator, Rule 2 authored + confirmed live).
+
+### Fixed
+- **CHANGELOG.md** — corrected a stray **future-dated** `## 2026-06-05` heading (today is 2026-06-04) to its real date `## 2026-05-25` (the entry's commits `c06309d`/`b873431`/`6e0b1ed` are all 2026-05-25); it's a real "unified-upload session 4" entry, so the date was fixed, not removed. Not reordered within the consolidation tail; the rest of the tail is left untouched.
+
+### Notes
+- **ADR 0003 and 0006 left unchanged** (flagged, not edited): both already carry a meaningful `## Status` header — 0003 "Implemented (with LS caveat)" (a deliberate nuanced status, not a bare gap), 0006 "Accepted (2026-06-01)". Neither lacked a status; an earlier reconciliation mis-reported them because it grepped only the inline `**Status:**` form, missing the `## Status` header form.
+
+---
+
+## 2026-06-04 (docs — Rule 2 confirmed live on /quick-hc)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only.
+
+### Changed
+- **HANDOVER.md** — flipped the Rule 2 note from the token-gated "expected UI result" assumption to a confirmed-live record: `commserve_software_cache` REST re-collected 2026-06-04, `cache_contents` renders 3 amber warning dots + 4 Findings (1 critical + 3 warning), criteria card shows the authored sentence. Token confirmed alive this session.
+
+---
+
+## 2026-06-04 (docs — add live-validated /v4/servergroup to API_MAPPING)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only.
+
+### Added
+- **API_MAPPING.md** — `/commandcenter/api/v4/servergroup` appended as the 4th ADR-0009 `rest_command_center_api` endpoint (PROVEN), now that it's been **live-captured 2026-06-04** via the ADR-0008 loopback (HTTP 200, `{"serverGroups": [...]}` — a collection of 21 group objects, each `{id, name, association, company, description, isSyncInProgress, serverCount}`; feeds the `server_groups` subject). This was the previously declared-but-unvalidated ADR-0009 acceptance-test endpoint. Existing rows unchanged.
+
+---
+
+## 2026-06-04 (ADR-0011 acceptance — Rule 2 authored on commserve_software_cache.cache_contents)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Runtime catalog + docs; no code change (the operators landed in `5ad8b64`).
+
+### Notes
+- Authored + bound **`csc_cache_sp_below_min`** (runtime, `data/app.db`, gitignored): `row_match` on `commserve_software_cache.cache_contents`, condition `service_pack version_lt "11.40.51"`, severity **warning** (Michiel's minimum + severity choices). `evaluate_subject` dry-run over the stored artifact: all **3 cached-SP rows (`11.40.47`) flag warning** — completes the ADR-0011 acceptance test. The live `/quick-hc` re-render is token-gated (a fresh Connect), not required for correctness. (All 3 rows are identical `11.40.47`, so this rule is all-or-none on real data; the lexical-trap ordering is exercised by the unit tests, not this data.)
+
+---
+
+## 2026-06-04 (feat(rules) — version-aware comparison primitive + version_lt/version_gte (ADR-0011))
+
+**Branch:** `feature/basic-healthcheck-report-output`. **1014 passing** (was 1008; +6). Localized to the evaluative + authoring layers; **`result_to_artifact` untouched** (the boundary recorded as deferred debt in the prior entry).
+
+### Added
+- **`evaluative/coerce.parse_version` + `compare_versions`** — the standalone, importable version primitive (ADR-0011 D1/D2): `parse_version` normalizes a dotted string to a left-aligned integer tuple (max leading integer run, optional leading `v`/`SP` token ignored), `None` when there's no numeric component; `compare_versions` pads trailing 0s and returns −1/0/1, or `None` if either operand is unparseable. Lives in `coerce.py`, **not** `result_to_artifact`, so a future live-baseline evaluator reuses it.
+- **`version_lt` + `version_gte` operators** (ADR-0011 D3 — only these two, no `gt`/`lte`/`eq`/`ne` yet). Added to the **single shared** `_KNOWN_OPS`/`KNOWN_OPERATORS` set (so authoring-validation and evaluation accept them together) plus an evaluation dispatch branch in `row_match`, and readable rendering in `format_conditions`.
+- **D4 semantics:** an unparseable **rule literal** is rejected at authoring time by `validate_row_match_rule` (`db/rules.py`), same class as an unknown operator (a `{ref}` value is skipped — it's a column, not a literal). An unparseable **row value** evaluates to **not_evaluated** (grey) with a recorded reason — never a false good/critical. Implemented via a tri-state `_predicate_value` (True/False/None) + `_rule_row_state` + an unevaluable pass in `evaluate_section_rows`; reuses the existing `not_evaluated`/`in_scope` path, no new verdict, no `result_to_artifact` change.
+- `tests/test_version_operators_adr0011.py` (+6): comparator grammar + ordering (incl. the lexical trap `11.40.9 < 11.40.51`, padding, unparseable→sentinel); authoring accepts a valid literal / rejects an unparseable one; evaluation splits below/at/above a minimum and greys an unparseable row (with reason); `version_gte` complement.
+- `docs/adr/0011-version-aware-comparison-operators.md` (Proposed) committed with the feature.
+
+### Notes
+- **Verify-first findings:** operator dispatch is `row_match._eval_predicate` / now `_predicate_value` (`row_match.py:~234`); the authoring whitelist is `db/rules.validate_row_match_rule` (`:273`) consuming `KNOWN_OPERATORS` — which **is** `_KNOWN_OPS` (one shared frozenset, `row_match.py:55`), so a single edit covers both. The stored `commserve_software_cache.cache_contents` version column is **`service_pack`**; all three rows are **"11.40.47"** (WinX64 / linux-x8664 / linux-arm64) — a real Rule-2 minimum must be chosen to split them (e.g. `version_lt "11.40.48"` flags all; pick per intent).
+- **No Rule 2 authored** (deferred to Michiel: severity + minimum are authoring choices). **The running `cv-healthcheck-mcp` caches modules** — it must be restarted (`pkill -f cv-healthcheck-mcp` + reconnect) before `save_rule`/`evaluate_subject` see the new operators.
+
+---
+
+## 2026-06-04 (docs — record evaluation-boundary as deferred architectural debt)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only.
+
+### Notes
+- Recorded deferred architectural debt (the evaluation boundary — some rule/verdict logic runs in `result_to_artifact`) as a new ROADMAP section; proceeding with the ADR-0011 version operators within the current structure, no refactor.
+
+---
+
+## 2026-06-04 (docs — link WORKFLOW from PROMPT, add push-confirm, retire artifact_schema_v1, track lab env doc)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source/schema/behavior change. Verify-first.
+
+### Changed
+- **PROMPT.txt** — two operational additions: (1) a one-line pointer in START OF SESSION to WORKFLOW.md ("Methodology, workflow stages, and historical lessons live in WORKFLOW.md — read it when doing architecture-sensitive work"); (2) merged WORKFLOW.md §10.1's **push-and-confirm** rule into the SESSION WRAP-UP push step — after pushing, verify the remote actually moved (`git status` in-sync / `origin/<branch>` HEAD matches local) before declaring done; "Pushed" is verified, not asserted. WORKFLOW.md was **not** edited.
+
+### Removed
+- **`artifact_schema_v1.md`** — retired (git history preserves it). It was a "v1 Draft" schema spec, superseded by the **live canonical artifact shape the engine enforces** (the Pydantic models — numeric metric values, `{id,label}` columns, item ids). Re-proved orphan first: zero structural/link refs; the only mentions were this CHANGELOG's own consolidation Note + the rolling HANDOVER, both non-blocking (history/handover, not dependencies).
+
+### Added
+- **`docs/lab_environment.md`** — the previously-untracked `docs/Lab_Environment v1.01.md` lab-environment draft, moved to the repo's lowercase-underscore naming and committed. **Secret-scanned before staging** (authtoken/bearer/access_token/refresh_token = value, JWT `eyJ…`, password/secret/`CV_PASSWORD_B64`/PEM) — **no pasted credentials found** (only documentation of token files/mechanics). Only one draft existed (the earlier `… copy.md` was already gone).
+
+---
+
+## 2026-06-04 (docs — add ADR-0009 validated Command Center API endpoints to API_MAPPING)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source/schema/behavior change. Verify-first; only endpoints with documented live-200 evidence were asserted.
+
+### Added
+- **API_MAPPING.md** — three ADR-0009 `rest_command_center_api` endpoints appended to the validated-endpoint table (existing 8-column format, host/shape in Notes per the table's convention), all **PROVEN** from live-200 validation earlier on 2026-06-04 via the ADR-0008 loopback against the lab CommServe `192.168.182.129:4433`:
+  - `/commandcenter/api/commserv/audittrail` → `{auditTrailInfo:{retentionForCritical/High/Medium/Low}}` → `audit_trail` subject.
+  - `/commandcenter/api/commserv/metricsreporting` → `{config:{…, cloud.serviceList[8]}}` → `metrics_reporting` subject.
+  - `/commandcenter/api/commserv/addremovesoftware/commservesoftwarecache` → `{commserveSoftwareCache:{cacheFreeSpace, UaInfo.cacheContents[].softwareCacheServicePackDetails}}` → `commserve_software_cache` subject.
+
+### Notes
+- **`/commandcenter/api/v4/servergroup` was NOT added (declared, unvalidated).** ADR-0009 frames it as the *deferred* end-to-end acceptance-test capture, and CHANGELOG (earlier entry) records its shape as "unverified until a live capture" — no live-200 evidence exists. Skipped per the verify-first rule; left for a future live capture.
+- **Verify-first / token state:** a re-probe of all four endpoints this session returned **HTTP 401** — the CS token is expired (whole-connection, every endpoint 401s), not an endpoint failure. The three additions rest on documented earlier-2026-06-04 live-200 validations (CHANGELOG entries + stored `rest_commserve` artifacts), and each row carries the stale-token caveat — consistent with API_MAPPING's existing PROVEN rows (e.g. Client Growth, which is PROVEN despite a current-token 401). No existing API_MAPPING content was reworded or restructured.
+
+---
+
+## 2026-06-04 (docs — consolidate doc tree: delete orphans, rehome workflow into PROMPT.txt)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source/schema/behavior change. VERIFY-FIRST: every claim below was proven by `grep` before acting.
+
+### Removed
+- **`HANDOVER_TO_CODE.md`, `design/CODEX_HANDOVER_v2.md`, `cv_healthcheck_context.md`** — shipped/superseded one-off handover & context notes. The 0-ref grep showed their only inbound references were this review's own bookkeeping (the prior HANDOVER candidate table, refreshed this session, + a CHANGELOG history note), not structural/content dependencies — so they are true orphans. git history preserves them.
+- **`docs/Workflow.md`** — the per-session checklist, removed after rehoming its content into PROMPT.txt (the file was already deleted from the working tree).
+
+### Changed
+- **PROMPT.txt** — merged the two session-workflow elements it lacked (it already covered the rest across ENGINEERING RULES / DO NOT / VALIDATION REQUIREMENTS / DOCUMENTATION MODEL / START OF SESSION / SESSION WRAP-UP, so per "merge, don't duplicate" nothing else was added): a start-of-session **git-state check** (`git status / branch / log --oneline -5`) and a **validation-honesty** rule ("report the exact failing command… never pretend success"). DEVLOG-free; the existing "Do not reintroduce DEVLOG.md" note is unchanged.
+
+### Notes
+- **STOPPED on `DATA_SOURCE_MAPPING.md` (kept, not folded)** — it is an operating-mode *source-strategy* doc (explicitly "does not define… implementation"), not validated-API behavior. Folding it into API_MAPPING.md (the validated-API home) would change that doc's meaning; its unique content (per-subject source preference across Quick HC / Daily / Full + Operating Mode Guidance) overlaps conceptually with ROADMAP's "Future Architecture: Operating Modes," not API_MAPPING. Left in place; README:450 reference unchanged. Recommend: keep as-is, or fold into ROADMAP (a separate decision).
+- **Step 5 (gitignore/untrack build noise) was a no-op** — `.gitignore` already has `.pytest_cache/` and `*.egg-info/`, and `git ls-files` showed none tracked.
+- **`artifact_schema_v1.md` is now a true orphan** (its only inbound ref was the deleted `cv_healthcheck_context.md`) — left in place, flagged for later refresh/retire.
+- Left untouched per scope: `docs/adr/*`, `docs/PATTERNS.md`, `docs/data_flow_audit.md`, `docs/research/*`, `docs/refactor_unified_upload_*` (active WIP), `memory/*`, root `WORKFLOW.md` (methodology doc), and the unrelated untracked `docs/Lab_Environment v1.01*.md` drafts.
+
+---
+
+## 2026-06-04 (docs — remove retired DEVLOG.md from docs/Workflow.md)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source/schema/behavior change. Reconciles the per-session workflow checklist with the DEVLOG-retired decision (PROMPT.txt; retired 2026-05-25).
+
+### Changed
+- **`docs/Workflow.md`** (the per-session "Follow this workflow…" checklist — newly added to the repo; distinct from the root `WORKFLOW.md` methodology doc) — removed the two `DEVLOG.md` references:
+  - **Read-docs-first list:** dropped `DEVLOG.md`; added `HANDOVER.md` (start-here) + `CHANGELOG.md` (running log); kept README/ROADMAP/API_MAPPING/PROMPT.
+  - **Documentation-updates list:** replaced the `DEVLOG.md` bullet with `CHANGELOG.md: what changed, validation results, commit hash` + `HANDOVER.md: rolling forward note for the next session`; left the ROADMAP/API_MAPPING/README/PROMPT "only if…" bullets intact.
+- No other content in the file changed.
+
+### Notes
+- The earlier "WORKFLOW.md — no DEVLOG refs" review was about the **root `WORKFLOW.md`** (a methodology/philosophy doc with no doc-lists, genuinely DEVLOG-free). The DEVLOG instruction lived in this separate **`docs/Workflow.md`** checklist, which was not in the repo at review time.
+- **Other (active) DEVLOG references left for separate scope:** `docs/adr/0007-…:121` (historical ADR — don't rewrite), `cv_healthcheck_context.md:13` (stale snapshot, already an archival candidate). Historical/retirement mentions in PROMPT.txt + CHANGELOG stay.
+- **Flagged, not changed (out of scope):** `docs/Workflow.md` §5 still shows `git add .`, which conflicts with this project's explicit-staging discipline; and there are now two workflow docs (root `WORKFLOW.md` vs `docs/Workflow.md`) worth reconciling.
+
+---
+
+## 2026-06-04 (docs — documentation review & hygiene pass)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Docs-only; no source/schema/behavior change. (Recorded here, not in a DEVLOG — DEVLOG.md was retired 2026-05-25, per PROMPT.txt; this file + HANDOVER are the log.)
+
+### Changed
+- **README.md / ROADMAP.md** — corrected the one factual drift the review found: the "no scoring or recommendations yet" limitation predated ADR 0010. Now reads "no recommendations yet; scoring is limited to row-scope evaluation rules on table subjects (ADR 0010), not the Reports Plus subjects." No other prose touched.
+
+### Notes
+- **Reviewed** every tracked `*.md`/`*.txt` (excl. `venv/`, `.git/`, and auto-generated `*.pytest_cache/README.md` + `src/*.egg-info/*.txt`). Ports (5001), paths (`~/dev/cv-healthcheck`), and commands in README verified correct. PROMPT.txt is an accurate stable primer (incl. the still-true "DEVLOG/docs-handover retired" note). The canonical docs (CHANGELOG/HANDOVER/HEALTHCHECK_MATRIX/ADRs 0001–0010) are current.
+- **Flagged for Michiel's decision (NOT changed):** (1) API_MAPPING.md is missing the ADR-0009 live-validated Command Center endpoints (`/commandcenter/api/commserv/audittrail`, `…/metricsreporting`, `…/addremovesoftware/commservesoftwarecache`, `…/v4/servergroup`); (2) the subject enumerations in ROADMAP's Phase-3 capability snapshot don't list the new CC-API subjects (server_groups / audit_trail / metrics_reporting / commserve_software_cache) — left as historical snapshots; (3) a set of shipped/superseded handover & context notes proposed for archival (see HANDOVER). No architecture/decision conflicts found.
+
+---
+
+## 2026-06-04 (fix(rules) — bind path scopes to the active version + recognizes transpose key/id targets)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **1008 passing** (was 1002; +6). Two coupled fixes in `db/rules.py` (authoring/validate path only; the collection/read path and the engine are untouched).
+
+### Fixed
+- **Active-version scoping (the reported bug).** `validate_row_match_rule`'s bind block resolved the bound section's `section_type` (and `_section_column_ids`) with an **unscoped** `WHERE subject_id=? AND section_id=?`. `subject_sections` holds one row per version, so `.fetchone()` returned the lowest-rowid (oldest) version — and binding a row rule to `commserve_software_cache.cache_configuration` (card v1–3 → **table v4**, v4 active) was wrongly rejected as `'card'`. The bind block now resolves the **active version once via `get_subject`** (the same helper the collector uses) and scopes both lookups with `AND subject_version = ?` / `AND src.subject_version = ?` — mirroring `load_subject_row_rules`/`load_subject_section_scope`. A subject with no active version raises a clear error.
+
+### Added
+- **Transpose key/id are valid rule targets.** With the lookup now scoped to v4, `_section_column_ids` validates targets against v4's `table.columns` (display = Setting/Value only). A row rule on a transpose property table legitimately targets the stable `key`/`id` (the locked "target key, never label" principle), so `_section_column_ids` now also admits the transpose rows' **implicit** columns — `id`, `key`, `label`, `value` — when the section's extraction block has `table.transpose`. **Targetability and display are decoupled**: the implicit keys are valid *targets* but are NOT added to the *displayed* columns (display stays driven by `table.columns`); the line is drawn entirely in `_section_column_ids` (target validation), with no change to `result_to_artifact`, the materializer, or the engine.
+- `tests/test_bind_version_scoping.py` (+6): bind succeeds on the active (table) v4 although the unscoped query still returns v1's `'card'`; `_section_column_ids` returns the active version's columns only (no cross-version union, no v1 `free_space` leak); a `key`+`value` rule binds end-to-end while a bogus target is still rejected; no-active-version raises; single-version table bind unchanged (regression).
+
+### Notes
+- **`bind_rule` (the WRITE, `:192-197`) was deliberately left unscoped** (the task marked it optional). It still writes the `{ref}` into every version's binding incl. superseded — harmless dead data (collection reads only the active version's binding, which gets the ref), so the goal "bind to v4 succeeds and fires" is met. Scoping it to the active version is a recommended follow-up (no downside; just stops the dead writes).
+- Why existing rules never hit the bug: `audit_trail`/`server_groups`/`users` are single-version; `metrics_reporting` is 2-version but its bound section types are stable across versions. `commserve_software_cache` is the first subject that is multi-version **and** changed a bound section's type across versions.
+
+---
+
+## 2026-06-04 (fix(view) — unify the table verdict legend to one order; supersedes the 5a40e1e split)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **1002 passing** (unchanged count; the two split-legend tests were replaced by three unified ones). Render-only (JS legend content); no model/view/engine/rule/binding change.
+
+### Changed
+- **One shared verdict legend for EVERY table section** (`quick_hc.js`, columns-mode table branch): **good · warning · critical · not evaluated · info** (exactly this order). The `5a40e1e` two-legend split (a property legend *with* info vs a data-table legend *without*) is removed — `legendDots` no longer branches on `sec.view_mode === 'property'`; the `propLegend`/`dataLegend` consts are gone.
+- **Rationale:** any table's unruled rows fall through to the info-blue dot (`vdotClass(null) → 'vdot-info'`), not just the property table — e.g. `cache_contents` is a plain `columns` data table whose rows show info-blue. So info belongs on every table legend; the `5a40e1e` cut was wrong. Collapsed to one.
+- `tests/test_transpose_property_table.py`: replaced the two split-legend assertions with — the unified legend order good/warning/critical/not evaluated/info (info present + not evaluated present); the split is gone (`view_mode === 'property'`/`propLegend`/`dataLegend` absent from the JS); and the dot-fallback + card-routing regression guard.
+
+### Notes
+- **`view_mode:"property"` stays** (model + `result_to_artifact` unchanged) as the discriminator for the future stacked-tile render — it just **no longer drives the legend**.
+- **Lock honored:** `not_evaluated` (grey) and `info` (blue) remain **separate legend entries with separate colours** (`e0aa3287`) — never merged. Dot colours, the `vdotClass(null)→'vdot-info'` fallback, the 1-row `view_mode==='card'` card path, row layout, and the STATUS column are all untouched.
+
+---
+
+## 2026-06-04 (feat — "property" table view_mode: transpose section gets the property verdict legend)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **1002 passing** (was 997; +5). Presentation carry (model + collection + view + JS); **no engine/builder/rule/binding change**, no dot colours or verdict computation touched.
+
+### Added / Changed
+- **`TableSection.view_mode` gains `"property"`** (`models.py`) alongside `columns`/`card` — a third presentational value on the existing discriminator (no new field; omit-when-default serializer unchanged, so non-property tables stay byte-identical).
+- **`result_to_artifact`** sets `view_mode="property"` on a **transpose** section (gated on the existing `spec.get("transpose")`); every other table section keeps its prior value (`card` opt-in, else default `columns`).
+- **`canonical_view`** already forwards `sec.view_mode` (`:137`) — `"property"` passes through to the JS section object untouched (no change).
+- **`quick_hc.js`** columns-mode table branch: when `sec.view_mode === 'property'`, the legend is **good · info · warning · critical · not evaluated**; every other table keeps the unchanged data-table legend (**good · warning · critical · not evaluated**). **Legend content ONLY** — layout, the STATUS column, dot rendering, the `vdotClass(null) → 'vdot-info'` fallback, and the 1-row `view_mode==='card'` card path are all untouched. "property" does not route to the card path.
+- `tests/test_transpose_property_table.py` (+5): transpose section serializes `view_mode=="property"` through model + canonical view; a non-transpose data table stays `"columns"` (omitted default); the property legend is exactly good/info/warning/critical/not evaluated (ordered, info present); the data-table legend is unchanged (no info — regression guard); the info-blue fallback + card routing are untouched.
+
+### Notes
+- **Why a transpose property table wanted its own legend:** it renders through the columns-mode table branch, and its unruled rows fall through to the info-blue dot (`vdotClass(null)`), so info is a real verdict state on it — but the data-table legend omits info. The fix surfaces info in the legend for property tables only.
+- **Locks honored:** `not_evaluated` (grey) stays visually **distinct** from info-blue (`e0aa3287`) — the property legend *adds* info, it does not merge grey into blue or alter grey semantics. Data-table sections (e.g. `server_groups`) are opt-out by construction (only `view_mode==='property'` switches the legend).
+
+---
+
+## 2026-06-04 (feat — transpose / property-table materialization in _project_table_rows)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **997 passing** (was 990; +7). Additive materialization branch; **reuses the existing row-scope engine + columns render — NO engine change.**
+
+### Added
+- **`table.transpose` (object → N rows).** `extractors/command_center._project_table_rows` recognizes a new `table.transpose: [{key, label, field}]` spec key: when the resolved root object is a dict, it explodes that ONE object into N rows — one `{id: key, key, label, value: <obj.field>}` per declared field (`field` resolves nested + list-index via the shared walker). Placed **before** the single-object dict-wrap, so a declared transpose wins over the 1-row wrap; `label` defaults to `key`; entries missing `key`/`field` are skipped. Each setting becomes a real row with a stable `id` (= key), so a `row_match` rule keyed on the `key` + `value` columns gives an **independent per-row verdict** — the existing row-scope engine, unchanged. This is the N-row sibling of the dict-wrap (`d1860c4`, object → 1 row).
+- **Declared-column display for transpose** (`result_to_artifact`): a transpose section keeps `id`/`key` on each row (for ref-stability + rule targeting) but **honors its binding's `table.columns` for display**, so those internal keys don't leak as columns. Gated on `table.transpose` — every other table section still derives display columns from row keys (`_derive_columns`), unchanged.
+- `tests/test_transpose_property_table.py` (+7): object → N typed rows (int/str/bool, nested paths); label-defaults / incomplete-entry skip; transpose-over-raw (no root_key); dict-wrap regression unchanged without a transpose key; declared columns restrict display while id/key stay on the row; a `key`+`value` rule yields a per-row verdict (in_sync→warning, others→good) with no engine change; verdict bakes per-row end to end.
+
+### Notes
+- **Why this avoids the deferred ADR-0010 field/object-scope engine:** that engine was needed to judge a *card's fields in place* (value-grained, no rows). Transpose materializes fields **as rows**, so the row-scope engine (which exists) gives the per-row dots directly. Confirmed read-only-pass-then-implement.
+- **Renders today in the default `columns` view_mode** — a `Setting | Value` table with a per-row STATUS dot (`quick_hc.js:355-378`). The stacked-tile "card look" is **out of scope** (the `TableSection.view_mode:"card"` branch is 1-row-only + dotless, `:346`); a tile aesthetic is a separate later commit.
+- **No live re-collect / rule authoring this slice** (no token needed). `commserve_software_cache`'s `cache_configuration` can now be re-authored as a transpose section (replacing the empty card) — that binding + its row rules are Michiel's next step (MCP `save_rule`).
+
+---
+
+## 2026-06-04 (fix(engine) — numeric path segment indexes into a list in _resolve_field_path)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **990 passing** (was 984; +6). Global engine fix; additive, no behavior change for existing dict paths.
+
+### Fixed
+- **`extractors/metric_section._resolve_field_path`** — the shared ADR-0007 D2 field-path resolver descended only into dicts, so a path with a numeric segment pointing into a **list** (e.g. `commserve_software_cache`'s table root_key `commserveSoftwareCache.UaInfo.cacheContents.0.softwareCacheServicePackDetails`) hit `.0` against a list and returned `default` → the table rendered **0 rows**. The resolver now: descends a **dict** by key as before (a literal `"0"` key still wins via dict semantics), indexes a **list** by a non-negative integer segment (out-of-range / non-numeric → `default`), and returns `default` for any other mid-path type. Used by every section type (table root_key + columns, card/metric fields).
+- **Purely additive:** a numeric-on-list segment previously only ever returned `default`, so no existing path changes. Same spirit as the recent generic fixes in this path (Fix A nested root_key `842d39c`, dict-wrap `d1860c4`).
+- `tests/test_resolve_field_path.py` (+6, new): list index; nested dict→list→dict→value (the real cache shape); out-of-range → default (incl. custom default); non-numeric/negative on a list → default; literal `"0"` dict key resolves by key; dict-only regression cases.
+
+### Notes
+- **Validated** against the `commserve_software_cache` payload captured live last turn (the live re-collect's loopback token had expired again: `error='no active token; reconnect'`): `cache_contents` table now renders **3 rows** — WinX64 / linux-x8664 / linux-arm64, each SP `11.40.47`. The `cache_configuration` **card is still empty** — that's **Fix 2** (separate), unchanged here.
+- **Diagnosis confirmed (out of scope to fix here):** the original mis-authoring root cause is that the binding **spec vocabulary diverges by section type** — a table declares `root_key` + `columns`, a card declares `items` (and `build_card_section` ignores `root_key`). The `commserve_software_cache` card was authored with `columns`, so it bakes empty. Worth an ADR note later; Fix 2 is a v2 card-spec re-stage, not code.
+- The `.0` positional index makes list-indexing **work**, not **version-correct** (it hardcodes "v11 is first in cacheContents"). Version-predicate vs positional index is a later spec question — left as-is.
+
+---
+
+## 2026-06-04 (Fix A — nested root_key resolution + epoch_to_iso coercion)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **984 passing** (was 982; +2). Two generic, additive read-path fixes surfaced by `metrics_reporting` (which baked empty). The card binding-shape half (Fix B) is separate.
+
+### Fixed / Added
+- **Nested `root_key` (table read path).** `extractors/command_center._project_table_rows` now resolves `root_key` through the shared nested-path walker `_resolve_field_path(raw, root_key)` instead of a flat `raw.get(root_key)`. The column `field` paths already nested (`service.name`), so root_key being flat was an asymmetry — a nested `root_key` like `config.cloud.serviceList` silently yielded an empty table. **Behavior-preserving:** a single-segment key (`auditTrailInfo`, `items`, …) resolves byte-identically to the old flat get (missing → `None` → `[]`); same spirit as the prior generic fixes in this path (dict-wrap `d1860c4`, view_mode `5f5f136`).
+- **`epoch_to_iso` coercion (card read path).** Added `epoch_to_iso` as a closed-enum sibling of `hex` in `extractors/card_section._coerce_item_value` (ADR 0007 D3): a card item declaring `"type":"epoch_to_iso"` formats an epoch-**seconds** integer as an ISO 8601 UTC string (`1700000000 → "2023-11-14T22:13:20Z"`), keeping the raw epoch in `raw_value`. Seconds only — no millisecond guessing. The card reader already runs every field value through `_coerce_item_value`, so no new wiring; absent/other `type` and non-integers pass through byte-identical. **Declared in the binding, not a field-name heuristic.**
+- Tests +2: `test_project_table_rows_nested_root_key_path` (nested `a.b.c` resolves to the inner list with `service.name` populated + Health Check id 1/enabled false; single-segment unchanged; missing nested path → `[]`); `test_epoch_to_iso_coercion` (known epoch → ISO + raw kept; undeclared field left an int).
+
+### Notes
+- **Validated end-to-end** against the `metrics_reporting` payload captured live earlier this session (only the HTTP fetch substituted — the live re-collect's loopback token had expired: `error='no active token; reconnect'`): `services` table = **8 rows, `service_name` populated 8/8**, **Health Check (id 1, enabled false) → `warning`** with finding "Health Check cloud service disabled". The `status` card is **still empty (0 items)** — expected; its binding shape (`card.fields`/`id` vs the reader's `card.items`/`label`, and the `root_key` the reader doesn't apply) is **Fix B**, handled separately. `epoch_to_iso` is now available for Fix B to declare on the three timestamp fields.
+- This is the CODE half only; no staged artifacts / subject definitions / rules were touched.
+
+---
+
+## 2026-06-04 (TableSection.view_mode — single-row table renders as a card)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **982 passing** (was 976; +6). Presentational discriminator (option b); **no change to the rule engine, `validate_row_match_rule`, or the verdict bake** — a card-rendered table still fires its row rules + per-row verdict.
+
+### Added / Changed
+- **`TableSection.view_mode: Literal["columns","card"]` (default `"columns"`)** (`artifacts/models.py`) — mirrors `CardSection.view_mode` / `MetricSection.render_mode`: a presentational layout discriminator carried on the artifact from the catalog binding, never keyed on subject id. A `@model_serializer` **omits it from JSON when default**, so existing table artifacts stay byte-identical.
+- **`result_to_artifact`** reads the mode from the already-plumbed `section_table_specs` (`view_mode="card"` only when the binding says so; any other/absent value → `"columns"`, so a typo never crashes collection).
+- **`artifact_to_view`** passes `view_mode` through the TableSection branch alongside the existing `row_verdicts`/`sev`/`scope_caption`.
+- **`quick_hc.js::secBody`** — new branch: a **single-row** table with `view_mode==='card'` renders as a Field/Value card reusing the existing `meta-grid`/`meta-card` markup (the layout behind CommCell Details), with the section-level verdict pill in the header (`secTile`, from `sec.sev`). Any row count other than exactly one falls through to the column table.
+- `tests/test_table_card_view_mode.py` (+6): model default + omit-when-default serialization + round-trip; collection reads the mode (card / default / bad-value-degrades); the view carries `view_mode` while `row_verdicts` still ride along; JS card-branch render marker.
+
+### Notes
+- **Design point (settled):** a row rule yields one verdict *per row*, so a card shows one **section-level** badge — no per-field dots (unlike the card `view_mode==='table'` path, which has per-field `CardItem.sev`). Correct for `audit_trail`.
+- **`audit_trail` opted into card mode** (runtime binding edit, gitignored): `view_mode:"card"` added to its `table` spec. Re-baked artifact → `TableSection.view_mode=="card"`, **1 row, verdict `good`, 0 findings** (`retention_critical 365` not `< 365`); view = `type:table, view_mode:card, sev:good`.
+- **Validation honesty:** the **live re-collect failed** — the loopback returned `error='no active token; reconnect'` (the connection expired since the earlier live collect this session). The pipeline above was validated against the `auditTrailInfo` payload **captured live earlier** (stable retention settings), substituting only the network call — so binding→extract→project→evaluate→bake→view is exercised end-to-end; only the live HTTP fetch (orthogonal to this presentational change) is unverified this run. Visual confirmation is the operator's after a reconnect + `./start.sh`.
+
+---
+
+## 2026-06-04 (audit_trail subject built + the CC-API dict-wrap fix validated LIVE)
+
+**Branch:** `feature/basic-healthcheck-report-output`. Catalog/runtime + live-validation pass on top of the dict-wrap collector fix below; **no code change** (the subject + binding are db-driven runtime state, gitignored). **Resolves the "held pending review" caveat in the preceding entry** — the endpoint and shape are now verified live.
+
+### Added (runtime catalog — data/app.db, gitignored)
+- **`audit_trail` subject** (fresh build — it never existed in code/catalog/git; only an orphaned, unbound `audit_critical_retention_warning` rule did). One table section `audit_trail.retention` on the `rest_command_center_api` source, endpoint `/commandcenter/api/commserv/audittrail`, `output_as: table`, `root_key: auditTrailInfo`, with the orphaned rule bound via `evaluative.row_rules`. Nothing to supersede (single rule version, was unbound).
+
+### Notes
+- **Endpoint + shape verified live** through the ADR-0008 loopback (`POST /internal/commserve`, app-held token; no CS token ever held here): `/commandcenter/api/commserv/audittrail` → `200`, body `{"auditTrailInfo": {…}}` where `auditTrailInfo` is a **single dict** (`retentionForCritical/High/Medium/Low`). This is a *different* endpoint from the proven ReportsPlus audit **dataset** in `API_MAPPING.md` (event records) — the earlier "differs from the proven dataset / shape unverified" caveat was over-cautious; both are real, distinct endpoints.
+- **Field-name correction vs the brief:** the API returns camelCase `retentionForCritical/High/Medium/Low`, not `retention_critical/...`. The binding maps column id → field accordingly (`retention_critical ← retentionForCritical`, …), so the rule's `retention_critical` target resolves.
+- **Live re-collect** (real `CommandCenterExtractor.extract()`, only `_fetch` routed through the loopback) → the `auditTrailInfo` dict auto-wraps to **exactly 1 row** `{retention_critical: 365, high: 365, medium: 240, low: 120}`, verdict `good`, **0 findings** (`retention_critical < 365` is false at 365 — boundary-compliant). Renders as a Report-band table (1 row, green STATUS dot) + an Evaluation-band criteria card (`Low critical audit retention` · `retention_critical < 365`). Visual check is the operator's after `./start.sh`.
+
+---
+
+## 2026-06-04 (Fix — CC-API table adapter: single-object root_key → one row)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **976 passing** (was 975; +1). Collector-only fix in the `rest_command_center_api` source adapter; no schema/catalog/view change.
+
+### Fixed
+- `extractors/command_center._project_table_rows`: when `root_key` resolved to a **dict** (a single-object response, e.g. `auditTrailInfo: {...}`) the projector hit `if not isinstance(records, list): return []` and emitted an **empty table**. It now auto-wraps a dict as `[obj]` before projecting, so a single-object response becomes a one-row table (columns selected/renamed or passed through, same as the list path). `wrap_object_as_row` is **not** plumbed through the binding, so the dict auto-detect is unconditional. The multi-record list path and all degenerate cases are unchanged.
+- `tests/test_cc_api_multi_object_adr0009.py` (+1): `test_project_table_rows_wraps_single_object_under_root_key` — column-mapped dict-wrap + no-columns passthrough + an explicit assertion the existing list path is unaffected.
+
+### Notes
+- This is a **gap from inception**, not a regression: the dict branch never existed — `_project_table_rows` was introduced (ADR 0009, `5891076`) only ever handling lists; git history shows no prior dict-wrap and `auditTrailInfo` has never appeared in the tree.
+- Discovered while investigating a handover note about an `audit_trail` collector regression. The collector fix is real and lands here; the `audit_trail` **subject does not exist** in code/catalog/git (only an orphaned, unbound `audit_critical_retention_warning` rule), so building/validating that subject is held pending review (its endpoint shape is unverified and differs from the proven ReportsPlus audit dataset in `API_MAPPING.md`).
+
+---
+
+## 2026-06-03 (ADR-0010 — authored rule descriptions + Option-B criteria render (slice 3))
+
+**Branch:** `feature/basic-healthcheck-report-output`. **975 passing** (was 963; +12). Retires the interim per-rule prose deriver in favour of authored text + a mechanical condition render; **view/data only** (no scope/verdict/binding/engine change beyond the new `description` field).
+
+### Added / Changed
+- **Authored `description` on a rule (DATA).** `save_rule` accepts an optional `description` (string, nullable); it is persisted, returned, and surfaced by `list_rules`. Absent ⇒ null (no extra validation — it rides the rule body, which `save_rule` already stores verbatim). Documented on the MCP `save_rule` tool.
+- **Mechanical condition formatter** — `evaluative/row_match.format_conditions(conditions)`: renders a conditions list as one AND-joined human string, covering **every** supported operator (`eq =`, `ne ≠`, `gt >`, `gte ≥`, `lt <`, `lte ≤`, `contains`, `not contains`, `between <v> and <v2>`, `exists → is set`, `not_exists → is not set`, `stale_days → older than <n> days`). Strings quoted, numbers bare, a `{"ref":col}` rendered as the bare column name. ONE tested place — not inference.
+- **Bake gains the rendered fields.** `result_to_artifact` now bakes each check as `{rule_id, severity, description, title, condition_text}` (the formatter runs at bake; the view renders strings only).
+- **Criteria card = Option B.** Per check: severity badge + a **primary line** + the **condition** underneath in mono/muted. The primary line is the authored `description`, falling back to the rule `title` with its `{row.*}` template placeholders stripped (`canonical_view._title_static`) — **never the raw rule id** (the bug this slice fixes). `quick_hc.js`/`.css` render the two-line check.
+- **Interim prose deriver RETIRED.** `canonical_view._RULE_SENTENCE` / `_rule_sentence` (the hard-coded rule-id→sentence mapping) are removed. The scope-block sentence (`_scope_phrases`) stays as-is for this slice.
+- `tests/test_authored_descriptions_adr0010.py` (+12): formatter one-case-per-operator + quoting/AND-join; bake carries description/title/condition_text (absent ⇒ null); render contract — primary is description / static-title / **never the rule id** (the regression guard); deriver removed; `save_rule` description persists/returns/lists, absent ⇒ null. `test_evaluation_band_adr0010.py` updated to the new check shape.
+
+### Notes
+- **Seeded (runtime, gitignored — the proof):** `server_groups`' three bound rules got authored descriptions — `sg_empty_group` "Every server group must contain at least one server.", `sg_naming_convention` "Manual server group names must follow the GRP_ naming convention.", `sg_rommelgroep_company_1` "Company_1 must not contain a group named “rommelgroep”." `sg_naming_convention`'s redundant `association == MANUAL` condition was dropped (the section scope already gates that population, so this is verdict/finding-neutral) — leaving its criteria condition the substantive `name not contains "GRP_"`.
+- **Verified via the real path** (re-baked stored artifact, runtime state): criteria card Checks → `name not contains "GRP_"` (naming), `name = "rommelgroep" and company = "Company_1"` (rommelgroep, critical), `server_count = 0` (empty), each with its authored description; **no raw rule id**; scope sentence + table caption unchanged. Card visuals are the operator's check after `./start.sh`.
+- **Check ORDER** follows the binding order (naming → rommelgroep → empty), which differs from the acceptance's logical listing — a deterministic authored order is still the open follow-up (bindings were not touched).
+- **Open follow-up:** the scope-authoring MCP tool (`save_section_scope` / a `scope` arg on bind) + an **authored scope label** to retire the remaining interim `_scope_phrases` derivation; an authored check order.
+
+---
+
+## 2026-06-03 (ADR-0010 — Evaluation band: criteria + findings cards (layout slice 2))
+
+**Branch:** `feature/basic-healthcheck-report-output`. **963 passing** (was 956; +7). Restructures where evaluation lives in the report; **presentation/view only** (no scope/rule/binding/verdict change).
+
+### Added / Changed
+- **New "Evaluation" band** — a peer to Data Source / Report Sections, ordered **after** Report Sections — with TWO independently-includable cards: **"Evaluation criteria"** (read-only) and **"Findings"** (the former Compliance findings list, moved verbatim + retitled). Each is a normal section, so it gets its own include toggle via the existing `secTile`.
+- **The pipe:** `result_to_artifact` bakes a per-section `metadata["evaluation"] = {scope, checks:[{rule_id, severity}]}` from the resolved rules + scope. `artifact_to_view` reads it to: move the `<subject>.compliance` findings into the evaluation band (retitled "Findings", keeps its pill), build the criteria card, set a `band` on every section (default `report`), and add a `scope_caption` to the data table.
+- **"Evaluation criteria" card** — **no status pill** (it describes the assessment, it is not a verdict): a plain-language **Scope** sentence + one severity-tagged **check** sentence per bound rule.
+- **Scope caption** on the data-table legend bar (muted, right-aligned, e.g. "Scope: manual server groups · automatic excluded") — the **always-present safety net**: it lives on the table, so it survives toggling both Evaluation cards out.
+- `quick_hc.js` partitions sections into the Report vs Evaluation bands and renders the `criteria` type + the scope caption; `quick_hc.css` adds the criteria card + caption styling.
+- **Derived phrasing is INTERIM** — one clearly-marked place in `canonical_view.py` maps the scope (`association eq <v>`) and the two named rule ids to sentences. **Not** an inference engine (between / stale_days / … are out of scope).
+- `tests/test_evaluation_band_adr0010.py` (+7): the band ordered after Report with exactly criteria+findings; findings moved out of Report + retitled; criteria scope/checks with no pill; independent toggles; the table scope caption; no-evaluation subjects get no band/criteria/caption (only `.compliance` rebands); render markers.
+
+### Notes
+- **Verified headless** against the live page: server_groups → table (report band) with caption "manual server groups · automatic excluded"; Evaluation band → "Evaluation criteria" (scope sentence + two warning checks, no pill) + "Findings" (11, Warning pill). The stored artifact was re-baked (runtime state); a real Collect bakes the same. The card visuals are the operator's check after `./start.sh`.
+- **Other subjects unchanged:** CommCell Details / License Summary / Security Assessment carry no `evaluation` metadata (or use their own builders) → no Evaluation band, sections default to the report band, captions `None`.
+- **Open follow-up:** an authored rule `description` + scope label (rendered verbatim, replacing the interim derivation) — pairs with the scope-authoring MCP tool, still the open authoring follow-up.
+
+---
+
+## 2026-06-03 (ADR-0010 — report section layout + per-row verdict rendering (layout slice))
+
+**Branch:** `feature/basic-healthcheck-report-output`. **956 passing** (was 948; +8). Renders the per-row `_verdict` the engine slice bakes; **presentation only** — no engine / scope / rule / verdict change.
+
+### Added / Changed
+- **The pipe:** `artifact_to_view`'s table branch now carries the baked per-row `_verdict` to the view as row metadata `row_verdicts` (row-aligned), **not** as a visible data column, and rolls a section `sev` pill from the worst row verdict **excluding `not_evaluated`**. The findings branch gains the same `sev` (worst finding severity) so the derived `<subject>.compliance` section gets a pill.
+- **STATUS column** on the data table (`quick_hc.js` `secBody`): one verdict dot per row — good→green, warning→amber, critical→red, **`not_evaluated`→gray (`vdot-na`)** — plus a legend gaining a "not evaluated" entry. Rendered only when the section carries `row_verdicts`; tables without verdicts are unchanged.
+- **The explicit-verdict trap, guarded:** the dot maps the verdict **directly**; only a genuinely ABSENT verdict (`null`) falls back to info-blue. `not_evaluated` is its own gray token — out-of-scope rows never paint blue.
+- The card **shell** (header title + `sec.sev` status pill + visibility toggle + legend) is the **existing `secTile` / card chrome reused as-is** — server_groups' table + compliance sections already render through it, so they now match CommCell Details. New CSS: `.vdot-na` (gray), `.vdot-col` (status column).
+- `tests/test_layout_verdict_adr0010.py` (+8): view carries `row_verdicts` (row-aligned, not a data column); pill = worst excluding `not_evaluated` (+ critical>warning, all-not_evaluated → no pill); no-verdict table unchanged; compliance pill = worst finding; render markers assert `not_evaluated`→`vdot-na` and that only `null` falls back to info.
+
+### Notes
+- **Verified headless** against the live page: server_groups table → pill `warn`, `row_verdicts` = {not_evaluated 7, warning 9, good 5}; compliance → pill `warn`, 11 findings — exactly the acceptance (5 green / 9 amber / 7 gray). The stored server_groups artifact was **re-baked** (gitignored runtime state) so verdicts show without a re-collect; a real Collect regenerates the identical bake. The actual dot visuals are the operator's check after `./start.sh`.
+- **Other subjects unchanged:** CommCell Details (`_card_section_view`) and License Summary (`license_summary_to_view`) use their own builders; the table-branch change only adds metadata that non-verdict tables carry as all-`None` (no STATUS column).
+- **Open follow-up:** the scope-authoring MCP tool (`save_section_scope`, or a `scope` arg on `save_rule`'s bind) — scope is still set directly in the catalog.
+
+---
+
+## 2026-06-03 (ADR-0010 — section-level evaluation scope + per-row verdict (engine slice))
+
+**Branch:** `feature/basic-healthcheck-report-output`. **948 passing** (was 941; +7). An explicit evaluated **population** per section + a real **per-row verdict** — so the report can show good vs not-evaluated rather than infer from the absence of findings. Layout/render is a follow-up slice.
+
+### Added
+- **Section-level scope (data, not code):** an optional `evaluative.scope` on a section's binding — a list of AND-ed conditions (same shape/operators as `row_match` conditions). A row is IN SCOPE iff it satisfies every scope condition; absent ⇒ all rows in scope (unchanged default). Resolved by `db.rules.load_subject_section_scope`; carried on `ExtractionResult.section_scope` by both REST extractors.
+- **Scoped evaluation + per-row verdict:** `evaluative.row_match.evaluate_section_rows(rules, rows, *, scope)` — bound rules run ONLY on in-scope rows, and every row gets an explicit verdict: out-of-scope → `not_evaluated`; in-scope clean → `good`; in-scope flagged → worst severity (`warning`/`critical`). The shared `matches_conditions` (extracted from the rule matcher) backs both rule and scope predicates.
+- **Verdict baked at canonicalization:** `result_to_artifact` writes the per-row `_verdict` onto the `TableSection` items (D5 — no separate store; the same mechanism as a card field's `sev`; set **explicitly** so `not_evaluated` ≠ `good` ≠ `info`). `evaluate_subject` returns the identical per-row verdicts (`row_verdicts: [{section_id, row_ref, in_scope, verdict}]`) so the dry-run preview matches the baked artifact — and persists nothing.
+- `tests/test_section_scope_adr0010.py` (+7): scope gating; absent-scope no-op; the three verdicts on one fixture; worst-severity roll-up; multi-condition AND scope; the `result_to_artifact` bake; `evaluate_subject` preview consistency.
+
+### Notes
+- **Verified live** (read-only dry-run, persists nothing): `server_groups` scope = `association == "MANUAL"` → findings **14 → 11** (the 3 automatic empty groups 4/5/17 no longer flagged); per-row verdicts **5 good** (7,8,11,13,14), **9 warning** (6,9,10,19,36,37,39,40,41), **7 not_evaluated** (1,2,3,4,5,17,18); `rommelgroep` 19 & 41 still distinct, each warning. The seeded scope + `sg_naming_convention` are left in place as the acceptance probe (gitignored runtime state).
+- **Follow-ups:** the **layout slice** (render per-row `_verdict` — good/warning/critical/not_evaluated — in the report/UI); an **MCP tool to author section scope** (`save_section_scope`, or a `scope` arg on `save_rule`'s bind) — this slice set scope directly in the catalog.
+
+---
+
+## 2026-06-03 (Fix — `save_rule`-authored row rules were never evaluated: `kind` not persisted)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **941 passing** (was 939; +2 regression tests). ADR-0010 follow-up bug.
+
+### Fixed
+- **A `row_match` rule authored + bound via the `save_rule` MCP tool persisted, listed, and bound correctly but was never evaluated** by `evaluate_subject` / collection. Root cause: `save_rule` did not **persist** `kind`, while `load_subject_row_rules` filtered `kind == "row_match"` and silently skipped a kind-less def. The authoring validator defaults a missing `kind` to `row_match` (so the rule passed validation), but the stored def carried no `kind` — an author↔evaluator divergence. (NOT a bind/read **location** divergence: the data showed the `{ref}` correctly placed in the collected source's binding; the `"bound_sections": 2` fan was a red herring.)
+- **Fix (both sides now agree):** `load_subject_row_rules` treats a ref in `evaluative.row_rules` as `row_match` when `kind` is absent (`resolved.get("kind", "row_match")`) — matching the validator's default, so existing kind-less rules fire with **no data repair**; and `save_rule` now persists the canonical `kind:"row_match"` / `scope:"row"` so future stored defs are explicit.
+- **Regression guard (the coverage that was missing):** a true bind-write → eval-read **round-trip** test (`save_rule` + `bind` → `evaluate_subject` → assert the findings appear), on a fixture whose section exists under **two** source types (so the bind fans, `bound_sections == 2`) with a rule authored **without** an explicit `kind` — the exact structural trigger; plus a test that the tool persists canonical kind/scope. The earlier Phase-2b tests only checked persistence/`list_rules` (which agreed) or evaluated a rule bound a different way, so none exercised this path.
+
+### Notes
+- **Verified live** (read-only dry-run, persists nothing, live rule preserved): `evaluate_subject("server_groups")` now `rules_evaluated=2` → `sg_empty_group` (12) **and** `sg_naming_convention` on exactly rows **19 & 41** (both `rommelgroep`, MANUAL non-`GRP_`); those two rows carry both findings (multi-rule-per-row). `sg_naming_convention` is left in place as the live acceptance probe.
+
+---
+
+## 2026-06-03 (ADR-0010 Phase 2b — MCP authoring surface for row-scope rules)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **939 passing** (was 929; +10). Completes ADR-0010: row-scope rules are authored/managed via MCP, validated at authoring time.
+
+### Added
+- **MCP tools** (`mcp/server.py`): `evaluate_subject` (dry-run — wraps the Phase-2a service; reads the canonical/approved latest artifact, **not** the staging queue), `list_rules` (`subject_id?` / `enabled?`), `save_rule` (upsert + optional one-call bind), `delete_rule` (removes the registry row + strips its `{ref}` from every binding). Registered through the existing `_run_in_thread` event-loop offload.
+- **`db.rules` authoring helpers**: `save_rule` (upsert by `rule_id`; **bumps `version` on a body change**; preserves `created_by`; `enabled` defaults true), `bind_rule` (idempotent `{ref}` write onto a section's `evaluative.row_rules`), `delete_rule` (delete + strip refs), `list_rules` (subject/enabled filters), and `validate_row_match_rule`. `load_subject_row_rules` now **skips disabled rules**.
+- **Authoring-time validation** — rejected, not silently dropped at collection: unknown operator; `between` without `value2`; `emit:"count"` without `count_operator`/`count_value`; `scope` ≠ "row" (summary scope not yet implemented); and, when binding, a missing section, a non-table section, or a condition target / `{"ref":col}` that isn't a column of that section.
+- `tests/test_rules_mcp_adr0010.py` (+10): version bump on change; list filters (subject/enabled); idempotent bind; unbound save; disabled-not-loaded; delete strips binding; the full a–f + scope rejection matrix; and tool wiring (`save_rule` validates-before-persist; `evaluate_subject` no-artifact preview).
+
+### Notes
+- **Verified live in-process** (the MCP client must reconnect / `pkill -f cv-healthcheck-mcp` to pick up the new tool list): `list_rules()` returns the catalog rules; `evaluate_subject("server_groups")` → 12 findings via the tool.
+- `save_rule` keeps the rule body and the section binding **separable** (bind is optional; one rule can bind to several sections via repeated `save_rule` targets) — the common author+fire case is one call.
+- **ADR-0010 is complete** (Phase 1 core + 2a binding/dry-run + 2b authoring). Deferred (ADR): summary-scope rules (the validator carries the TODO); a count/aggregate kind if cross-row duplicate *detection* is wanted (`row_match` is per-row); a separate findings store only on the D5 revisit trigger (persistent ack surviving re-collection, or cross-engagement trend).
+
+---
+
+## 2026-06-03 (ADR-0010 Phase 2a — catalog binding + the `evaluate_subject` dry-run)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **929 passing** (was 922; +7). Connects the Phase-1 evaluator to the catalog and proves it live. Stops **before** the MCP authoring surface (Phase 2b).
+
+### Added
+- **`db.rules.load_subject_row_rules(db, subject_id, version)`** — resolves a subject's row-rule bindings (`extraction_instructions.evaluative.row_rules: [{"ref": rule_id}]`) against the rules registry into `{section_id: [resolved row_match defs]}` (the ref-from-binding model the metric/card rules use; unknown ref fails loudly; only `kind="row_match"`; deduped per section). Feeds both the dry-run and the extractors.
+- **`evaluative/subject_eval.py` — `evaluate_subject(db, subject_id)`** — the dry-run, the rules-side parallel to `probe`: re-runs the subject's bound row rules over its **latest stored artifact** and returns a findings preview, **persisting nothing** and never touching the artifact (D4/D5). `has_artifact=False` when nothing is collected yet (empty, not an error).
+- **Extractor wiring** — `RESTExtractor` and `CommandCenterExtractor` now set `result.section_row_rules = load_subject_row_rules(...)`, so bound rules fire on a real collection (the canonicalization pass bakes a `<subject>.compliance` FindingsSection).
+- `tests/test_subject_eval_adr0010.py` (+7): binding resolution (+ unknown-ref raise, empty-when-unbound); dry-run fires over the latest artifact with **distinct `row_ref` on same-named rows**; no-artifact is empty-not-error; **persists-nothing** (artifact bytes unchanged); the extractor populates `section_row_rules` and the pass bakes a finding end-to-end.
+
+### Notes
+- **Proven live** against the real catalog (2 rules + bindings authored into `data/app.db`): `evaluate_subject("server_groups")` → **12** empty-group findings incl. **both `rommelgroep` ids 19 & 41 as distinct findings** (row_ref=id — the duplicate-name correctness); `evaluate_subject("users")` → **2** never-logged-in (`last_logged_in == 0`: ids 4, 8). These rules now also fire on the next collection via the extractor wiring.
+- True duplicate *detection* is cross-row (not a per-row predicate) — out of `row_match`'s grain; the `rommelgroep` case is handled as distinct per-row findings, which is exactly the row_ref=id guarantee.
+- **Boundary (Phase 2b):** the MCP authoring surface — `list_rules` / `save_rule` / `delete_rule` / `evaluate_subject` + `save_rule` validation (row rule on a non-table section; `{ref}` to a missing column; `emit=count` without `count_operator`/`count_value`). Rules are authored by direct catalog writes until then.
+
+---
+
+## 2026-06-03 (ADR-0010 Phase 1 — row-scope evaluation rules: core + canonicalization pass)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **922 passing** (was 885; +37). Layer 5 (evaluation) reconciliation — see `docs/adr/0010-row-scope-evaluation-rules.md` (Accepted). Phase 1 is the **pure evaluation core + the canonicalization integration point**; **no catalog rule fires yet** (catalog binding + MCP authoring is Phase 2).
+
+### Added
+- **`evaluative/row_match.py`** — the row-scope evaluator (ADR 0010 D3): `evaluate_row_rule(rule, rows)` ANDs a list of predicates over each table row and emits findings. Operators `lt/lte/gt/gte/eq/ne/contains/not_contains/exists/not_exists/between/stale_days`; a predicate `value` is a literal or `{"ref": <other column>}` for field-to-field comparison (`used > available`); `emit=per_row` (one finding per matching row, **`row_ref` = the row's `id`, not its name**) or `emit=count` (one finding when the match count satisfies `count_operator`/`count_value`); `{value}/{target}/{count}/{row.<col>}` templating. A new **grain** in the engine package — not a branch in the per-value `engine._evaluate_rule`.
+- **`evaluative/coerce.py`** — centralized value coercion (ADR 0010 D6): `to_number` (leading-numeric out of unit strings `"0 TB"`→0; `"Unlimited"`→+∞; bool rejected), `is_absent` (`N/A`/`-`/``/`null` → a comparison against absent is **false**, not an error; `exists`/`not_exists` test it), `age_days` (ISO **and** unix-epoch — incl. `users.lastLoggedIn` `0`=never) for `stale_days`.
+- **`result_to_artifact` compliance pass** — after the extracted sections are built, runs each section's bound `row_match` rules over its rows and emits a derived **`<subject>.compliance` FindingsSection**, folding severities into the summary (ADR 0006 D1, one canonicalization path). Read-only over the rows; the rules never mutate the artifact. New `ExtractionResult.section_row_rules` carries the bindings; empty for every existing path (the pass is a no-op until a rule is bound).
+- `tests/test_row_match_adr0010.py` (+37): coercion; every operator; AND (all-true vs one-false); field-ref + `Unlimited`; `exists`/absent-is-false; `stale_days` (epoch-0 never + ISO); never-logged-in `eq 0`; `emit=count` threshold; templating; the **`rommelgroep` duplicate-name → distinct `row_ref` 19/41**; and the `result_to_artifact` integration (compliance section + summary status; no rules → no section).
+
+### Notes
+- **D5 accepted** (the key call): findings are a derived **in-artifact** FindingsSection (consistent with the existing engine baking verdicts at collection), **not** a separate store. Consequence: a rule change re-derives on the next collection / in the `evaluate_subject` dry-run, not by rewriting stored artifacts. Revisit a separate store only if persistent finding acknowledgement (surviving re-collection) or cross-engagement trend analysis becomes a goal.
+- **Phase 1 boundary:** nothing populates `section_row_rules` from the catalog yet, so no catalog-authored rule fires on a real collection. Phase 2 wires it: registry `kind:"row_match"` rows + the section binding (`extraction_instructions.evaluative.row_rules: [{ref}]`) + the extractors resolving them, plus the MCP tools `list_rules`/`save_rule`/`delete_rule`/`evaluate_subject`.
+- The original Layer-5 spec's collisions were dropped: no `0005` / second `rules` table (a registry extension instead), no DEVLOG, no separate findings store, and §9 (migrate `environment`) is void — already declarative (migration 0023).
+
+---
+
+## 2026-06-02 (Fix — `delete_subject` reconciles staging; full `server_groups` reset)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **885 passing** (+1). A logically **separate** change from the ADR-0009 D1/D2 build and Phase 1 — it shares `db/subjects.py` with the still-uncommitted D2 hunk, so the `delete_subject` hunk is staged separately when committing.
+
+### Fixed
+- **`delete_subject` now reconciles the review queue.** It already cascaded `subject_sections` / `subject_sources` / `subject_section_sources` / `subjects`, but left the subject's `staged_artifacts` rows behind — so a delete **orphaned** approved proposals (an approved `subject_proposal` with no catalog subject, which the staging UI / `list_proposed_subjects` misreads as "belongs in the catalog"). It now **hard-deletes** the subject's `staged_artifacts` rows (proposals AND imported `artifact` rows) in the same transaction, and returns `staging_rows_removed`. Chosen over mark-terminal: consistent with the function's "delete all related rows" contract, fully prevents orphan accumulation, and needs no new status value. The shared approval path (`execute_approval` / `reject_staged_artifact`) is untouched.
+- `tests/test_delete.py` (+1): a subject with a pending proposal + an approved artifact staged row → `delete_subject` removes both (`staging_rows_removed == 2`) and nothing for the subject resurfaces in `list_staged_artifacts(status="pending")`.
+
+### Removed
+- **Full `server_groups` data reset (live DB).** Deleted all **3** `staged_artifacts` rows for `server_groups` (the two real approved rows `stage_97a9…` / `stage_9513…` and the Phase-1 seed `stage_phase1_validate_server_groups`) so the next import starts clean. An **exhaustive value scan** confirmed `server_groups` survived in **no other table** (no `subjects` / `subject_sources` / `subject_section_sources` / `subject_sections` / `customer_subject_pin` / `rule_overrides` rows — all already 0). Post: `list_staged_artifacts(subject_id="server_groups")` empty; `list_subjects` has no `server_groups`.
+
+### Notes
+- Root cause of the orphan mess (from the prior read-only diagnosis): promotion always worked, but `delete_subject` never cleaned `staged_artifacts`, so deleted subjects stranded their approved proposals. This closes that gap going forward; the manual wipe clears the existing strand.
+- Sibling cleanup noted, out of scope: `delete_subject` also leaves `customer_subject_pin` / `rule_overrides` rows for a deleted subject — not orphan-visible in the staging queue, but a candidate for the same treatment later.
+
+---
+
+## 2026-06-02 (ADR-0009 Phase 1 — consolidated `/quick-hc` Staging + Subjects zones)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **884 passing** (was 876 after the ADR-0009 D1/D2 build; +8). **Built, not committed** — pending the in-browser confirmation ("tests green ≠ works"). The old `/quick-hc/staging` page, its template, the `artifact_card` macro, and the nav link are deliberately **left intact** as the fallback (removal is Phase 3).
+
+### Added
+- **Staging zone on `/quick-hc`** (above the existing Subjects / Report-Sections content). Pending subject proposals render as **empty structural shells** — section titles + types, with **table sections showing their header row even when empty** (the one `secBody` enrichment; collected-but-empty tables benefit too), metric sections as labeled placeholders, findings/card/chart as their empty bodies. Built **server-side**: `build_proposal_shell()` (`quickhc/subject_data_service.py`) synthesizes an empty-bodied `CanonicalArtifact` from a proposal's `artifact_json` and runs it through the existing `artifact_to_view`, reusing its canonical→view-token mapping — the JS stays a pure renderer.
+- **Pending-proposal data into `initial_data`** as a new `staging` list, filtered to `artifact_type=='subject_proposal' AND status=='pending'` (`_build_staging_shells`) — orphaned approved proposals and all `artifact`-type rows are excluded by construction.
+- **Two new endpoints** (`web/routes/quick_hc.py`): `POST /quick-hc/proposals/<stage_id>/approve` and `…/reject`, beside each shell's title (approve = primary success-outline, reject = quiet ×). Both route through the **unchanged** `execute_approval` / `reject_staged_artifact` and **redirect to `/quick-hc`** — a full reload re-renders both zones from fresh server state (no DOM surgery) and preserves the localStorage `_test` hide toggle.
+- `tests/test_proposals_routes.py` (+8): approve promotes into the catalog + redirects; reject marks rejected + redirects; double-approve flashes "not pending"; `/quick-hc` lists the pending shell; `build_proposal_shell` keeps table columns with empty rows, degrades gracefully on a garbage section, and returns None without a subject_id; `_build_staging_shells` includes only pending subject_proposals.
+
+### Notes
+- **Explicitly unchanged** (verified): `execute_approval`, `reject_staged_artifact`, `db/staging.py`, the `_test` hide button (`showTestSubjects()` / `TEST_SUBJECTS_KEY` / `renderLeft`), and the entire `/quick-hc/staging` page. The four shared-path suites (`test_staging_routes`, `test_db_staging`, `test_core_solidity`, `test_mcp_tools`) are untouched.
+- Headless render check against the live DB confirms `/quick-hc` serves the staging shell (`is_proposal`, title, `type:table`, header columns) and `/quick-hc/staging` still 200s — but the **in-browser eyeball is the operator's**. A pending `server_groups` proposal (re-proposed as `rest_command_center_api` / `/v4/servergroup`, stage_id `stage_phase1_validate_server_groups`) was seeded for that and left **pending** — approve it in the browser or discard.
+- Deferred to later phases: deleting `/quick-hc/staging` + the nav link (Phase 3); a home for `artifact_type=='artifact'` rows (Phase 2 design).
+
+---
+
+## 2026-06-02 (ADR-0009 D1/D2 — MCP-authored + multi-object Command Center API sources)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **876 passing** (was 862; +14). Implements the Accepted ADR-0009 D1/D2 (the decision record landed in the prior commit). `server_groups` is only the throwaway end-to-end test case — not authored or shipped here.
+
+### Added
+- **`cvhealthcheck/extractors/cc_endpoint.py`** — leaf policy module (stdlib only): `validate_cc_endpoint()` resolves/validates a Command Center collect endpoint as **relative + read-only** under `/commandcenter/api/` (rejects absolute URLs, protocol-relative, traversal, scheme/host), defaulting to `/commandcenter/api/CommServ`; plus the `COMMAND_CENTER_SOURCE_TYPE` / `DEFAULT_CC_ENDPOINT` constants (re-exported from `command_center.py`).
+- **D1 — generalized `CommandCenterExtractor`** (one extractor, no parallel producer; ADR 0006 D4.1): (1) collects from a **binding-declared relative endpoint** (`recognition_hints.endpoint`, validated), defaulting to CommServ so `environment` is byte-for-byte unchanged (still via `get_commcell_identity`); any other endpoint is a plain in-process GET. (2) an `output_as="table"` arm projects a multi-record collection (`raw[root_key]`) into rows via the shared nested-path resolver — **structural projection only, no operators** (ADR 0006 D2) — alongside the existing single-record card arm. Feeds the unchanged `result_to_artifact` tail.
+- **D2 — MCP-authored CC-API source**: `propose_new_subject` documents `rest_command_center_api` + an explicit relative `endpoint` field; `create_subject_from_proposal` validates that endpoint relative + read-only and persists it into `recognition_hints` (no schema migration). No labeller change needed (`_SOURCE_TYPE_TO_LABEL` already maps the type).
+- `tests/test_cc_api_multi_object_adr0009.py` (+14): endpoint policy (accept relative; reject absolute / protocol-relative / out-of-namespace / traversal / whitespace / non-str); `_project_table_rows` (column-map select+rename, passthrough, top-level list, degenerate cases); default-endpoint resolution; full propose→persist→extract→`TableSection`; absolute-endpoint rejection rolls back the proposal write.
+
+### Notes
+- **D4 trust boundary unchanged** (ADR 0008): the collect GET stays app-side / in-process with the in-memory token; the MCP layer asserts only a classification + a relative path string, never a token, host, or write. "Read-only" is the GET-only collect contract plus the `/commandcenter/api/` allowlist.
+- The `/v4/servergroup` shape (root key / column fields) is **unverified** until a live capture — nothing about it is hardcoded in the extractor; the per-subject binding carries it.
+- Operator-run acceptance test remains: re-propose a CC-API subject → approve → Collect hits the declared endpoint (not CommServ) and renders a table.
+
+---
+
+## 2026-06-02 (ADR-0008 B — Connections page; **ADR-0008 COMPLETE end to end**)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **862 passing** (was 857; +5). **This is the last piece —
+the trust boundary is built, proven against the live CommServe, and now has a real connect/status surface.**
+
+### Added
+- **`GET /connections`** + `connections.html` (extends `base.html`; matches the app's look — CSS variables,
+  `localtime_span` for timestamps) — a live connection surface:
+  - **Status from `token_store.status()`:** `connected` → shows the principal + connected-at (+ token-expiry
+    when known) and a **Disconnect** button; `disconnected` / `expired` → an honest **"Disconnected —
+    reconnect"** prompt (expired is worded as a reconnect, not an error) with a **Connect** action.
+  - **Connect** reuses the existing login — a link to `/login?next=/connections` (no second login path; the
+    operator enters the password live, the store fills, the page reflects `connected`).
+  - **Disconnect** (`POST /connections/disconnect`) calls `clear_current_token()` (store + session markers) and
+    returns to the page as `disconnected`.
+  - **Read-only connection target** from `Settings`: CommServe URL (`CV_BASE_URL`), SSL verification, customer,
+    username — **no token, no password ever rendered**. Noted as environment-configured (editing is out of scope).
+- A **"Connections"** sidebar nav link (`base.html`) — the long-planned Settings/Connections item.
+- `tests/test_connections_page.py` (+5): disconnected→reconnect+Connect link; connected→principal+Disconnect (token
+  never rendered); expired→reconnect (not error); disconnect→clears store + redirects; target shown without secrets.
+
+### Notes
+- **ADR-0008 is complete end to end:** the AI/MCP layer never holds a CommServe token and reaches the CommServe
+  only through the app's loopback endpoint (C); the app holds the token in memory only (A, Flavour 1); the token
+  is out of the cookie with the gate on the store (B); redaction is shared and app-side (D); the direct probe is
+  retired (E); and the operator now has a connect/status surface (B, this).
+- Remaining work is only the **named, deferred future items**, none in this ADR: RBAC over the principal/capability
+  pair, Flavour 2 (encrypted stored credentials / multi-user), oversized-response tiering, and reactive expiry
+  (flip the store to expired on a CommServe 401).
+
+---
+
+## 2026-06-02 (ADR-0008 B consolidation — CommServe token out of the cookie, auth gate on the store)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **857 passing** (was 856; +1). **The CommServe token is
+no longer at rest in the browser** — it lives only in the in-process store.
+
+### Changed
+- **De-cookie:** `set_current_token` (`auth/commvault_auth.py`) **no longer writes the token to the session
+  cookie** — only the non-secret `CUSTOMER_ID` / `USERNAME` markers. The token lands solely in the in-process
+  store (`set_active_token`, wired in the prior brief).
+- **Read seam repointed:** `_current_token()` (`web/routes/shared.py`) now returns `get_active_token() or ""`
+  (was `get_current_token()`); its four web consumers (`/collect`, `get_commcell_identity`, `_reportsplus_client`,
+  the dormant `_api_client`) follow automatically, `""` semantics preserved.
+- **Auth gate keyed off the store:** `is_authenticated()` → `get_active_token() is not None`;
+  `is_authenticated_for(cust)` → `get_active_token() is not None and get_current_customer_id() == cust` (the
+  binding customer stays a non-secret cookie marker). `get_current_token()` is now dead (no real callers, reads
+  the now-absent cookie key) — left returning `None` harmlessly.
+- **`token_store` defense-in-depth (the one net production delta vs the original plan):** `get_active_token()`
+  returns `None` for a non-string / blank / whitespace-only stored token, and `status()` reports `disconnected`
+  for it — preserving the old cookie-token whitespace guard at its new home.
+
+### Notes
+- **Lock-out behaviour is honest** (the reason we de-cookied with care): a process restart empties the in-memory
+  store, so the next request is **not-authenticated → `/login` redirect**; a **stale cookie token is ignored**
+  (the gate reads the store, not the cookie) — no false logged-in, no silent failure. Verified via a test-client
+  simulation of the restart scenario (operator browser check still recommended).
+- **Test reshape (guiding principle: move the property, don't drop coverage):**
+  - `test_phase3_auth_customer_bound.py` — **rewritten** to the store model: the `set_current_token` test now
+    asserts the **de-cookie invariant** (token in store, `SESSION_TOKEN_KEY` NOT in the cookie, markers present);
+    `is_authenticated_for` cases keep the binding-required property (store token + matching marker → True;
+    mismatched/missing marker / no token → False); the legacy-unbound-**cookie**-token case became
+    `requires_a_customer_marker` (binding-required, store-side); login/collect tests assert token-to-store.
+  - `test_api_auth_status.py` — repointed to the store (via a new `authenticate` fixture); the whitespace case
+    **retargeted** to a blank **stored** token reading as unauthenticated.
+  - `test_token_store.py` — the brief-#5 cookie-unchanged test **flipped** to the de-cookie invariant; added the
+    blank/whitespace-token-disconnected case.
+  - Mechanical auth-setup pokes (`test_license_summary_web`, `test_platform_foundation`,
+    `test_security_assessment_registry`) switched from `session[SESSION_TOKEN_KEY]=` to populating the store.
+  - **New in `conftest.py`:** an `authenticate(client, …)` fixture (store token + cookie markers) so the next
+    auth change doesn't ripple across files, and an autouse `_reset_token_store` (the store is process-global —
+    a token set in one test must not leak).
+
+---
+
+## 2026-06-02 (ADR-0008 E — retire the probe to the app-mediated endpoint; AI holds no CommServe token)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **856 passing** (was 851). **This makes the direct
+AI-holds-token model (committed at `e193e4b`) superseded in fact, not just on paper — ADR-0008's core is
+complete:** the AI/MCP layer reaches the CommServe **only through the app**.
+
+### Changed
+- **`probe(path)` (`mcp/server.py`) is now app-mediated.** It no longer holds a CommServe token or calls the
+  CommServe directly: it `requests.post`s the app's loopback endpoint `POST /internal/commserve` (default
+  `http://127.0.0.1:5001`, overridable via `CV_INTERNAL_ENDPOINT_URL`) with `X-Internal-Secret`
+  (`CV_INTERNAL_SECRET`) and the read contract `{path, principal:"mcp-operator", capability:"read"}`. The
+  **app** fetches with its own held token and returns the response **already redacted** — so the probe's own
+  `redact_user_descriptions` call is gone (redaction is app-side). Connected → returns `data` + surfaces
+  `status_code`/`ok`/`error` (a CommServe non-200 stays visible); disconnected/expired → a clear
+  "log in via the app to reconnect" message (visible-not-silent); raises only on a missing
+  `CV_INTERNAL_SECRET`, an unreachable app, or a guard rejection (403/503).
+- **Removed the direct-token machinery:** `_probe_token()` and the `CommvaultApiClient` / `load_login_token`
+  / `load_token` / `redact_user_descriptions` imports in `mcp/server.py` (probe was their only user).
+- **`run-mcp.sh`:** dropped the `CV_LOGIN_TOKEN_FILE` export (and there is no `CV_LOGIN_TOKEN` now). It only
+  `source`s `~/.cv-healthcheck-env` for `CV_INTERNAL_SECRET`; the `.login_token` file is simply no longer read
+  (left on disk, untracked).
+
+### Notes
+- Probe tests repointed to mock the **HTTP POST to the endpoint** (no CommServe client): connected (asserts
+  the redacted data passes through + the shared-secret/read contract is sent), disconnected reconnect message,
+  CommServe-non-200 surfaced, missing-secret raises, app-unreachable raises, guard-rejection surfaces.
+- Added `tests/test_redaction.py` (+4) — the shared `redact_user_descriptions` lost its only test home when the
+  probe stopped redacting; gave it direct unit coverage (basic / nested / non-str / scalar passthrough).
+- **Capstone live smoke (operator + AI) still required** — `tests green ≠ works`: add `CV_INTERNAL_SECRET` to
+  `~/.cv-healthcheck-env`, **reconnect the MCP** (re-spawns on the retired-probe code), log in via the browser,
+  then `probe("/commandcenter/api/v4/user")` returns the same redacted data — now fetched through the app with
+  the MCP holding no CommServe token. Deferred (unchanged): the Connections page + cookie consolidation (step 7).
+
+---
+
+## 2026-06-02 (ADR-0008 C — loopback internal endpoint `POST /internal/commserve`)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **851 passing** (was 839; +12 endpoint tests).
+
+### Added
+- **`POST /internal/commserve`** (`src/cvhealthcheck/web/routes/internal.py`) — the single trust-boundary
+  door the AI/MCP layer may call; the **app** makes the CommServe GET with its own held token and returns a
+  redacted envelope. Registered via one import in `routes/main.py` (same `main` blueprint).
+  - **Guards (fail-closed, generic):** missing shared secret → **503** (never serve unguarded); non-loopback
+    `remote_addr` → **403** (defense-in-depth); `X-Internal-Secret` mismatch (constant-time `hmac.compare_digest`)
+    → **403**. All guard failures return a generic `{"error":"forbidden"}` — never revealing which failed; the
+    secret/token are never logged.
+  - **Request contract:** JSON `{path, principal, capability}` (all required strings). `capability` must be
+    `"read"` (GET-only, read-only) else **400**; `path` must be relative (rejects scheme / netloc /
+    protocol-relative) else **400**. `principal` is carried but not yet authorized (RBAC deferred, ADR-0008
+    Decision 6 / future ADR).
+  - **Token + call:** reads `get_active_token()`. **Disconnected/expired → HTTP 200** with
+    `{"ok":false,"state":"disconnected"|"expired","status_code":null,"data":null,"error":"no active token; reconnect"}`
+    and **never constructs a client** (a `None` token would make `CommvaultApiClient` fall back to the `.token`
+    file — the path ADR-0008 kills). Connected → `CommvaultApiClient(token=tok).get(path)` (base_url/SSL from
+    env), returns `{"ok":result.ok,"state":"connected","status_code":...,"data":redact_user_descriptions(result.data),"error":...}`.
+    A CommServe non-200 (incl. 401) **passes through in the envelope** (our endpoint still returns 200) — not
+    translated into a bare endpoint 401.
+- **`Settings.internal_secret`** (`config.py`) from `CV_INTERNAL_SECRET` (default `None`). Operator sets it
+  out-of-band in `~/.cv-healthcheck-env` (sourced into both the app and MCP envs); never in the repo.
+- `tests/test_internal_endpoint.py` (+12, CommServe mocked, no live call): 503-not-configured (+client never
+  built), 403 wrong/missing secret, 403 non-loopback, 400 ×6 (missing fields / bad capability / absolute /
+  protocol-relative path), disconnected-200-no-client, connected-happy-redacts-description, CommServe-401
+  passthrough.
+
+### Notes
+- **MCP not yet repointed** — the probe still calls the CommServe directly; pointing it at this endpoint is
+  the final build step. Deferred in-endpoint (noted in code): oversized-response summarisation and reactive
+  expiry (flip store to expired on a CommServe 401 — needs the auth-failure distinction).
+
+---
+
+## 2026-06-02 (ADR-0008 A wiring — login populates the held-token store; reads + cookie unchanged)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **839 passing** (was 837; +2 wiring tests).
+
+### Changed
+- **`set_current_token` (`auth/commvault_auth.py`) now ALSO publishes the token into the in-process
+  `token_store`** (`set_active_token(token, principal=<cleaned username>, expires_at=None)`), after the
+  existing session writes — an **addition**, the session cookie writes are byte-for-byte unchanged.
+  `expires_at=None` because `login_to_commvault` returns only the token, no TTL (reactive expiry on a
+  CommServe 401 is a later endpoint-side enhancement).
+- **`clear_current_token` now also calls `clear_active_token()`** so the store never outlives the session.
+  It's the single clear chokepoint behind `/logout` (`basic.py:73`) and the auto-clear paths
+  (`quick_hc.py:214/381/441`, `shared.py:99`); the store-clear is unconditional (the store is
+  process-scoped, not request-bound).
+
+### Notes
+- **Deliberately narrow:** this only *fills* the store so the upcoming loopback endpoint (brief #6) can
+  read it via `get_active_token()`. **No token read is repointed, `is_authenticated()`/`is_authenticated_for()`
+  are untouched, the web path is unchanged.** The read-repoint + de-cookie + gate change is the later
+  consolidation step, done with the Connections-page "reconnect" UI — because the store is in-memory and
+  empties on restart while the cookie survives, repointing reads before that UI exists would turn a restart
+  into a silent failure.
+- Tests authenticate by poking `session[SESSION_TOKEN_KEY]` directly (bypassing `set_current_token`), so
+  those sessions don't fill the store — harmless here (reads unchanged), but a ripple to handle at the
+  consolidation step.
+
+---
+
+## 2026-06-02 (ADR-0008 A — in-process held-token store module, not yet wired)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **837 passing** (was 829; +8 token-store tests).
+
+### Added
+- **`src/cvhealthcheck/token_store.py`** — the app's single in-memory held-token slot (ADR-0008 Flavour 1,
+  no credential at rest). Stdlib only; imports nothing from Flask / web / MCP / `shared.py`, so both the web
+  process and the future loopback endpoint can use it without a circular import. Public surface:
+  `set_active_token(token, *, expires_at=None, principal=None)`, `get_active_token() -> str | None`,
+  `clear_active_token()`, `status() -> dict`. A `threading.Lock` guards the slot (the dev server may serve on
+  multiple threads). **Expiry is enforced in the store** — `get_active_token()` returns `None` once past
+  `expires_at` (never a stale string), and `status()` distinguishes `"expired"` from `"disconnected"` so
+  "expiry is visible, not silent" (ADR-0008 Decision 5) has a home. `get_active_token()` mirrors today's
+  `_current_token()` shape (`str | None`) so the read-seam swap is a drop-in. **Single-process, single-slot**
+  (ADR-0008 Consequences) — a multi-worker deployment would reintroduce cross-process sharing, which this
+  does not solve. Token value never logged or returned by `status()`.
+- `tests/test_token_store.py` (+8): set→get, clear/unset→disconnected, past-expiry→None+expired,
+  future-expiry→connected, metadata round-trip through `status()`, epoch-float expiry, overwrite-replaces-slot.
+
+### Notes
+- **Not yet wired** — nothing imports this module yet (zero behaviour change, like `redaction.py`). Populating
+  it at login and repointing the `_current_token()` reads is the next brief.
+
+---
+
+## 2026-06-02 (ADR-0008 D — extract user-description redaction to a shared module)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **829 passing** (unchanged — leaf refactor, no behaviour change).
+
+### Changed
+- **`redact_user_descriptions` moved out of the MCP probe into `src/cvhealthcheck/redaction.py`** (renamed
+  from the private `mcp/server.py::_redact_user_descriptions`). Self-contained (stdlib only; imports nothing
+  from the MCP/web/Flask layers), so **both** the MCP layer and the future app-mediated loopback endpoint
+  (ADR-0008 C) can import it without a circular dependency — the app-mediated path must redact before
+  returning, so redaction can no longer live only in the MCP module. `mcp/server.py` now imports it and the
+  probe's single call site points at the new name. Logic + recursion are identical; the redaction tests
+  (exercised through `probe`) stay green at 829.
+
+---
+
+## 2026-06-02 (MCP — `probe(path)` tool: exploratory Command Center REST GET, store-free)
+
+**Branch:** `feature/basic-healthcheck-report-output`. **Not committed** (held for review + live smoke). **829 passing** (was 824; +5).
+
+### Added
+- **`probe(path: str) -> dict` MCP tool** (`mcp/server.py`) — an authenticated GET against an arbitrary
+  Command Center REST path (e.g. `/commandcenter/api/v4/user`) that returns the response **store-free**
+  (no artifact/catalog/db write, ever). Reuses the existing fetch primitive `CommvaultApiClient.get`;
+  registered in the offload tuple so its blocking call runs in a worker thread (the #35 loop-blocking
+  guard the registration comment already anticipates for "a live REST/CommCell call"). GET only.
+  - **Non-200 is returned readable** (`ok`/`status_code`/`error`/`data` intact) so the first live call
+    doubles as the auth-acceptance check; only a **transport failure** (connection/DNS/timeout, or unset
+    `CV_BASE_URL` → `status_code is None`) raises `ValueError`.
+  - **Redaction:** every user-record `description` is replaced with `[redacted: <n> chars]` (recursive,
+    shape-agnostic — the V4 `/user` shape isn't pinned), all sibling fields raw. The raw `text` field is
+    **dropped** from the result (it's the verbatim pre-redaction body that duplicates `data` for JSON —
+    returning it would bypass redaction). Secret *detection* stays a propose-stage evaluator (field
+    shape, not contents).
+- Tests (`tests/test_mcp_tools.py`, +5, no live calls): passthrough+redaction, sibling-intact,
+  non-200-returned-not-raised, transport→`ValueError`, nested/shape-agnostic redaction, and a
+  writes-nothing guard (any `save_artifact`/`get_db` call explodes).
+
+### Notes
+- **Token model — interim, deliberate (documented in `_probe_token`'s docstring).** The probe authenticates
+  with the operator-maintained, **session-less** token via a single swappable seam `_probe_token()` →
+  `load_login_token()` (`​.login_token`/`CV_LOGIN_TOKEN`) falling back to `load_token()` (`.token`). This is
+  **decoupled from the web Connections flow on purpose**: web connect binds a token to the Flask session
+  (signed cookie) and persists nothing to disk/env (`set_current_token`), so a separate process can't read
+  it. This is **not the end state** — the known destination is a **shared server-side token store** both the
+  web and MCP processes read (Option 3), adopted when the MCP server becomes a routine companion to the web
+  app; a connect-writes-token-to-disk bridge (Option 2) is a possible stopgap that may be skipped. Moving to
+  the shared store swaps `_probe_token` only — `probe` is unaware of the source.
+- **Identity guard deferred (noted, no round-trip added).** Acting-user identity is not cheaply available
+  from an arbitrary-path GET: `ApiResult` carries no acting-user, the V4 `/user` response shape isn't pinned,
+  and a dedicated whoami call would be a round-trip the brief said not to add. Flagged as a follow-up (a
+  `whoami` probe or an acting-user field once a cheap source is confirmed). Surfacing the token *source* was
+  rejected — it would make `probe` care where the token comes from, violating the swappable-seam principle.
+- **`API_MAPPING.md` intentionally NOT updated** — gated on a live `GET /commandcenter/api/v4/user` validation
+  (auth acceptance + actual response shape); the first `probe` call is that check.
+
+---
+
+## 2026-06-01 (ADR 0007 Phase 3 slice B — retire the live environment builder; environment fully on the declarative path — **ADR 0007 COMPLETE**)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `c44d6b1`. **824 passing** (was 836; −14 = the obsolete `test_environment_per_field.py` removed, +2 new). Net **−337 lines** of code.
+
+### Removed
+- **`_build_environment_subject` and its helper cluster** (217 lines): `_build_environment_identity_section`,
+  `_load_environment_card_block`, `_load_environment_identity_rules`, `_normalize_timezone`,
+  `_hex_commcell_id` — plus the `if subject_id == "environment"` dispatch special-case and the
+  now-unused `import re` / `build_card_section` import. Environment is no longer registered in
+  `_legacy_builders()`; it is served by the uniform "canonical store wins" generic path like every
+  other subject. **The live-serve special case for environment is GONE.**
+- `tests/test_environment_per_field.py` (257 lines) — entirely tested the removed live builder; the
+  9-field card + per-field rules + view_mode are covered by the extractor / canonical-view tests.
+
+### Changed
+- **Empty-state (pre-first-collect):** `_build_generic_subject`'s no-artifact branch now default-selects
+  the first source, so the command-center tab's Collect button is visible before the first collect; and
+  the dispatch builds the generic not-collected state for builderless tiles in the no-db `list_tiles`
+  path too (previously dropped) — so environment is never skipped there.
+- **3 cosmetics absorbed in the generic path** (so removal is a visual no-op): CC source badge `v`
+  (Validated) when an artifact exists else `a`; CC source description from `SOURCE_DESCRIPTIONS` (was
+  empty); subtitle `"<host> · <version>"` derived from the identity card for command-center artifacts
+  (was "Data available").
+
+### Notes
+- **Caller audit (the gate before deletion):** the only live reference to the removed functions was the
+  `legacy_builders` registration; everything else was the dying cluster, migration **comments**, or
+  tests. No route / report page / detail GET called them. **KEPT** (shared, not env-specific):
+  `_load_legacy_commcell` (feeds the CommCell header), `get_commcell_identity` (used by the Command
+  Center **extractor**), `_build_tile_sources`, `_nodata_subject`, `_command_center_*`.
+- **Row 7** (the stale plain-`rest` environment source) left **INERT, not deleted**: its only reader
+  (`_load_environment_card_block`) is now gone and its tab was suppressed in slice A; deleting it would
+  require cascading its FK-child binding (`subject_section_sources`) for zero functional gain — so per
+  the "don't delete if an FK depends on it" guard, it stays (invisible).
+- **Behavior change worth noting:** environment no longer auto-renders its card from the global
+  `commserv.json` — it shows its card from a **collected artifact** (nodata until first collect), exactly
+  like every other subject. The CommCell header still reads `commserv.json` via `_load_legacy_commcell`.
+- **Visual no-op verified** (real dispatch, stored artifact): CommCell Details · subtitle
+  `cs01 · 11 SP40.47` · CC tab active · badge Validated · Endpoint/Host meta · "Last collected" (local) ·
+  9-field table · per-field verdicts. **Reviewer gate:** `./start.sh` + cache-busted reload — environment
+  must render the SAME as before, plus sanity-check the empty state (a fresh/uncollected environment
+  shows the not-collected tile with the Command Center tab + Collect, not a crash/blank). Final
+  confirmation is the reviewer's browser + a fresh live collect.
+
+---
+
+## 2026-06-01 (UI — surface command-center source metadata in the generic panel + group "Last collected" with Collect)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `7e85c95`. **836 passing** (was 832; +4).
+
+### Added
+- **`SOURCE_ENDPOINTS` registry constant** — the REST endpoint a live source collects from, keyed by
+  canonical source id (`rest_command_center_api → "GET /commandcenter/api/CommServ"`). Source-TYPE
+  metadata, mirroring `SOURCE_DESCRIPTIONS`; sources without a fixed single endpoint are absent.
+
+### Changed
+- **The shared generic source panel now surfaces the command-center descriptor** instead of "No source
+  metadata is available yet." `_build_generic_sources` attaches **Endpoint** (the `SOURCE_ENDPOINTS`
+  constant) + **Host** (read from the collected identity card via `_command_center_host` — Hostname,
+  fallback CommCell Name) to the `rest_command_center_api` source. Built entirely in the **generic
+  path**, so it survives the live builder's retirement. Other source types keep empty meta (no
+  regression — no generic source surfaced meta before; the placeholder still shows when meta is
+  genuinely absent).
+- **"Last collected" moved INSIDE the source card**, grouped with the Collect button (action + last-run
+  as one unit), rendering whether or not a Collect action exists. Still routed through `fmtUtc` →
+  `window.fmtLocalTime`, so local-time rendering is preserved. The **Template dropdown is untouched** —
+  it stays in the provenance block below the card.
+
+### Notes
+- **Host is read from the card, not the source block.** The artifact's `source.commcell_name` is the
+  *customer* name ("Default"); the CommCell host ("cs01" = `cc.hostName`) lives only in the collected
+  identity card. So `_command_center_host` reads it from the card (graceful: absent → Host row omitted).
+  The cleaner long-term home is populating `source.endpoint`/host at collect time, but that touches the
+  stored artifact (out of scope here).
+- **Slice-B readiness:** after this slice the generic CC source `meta` matches the live builder **exactly**
+  (Endpoint + Host=cs01). The only remaining live-builder-unique output is **cosmetic** — `status` badge
+  (Validated vs Available), the source `description` text, and the tile `subtitle` (`cs01 · 11 SP40.47`
+  vs "Data available"). `_build_environment_subject` is now **fully replaceable**; source metadata was the
+  last substantive thing it uniquely authored. (`_build_environment_subject` was NOT retired this slice.)
+- Untouched: collect/extractor/auth logic, storage, artifact schema, CEL, the evaluate path, the report
+  page, and the Template selector.
+- **Reviewer browser check (needs `./start.sh` + cache-busted reload):** (i) environment — source card
+  shows Endpoint + Host (not the placeholder), "Last collected" sits inside the card next to Collect in
+  local time, Template unchanged below; (ii) a non-CC subject (e.g. License Summary / Client Growth) —
+  panel still renders, "Last collected" relocated consistently, no regression. Final confirmation is the
+  reviewer's browser.
+
+---
+
+## 2026-06-01 (UI fix — load localtime.js on the standalone workspace page; completes the browser-local timestamp slice)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `7f2dc0e`. **832 passing** (was 831; +1).
+
+### Fixed
+- **The workspace "Last collected" still rendered raw UTC** after `58b0079`. Root cause: `quick_hc.html`
+  is a **standalone** document (no `{% extends "base.html" %}`), so the `localtime.js` include `58b0079`
+  added to `base.html` never reached it — `window.fmtLocalTime` was undefined on the workspace, so
+  `fmtUtc` silently took its raw-UTC fallback. Added the `localtime.js` `<script>` to `quick_hc.html`
+  itself, **before** `quick_hc.js` (fmtUtc delegates to `window.fmtLocalTime`, so the helper must be
+  defined first), with the page's `v=asset_version` cache-bust.
+
+### Notes
+- **`base.html:19` left as-is (reported, not expanded):** `asset_version` is passed only to
+  `quick_hc.py`'s two `render_template` calls — it is **not** a global context processor — so it isn't in
+  `base.html`'s scope. Adding `v=asset_version` there would raise `Undefined` on the other routes that
+  extend base. base.html's include works on those pages (first-load); only the standalone workspace was
+  missing one.
+- **Guard test** (`test_platform_foundation.py::test_workspace_loads_localtime_helper_before_quick_hc_js`):
+  the rendered `/quick-hc` references `static/localtime.js` **before** `static/quick_hc.js`, so this
+  standalone-page miss can't silently recur. (It matches the `static/` src paths, not bare filenames,
+  which also appear in on-page comments.)
+- **Reviewer browser check (needs `./start.sh` + cache-busted reload):** the workspace "Last collected"
+  now shows local time + zone label (e.g. `2026-06-01 21:49 CEST`), not `… UTC`.
+
+---
+
+## 2026-06-01 (UI — render UTC timestamps in browser-local time with a zone label; display-only)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `58b0079` (code + tests). **831 passing** (was 827; +4).
+
+### Changed
+- **Every user-facing timestamp now renders in the browser's LOCAL timezone with an explicit zone
+  label** (e.g. `2026-06-01 21:30 CEST`) instead of UTC, fixing the UTC-vs-local misread (a stored
+  `19:30 UTC` looked wrong to a viewer at 21:30 CEST). Correct-by-default; no setting/picker (the
+  picker was deliberately deferred — browser-local is the chosen scope).
+- **One helper each side, routing all 20 call sites:**
+  - `web/static/localtime.js` (new) — `window.fmtLocalTime(iso)` (UTC ISO → local + zone label, via
+    `Intl.DateTimeFormat`, numeric-offset fallback) plus a `data-localtime` DOM sweep on load. Loaded
+    globally via `base.html` (+ the standalone `project_detail.html`).
+  - `localtime_span(value, fallback)` Jinja global (`web/app.py`) — emits a `data-localtime` span
+    carrying the machine-readable UTC, with the raw value as fallback text (no-JS / bad value) and a
+    plain placeholder for empty values.
+  - `quick_hc.js` `fmtUtc` now delegates to `window.fmtLocalTime` (the workspace "Last collected" line).
+
+### Notes
+- **HARD CONSTRAINT held — storage stays UTC.** `collected_at` / `generated_at` / `imported_at` are
+  unchanged ISO-8601 `…Z`; no stamping/serialization/storage/extractor code was touched (verified by a
+  guard test asserting a collect still stores `…Z`, and by `git diff --name-only` — changes are all in
+  `web/`). This slice changes rendering only.
+- **Call-site inventory (20):** 1 JS workspace render (`quick_hc.js` "Last collected") + 19
+  server-rendered template timestamps across 9 templates — `quick_hc_report.html` (×6:
+  generated_at/generated_on + license/client_growth/capacity imported_at + bjs generated_at),
+  `quick_hc_staging.html` (created_at, reviewed_at), `project_detail.html` (created_at,
+  working_state_modified_at, finalized_at), `security_assessment.html` (collected_at, generated_on,
+  imported_at), `quick_hc_commcell.html` (collected_at), `quick_hc_backup_job_summary.html`
+  (generated_at), `security_assessment_registry_history.html` (imported_at, executed_at), and the
+  license_summary / backup_job_summary preview partials + the source_provenance partial. All values
+  were confirmed machine-readable ISO-UTC at source (`collected_at()` / `_now()` / artifact
+  `.isoformat()`), so none needed raw-value threading.
+- **STOP-AND-STEER evaluated, did not trigger:** the report page (`quick_hc_report.html`) is a live
+  on-screen render (route `render_template`), not a baked/exported customer document — `finalize_project`
+  snapshots the JSON artifacts (UTC preserved), it does not bake the HTML — so browser-local is correct.
+  No timestamp consumed for sorting/comparison was touched (SQL `ORDER BY created_at` uses the stored
+  UTC value, unaffected).
+- **Reviewer browser check (requires `./start.sh` — JS/template — + cache-busted reload):** every
+  inventoried timestamp now shows local time with a zone label; "Last collected" in the workspace is the
+  headline fix. Tests prove the server seam + the storage guard; the browser is the final confirmation.
+
+---
+
+## 2026-06-01 (ADR 0007 Phase 3 follow-on, slice A — surface the command-center source tab + Collect by default, thread card view_mode, flash auth-failed collects)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `afecdc2` (code + tests). **827 passing** (was 821; +6).
+
+### Fixed
+- **BUG 1 — command-center source tab dropped in the generic path.** Once a stored artifact wins
+  precedence, environment renders via `_build_generic_subject` → `get_tiles` → `_build_db_source_entries`,
+  whose `_SOURCE_TYPE_TO_CANONICAL_ID`/`_SOURCE_TYPE_TO_LABEL` (`registry.py`) only knew `{html,csv,rest,json}`
+  — so the `rest_command_center_api` row mapped to `src_id=None` and was dropped. Added the mapping →
+  a **"REST / Command Center API"** tab with its `/quick-hc/<id>/collect` url; `_build_generic_sources`
+  (`subject_data_service.py`) now emits the collect action (`requiresSession=True`) for it.
+- **BUG 2 — activeSource pointed at the dropped tab.** `artifact_to_view` maps `rest_commserve` →
+  `REST_COMMAND_CENTER_API_SOURCE_ID` — the **same id string** the now-mapped tab renders with — so
+  `quick_hc.js:501` resolves `activeSrc` and `:503` shows the panel + Collect button **by default**
+  (previously reachable only by manually clicking the mislabeled Reports-Plus tab). Resolved by BUG 1's
+  mapping; the stored artifact's `source.type` was **not** changed.
+- **BUG 3 — silent auth-failed collect.** The customer-bound auth gate (`quick_hc.py`) did a bare
+  redirect with no flash, so an auth-failed collect looked identical to a stale success (cost multiple
+  diagnosis cycles). It now flashes **"Collection failed: sign in to Commvault for customer '…'…"**
+  before redirecting. The `result.errors` flash and success flash are unchanged.
+
+### Changed
+- **Card `view_mode` now rides on the artifact (render-only).** `CardSection` gained an optional
+  `view_mode` (`models.py`, additive-absent serializer — existing card artifacts stay byte-identical);
+  `build_card_section` captures the binding's `card.view_mode`; `artifact_to_view` threads it to
+  `_card_section_view` so a card authored `view_mode="table"` renders as the **Field/Value table**
+  (matching the live card). Source-agnostic; unset → tiles (unchanged). The stored environment artifact
+  was regenerated so it carries `view_mode="table"`.
+- **Stale plain-`rest` source tab suppressed for command-center subjects.** When a subject has a
+  `rest_command_center_api` source, `_build_db_source_entries` hides the legacy plain-`rest` tab so the
+  user sees ONE correct source. Generic (keyed on source_type, not subject id) and reversible; the
+  `rest` row itself is untouched. environment is the only command-center subject today.
+
+### Notes
+- **This slice is UI plumbing only — the live builder `_build_environment_subject` was NOT retired**
+  (still in `legacy_builders`). Retiring it is the **next slice**.
+- Non-goals held: the "canonical store wins" precedence, the collect/extractor/auth *logic* (beyond the
+  BUG-3 flash), and CEL/`html.py`/`csv.py` are all unchanged.
+- **Reviewer browser check (requires `./start.sh` — Python/template/JS state — + a cache-busted reload):**
+  at `localhost:5001#subject=environment`, by default (no manual tab click) the **Command Center API**
+  tab is selected, the **Collect button is visible**, and the card renders as a **TABLE**. Tests prove
+  the data contract; final confirmation is the reviewer's browser.
+
+---
+
+## 2026-06-01 (ADR 0007 Phase 3 — environment full 9-field parity card spec + rules on the command-center artifact)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+
+### Added
+- **Migration 0028** (`0028_environment_full_parity_card_spec.sql`): replaces the provisional
+  3-field spec migration 0026/0027 put on environment's `rest_command_center_api` binding with the
+  **full 9-field parity spec** mapped to the real GET CommServ dot-paths — CommCell Name
+  (`commcell.commCellName`), CommCell ID (`commcell.commCellId`, `type:hex` → "2"), CommCell GUID
+  (`commcell.csGUID`), Version (`csVersionInfo`), OS Type (`osType`), Current/Installed SP Version,
+  Timezone (`csTimeZone.TimeZoneName`), Hostname (`hostName`) — plus the **3 per-field rules**
+  retargeted from row-7's flat keys (`version`/`timezone`/`name`) to row-22's dot-path field ids.
+  Pure idempotent + FK-safe `UPDATE` of one binding row.
+
+### Notes
+- **Parity verified (the gate):** the STORED command-center artifact now resolves all 9 fields from
+  the real nested `.raw` dict (no resolver changes — D2 dot-paths + D3 hex carry it), and the 3 rules
+  fire **good / good / good** with a **good** roll-up — matching the live-served identity card.
+- **The live builder `_build_environment_subject` is NOT retired this slice (steered).** Removing it
+  is not a clean "remove from `legacy_builders`": the live builder also *authors* environment's
+  `rest_command_center_api` SOURCE tile + Collect button + `Endpoint/Host` meta, which `get_tiles()`
+  (surfaces only a `rest_reports_plus` source for environment) and `_build_generic_sources` (no
+  command-center collect branch) do not yet produce for the generic path. A clean retire needs that
+  source-tile/Collect plumbing first — a separate follow-on.
+- **view_mode parity gap (presentational, deferred):** the spec carries `"view_mode":"table"` as
+  declared intent, but the stored-artifact render path (`canonical_view.artifact_to_view` →
+  `_card_section_view`) hardcodes `tiles` and does not thread a section view_mode, so the stored card
+  renders as tiles today. Outside the hard parity gate (9 fields + 3 firing rules); a follow-on
+  threads view_mode through the artifact render path.
+- **821 passing** (was 820; +1 net: parity-rules-fire test added, provisional-3-field tests retargeted).
+
+---
+
+## 2026-06-01 (ADR 0007 Phase 2 fix — migration 0027 lands the command-center source on live DBs)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `ce8e8d4` (migration 0027 + tests).
+
+**Root cause:** the broken first migration 0026 ran a plain `INSERT OR IGNORE` against the old
+4-value `subject_sources.source_type` CHECK — the CHECK silently rejected the
+`rest_command_center_api` row, but 0026 was stamped applied, so run-once keying meant the
+corrected 0026 could never re-run on `data/app.db` (stuck: 4-value CHECK, no command-center
+source → environment `/collect` fell to RESTExtractor and errored "missing report_id"). **0027**
+lands 0026's intended effect under a new migration id: an idempotent + FK-safe `subject_sources`
+rebuild (widen the CHECK) + `INSERT OR IGNORE` source/binding — no-op on fresh DBs, corrective on
+the live DB (existing `rest` row id 7 + live-card binding preserved). Data/migration fix only, no
+code changed. **820 passing** (was 818; +2 migration tests).
+
+---
+
+## 2026-06-01 (ADR 0007 Phase 2 — command_center_api source + pluggable /collect + environment Collect button)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `db39758` (implementation + tests + migration 0026).
+
+Makes `environment` collectable through a single-object Command Center API extractor that
+STORES a canonical artifact in `working/environment/`, proving the seam end to end (Collect
+button → `/collect` → extract → `result_to_artifact` → `save_artifact`). **818 passing**
+(was 813; +5). Additive — the live-served environment card is unchanged. CommCell ID is **not**
+authored (gated on a live capture, Phase 3).
+
+### Added
+
+- **`extractors/command_center.py`** — `CommandCenterExtractor`: wraps the existing
+  `get_commcell_identity` (unchanged; still writes `commserv.json` as raw provenance), feeds
+  the CommServ `raw` object as ONE record to the generic card path, and reads the card spec
+  from the subject's `rest_command_center_api` binding. Nested fields resolve via Phase-1's
+  dot-path selector. Injectable `identity_provider` for offline tests.
+- **Pluggable `/collect` dispatch** (`quick_hc.py`): `_has_command_center_source` selects the
+  extractor by the subject's source type — Reports-Plus → `RESTExtractor` (unchanged),
+  command-center → the new extractor. Auth checks + `result_to_artifact`/`save_artifact` tail
+  identical.
+- **environment Collect button** — the Command Center SOURCE tile emits a collect action
+  (`collectUrl` + `requiresSession=True`); the card section is untouched.
+- **Migration 0026** — widens the `subject_sources.source_type` CHECK to admit
+  `rest_command_center_api` (FK-safe table rebuild, FK integrity verified) + adds environment's
+  command-center source and a PROVISIONAL 3-field card spec (CommCell Name / Version / Timezone;
+  two nested reads). No CommCell ID this slice.
+
+### Changed
+
+- `result_to_artifact._SOURCE_TYPE_MAP` maps `rest_command_center_api` → the existing
+  `SourceType.rest_commserve` (the stored artifact's `source.type` is the CommServe type, not
+  `rest`); `collected_at` is stamped for it (live collection).
+
+### Notes (deviations from the brief, flagged)
+
+- **SourceType reused, not added.** The brief asked for a `command_center_api` SourceType, but
+  the canonical model already has `SourceType.rest_commserve` (used by the env adapter,
+  `commcell_details.py:38`). Reused it rather than add a redundant third name alongside
+  `rest_commserve` (enum) + `rest_command_center_api` (source-id). `source.type` = `rest_commserve`.
+- **Collect-button gate point differed.** The brief's gate (`:269`, `_provenance_to_tile_sources`)
+  is NOT on environment's bespoke path — environment builds sources via `_build_tile_sources` in
+  `_build_environment_subject`. The button was surfaced by passing a collect action there (SOURCE
+  only; the card section, rules, view_mode, and live-serve model are untouched).
+- **CHECK ripple.** `subject_sources.source_type` had a closed CHECK — adding a new source type
+  required a table rebuild (the ripple the STOP-AND-STEER list anticipated).
+
+---
+
+## 2026-06-01 (ADR 0007 Phase 1 — nested-path field selector + hex coercion capability fixture)
+
+**Branch:** `feature/basic-healthcheck-report-output`
+**Commit:** `70850bd` (implementation + tests + migration 0025 + fixture).
+
+Proves ADR 0007's two new EXTRACT-stage capabilities in isolation on a dedicated test
+subject, before any real subject depends on them — mirroring how `_metric_test` /
+`_card_test` de-risked ADR 0004. Test-subject-first, additive only. **813 passing** (was
+807; +6 new tests). environment, the HTML/CSV extractors, and CEL were NOT touched.
+
+### Added
+
+- **D2 — nested-path field selector.** New `_resolve_field_path(record, path)` in
+  `metric_section.py` (the shared field-resolution module). A card/metric item `field` may
+  now be a dot-path (`commcell.commCellId`, `csTimeZone.TimeZoneName`); it traverses nested
+  dicts, and a missing/non-dict segment resolves to `None` (consistent with `.get()`). Used
+  once, by both the metric/card path via `_aggregate` and the card no-agg path — not CEL.
+- **D3 — `hex` coercion.** New `_coerce_item_value` in `card_section.py` adds `type: "hex"`
+  to the card item path (a closed sibling of the HTML extractor's string/int/float): formats
+  an integer as lowercase hex, no `0x` (`13183 -> "337f"`). `CardItem` gains an optional
+  `raw_value` (the pre-coercion integer), omitted from JSON when absent.
+- **`_nested_test` subject** (migration 0025, `created_by=system`) + nested JSON fixture
+  `data/test_fixtures/nested_test.json` + `test_nested_test_subject.py` — one card section
+  with `commcell.commCellName`, `commcell.commCellId` (hex), `csTimeZone.TimeZoneName`,
+  deliberately mirroring environment's two hard fields.
+
+### Notes
+
+- **Step-1 finding:** `_aggregate` is the shared field helper (metric always; card-with-agg);
+  the card no-agg path (`row.get(field)`) was the one outlier — both now route through the
+  single `_resolve_field_path`, matching ADR 0007 D2's "implemented once, shared." No
+  semantic change to flat fields (single-segment path is byte-identical to `row.get`).
+- **Step-2 finding:** there was NO `type`-coercion step in the card/metric item value path
+  (`_coerce` is HTML-local; `_coerce_number` is evaluate-stage). D3 therefore *added* a
+  coercion step to card item resolution — it did not extend `html.py`.
+- `_card_test` stays the flat-path oracle (untouched). Existing card artifacts are
+  byte-identical (the new `raw_value` is omitted when absent).
+
+---
+
 ## 2026-05-31 (ADR 0004 phase-8 follow-on — per-field evaluation, enum/format kinds, environment table)
 
 **Branch:** `feature/basic-healthcheck-report-output`
@@ -1319,7 +2464,9 @@ Session 5b implements Option δ (or whichever option the user picks after review
 
 ---
 
-## 2026-06-05
+## 2026-05-25 (unified-upload session 4 — old upload routes deleted)
+
+<!-- date corrected from a future-typo "2026-06-05"; commits c06309d/b873431/6e0b1ed are 2026-05-25. Left in place within the consolidation tail (not reordered). -->
 
 **Branch:** `feature/basic-healthcheck-report-output`
 **Commits:** `c06309d`, `b873431` (step 2 split — the first commit landed only the template deletion because a `git add` invocation died silently on the already-deleted path; the second commit landed the route bodies and comment updates). `6e0b1ed` (step 3 test cleanup). Plus the wrap-up commit that publishes this entry.

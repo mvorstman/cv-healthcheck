@@ -20,6 +20,10 @@ class Settings:
     token_path: Path
     verify_ssl: bool = True
     timeout_seconds: float = 30.0
+    # ADR-0008 C: shared secret guarding the loopback internal endpoint. Set
+    # out-of-band via CV_INTERNAL_SECRET in ~/.cv-healthcheck-env (never in repo);
+    # None when unset, so the endpoint fails closed (503).
+    internal_secret: str | None = None
 
 
 def project_root() -> Path:
@@ -31,12 +35,14 @@ def load_settings() -> Settings:
     token_path = Path(os.getenv("CV_TOKEN_FILE") or os.getenv("CV_TOKEN_PATH", ".token"))
     verify_ssl = _as_bool(os.getenv("CV_VERIFY_SSL"), default=True)
     timeout_seconds = float(os.getenv("CV_TIMEOUT") or os.getenv("CV_TIMEOUT_SECONDS", "30"))
+    internal_secret = os.getenv("CV_INTERNAL_SECRET") or None
 
     return Settings(
         base_url=base_url,
         token_path=token_path,
         verify_ssl=verify_ssl,
         timeout_seconds=timeout_seconds,
+        internal_secret=internal_secret,
     )
 
 

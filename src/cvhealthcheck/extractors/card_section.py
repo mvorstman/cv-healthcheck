@@ -50,13 +50,14 @@ raises (loud-fail) via the phase-1 evaluator.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from cvhealthcheck.artifacts.enums import FindingSeverity
 from cvhealthcheck.artifacts.models import CardItem, CardSection
 from cvhealthcheck.cel import evaluate as cel_evaluate
 from cvhealthcheck.evaluative import engine
-from cvhealthcheck.extractors.metric_section import _aggregate
+from cvhealthcheck.extractors.metric_section import _aggregate, _resolve_field_path
 
 
 def build_card_section(
@@ -88,14 +89,21 @@ def build_card_section(
             if "agg" in it:
                 value = _aggregate(rows, field, it["agg"])
             else:
-                value = row.get(field)
+                # ADR 0007 D2: `field` may be a dot-path; the shared resolver
+                # traverses nested dicts (a flat single-segment field is
+                # byte-identical to the prior row.get(field)).
+                value = _resolve_field_path(row, field)
         elif source == "cel":
             # Card items don't cross-reference each other (no item id), so the
             # CEL context is just the section's records.
             value = cel_evaluate(it["expr"], {"records": rows})
         else:
             raise ValueError(f"Unknown card item source {source!r} for {label!r}")
-        card_item = CardItem(label=label, value=value, unit=it.get("unit"))
+        # ADR 0007 D3: optional `type` coercion on the resolved value. Only the
+        # closed, enumerated `hex` value today (sibling of the HTML extractor's
+        # string/int/float). The raw pre-coercion value is kept on the item.
+        value, raw_value = _coerce_item_value(value, it.get("type"))
+        card_item = CardItem(label=label, value=value, unit=it.get("unit"), raw_value=raw_value)
         items.append(card_item)
         if field is not None:
             item_by_field[field] = card_item
@@ -107,6 +115,10 @@ def build_card_section(
         title=title,
         items=items,
         columns=spec.get("columns"),
+        # ADR 0007 ph3 follow-on: carry the catalog binding's presentational
+        # view_mode ("tiles" | "table") onto the artifact so the source-agnostic
+        # render path can pick the layout. Absent → None → tiles default.
+        view_mode=spec.get("view_mode"),
     )
 
     evaluative = spec.get("evaluative") or {}
@@ -239,3 +251,30 @@ def _coerce_number(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _coerce_item_value(value: Any, col_type: str | None) -> tuple[Any, Any]:
+    """ADR 0007 D3 — apply a closed-enum `type` coercion to a card item value.
+
+    Returns ``(coerced_value, raw_value)``. ``raw_value`` is the pre-coercion
+    value, kept only when a coercion actually reshapes it (else None, so
+    uncoerced items stay byte-identical). Closed enum, added only by explicit
+    decision (not CEL):
+      - ``hex``: format an integer as lowercase hex, no ``0x`` (13183 -> "337f").
+      - ``epoch_to_iso``: format an epoch-SECONDS integer as an ISO 8601 UTC
+        string (1700000000 -> "2023-11-14T22:13:20Z"). Seconds only — the raw
+        value (10-digit) is kept; no millisecond guessing.
+    A non-coercible value (None / non-integer) passes through unchanged — never
+    crashes. Not CEL; new coercion values are added only by explicit decision."""
+    if col_type not in ("hex", "epoch_to_iso"):
+        return value, None
+    if value is None or isinstance(value, bool):
+        return value, None
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return value, None  # defensive: leave non-integers as-is
+    if col_type == "hex":
+        return format(n, "x"), n
+    # epoch_to_iso — treat as epoch SECONDS, emit ISO 8601 UTC (Z), keep raw int.
+    return datetime.fromtimestamp(n, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), n

@@ -7,6 +7,7 @@ from .shared import (
     _safe_next,
     bp,
     clear_current_token,
+    get_current_username,
     login_to_commvault,
     redirect,
     render_template,
@@ -72,6 +73,34 @@ def login():
 def logout():
     clear_current_token()
     return redirect(url_for("main.login"))
+
+
+@bp.route("/connections")
+def connections():
+    """Live connection status + connect/disconnect (ADR-0008 B). Thin: reads the held
+    token's status from the store and the read-only env target; the Connect action reuses
+    /login, Disconnect clears the store. No secrets (token/password) are rendered."""
+    from cvhealthcheck import token_store
+    from cvhealthcheck.config import load_settings
+    settings = load_settings()
+    try:
+        customer = get_active_customer()
+    except Exception:  # no active project / customer — page must still render
+        customer = {}
+    return render_template(
+        "connections.html",
+        status=token_store.status(),
+        username=get_current_username(),
+        customer_name=customer.get("customer_name") or customer.get("customer_id"),
+        base_url=settings.base_url,
+        verify_ssl=settings.verify_ssl,
+    )
+
+
+@bp.route("/connections/disconnect", methods=["POST"])
+def connections_disconnect():
+    clear_current_token()   # clears the in-process store + session markers
+    return redirect(url_for("main.connections"))
 
 
 @bp.route("/")

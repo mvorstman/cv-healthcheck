@@ -33,3 +33,41 @@ def migrated_db_path(tmp_path: Path) -> Path:
     path = tmp_path / "test.db"
     run_migrations(db_path=path)
     return path
+
+
+@pytest.fixture(autouse=True)
+def _reset_token_store():
+    """Clear the process-global held-token store around every test (ADR-0008 B).
+
+    Tests now establish auth by populating the store, so a token set in one test must
+    not leak into the next.
+    """
+    from cvhealthcheck import token_store
+    token_store.clear_active_token()
+    yield
+    token_store.clear_active_token()
+
+
+@pytest.fixture()
+def authenticate():
+    """Establish an authenticated session the ADR-0008 way: the held CommServe token
+    goes to the in-process store; the non-secret customer/username markers go to the
+    session cookie. Replaces the old ``session[SESSION_TOKEN_KEY] = ...`` poke — the
+    cookie no longer carries the token.
+    """
+    from cvhealthcheck import token_store
+    from cvhealthcheck.auth.commvault_auth import (
+        SESSION_CUSTOMER_ID_KEY,
+        SESSION_USERNAME_KEY,
+    )
+
+    def _auth(client, *, token: str = "test-token", customer_id=None, username=None):
+        token_store.set_active_token(token, principal=username)
+        if customer_id is not None or username is not None:
+            with client.session_transaction() as sess:
+                if customer_id is not None:
+                    sess[SESSION_CUSTOMER_ID_KEY] = customer_id
+                if username is not None:
+                    sess[SESSION_USERNAME_KEY] = username
+
+    return _auth

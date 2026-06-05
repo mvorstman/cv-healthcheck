@@ -2,15 +2,27 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import sqlite3
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from cvhealthcheck.artifacts.models import CanonicalArtifact
+from cvhealthcheck.artifacts.enums import ArtifactStatus, ChartType, SourceType
+from cvhealthcheck.artifacts.models import (
+    ArtifactSource,
+    ArtifactSubject,
+    ArtifactSummary,
+    CanonicalArtifact,
+    CardItem,
+    CardSection,
+    ChartSection,
+    FindingsSection,
+    MetricItem,
+    MetricSection,
+    TableColumn,
+    TableSection,
+)
 from cvhealthcheck.artifacts.store import ArtifactStore
-from cvhealthcheck.extractors.card_section import build_card_section
 from cvhealthcheck.db.subjects import (
     list_family_versions,
     resolve_active_version,
@@ -45,6 +57,7 @@ from cvhealthcheck.quickhc.registry import (
     SECURITY_ASSESSMENT_DETAIL_SECTION_IDS_BY_NAME,
     SECURITY_ASSESSMENT_METADATA_SECTION_ID,
     SOURCE_DESCRIPTIONS,
+    SOURCE_ENDPOINTS,
     SOURCE_LABELS,
     STANDARD_SOURCES,
     get_tiles,
@@ -133,17 +146,13 @@ def build_subject_initial_data(
             legacy_builder = legacy_builders.get(subject_id)
             if legacy_builder is not None:
                 loaded = legacy_loader() if legacy_loader else None
-                # environment reads its per-field card rules from the catalog
-                # binding (data, migration 0023), so it needs the db connection;
-                # the other legacy builders take only their loaded blob.
-                if subject_id == "environment":
-                    built = legacy_builder(loaded, db)
-                else:
-                    built = legacy_builder(loaded)
-            elif db is not None:
-                built = _build_generic_subject(tile, None)
+                built = legacy_builder(loaded)
             else:
-                continue
+                # No artifact and no bespoke builder (e.g. environment after ADR
+                # 0007 ph3 slice B): the generic not-collected state. Works with or
+                # without a db (it reads only the tile + sources), so the no-db
+                # list_tiles path renders environment too instead of dropping it.
+                built = _build_generic_subject(tile, None)
 
         built["created_by"] = tile.get("created_by", "system")
         # ADR 0004 source-tile cleanup: version dropdown + last-collected.
@@ -156,12 +165,201 @@ def build_subject_initial_data(
         category_groups[cat_id]["subjects"].append(built)
 
     cats = list(category_groups.values())
+    staging = _build_staging_shells(db)
 
     return {
         "commcell": commcell_info,
         "cats": cats,
+        "staging": staging,
         "report_url": report_url,
     }
+
+
+# ── Staging zone: pending subject_proposal shells (ADR 0009 Phase 1) ──────────
+#
+# A pending proposal is rendered as an EMPTY structural shell: section titles +
+# types, table header rows, metric labels with placeholder values, etc. — no
+# collected data. The shell is built SERVER-SIDE here (the JS stays a pure
+# renderer): synthesize an empty-bodied CanonicalArtifact from the proposal and
+# run it through artifact_to_view, reusing its canonical→view-token mapping so
+# section types resolve exactly as a collected subject's would.
+
+_PROPOSAL_SOURCE_TYPE: dict[str, SourceType] = {
+    "rest_command_center_api": SourceType.rest_commserve,
+    "rest":  SourceType.rest,
+    "json":  SourceType.json_import,
+    "html":  SourceType.html_import,
+    "csv":   SourceType.csv_import,
+}
+
+
+def _build_staging_shells(db: sqlite3.Connection | None) -> list[dict[str, Any]]:
+    """Pending subject proposals as empty-bodied shell views for the Staging zone.
+
+    Filtered to artifact_type=='subject_proposal' AND status=='pending', so
+    orphaned approved proposals and all artifact_type=='artifact' rows are
+    excluded by construction. No db → no staging (the list_tiles path)."""
+    if db is None:
+        return []
+    from cvhealthcheck.db.staging import list_staged_artifacts
+
+    shells: list[dict[str, Any]] = []
+    for row in list_staged_artifacts(db, status="pending"):
+        if row.get("artifact_type") != "subject_proposal":
+            continue
+        try:
+            proposal = json.loads(row["artifact_json"])
+        except (TypeError, KeyError, json.JSONDecodeError):
+            continue
+        shell = build_proposal_shell(proposal, stage_id=row["stage_id"])
+        if shell is not None:
+            shells.append(shell)
+    return shells
+
+
+def build_proposal_shell(
+    proposal: dict[str, Any], *, stage_id: str
+) -> dict[str, Any] | None:
+    """Turn a subject proposal's artifact_json into an empty-bodied subject view.
+
+    Reuses artifact_to_view's canonical→view-token mapping by synthesizing a
+    CanonicalArtifact with structurally-correct but data-empty sections."""
+    subject_id = proposal.get("subject_id")
+    if not subject_id:
+        return None
+    title = proposal.get("title") or subject_id
+    extraction = proposal.get("extraction_instructions") or {}
+    sections = []
+    for sdef in proposal.get("sections") or []:
+        sec = _shell_section(sdef, extraction)
+        if sec is not None:
+            sections.append(sec)
+
+    artifact = CanonicalArtifact(
+        artifact_type=subject_id,
+        generated_at=datetime.now(timezone.utc),
+        source=ArtifactSource(type=_proposal_source_type(extraction)),
+        subject=ArtifactSubject(id=subject_id, title=title),
+        summary=ArtifactSummary(status=ArtifactStatus.unknown),
+        sections=sections,
+    )
+    view = _canonical_view.artifact_to_view(artifact)
+    # Staging-zone markers (consumed by the JS renderStagingZone()).
+    view["description"] = proposal.get("description") or ""
+    view["subtitle"] = "Pending proposal — not yet collected"
+    view["status"] = "pending"
+    view["is_proposal"] = True
+    view["stage_id"] = stage_id
+    view["created_by"] = "ai"
+    return view
+
+
+def _proposal_source_type(extraction: dict[str, Any]) -> SourceType:
+    for key in ("rest_command_center_api", "rest", "json", "html", "csv"):
+        if key in extraction:
+            return _PROPOSAL_SOURCE_TYPE[key]
+    return SourceType.rest
+
+
+def _shell_section(sdef: dict[str, Any], extraction: dict[str, Any]):
+    """One empty-bodied canonical Section from a proposal's section definition.
+
+    Defensive: a malformed section degrades to a titled empty table rather than
+    breaking the whole shell."""
+    section_id = sdef.get("section_id")
+    if not section_id:
+        return None
+    title = sdef.get("title") or section_id
+    stype = sdef.get("section_type") or "table"
+    spec = _proposal_section_spec(extraction, section_id)
+    try:
+        if stype == "metric":
+            items = [MetricItem(id=mid, label=label, value=None)
+                     for mid, label in _shell_metric_items(spec)]
+            return MetricSection(type="metric", id=section_id, title=title,
+                                 items=items, render_mode="metric")
+        if stype == "card":
+            items = [CardItem(label=label, value=None) for label in _shell_card_labels(spec)]
+            vm = (spec.get("card") or {}).get("view_mode") if isinstance(spec.get("card"), dict) else None
+            return CardSection(type="card", id=section_id, title=title, items=items,
+                               view_mode=vm if vm in ("tiles", "table") else None)
+        if stype == "findings":
+            return FindingsSection(type="findings", id=section_id, title=title, items=[])
+        if stype == "chart":
+            return ChartSection(type="chart", id=section_id, title=title,
+                                chart_type=_shell_chart_type(spec), labels=[], series=[])
+        # "table" and any unknown type → a titled table shell.
+        cols = [TableColumn(id=cid, label=label) for cid, label in _shell_columns(spec)]
+        return TableSection(type="table", id=section_id, title=title, columns=cols,
+                            items=[], empty_message="No data collected")
+    except Exception:
+        return TableSection(type="table", id=section_id, title=title, columns=[],
+                            items=[], empty_message="No data collected")
+
+
+def _proposal_section_spec(extraction: dict[str, Any], section_id: str) -> dict[str, Any]:
+    """The per-section extraction spec, preferring the live REST source types."""
+    ordered = list(("rest_command_center_api", "rest", "json", "html", "csv")) + list(extraction.keys())
+    for key in ordered:
+        src_info = extraction.get(key)
+        if isinstance(src_info, dict):
+            secs = src_info.get("sections")
+            if isinstance(secs, dict) and isinstance(secs.get(section_id), dict):
+                return secs[section_id]
+    return {}
+
+
+def _shell_columns(spec: dict[str, Any]) -> list[tuple[str, str]]:
+    """Column (id, label) pairs from a table spec, tolerant of shape:
+    table.columns (ADR 0009 D2), columns (row_source form), or column_map (HTML)."""
+    cols_src = None
+    table_block = spec.get("table")
+    if isinstance(table_block, dict) and isinstance(table_block.get("columns"), list):
+        cols_src = table_block["columns"]
+    elif isinstance(spec.get("columns"), list):
+        cols_src = spec["columns"]
+    elif isinstance(spec.get("column_map"), list):
+        cols_src = spec["column_map"]
+    out: list[tuple[str, str]] = []
+    for c in cols_src or []:
+        if not isinstance(c, dict):
+            continue
+        cid = c.get("id") or c.get("canonical") or c.get("field") or c.get("label")
+        label = c.get("label") or c.get("canonical") or c.get("id") or c.get("field") or cid
+        if cid:
+            out.append((str(cid), str(label)))
+    return out
+
+
+def _shell_metric_items(spec: dict[str, Any]) -> list[tuple[str, str]]:
+    src = spec.get("metrics") if isinstance(spec.get("metrics"), list) else spec.get("items")
+    out: list[tuple[str, str]] = []
+    for m in src or []:
+        if not isinstance(m, dict):
+            continue
+        mid = m.get("id") or m.get("label")
+        label = m.get("label") or m.get("id")
+        if mid:
+            out.append((str(mid), str(label)))
+    return out
+
+
+def _shell_card_labels(spec: dict[str, Any]) -> list[str]:
+    card = spec.get("card") if isinstance(spec.get("card"), dict) else {}
+    out: list[str] = []
+    for it in card.get("items") or []:
+        if isinstance(it, dict) and it.get("label"):
+            out.append(str(it["label"]))
+    return out
+
+
+def _shell_chart_type(spec: dict[str, Any]) -> ChartType:
+    chart = spec.get("chart") if isinstance(spec.get("chart"), dict) else {}
+    raw = chart.get("chart_type")
+    try:
+        return ChartType(raw) if raw else ChartType.line
+    except ValueError:
+        return ChartType.line
 
 
 def _tile_def_to_dict(tile: Any) -> dict[str, Any]:
@@ -310,6 +508,7 @@ def _build_generic_sources(
         is_html = src_id == HTML_IMPORT_SOURCE_ID
         is_csv = src_id == CSV_IMPORT_SOURCE_ID
         is_rest = src_id == REST_REPORTS_PLUS_SOURCE_ID
+        is_command_center = src_id == REST_COMMAND_CENTER_API_SOURCE_ID
         is_json = src_id == JSON_IMPORT_SOURCE_ID
         collect_url = src.get("collect_url")
         is_import = is_html or is_csv
@@ -319,30 +518,79 @@ def _build_generic_sources(
                 _upload_action(import_url=import_url_base, import_field="file", accept=accept)
             ]
             status = "a"
-        elif (is_rest or is_json) and collect_url:
-            # REST collects from the lab; JSON (internal/test subjects) collects
-            # from a shipped fixture via the collect-fixture route. Only REST is
-            # auth-gated (customer-bound CommCell session); requiresSession lets
-            # the frontend open the connect modal in-place for that case. JSON
-            # fixture collection needs no session and submits straight through.
+        elif (is_rest or is_command_center or is_json) and collect_url:
+            # REST / Command Center API collect from the lab; JSON (internal/test
+            # subjects) collects from a shipped fixture via the collect-fixture
+            # route. Both live-REST paths are auth-gated (customer-bound CommCell
+            # session); requiresSession lets the frontend open the connect modal
+            # in-place for that case. JSON fixture collection needs no session and
+            # submits straight through.
             actions = [{
                 "kind": "collect",
                 "label": "Collect",
                 "collectUrl": collect_url,
-                "requiresSession": is_rest,
+                "requiresSession": is_rest or is_command_center,
             }]
             status = "a"
         else:
             actions = []
             status = "ni"
+        # Command Center source cosmetics (ADR 0007 ph3 slice B — match what the
+        # retired live builder showed, kept generic/data-driven):
+        #   desc:   the canonical SOURCE_DESCRIPTIONS text (was empty in the
+        #           generic path; the tile rows carry no description).
+        #   status: "validated" once an artifact has been collected through it,
+        #           else "available" — derived from whether a stored artifact
+        #           exists, not hardcoded.
+        description = src.get("description", "")
+        if is_command_center:
+            description = SOURCE_DESCRIPTIONS.get(src_id, description)
+            if artifact_payload is not None:
+                status = "v"
         result.append(_source_item(
             src_id,
             src.get("label", src_id),
-            src.get("description", ""),
+            description,
             status=status,
+            meta=_command_center_source_meta(artifact_payload) if is_command_center else [],
             actions=actions,
         ))
     return result
+
+
+def _command_center_source_meta(artifact_payload: dict[str, Any] | None) -> list[dict[str, str]]:
+    """Source-panel descriptor for the single-object Command Center API source,
+    built in the GENERIC path so it survives the live builder's retirement.
+
+    - Endpoint: a source-TYPE constant (SOURCE_ENDPOINTS) — GET /commandcenter/api/CommServ.
+    - Host: the CommCell host from the collected identity card (Hostname, falling
+      back to CommCell Name). It is NOT in the artifact's source block (that carries
+      the customer name), so it is read from the card the collection produced; absent
+      → the Host row is simply omitted. (Populating source.endpoint/host at collect
+      time would be the cleaner long-term home, but that touches the stored artifact.)"""
+    meta: list[dict[str, str]] = []
+    endpoint = SOURCE_ENDPOINTS.get(REST_COMMAND_CENTER_API_SOURCE_ID)
+    if endpoint:
+        meta.append({"k": "Endpoint", "v": endpoint})
+    host = _command_center_host(artifact_payload)
+    if host:
+        meta.append({"k": "Host", "v": host})
+    return meta
+
+
+def _command_center_host(artifact_payload: dict[str, Any] | None) -> str | None:
+    """Best-effort CommCell host from the collected identity card (Hostname, then
+    CommCell Name). Returns None when unavailable — no host row is shown."""
+    if not artifact_payload:
+        return None
+    for sec in artifact_payload.get("sections", []) or []:
+        if sec.get("type") != "card":
+            continue
+        items = {it.get("label"): it.get("value") for it in sec.get("items", []) or []}
+        host = items.get("Hostname") or items.get("CommCell Name")
+        if host:
+            return str(host)
+    return None
 
 
 def _version_info(
@@ -386,7 +634,12 @@ def _build_generic_subject(tile: dict[str, Any], artifact: CanonicalArtifact | N
             "included": True,
             "subtitle": "Not collected",
             "fullUrl": None,
-            "activeSource": None,
+            # Default-select the first source so its collect/import affordance is
+            # visible on the empty (not-yet-collected) state — the JS panel only
+            # renders for the active source. (Pre-slice-B, environment's live
+            # builder set this to the command-center source; the generic path now
+            # does it for every subject's empty state.)
+            "activeSource": sources[0]["id"] if sources else None,
             "sources": sources,
             "sections": [],
             "created_by": created_by,
@@ -398,7 +651,32 @@ def _build_generic_subject(tile: dict[str, Any], artifact: CanonicalArtifact | N
     view["sources"] = sources
     view["created_by"] = created_by
     view["status"] = status
+    # Command Center artifacts (environment) get a "<host> · <version>" subtitle
+    # derived from the identity card — matching the retired live builder, instead
+    # of the generic "Data available". Generic by source type, not env-special.
+    if (artifact_payload or {}).get("source", {}).get("type") == "rest_commserve":
+        cc_subtitle = _command_center_subtitle(artifact_payload)
+        if cc_subtitle:
+            view["subtitle"] = cc_subtitle
     return view
+
+
+def _command_center_subtitle(artifact_payload: dict[str, Any] | None) -> str | None:
+    """"<host> · <version>" for a Command Center artifact, from the identity card
+    (Hostname/CommCell Name + Version). Matches the retired live builder's subtitle.
+    Returns None when neither field is present (caller keeps the generic subtitle)."""
+    host = _command_center_host(artifact_payload)
+    version = None
+    for sec in (artifact_payload or {}).get("sections", []) or []:
+        if sec.get("type") != "card":
+            continue
+        items = {it.get("label"): it.get("value") for it in sec.get("items", []) or []}
+        version = items.get("Version")
+        if version:
+            break
+    if host and version:
+        return f"{host} · {version}"
+    return host or (str(version) if version else None)
 
 
 # ── LEGACY DATA LOADERS ──
@@ -524,7 +802,9 @@ def _legacy_builders() -> dict[str, Any]:
     # canonical store has no artifact for the subject. The fork is
     # intentional. Do not "clean it up" without reading the ADR.
     return {
-        "environment": _build_environment_subject,
+        # ADR 0007 ph3 slice B: environment retired from the bespoke fork — it is
+        # now served entirely by the "canonical store wins" generic path (with a
+        # generic no-data fallback when uncollected). No bespoke builder.
         "security_assessment": _build_security_assessment_subject,
         "license_summary": _build_license_summary_subject,
         "client_growth": _build_client_growth_subject,
@@ -609,211 +889,6 @@ def _build_tile_sources(
         )
         for src_id in STANDARD_SOURCES
     ]
-
-
-def _build_environment_subject(cc: dict | None, db: sqlite3.Connection | None = None) -> dict:
-    full_url = _try_url("main.quick_hc_commcell")
-    if not cc:
-        subj = _nodata_subject("environment", "CommCell Details", full_url)
-        subj["activeSource"] = REST_COMMAND_CENTER_API_SOURCE_ID
-        subj["sources"] = _build_tile_sources(
-            "environment",
-            active_source_id=REST_COMMAND_CENTER_API_SOURCE_ID,
-            statuses={
-                REST_COMMAND_CENTER_API_SOURCE_ID: "n",
-                REST_REPORTS_PLUS_SOURCE_ID: "ni",
-                JSON_IMPORT_SOURCE_ID: "ni",
-                CSV_IMPORT_SOURCE_ID: "ni",
-                HTML_IMPORT_SOURCE_ID: "ni",
-            },
-            meta={
-                REST_COMMAND_CENTER_API_SOURCE_ID: [
-                    {"k": "Endpoint", "v": "GET /commandcenter/api/CommServ"},
-                ],
-            },
-            descriptions={
-                REST_COMMAND_CENTER_API_SOURCE_ID: "Live collection of CommCell identity details from Command Center.",
-            },
-        )
-        return subj
-
-    name = cc.get("hostName") or "CommCell"
-    version = cc.get("csVersionInfo") or ""
-    subtitle = f"{name} · {version}" if version else name
-
-    return {
-        "id": "environment",
-        "name": "CommCell Details",
-        "description": resolve_tile_description("environment"),
-        "state": "ok",
-        "included": True,
-        "subtitle": subtitle,
-        "fullUrl": full_url,
-        "activeSource": REST_COMMAND_CENTER_API_SOURCE_ID,
-        "sources": _build_tile_sources(
-            "environment",
-            active_source_id=REST_COMMAND_CENTER_API_SOURCE_ID,
-            statuses={
-                REST_COMMAND_CENTER_API_SOURCE_ID: "v",
-                REST_REPORTS_PLUS_SOURCE_ID: "ni",
-                JSON_IMPORT_SOURCE_ID: "ni",
-                CSV_IMPORT_SOURCE_ID: "ni",
-                HTML_IMPORT_SOURCE_ID: "ni",
-            },
-            meta={
-                # ADR 0004: CommCell server version is NOT shown on the data
-                # source tile — it's a property of the deployment, not of this
-                # collection. It stays in the environment subject's identity
-                # card (built below), where it's the whole point.
-                REST_COMMAND_CENTER_API_SOURCE_ID: [
-                    {"k": "Endpoint", "v": "GET /commandcenter/api/CommServ"},
-                    {"k": "Host", "v": name},
-                ],
-            },
-            descriptions={
-                REST_COMMAND_CENTER_API_SOURCE_ID: "Live collection of CommCell identity details from Command Center.",
-            },
-        ),
-        "sections": [_build_environment_identity_section(cc, name, version, db)],
-    }
-
-
-def _normalize_timezone(raw: Any) -> str | None:
-    """Normalize a CommCell timezone to its IANA component for both display and
-    evaluation. commserv.json carries a composite like ``"0:0:America/Danmarkshavn"``
-    (``<offsetH>:<offsetM>:<IANA>``); reduce it to ``"America/Danmarkshavn"`` so
-    BOTH the displayed CardItem value AND the value handed to the enum evaluator
-    are the IANA name (the evaluator deliberately does not normalize). Values that
-    don't match the composite shape (e.g. ``"UTC"``) pass through unchanged; an
-    absent value → None (renders "—", reads as "not set")."""
-    if raw is None:
-        return None
-    text = str(raw)
-    if not text:
-        return None
-    m = re.match(r"^\d+:\d+:(.+)$", text)
-    return m.group(1) if m else text
-
-
-def _load_environment_card_block(db: sqlite3.Connection | None) -> dict[str, Any]:
-    """Read environment's ``card`` config block from its catalog binding (DATA),
-    not from a Python literal — the ``card`` object of ``extraction_instructions``
-    on the ``subject_section_sources`` row for ``environment / environment.metadata``
-    (migrations 0023 rules + 0024 view_mode). Carries ``evaluative.rules`` and the
-    presentational ``view_mode`` hint. Returns ``{}`` when the binding is absent or
-    no db is available (e.g. the no-db status API path) — the card then renders
-    bare/tiles, which is safe; the main render path always has a db."""
-    if db is None:
-        return {}
-    try:
-        row = db.execute(
-            "SELECT sss.extraction_instructions "
-            "FROM subject_section_sources sss "
-            "JOIN subject_sources src ON src.id = sss.source_id "
-            "WHERE src.subject_id = 'environment' AND src.subject_version = 1 "
-            "  AND sss.section_id = 'environment.metadata'",
-        ).fetchone()
-    except sqlite3.OperationalError:
-        return {}
-    if not row or not row["extraction_instructions"]:
-        return {}
-    try:
-        instructions = json.loads(row["extraction_instructions"])
-    except (json.JSONDecodeError, TypeError):
-        return {}
-    return instructions.get("card") or {}
-
-
-def _load_environment_identity_rules(db: sqlite3.Connection | None) -> list[dict[str, Any]]:
-    """The per-field rules from environment's catalog binding (``card.evaluative.rules``)."""
-    return (_load_environment_card_block(db).get("evaluative") or {}).get("rules") or []
-
-
-def _hex_commcell_id(commcell_id: Any) -> str | None:
-    """Render commcell.commCellId (an integer, e.g. 2 or 13183) as lowercase hex
-    with no '0x' prefix (2 → "2", 13183 → "337f"). The raw int is NOT shown — it
-    stays in commserv.json. None / non-numeric → None (renders "—")."""
-    if commcell_id is None:
-        return None
-    try:
-        return format(int(commcell_id), "x")
-    except (TypeError, ValueError):
-        return None
-
-
-def _build_environment_identity_section(
-    cc: dict, name: str, version: str, db: sqlite3.Connection | None = None
-) -> dict[str, Any]:
-    """Build the CommCell-identity card for the bespoke environment subject.
-
-    The identity card is built through the SAME shared path the generic cards use
-    — ``build_card_section`` (the single ``engine.evaluate`` locus) +
-    ``_card_section_view`` (the shared per-field card view) — and its per-field
-    rules are DATA from the catalog binding (migration 0023), not a literal.
-
-    The card VALUES are read DIRECTLY from the real GET /commandcenter/api/CommServ
-    response (``cc`` is now the raw nested block: ``commcell.{commCellId,commCellName,
-    csGUID}``, ``csTimeZone.TimeZoneName``, ``csVersionInfo``, SP versions, …). No
-    synthesis: CommCell ID is the numeric commCellId rendered as hex; CommCell GUID
-    and Timezone are read directly (csTimeZone.TimeZoneName — no "0:0:" composite).
-    Fields the API doesn't return (e.g. releaseName) get no row. Rows for releaseId
-    / TimeZoneID / top-level timeZone are intentionally omitted (they stay in
-    commserv.json; there is no card-metadata slot).
-
-    Field keys ``name`` / ``version`` / ``timezone`` are preserved so the 49053a9
-    rule binding still attaches (Version presence, Timezone enum, Name format); the
-    new fields carry no rule and render bare."""
-    # One read of the catalog binding's card block — carries both the per-field
-    # rules and the view_mode presentational hint (DATA, migrations 0023 + 0024).
-    card_block = _load_environment_card_block(db)
-    commcell = cc.get("commcell") if isinstance(cc.get("commcell"), dict) else {}
-    cstz = cc.get("csTimeZone") if isinstance(cc.get("csTimeZone"), dict) else {}
-    # *_or_None so absent values render "—" AND a presence rule reads "not set".
-    identity_row = {
-        "name": commcell.get("commCellName") or None,            # format rule
-        "id": _hex_commcell_id(commcell.get("commCellId")),      # numeric → hex
-        "guid": commcell.get("csGUID") or None,                  # direct, no synth
-        "version": cc.get("csVersionInfo") or None,              # presence rule
-        "os_type": cc.get("osType") or None,
-        "current_sp": cc.get("currentSPVersion"),
-        "installed_sp": cc.get("installedSPVersion"),
-        # csTimeZone.TimeZoneName is already clean; _normalize_timezone kept as a
-        # harmless pass-through guard (no-op on clean values, strips a stray
-        # "0:0:" if a deployment ever puts the composite here). enum rule target.
-        "timezone": _normalize_timezone(cstz.get("TimeZoneName")),
-        "hostname": cc.get("hostName") or None,
-    }
-    identity_spec = {
-        "columns": 4,
-        # Schema order (reordering is a later cosmetic pass). Release Name omitted
-        # — releaseName is absent from the real response.
-        "items": [
-            {"label": "CommCell Name", "field": "name"},
-            {"label": "CommCell ID", "field": "id"},
-            {"label": "CommCell GUID", "field": "guid"},
-            {"label": "Version", "field": "version"},
-            {"label": "OS Type", "field": "os_type"},
-            {"label": "Current SP Version", "field": "current_sp"},
-            {"label": "Installed SP Version", "field": "installed_sp"},
-            {"label": "Timezone", "field": "timezone"},
-            {"label": "Hostname", "field": "hostname"},
-        ],
-        # Rules + view_mode come from the catalog binding (DATA), not literals.
-        "evaluative": {"rules": (card_block.get("evaluative") or {}).get("rules") or []},
-    }
-    card_section = build_card_section(
-        "environment.metadata", "Environment metadata", identity_spec, [identity_row]
-    )
-    # view_mode is presentational DATA on the section (migration 0024 sets "table"
-    # for environment); the renderer reads it. Default "tiles" keeps other cards
-    # unchanged.
-    view_mode = card_block.get("view_mode") or "tiles"
-    section = _canonical_view._card_section_view(
-        card_section, "environment.metadata", view_mode=view_mode
-    )
-    # Preserve the original section sub-label (the view builder defaults meta="").
-    section["meta"] = "CommCell profile"
-    return section
 
 
 def _build_security_assessment_subject(sa: dict | None) -> dict:

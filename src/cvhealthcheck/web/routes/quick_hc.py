@@ -26,6 +26,10 @@ from cvhealthcheck.db.subjects import (
     set_pinned_subject_id,
     subject_family,
 )
+from cvhealthcheck.extractors.command_center import (
+    COMMAND_CENTER_SOURCE_TYPE,
+    CommandCenterExtractor,
+)
 from cvhealthcheck.extractors.dispatcher import extract_file
 from cvhealthcheck.extractors.fixture import FixtureExtractor
 from cvhealthcheck.extractors.rest import RESTExtractor
@@ -127,6 +131,49 @@ def quick_hc():
     )
 
 
+@bp.route("/quick-hc/proposals/<stage_id>/approve", methods=["POST"])
+def quick_hc_proposal_approve(stage_id: str):
+    """Approve a pending subject proposal from the consolidated /quick-hc page.
+
+    Routes through the UNCHANGED execute_approval (shared with the MCP review
+    loop and the still-live /quick-hc/staging page) so the proposal is promoted
+    into the subjects catalog, then full-page redirects to /quick-hc — both zones
+    re-render from fresh server state (ADR 0009 Phase 1; no DOM surgery)."""
+    db = get_db()
+    try:
+        result = _staging_db.execute_approval(db, stage_id, reviewed_by="web")
+    except ValueError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.quick_hc"))
+    finally:
+        db.close()
+    if result.get("type") == "subject_proposal":
+        flash(f"Subject '{result['title']}' v{result['version']} added to catalog.", "success")
+    else:
+        flash(f"Approved staged artifact for {result.get('subject_id')}.", "success")
+    return redirect(url_for("main.quick_hc"))
+
+
+@bp.route("/quick-hc/proposals/<stage_id>/reject", methods=["POST"])
+def quick_hc_proposal_reject(stage_id: str):
+    """Reject a pending subject proposal from the consolidated /quick-hc page.
+
+    Uses the UNCHANGED reject_staged_artifact, then redirects to /quick-hc."""
+    db = get_db()
+    try:
+        updated = _staging_db.reject_staged_artifact(db, stage_id, reviewed_by="web")
+    except ValueError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.quick_hc"))
+    finally:
+        db.close()
+    if updated is None:
+        flash("Proposal not found.", "error")
+    else:
+        flash(f"Rejected proposal for {updated['subject_id']}.", "success")
+    return redirect(url_for("main.quick_hc"))
+
+
 @bp.route("/quick-hc/settings")
 def quick_hc_settings():
     """Placeholder Settings page.
@@ -159,6 +206,19 @@ def quick_hc_delete_subject(subject_id: str):
     make_active_project_store().delete_artifact(subject_id)
     flash(f"'{title}' removed from catalog.", "success")
     return redirect(url_for("main.quick_hc"))
+
+
+def _has_command_center_source(db, subject_id: str, version: int) -> bool:
+    """True iff the subject declares a ``rest_command_center_api`` source — the
+    discriminator that routes its /collect to the single-object extractor (ADR
+    0007 ph2). Defensive: any error -> False (falls back to the Reports-Plus path)."""
+    try:
+        return any(
+            s.get("source_type") == COMMAND_CENTER_SOURCE_TYPE
+            for s in get_subject_sources(db, subject_id, version)
+        )
+    except Exception:
+        return False
 
 
 @bp.route("/quick-hc/<subject_id>/collect", methods=["POST"])
@@ -195,6 +255,15 @@ def quick_hc_generic_collect(subject_id: str):
     if not is_authenticated_for(customer_id):
         if is_authenticated():
             clear_current_token()
+        # ADR 0007 ph3 follow-on (BUG 3): the result.errors path flashes (below),
+        # but this auth-gate redirect used to be silent — an auth-failed collect
+        # then looked identical to a stale success (the stored artifact + its old
+        # timestamp just stayed). Flash so the failure is visible, not silent.
+        customer_label = customer.get("customer_name") or customer_id
+        flash(
+            f"Collection failed: sign in to Commvault for customer '{customer_label}' before collecting.",
+            "error",
+        )
         return redirect(url_for("main.login", next=request.path))
 
     token = _current_token()
@@ -214,9 +283,19 @@ def quick_hc_generic_collect(subject_id: str):
         title = subject["title"]
         version = subject["version"]
         _, project_id = get_active_project(db)
-        with CommvaultSession(base_url, token, verify_ssl=settings.verify_ssl) as cv_session:
-            extractor = RESTExtractor(db, cv_session, customer_id, project_id)
+        # ADR 0007 ph2 — pluggable extractor selection by the subject's collect
+        # source type. Reports-Plus -> RESTExtractor (unchanged); the single-object
+        # Command Center API source -> CommandCenterExtractor. The auth checks above
+        # and the result_to_artifact -> save_artifact tail below are identical.
+        if _has_command_center_source(db, active_subject_id, version):
+            extractor = CommandCenterExtractor(
+                db, token=token, customer_id=customer_id, project_id=project_id
+            )
             result = extractor.extract(active_subject_id, version)
+        else:
+            with CommvaultSession(base_url, token, verify_ssl=settings.verify_ssl) as cv_session:
+                extractor = RESTExtractor(db, cv_session, customer_id, project_id)
+                result = extractor.extract(active_subject_id, version)
     except Exception as exc:
         flash(f"Collection failed: {exc}", "error")
         return _workspace_redirect(subject_id)

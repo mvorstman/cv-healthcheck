@@ -5,6 +5,11 @@ import re
 import sqlite3
 from typing import Any
 
+from cvhealthcheck.extractors.cc_endpoint import (
+    COMMAND_CENTER_SOURCE_TYPE,
+    validate_cc_endpoint,
+)
+
 from .section_types import validate_section_type
 
 
@@ -185,7 +190,18 @@ def create_subject_from_proposal(db: sqlite3.Connection, proposal: dict) -> dict
         for source_type, source_info in extraction_instructions.items():
             extractable = 1 if source_info.get("extractable", True) else 0
             non_extractable_reason = source_info.get("non_extractable_reason")
-            recognition_hints = source_info.get("recognition_hints", {})
+            recognition_hints = dict(source_info.get("recognition_hints") or {})
+            # ADR 0009 D2: a Command Center API source carries an explicit relative
+            # endpoint. Accept it as a top-level `endpoint` field (or already inside
+            # recognition_hints) and validate it relative + read-only before
+            # persisting — the AI-asserted endpoint is untrusted input (ADR 0008).
+            # The validated path is stored in recognition_hints (resolved
+            # open-question (ii): no schema migration). An invalid endpoint raises,
+            # rolling back the whole proposal write below.
+            if source_type == COMMAND_CENTER_SOURCE_TYPE:
+                declared = source_info.get("endpoint", recognition_hints.get("endpoint"))
+                if declared is not None:
+                    recognition_hints["endpoint"] = validate_cc_endpoint(declared)
             db.execute(
                 """
                 INSERT OR REPLACE INTO subject_sources
@@ -338,10 +354,18 @@ def delete_subject(db: sqlite3.Connection, subject_id: str) -> dict:
     Delete a subject and all related rows from the catalog.
     Deletes all versions of the subject.
 
+    Also reconciles the review queue: the subject's ``staged_artifacts`` rows
+    (its subject_proposal proposals AND imported ``artifact`` rows) are
+    hard-deleted too, so a delete can't leave an orphaned approved proposal that
+    the staging UI / ``list_proposed_subjects`` would misread as "belongs in the
+    catalog". (The shared approval path — ``execute_approval`` /
+    ``reject_staged_artifact`` — is untouched; only rows are removed.)
+
     Raises ValueError if created_by = 'system'.
     Raises ValueError if subject not found.
 
-    Returns {"deleted": subject_id, "versions_removed": int}
+    Returns {"deleted": subject_id, "versions_removed": int,
+             "staging_rows_removed": int}
     """
     rows = db.execute(
         "SELECT id, created_by FROM subjects WHERE subject_id = ?",
@@ -371,9 +395,20 @@ def delete_subject(db: sqlite3.Connection, subject_id: str) -> dict:
     db.execute("DELETE FROM subject_sources WHERE subject_id = ?", (subject_id,))
     db.execute("DELETE FROM subject_sections WHERE subject_id = ?", (subject_id,))
     db.execute("DELETE FROM subjects WHERE subject_id = ?", (subject_id,))
+    # Reconcile the review queue so a delete never orphans staged rows (the gap
+    # that left approved server_groups proposals with no catalog subject). Hard-
+    # delete every staged_artifacts row for this subject — proposals and imported
+    # artifacts alike — in the same transaction as the catalog/source rows.
+    staging_rows_removed = db.execute(
+        "DELETE FROM staged_artifacts WHERE subject_id = ?", (subject_id,)
+    ).rowcount
     db.commit()
 
-    return {"deleted": subject_id, "versions_removed": versions_removed}
+    return {
+        "deleted": subject_id,
+        "versions_removed": versions_removed,
+        "staging_rows_removed": staging_rows_removed,
+    }
 
 
 def get_subject_sources(

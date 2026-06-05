@@ -160,6 +160,23 @@ class TableSection(BaseModel):
     # shown when there are no rows (e.g. backup_job_summary's "No jobs in the
     # selected window") instead of the generic "No data.". None -> generic.
     empty_message: str | None          = None
+    # Presentational layout discriminator, mirroring CardSection.view_mode /
+    # MetricSection.render_mode — carried on the artifact from the catalog binding,
+    # honored by artifact_to_view + secBody, never keyed on subject id. "columns"
+    # is the column-header table (default, unchanged); "card" renders a single-row
+    # table as a Field/Value card (e.g. audit_trail retention); "property" is a
+    # transpose/property table — same columns layout, but the property verdict
+    # legend (good/info/warning/critical/not evaluated). Render-only: the row rules
+    # + per-row verdict still fire either way. Omitted from JSON when default so
+    # existing table artifacts stay byte-identical.
+    view_mode: Literal["columns", "card", "property"] = "columns"
+
+    @model_serializer(mode="wrap")
+    def _omit_default_view_mode(self, handler):
+        data = handler(self)
+        if self.view_mode == "columns":
+            data.pop("view_mode", None)
+        return data
 
 
 class ChartSection(BaseModel):
@@ -196,6 +213,11 @@ class CardItem(BaseModel):
     severity:      FindingSeverity | None = None
     verdict_chain: list[VerdictEntry]     = Field(default_factory=list)
     recommendation_intent: RecommendationIntent | None = None
+    # ADR 0007 D3 (hex coercion): when a `type` coercion reshapes the displayed
+    # value (e.g. integer → lowercase hex), the raw pre-coercion value is kept
+    # here so it isn't discarded. Optional; omitted from JSON when absent, so
+    # uncoerced items stay byte-identical.
+    raw_value: int | float | str | None = None
 
     @model_serializer(mode="wrap")
     def _omit_absent_evaluative(self, handler):
@@ -206,6 +228,8 @@ class CardItem(BaseModel):
             data.pop("verdict_chain", None)
         if self.recommendation_intent is None:
             data.pop("recommendation_intent", None)
+        if self.raw_value is None:
+            data.pop("raw_value", None)
         return data
 
 
@@ -230,9 +254,23 @@ class CardSection(BaseModel):
     items:         list[CardItem] = Field(default_factory=list)
     # Presentational grid hint; None = auto (renderer picks columns by count).
     columns:       int | None = None
+    # ADR 0007 ph3 follow-on: presentational layout hint that rides ON the artifact
+    # so the source-agnostic render path (artifact_to_view → _card_section_view) can
+    # pick the Field/Value TABLE the live card used instead of the tiles default.
+    # Sourced from the catalog binding's card.view_mode at build_card_section time.
+    # Optional; the serializer below OMITS it when absent so existing card artifacts
+    # (which never carried it) stay byte-identical (additive-absent).
+    view_mode:     Literal["tiles", "table"] | None = None
     # Evaluative face (reused from the metric machinery — same enum / VerdictEntry).
     severity:      FindingSeverity | None = None
     verdict_chain: list[VerdictEntry]     = Field(default_factory=list)
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_view_mode(self, handler):
+        data = handler(self)
+        if self.view_mode is None:
+            data.pop("view_mode", None)
+        return data
 
 
 class MetricSection(BaseModel):

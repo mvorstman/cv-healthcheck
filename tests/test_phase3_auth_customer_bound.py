@@ -22,6 +22,7 @@ from cvhealthcheck.auth.commvault_auth import (
     is_authenticated_for,
     set_current_token,
 )
+from cvhealthcheck import token_store
 from cvhealthcheck.web.app import create_app
 
 
@@ -31,60 +32,45 @@ def test_is_authenticated_for_returns_false_outside_request_context() -> None:
     assert is_authenticated_for("any-customer") is False
 
 
-def test_is_authenticated_for_returns_true_when_token_bound_to_customer() -> None:
+def test_is_authenticated_for_returns_true_when_held_token_bound_to_customer() -> None:
     app = create_app()
-    client = app.test_client()
-    with client.session_transaction() as session:
-        session[SESSION_TOKEN_KEY] = "tok"
-        session[SESSION_CUSTOMER_ID_KEY] = "acme"
-    with app.test_request_context():
-        # Replay the cookie into the request context. Easier: use the client
-        # to drive a real request that calls is_authenticated_for via the route.
-        pass
-    # Instead, run the assertion inside a real request via /api/auth/status,
-    # which calls is_authenticated() — but we want is_authenticated_for.
-    # Best: hit a route that exercises is_authenticated_for. The collect
-    # handler does that; we cover it below. For the helper itself we use
-    # test_request_context with a primed session.
-    with app.test_client() as c, c.session_transaction() as sess:
-        sess[SESSION_TOKEN_KEY] = "tok"
-        sess[SESSION_CUSTOMER_ID_KEY] = "acme"
-    # Direct helper exercise: prime session inside a request context.
+    token_store.set_active_token("tok")                  # token in the store (ADR-0008 B)
     with app.test_request_context("/"):
         from flask import session as flask_session
-        flask_session[SESSION_TOKEN_KEY] = "tok"
-        flask_session[SESSION_CUSTOMER_ID_KEY] = "acme"
+        flask_session[SESSION_CUSTOMER_ID_KEY] = "acme"  # binding marker stays in the cookie
         assert is_authenticated_for("acme") is True
-        assert is_authenticated_for("other") is False
+        assert is_authenticated_for("other") is False    # binding required (mismatch → False)
 
 
 def test_is_authenticated_for_returns_false_when_no_token() -> None:
     app = create_app()
     with app.test_request_context("/"):
         from flask import session as flask_session
-        flask_session[SESSION_CUSTOMER_ID_KEY] = "acme"  # customer id but no token
+        flask_session[SESSION_CUSTOMER_ID_KEY] = "acme"  # customer marker but no held token
         assert is_authenticated_for("acme") is False
 
 
-def test_is_authenticated_for_returns_false_for_unbound_legacy_token() -> None:
-    """A token in session without a customer-id key (legacy/test sessions)
-    must not satisfy is_authenticated_for."""
+def test_is_authenticated_for_requires_a_customer_marker() -> None:
+    """A held token with NO customer marker does not satisfy is_authenticated_for —
+    the binding-required property (replacing the old legacy-unbound-cookie-token case)."""
     app = create_app()
+    token_store.set_active_token("tok")
     with app.test_request_context("/"):
-        from flask import session as flask_session
-        flask_session[SESSION_TOKEN_KEY] = "tok"
-        # no SESSION_CUSTOMER_ID_KEY
-        assert is_authenticated_for("acme") is False
+        assert is_authenticated_for("acme") is False     # no SESSION_CUSTOMER_ID_KEY in the cookie
 
 
-# ── set_current_token ────────────────────────────────────────────────────────
+# ── set_current_token (de-cookie invariant) ──────────────────────────────────
 
-def test_set_current_token_stores_token_customer_and_username() -> None:
+def test_set_current_token_holds_token_in_store_not_cookie() -> None:
+    """ADR-0008 B: the CommServe token lands in the in-process store; the cookie keeps
+    ONLY the non-secret customer/username markers — the token is no longer at rest in
+    the browser."""
     app = create_app()
     with app.test_request_context("/"):
         from flask import session as flask_session
         set_current_token("tok", customer_id="acme", username="alice")
-        assert flask_session[SESSION_TOKEN_KEY] == "tok"
+        assert token_store.get_active_token() == "tok"        # token in the store
+        assert SESSION_TOKEN_KEY not in flask_session         # NOT in the cookie
         assert flask_session[SESSION_CUSTOMER_ID_KEY] == "acme"
         assert flask_session[SESSION_USERNAME_KEY] == "alice"
 
@@ -98,17 +84,18 @@ def test_set_current_token_raises_on_empty_customer_id() -> None:
             set_current_token("tok", customer_id="   ")
 
 
-def test_clear_current_token_clears_all_three_keys() -> None:
+def test_logout_clears_store_and_session_markers() -> None:
     app = create_app()
     client = app.test_client()
+    token_store.set_active_token("tok", principal="alice")     # held token in the store
     with client.session_transaction() as session:
-        session[SESSION_TOKEN_KEY] = "tok"
         session[SESSION_CUSTOMER_ID_KEY] = "acme"
         session[SESSION_USERNAME_KEY] = "alice"
 
     response = client.post("/logout")
     assert response.status_code == 302
 
+    assert token_store.get_active_token() is None              # store cleared
     with client.session_transaction() as session:
         assert SESSION_TOKEN_KEY not in session
         assert SESSION_CUSTOMER_ID_KEY not in session
@@ -187,8 +174,9 @@ def test_login_post_success_binds_token_to_customer(monkeypatch) -> None:
         data={"username": "alice", "password": "secret"},
     )
     assert response.status_code == 302
+    assert token_store.get_active_token() == "issued-token"   # token to the store
     with client.session_transaction() as session:
-        assert session[SESSION_TOKEN_KEY] == "issued-token"
+        assert SESSION_TOKEN_KEY not in session               # not the cookie
         assert session[SESSION_CUSTOMER_ID_KEY] == "acme"
         assert session[SESSION_USERNAME_KEY] == "alice"
 
@@ -212,6 +200,7 @@ def test_login_post_failure_renders_error(monkeypatch) -> None:
     assert response.status_code == 200
     body = response.data.decode("utf-8")
     assert "Invalid credentials" in body
+    assert token_store.get_active_token() is None             # failed login → no held token
     with client.session_transaction() as session:
         assert SESSION_TOKEN_KEY not in session
 
@@ -259,8 +248,9 @@ def test_api_login_success_binds_token(monkeypatch) -> None:
     )
     assert response.status_code == 200
     assert response.get_json() == {"success": True}
+    assert token_store.get_active_token() == "issued-token"   # token to the store
     with client.session_transaction() as session:
-        assert session[SESSION_TOKEN_KEY] == "issued-token"
+        assert SESSION_TOKEN_KEY not in session               # not the cookie
         assert session[SESSION_CUSTOMER_ID_KEY] == "acme"
 
 
@@ -304,17 +294,17 @@ def test_collect_clears_and_redirects_when_token_bound_to_wrong_customer(
     )
     app = create_app()
     client = app.test_client()
+    token_store.set_active_token("old-token")                   # held token...
     with client.session_transaction() as session:
-        session[SESSION_TOKEN_KEY] = "old-token"
-        session[SESSION_CUSTOMER_ID_KEY] = "different_customer"
+        session[SESSION_CUSTOMER_ID_KEY] = "different_customer"  # ...bound to the wrong customer
 
     response = client.post("/quick-hc/client_growth/collect")
     assert response.status_code == 302
     assert "/login" in response.headers["Location"]
 
+    # The wrong-customer held token must have been cleared (store + marker).
+    assert token_store.get_active_token() is None
     with client.session_transaction() as session:
-        # The wrong-customer token must have been cleared
-        assert SESSION_TOKEN_KEY not in session
         assert SESSION_CUSTOMER_ID_KEY not in session
 
 
@@ -325,8 +315,8 @@ def test_collect_errors_when_active_customer_has_no_hostname(monkeypatch) -> Non
     )
     app = create_app()
     client = app.test_client()
+    token_store.set_active_token("tok")
     with client.session_transaction() as session:
-        session[SESSION_TOKEN_KEY] = "tok"
         session[SESSION_CUSTOMER_ID_KEY] = "default"
 
     response = client.post("/quick-hc/client_growth/collect")

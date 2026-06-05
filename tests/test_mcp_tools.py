@@ -136,10 +136,10 @@ def test_list_subjects_returns_list(patch_db: None) -> None:
 
 
 def test_list_subjects_returns_seeded_subjects(patch_db: None) -> None:
-    # Six system subjects + the internal "_metric_test" subject (migration
-    # 0010, ADR 0004 phase 2).
+    # Six system subjects + the internal _metric_test / _chart_test / _card_test
+    # subjects, plus _nested_test (migration 0025, ADR 0007 phase 1).
     subjects = server.list_subjects()
-    assert len(subjects) == 9
+    assert len(subjects) == 10
 
 
 def test_list_subjects_items_have_expected_keys(patch_db: None) -> None:
@@ -157,7 +157,7 @@ def test_list_subjects_contains_security_assessment_and_license_summary(patch_db
 def test_list_subjects_status_filter_returns_only_active(patch_db: None) -> None:
     active = server.list_subjects(status="active")
     assert all(s["status"] == "active" for s in active)
-    assert len(active) == 9
+    assert len(active) == 10
 
 
 def test_list_subjects_status_filter_returns_empty_for_proposed(patch_db: None) -> None:
@@ -433,3 +433,89 @@ def test_quiet_sdk_logging_raises_mcp_logger_level() -> None:
     logging.getLogger("mcp").setLevel(logging.INFO)  # pretend it's noisy
     server._quiet_sdk_logging()
     assert logging.getLogger("mcp.server.lowlevel.server").getEffectiveLevel() >= logging.WARNING
+
+
+# ── probe (ADR-0008 E: app-mediated — POSTs the internal endpoint, holds no token) ──
+
+class _FakeResp:
+    """A requests.Response stand-in: .status_code, .json(), .text."""
+    def __init__(self, status_code: int, payload: Any, text: str = "") -> None:
+        self.status_code = status_code
+        self._payload = payload
+        self.text = text
+
+    def json(self):
+        if self._payload is None:
+            raise ValueError("no json")
+        return self._payload
+
+
+def _patch_post(monkeypatch, *, resp=None, exc=None, captured=None):
+    """Patch requests.post (in the server module) — no real HTTP."""
+    def _post(url, headers=None, json=None, timeout=None):
+        if captured is not None:
+            captured.update({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        if exc is not None:
+            raise exc
+        return resp
+    monkeypatch.setattr(server.requests, "post", _post)
+
+
+def test_probe_missing_internal_secret_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CV_INTERNAL_SECRET", raising=False)
+    with pytest.raises(ValueError, match="internal secret not configured"):
+        server.probe("/commandcenter/api/v4/user")
+
+
+def test_probe_connected_returns_data_and_sends_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CV_INTERNAL_SECRET", "s3cr3t")
+    captured: dict = {}
+    # The app already redacted `description` before returning; the probe passes it through.
+    resp = _FakeResp(200, {"ok": True, "state": "connected", "status_code": 200,
+                           "data": {"users": [{"name": "alice", "description": "[redacted: 11 chars]"}]},
+                           "error": None})
+    _patch_post(monkeypatch, resp=resp, captured=captured)
+
+    out = server.probe("/commandcenter/api/v4/user")
+    assert out["state"] == "connected" and out["ok"] is True and out["status_code"] == 200
+    assert out["data"]["users"][0]["description"] == "[redacted: 11 chars]"   # app-redacted, passed through
+    # The probe holds NO CommServe token — it sends the shared secret + read contract.
+    assert captured["headers"]["X-Internal-Secret"] == "s3cr3t"
+    assert captured["json"] == {
+        "path": "/commandcenter/api/v4/user", "principal": "mcp-operator", "capability": "read",
+    }
+
+
+def test_probe_disconnected_returns_reconnect_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CV_INTERNAL_SECRET", "s3cr3t")
+    resp = _FakeResp(200, {"ok": False, "state": "disconnected", "status_code": None,
+                           "data": None, "error": "no active token; reconnect"})
+    _patch_post(monkeypatch, resp=resp)
+
+    out = server.probe("/x")
+    assert out["state"] == "disconnected" and out["data"] is None
+    assert "reconnect" in out["error"].lower()           # visible-not-silent expiry signal
+
+
+def test_probe_commserve_non_200_surfaced_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CV_INTERNAL_SECRET", "s3cr3t")
+    resp = _FakeResp(200, {"ok": False, "state": "connected", "status_code": 401,
+                           "data": None, "error": "Unauthorized"})
+    _patch_post(monkeypatch, resp=resp)
+
+    out = server.probe("/x")    # our endpoint succeeded; the CommServe verdict rides the envelope
+    assert out["state"] == "connected" and out["status_code"] == 401 and out["ok"] is False
+
+
+def test_probe_app_unreachable_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CV_INTERNAL_SECRET", "s3cr3t")
+    _patch_post(monkeypatch, exc=server.requests.ConnectionError("refused"))
+    with pytest.raises(ValueError, match="could not reach the app"):
+        server.probe("/x")
+
+
+def test_probe_endpoint_guard_rejection_surfaces_clearly(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CV_INTERNAL_SECRET", "s3cr3t")
+    _patch_post(monkeypatch, resp=_FakeResp(403, {"error": "forbidden"}))
+    with pytest.raises(ValueError, match="HTTP 403"):
+        server.probe("/x")

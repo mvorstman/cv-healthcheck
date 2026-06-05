@@ -21,13 +21,13 @@ from cvhealthcheck.auth import (
     AuthError,
     clear_current_token,
     get_current_customer_id,
-    get_current_token,
     get_current_username,
     is_authenticated,
     is_authenticated_for,
     login_to_commvault,
     set_current_token,
 )
+from cvhealthcheck.token_store import get_active_token
 from cvhealthcheck.config import load_settings
 from cvhealthcheck.labreadiness.evaluator import assess_lab_readiness
 from cvhealthcheck.license_summary import (
@@ -83,7 +83,10 @@ def login_required(view: F) -> F:
 
 
 def _current_token() -> str:
-    return get_current_token() or ""
+    # ADR-0008 B: the read seam now sources the held token from the in-process store,
+    # not the session cookie (the cookie no longer carries the token). The four web
+    # consumers follow automatically; "" preserved for the not-connected case.
+    return get_active_token() or ""
 
 
 def _api_client() -> CommvaultApiClient:

@@ -1,0 +1,155 @@
+"""Transpose / property-table materialization: one object -> N rows of
+{id, key, label, value}, one per declared field. Additive branch in
+`_project_table_rows`; reuses the existing row-scope engine + columns render —
+NO engine change. Fixture-based; never reads app.db.
+"""
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+from cvhealthcheck.evaluative.row_match import evaluate_section_rows
+from cvhealthcheck.extractors.command_center import _project_table_rows
+from cvhealthcheck.extractors.html import ExtractionResult
+from cvhealthcheck.extractors.result_to_artifact import result_to_artifact
+from cvhealthcheck.quickhc.canonical_view import artifact_to_view
+
+# a single object (the commserve_software_cache shape), heterogeneous field types
+OBJ = {"commserveSoftwareCache": {
+    "cacheFreeSpace": 46284349440,
+    "UaInfo": {"uaPackageCacheStatus": "OK", "inSyncWithCSLevelCache": False}}}
+TRANSPOSE = [
+    {"key": "free_space",       "label": "Free space",                  "field": "cacheFreeSpace"},
+    {"key": "ua_package_cache", "label": "UA package cache",            "field": "UaInfo.uaPackageCacheStatus"},
+    {"key": "in_sync",          "label": "In sync with CS-level cache",  "field": "UaInfo.inSyncWithCSLevelCache"},
+]
+SPEC = {"root_key": "commserveSoftwareCache", "transpose": TRANSPOSE,
+        "columns": [{"id": "label", "label": "Setting"}, {"id": "value", "label": "Value"}]}
+
+
+# ── CHANGE 1: object -> N rows ────────────────────────────────────────────────
+
+def test_transpose_explodes_object_into_n_rows_typed():
+    rows = _project_table_rows(OBJ, SPEC)
+    assert [r["key"] for r in rows] == ["free_space", "ua_package_cache", "in_sync"]
+    assert all(r["id"] == r["key"] for r in rows)            # id mirrors key (stable ref)
+    assert rows[0] == {"id": "free_space", "key": "free_space",
+                       "label": "Free space", "value": 46284349440}
+    # value types preserved: int / str / bool (nested field paths resolve)
+    assert isinstance(rows[0]["value"], int) and rows[0]["value"] == 46284349440
+    assert rows[1]["value"] == "OK"
+    assert rows[2]["value"] is False
+
+def test_transpose_label_defaults_to_key_and_skips_incomplete_entries():
+    spec = {"root_key": "x", "transpose": [{"key": "a", "field": "a"}, {"key": "b"}, {"field": "c"}]}
+    rows = _project_table_rows({"x": {"a": 1}}, spec)
+    assert rows == [{"id": "a", "key": "a", "label": "a", "value": 1}]   # label->key; b & c skipped
+
+def test_transpose_over_raw_when_no_root_key():
+    spec = {"transpose": [{"key": "a", "label": "A", "field": "a"}]}
+    assert _project_table_rows({"a": 5}, spec) == [{"id": "a", "key": "a", "label": "A", "value": 5}]
+
+
+# ── regression: dict-wrap (object -> 1 row) unchanged without a transpose key ──
+
+def test_no_transpose_dict_wrap_unchanged():
+    spec = {"root_key": "auditTrailInfo",
+            "columns": [{"id": "retention_critical", "field": "retention_critical"}]}
+    rows = _project_table_rows({"auditTrailInfo": {"retention_critical": 365}}, spec)
+    assert rows == [{"retention_critical": 365}]             # still object -> 1 row
+
+
+# ── CHANGE 2 + engine reuse, end to end through result_to_artifact ────────────
+
+def _result(rules=None):
+    r = ExtractionResult(subject_id="csc", source_type="rest")
+    r.sections["cfg"] = _project_table_rows(OBJ, SPEC)
+    r.section_output_types["cfg"] = "table"
+    r.section_titles["cfg"] = "Cache Configuration"
+    r.section_table_specs["cfg"] = SPEC
+    if rules:
+        r.section_row_rules["cfg"] = rules
+    return r
+
+def test_declared_columns_restrict_display_id_key_stay_on_items():
+    tbl = next(s for s in result_to_artifact(_result(), "csc", "CSC").sections if s.type == "table")
+    assert [c.id for c in tbl.columns] == ["label", "value"]         # id/key NOT displayed
+    assert [c.label for c in tbl.columns] == ["Setting", "Value"]
+    assert tbl.items[0]["id"] == "free_space" and tbl.items[0]["key"] == "free_space"  # still on the row
+
+IN_SYNC_RULE = {
+    "rule_id": "csc_in_sync_false", "kind": "row_match", "scope": "row", "emit": "per_row",
+    "severity": "warning", "title": "Cache out of sync", "message": "m",
+    "conditions": [{"target": "key", "operator": "eq", "value": "in_sync"},
+                   {"target": "value", "operator": "eq", "value": False}],
+}
+
+def test_row_rule_on_key_value_gives_per_row_verdict_no_engine_change():
+    rows = _project_table_rows(OBJ, SPEC)
+    findings, per_row = evaluate_section_rows([IN_SYNC_RULE], rows)
+    # row_ref == the stable id (= setting key); only the in_sync row flags
+    assert {pr["row_ref"]: pr["verdict"] for pr in per_row} == \
+        {"free_space": "good", "ua_package_cache": "good", "in_sync": "warning"}
+    assert [f["row_ref"] for f in findings] == ["in_sync"]
+
+def test_transpose_verdict_bakes_per_row_end_to_end():
+    tbl = next(s for s in result_to_artifact(_result(rules=[IN_SYNC_RULE]), "csc", "CSC").sections
+               if s.type == "table")
+    assert {r["key"]: r["_verdict"] for r in tbl.items} == \
+        {"free_space": "good", "ua_package_cache": "good", "in_sync": "warning"}
+
+
+# ── view_mode "property" carry: model → view ──────────────────────────────────
+
+def _data_table_result():
+    """A NORMAL data table (no transpose) — the regression baseline."""
+    r = ExtractionResult(subject_id="sg", source_type="rest")
+    r.sections["rows"] = [{"id": 1, "name": "a"}]
+    r.section_output_types["rows"] = "table"
+    r.section_titles["rows"] = "Rows"
+    return r
+
+def test_transpose_section_view_mode_property_through_to_view():
+    art = result_to_artifact(_result(), "csc", "CSC")
+    tbl = next(s for s in art.sections if s.type == "table")
+    assert tbl.view_mode == "property"
+    assert tbl.model_dump()["view_mode"] == "property"          # serialized (not the omitted default)
+    sec = next(s for s in artifact_to_view(art)["sections"] if s["type"] == "table")
+    assert sec["view_mode"] == "property"                        # survives into the JS section object
+
+def test_non_transpose_data_table_stays_columns():
+    art = result_to_artifact(_data_table_result(), "sg", "SG")
+    tbl = next(s for s in art.sections if s.type == "table")
+    assert tbl.view_mode == "columns"                            # unchanged default
+    assert "view_mode" not in tbl.model_dump()                  # omitted-when-default, byte-identical
+    sec = next(s for s in artifact_to_view(art)["sections"] if s["type"] == "table")
+    assert sec["view_mode"] == "columns"
+
+
+# ── the unified table legend (render markers) ─────────────────────────────────
+
+_JS = (Path(__file__).resolve().parents[1] / "src/cvhealthcheck/web/static/quick_hc.js").read_text()
+
+def _table_legend() -> str:
+    # the single legendDots template in the columns-mode table branch
+    m = re.search(r"const legendDots = hasVerdicts \? `(.*?)` : '';", _JS, re.S)
+    return m.group(1) if m else ""
+
+def test_unified_table_legend_order_good_warning_critical_not_evaluated_info():
+    legend = _table_legend()
+    # ONE legend, exact order; info present AND not_evaluated present (distinct, e0aa3287)
+    assert ["vdot-good", "vdot-warn", "vdot-crit", "vdot-na", "vdot-info"] == \
+        re.findall(r"vdot-(?:good|info|warn|crit|na)", legend)
+    assert "not evaluated" in legend and ">info</span>" in legend
+
+def test_legend_no_longer_branches_on_property():
+    # the 5a40e1e two-legend split is gone — every table section (columns AND
+    # property) gets the same legend; the legend no longer keys on view_mode.
+    assert "sec.view_mode === 'property'" not in _JS
+    assert "propLegend" not in _JS and "dataLegend" not in _JS
+
+def test_dot_fallback_and_card_routing_unchanged():
+    # info-blue fallback for an absent/unruled verdict is untouched
+    assert "[v] || 'vdot-info'" in _JS
+    # the 1-row card path is untouched (view_mode==='card' + length 1)
+    assert "sec.view_mode === 'card' && (sec.rows || []).length === 1" in _JS

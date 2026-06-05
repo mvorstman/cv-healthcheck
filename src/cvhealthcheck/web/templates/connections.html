@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+  .conn-page { max-width: 720px; margin: 0 auto; padding: 32px 24px 64px; font-family: var(--font); color: var(--text-1); }
+  .conn-title { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .conn-lede { color: var(--text-2); font-size: 14px; line-height: 1.5; margin-bottom: 24px; }
+  .conn-panel { border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+  .conn-panel-title { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); margin-bottom: 12px; }
+  .conn-state { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .conn-state-connected { color: var(--c-good-fg, #1a7f37); }
+  .conn-state-disconnected, .conn-state-expired { color: var(--c-warn-fg, #9a6700); }
+  .conn-row { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-top: 1px solid var(--border); }
+  .conn-row:first-of-type { border-top: 0; }
+  .conn-row .k { color: var(--text-2); }
+  .conn-row .v { font-family: var(--mono); text-align: right; word-break: break-all; }
+  .conn-actions { margin-top: 16px; }
+  .conn-btn { display: inline-block; padding: 8px 18px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; text-decoration: none; cursor: pointer; font: inherit; }
+  .conn-btn-secondary { background: transparent; color: var(--accent); }
+  .conn-note { color: var(--text-2); font-size: 12.5px; line-height: 1.5; margin: 12px 0 0; }
+</style>
+
+<div class="conn-page">
+  <div class="conn-title">Connections</div>
+  <p class="conn-lede">
+    The app holds the CommServe token <strong>in memory while connected</strong> — it is never written to
+    disk. The AI/MCP layer never holds a token; it reaches the CommServe only through the app (ADR-0008).
+  </p>
+
+  <div class="conn-panel">
+    {% if status.state == "connected" %}
+      <div class="conn-state conn-state-connected">● Connected</div>
+      <div class="conn-row"><span class="k">Signed in as</span><span class="v">{{ status.principal or username or "—" }}</span></div>
+      <div class="conn-row"><span class="k">Connected</span><span class="v">{{ localtime_span(status.connected_at, "—") }}</span></div>
+      {% if status.expires_at %}
+        <div class="conn-row"><span class="k">Token expires</span><span class="v">{{ localtime_span(status.expires_at, "—") }}</span></div>
+      {% endif %}
+      <div class="conn-actions">
+        <form method="post" action="{{ url_for('main.connections_disconnect') }}">
+          <button type="submit" class="conn-btn conn-btn-secondary">Disconnect</button>
+        </form>
+      </div>
+    {% else %}
+      <div class="conn-state conn-state-{{ status.state }}">○ Disconnected — reconnect</div>
+      <p class="conn-note">
+        {% if status.state == "expired" %}
+          The held token has expired (this happens on restart, or after the CommServe session times out).
+          Reconnect to continue collecting.
+        {% else %}
+          Not connected to the CommServe. Connect to collect and to let report assembly reach CommServe data.
+        {% endif %}
+      </p>
+      <div class="conn-actions">
+        <a class="conn-btn" href="{{ url_for('main.login', next=url_for('main.connections')) }}">Connect</a>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="conn-panel">
+    <div class="conn-panel-title">Connection target</div>
+    <div class="conn-row"><span class="k">Customer</span><span class="v">{{ customer_name or "—" }}</span></div>
+    <div class="conn-row"><span class="k">CommServe URL</span><span class="v">{{ base_url or "—" }}</span></div>
+    <div class="conn-row"><span class="k">SSL verification</span><span class="v">{{ "on" if verify_ssl else "off" }}</span></div>
+    <div class="conn-row"><span class="k">Username</span><span class="v">{{ username or "—" }}</span></div>
+    <p class="conn-note">
+      Environment-configured (<code>CV_BASE_URL</code> / <code>CV_VERIFY_SSL</code>, active customer) —
+      editing these is out of scope here. The token and password are never displayed.
+    </p>
+  </div>
+</div>
+{% endblock %}

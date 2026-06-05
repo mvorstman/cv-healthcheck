@@ -102,3 +102,39 @@ that risk.
 Pushes should be append-only — no `--force`, no rebasing pushed
 branches. If a push fails (auth, network, conflict), stop and report
 the failure rather than working around it.
+
+---
+
+## 4. Standing conventions (project invariants)
+
+Enforceable rules that hold across the codebase. (ROADMAP states the
+themes; the concrete rules live here.)
+
+- **No ORM.** The `db/` package uses raw SQL helpers plus numbered
+  migrations — do not introduce an ORM.
+- **`latest.json` is compatibility / cache only.** Prefer registry-backed
+  reads internally; `latest.json` is a fallback, not the source of truth.
+- **Catalog persistence is file-based.** The Reports Plus / dataset
+  catalog lives in `data/catalog/` as JSON — no database for the catalog.
+  (The business/application state DB, `app.db`, is a separate concern.)
+- **License Summary missing-values policy.** Never fabricate absent
+  sections and never guess `license_expiry`; render only sections that
+  return real rows in the current CommCell.
+- **SSL verification defaults ON.** Require an explicit opt-out for
+  self-signed lab environments, and warn clearly when insecure mode is used.
+
+---
+
+## 5. Metric visualization uses a shared Chart.js payload pattern
+
+Historical metric pages render through one reusable server-side payload
+pattern, not page-specific JavaScript:
+
+```text
+route -> server-side chart payload -> metric_detail.html -> Chart.js render
+```
+
+Future historical metrics should reuse this pattern — build the chart
+payload server-side and pass it into `metric_detail.html` — instead of
+adding bespoke per-page JavaScript. (The `/metrics/client-growth` page is
+the worked example; see README "Metric Charts" for the how-to.)

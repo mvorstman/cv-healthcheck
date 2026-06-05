@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from cvhealthcheck.artifacts.enums import ArtifactStatus, FindingSeverity, SourceType
@@ -93,6 +94,8 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
     src = artifact.source
     active_src = _SOURCE_TYPE_TO_ID.get(src.type, REST_REPORTS_PLUS_SOURCE_ID)
     subject_id = artifact.subject.id
+    # ADR 0010 layout slice 2: per-section {scope, checks} baked at collection.
+    evaluation = artifact.metadata.get("evaluation") or {}
 
     sections: list[dict] = []
     for sec in artifact.sections:
@@ -107,6 +110,9 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
                 "type": "findings_list",
                 "findings": [_finding_view(f) for f in sec.items],
                 "rows": [],
+                # ADR 0010 layout: section pill = worst finding severity (e.g. the
+                # derived <subject>.compliance section → "Warning"). None → no pill.
+                "sev": _worst_finding_sev(sec.items),
             })
         elif isinstance(sec, TableSection):
             count = len(sec.items)
@@ -115,14 +121,32 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
                 [str(item.get(col.id) if item.get(col.id) is not None else "") for col in sec.columns]
                 for item in sec.items
             ]
+            # ADR 0010 layout: carry the baked per-row _verdict to the view as row
+            # METADATA (row-aligned), NOT as a visible data column — it drives the
+            # STATUS dot. Absent (no rules on this section) → None per row → the dot
+            # falls back to info; the explicit not_evaluated must NOT be that.
+            row_verdicts = [item.get("_verdict") for item in sec.items]
             sections.append({
                 "id": sec_id,
                 "title": sec.title,
                 "meta": f"{count} row{'s' if count != 1 else ''}",
                 "included": True,
                 "type": "table",
+                # presentational layout hint from the artifact (default "columns");
+                # "card" renders a single-row table as a Field/Value card in secBody.
+                "view_mode": sec.view_mode,
                 "columns": columns,
                 "rows": rows,
+                "row_verdicts": row_verdicts,
+                # section pill = worst row verdict EXCLUDING not_evaluated; None → no pill.
+                "sev": _worst_verdict_code(row_verdicts),
+                # Always-present scope caption on the legend bar (safety net — it
+                # survives toggling the Evaluation cards out). None when the section
+                # is not evaluated. ``sec.id`` here is the catalog section_id.
+                "scope_caption": (
+                    _scope_phrases((evaluation[sec.id].get("scope")) or [])[1]
+                    if sec.id in evaluation else None
+                ),
                 "empty_message": sec.empty_message,
             })
         elif isinstance(sec, MetricSection):
@@ -146,7 +170,26 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
         elif isinstance(sec, ChartSection):
             sections.append(_chart_section_view(sec, sec_id))
         elif isinstance(sec, CardSection):
-            sections.append(_card_section_view(sec, sec_id))
+            # ADR 0007 ph3 follow-on: honor the section's own view_mode (carried
+            # on the artifact from the catalog binding) instead of the hardcoded
+            # tiles default — so a card authored view_mode="table" renders as the
+            # Field/Value table. Source-agnostic; unset → tiles (unchanged).
+            sections.append(_card_section_view(sec, sec_id, view_mode=sec.view_mode or "tiles"))
+
+    # ── ADR 0010 layout slice 2: the Evaluation band ──
+    # Every section defaults to the "report" band; the derived <subject>.compliance
+    # findings MOVE to the "evaluation" band, retitled "Findings". A read-only
+    # "Evaluation criteria" card (no status pill) is built per evaluated section.
+    # Order: report sections, then Evaluation (criteria first, then findings).
+    for s in sections:
+        s.setdefault("band", "report")
+        if s["type"] == "findings_list" and s["id"].endswith(".compliance"):
+            s["band"] = "evaluation"
+            s["title"] = "Findings"
+    criteria = [_evaluation_criteria_view(sid, block) for sid, block in evaluation.items()]
+    report_sections = [s for s in sections if s.get("band") != "evaluation"]
+    eval_findings = [s for s in sections if s.get("band") == "evaluation"]
+    sections = report_sections + criteria + eval_findings
 
     return {
         "id": subject_id,
@@ -568,6 +611,96 @@ def _finding_view(f: Finding, section_label: str | None = None) -> dict[str, str
     else:
         rem = description or section
     return {"sev": sev, "title": str(f.title or ""), "rem": rem}
+
+
+# ADR 0010 layout: roll a section's pill up from its per-row/per-finding verdicts.
+_VERDICT_SEV_RANK = {"good": 0, "warning": 1, "critical": 2}
+_VERDICT_TO_SEV_CODE = {"good": "good", "warning": "warn", "critical": "crit"}
+_SEV_CODE_RANK = {"good": 0, "info": 1, "warn": 2, "crit": 3}
+
+
+def _worst_verdict_code(verdicts: list[Any]) -> str | None:
+    """Section pill from per-row verdicts: worst EXCLUDING ``not_evaluated`` (and
+    absent). Returned as a sev code (good/warn/crit); ``None`` ⇒ no pill."""
+    worst: str | None = None
+    for verdict in verdicts:
+        if verdict in _VERDICT_SEV_RANK and (
+            worst is None or _VERDICT_SEV_RANK[verdict] > _VERDICT_SEV_RANK[worst]
+        ):
+            worst = verdict
+    return _VERDICT_TO_SEV_CODE.get(worst) if worst else None
+
+
+def _worst_finding_sev(findings: list[Finding]) -> str | None:
+    """Section pill from findings: the worst finding severity as a sev code, or
+    ``None`` when there are no findings."""
+    worst: str | None = None
+    for finding in findings:
+        code = _FINDING_SEV.get(finding.severity, "info")
+        if worst is None or _SEV_CODE_RANK[code] > _SEV_CODE_RANK[worst]:
+            worst = code
+    return worst
+
+
+# ── ADR 0010 criteria card phrasing ──────────────────────────────────────────
+# Each check's PRIMARY line is the rule's AUTHORED `description` (slice 3),
+# falling back to the rule's `title` with its `{row.*}` template placeholders
+# stripped — NEVER the raw rule id. The condition line is the mechanically
+# formatted `condition_text` baked in `result_to_artifact`. The SCOPE sentence is
+# still derived here (interim) — an authored scope label is the scope-authoring
+# slice; `_scope_phrases` stays until then.
+_SEV_STR_TO_CODE = {"critical": "crit", "warning": "warn", "info": "info", "good": "good"}
+_TEMPLATE_PLACEHOLDER = re.compile(r"\{[^}]*\}")
+
+
+def _title_static(title: str | None) -> str:
+    """A rule `title` is a per-row template (e.g. ``Empty group: {row.name}``);
+    render only its static text for the criteria card."""
+    if not title:
+        return ""
+    stripped = _TEMPLATE_PLACEHOLDER.sub("", title)
+    return re.sub(r"\s+", " ", stripped).strip().rstrip(":·-–— ").strip()
+
+
+def _scope_phrases(conditions: list[Any]) -> tuple[str, str]:
+    """(full sentence, short caption) for a scope. INTERIM: handles eq-on-
+    ``association``; an empty scope → "all rows"; anything else → a generic
+    subset phrase."""
+    for cond in conditions or []:
+        if cond.get("target") == "association" and cond.get("operator") == "eq":
+            value = str(cond.get("value", "")).strip().lower()
+            sentence = f"{value.capitalize()} server groups."
+            caption = f"{value} server groups"
+            if value == "manual":
+                sentence += " Automatic groups are excluded from assessment."
+                caption += " · automatic excluded"
+            return sentence, caption
+    if not conditions:
+        return "All rows are assessed.", "all rows"
+    return "A subset of rows is assessed.", "a subset of rows"
+
+
+def _evaluation_criteria_view(section_id: str, block: dict[str, Any]) -> dict[str, Any]:
+    """The read-only "Evaluation criteria" card: a plain-language scope sentence +
+    one severity-tagged check sentence per bound rule. No status pill — it
+    describes the assessment, it is not a verdict."""
+    scope_sentence, _ = _scope_phrases(block.get("scope") or [])
+    checks = [
+        {"sev": _SEV_STR_TO_CODE.get(str(c.get("severity")), "info"),
+         "primary": c.get("description") or _title_static(c.get("title")) or "Check",
+         "condition": c.get("condition_text") or ""}
+        for c in (block.get("checks") or [])
+    ]
+    return {
+        "id": f"{section_id}.criteria",
+        "title": "Evaluation criteria",
+        "meta": "",
+        "included": True,
+        "type": "criteria",
+        "band": "evaluation",
+        "scope_sentence": scope_sentence,
+        "checks": checks,
+    }
 
 
 def _parse_percent(value: Any) -> int:

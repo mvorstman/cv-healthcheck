@@ -20,6 +20,7 @@ from cvhealthcheck.artifacts.models import (
     TableColumn,
     TableSection,
 )
+from cvhealthcheck.evaluative.row_match import evaluate_section_rows, format_conditions
 from cvhealthcheck.extractors.card_section import build_card_section
 from cvhealthcheck.extractors.chart_section import build_chart_section
 from cvhealthcheck.extractors.html import ExtractionResult
@@ -38,7 +39,14 @@ _SOURCE_TYPE_MAP: dict[str, SourceType] = {
     "csv":   SourceType.csv_import,
     "json":  SourceType.json_import,
     "rest":  SourceType.rest,
+    # ADR 0007 (single-object Command Center API source). Reuses the existing
+    # canonical CommServe source type rather than adding a redundant enum value.
+    "rest_command_center_api": SourceType.rest_commserve,
 }
+
+# Source types that represent a LIVE collection (stamp collected_at), as opposed
+# to a file import (imported_at only).
+_LIVE_SOURCE_TYPES = {SourceType.rest, SourceType.rest_commserve}
 
 
 def result_to_artifact(
@@ -55,7 +63,7 @@ def result_to_artifact(
     )
     # ADR 0004: live REST collection records collected_at; file imports record
     # only imported_at (the file may have been generated earlier elsewhere).
-    collected_at = now if artifact_source_type == SourceType.rest else None
+    collected_at = now if artifact_source_type in _LIVE_SOURCE_TYPES else None
     source = ArtifactSource(
         type=artifact_source_type,
         collected_at=collected_at,
@@ -116,8 +124,17 @@ def result_to_artifact(
             sections.append(card_section)
             card_sections.append(card_section)
         else:
-            columns = _derive_columns(rows)
             spec = result.section_table_specs.get(section_id, {})
+            is_transpose = bool(spec.get("transpose"))
+            # A transpose section carries id/key on each row for ref-stability +
+            # rule targeting; honor its declared display columns so those internal
+            # keys don't leak as columns. Other sections keep deriving from row keys.
+            declared = spec.get("columns") if is_transpose else None
+            if declared:
+                columns = [TableColumn(id=c["id"], label=c.get("label", c["id"]))
+                           for c in declared if isinstance(c, dict) and c.get("id")]
+            else:
+                columns = _derive_columns(rows)
             sections.append(TableSection(
                 type="table",
                 id=section_id,
@@ -125,7 +142,60 @@ def result_to_artifact(
                 columns=columns,
                 items=rows,
                 empty_message=spec.get("empty_message"),
+                # presentational layout hint. A transpose section is a "property"
+                # table (columns layout + property verdict legend); otherwise the
+                # binding's "card" opts in; anything else stays the default columns.
+                view_mode=("property" if is_transpose
+                           else "card" if spec.get("view_mode") == "card" else "columns"),
             ))
+
+    # ADR 0010: row-scope compliance rules → a derived FindingsSection. Runs after
+    # the extracted sections are built (one canonicalization path, ADR 0006 D1):
+    # for each table section with bound row_match rules, evaluate each rule over
+    # that section's rows. Findings fold into severity_counts + has_findings_section
+    # so the summary status reflects them, exactly like a transcribed findings
+    # section. Read-only over the rows — the rules never mutate the artifact data.
+    table_by_id = {s.id: s for s in sections if isinstance(s, TableSection)}
+    compliance_items: list[Finding] = []
+    # ADR 0010 layout slice 2/3: the Evaluation band's criteria card is built from
+    # the scope + the bound rules. Bake each rule's authored `description`, its
+    # `title` (a row template), and the mechanically-formatted `condition_text` per
+    # section so the view builder (artifact-only) renders strings, not derivation.
+    evaluation_meta: dict[str, dict[str, Any]] = {}
+    for section_id, row_rules in (result.section_row_rules or {}).items():
+        section_rows = result.sections.get(section_id) or []
+        scope = (result.section_scope or {}).get(section_id)
+        evaluation_meta[section_id] = {
+            "scope": list(scope or []),
+            "checks": [{"rule_id": r.get("rule_id"), "severity": r.get("severity"),
+                        "description": r.get("description"), "title": r.get("title"),
+                        "condition_text": format_conditions(r.get("conditions"))}
+                       for r in row_rules],
+        }
+        findings, per_row = evaluate_section_rows(row_rules, section_rows, scope=scope, now=now)
+        for derived in findings:
+            finding = _build_compliance_finding(section_id, derived)
+            compliance_items.append(finding)
+            sev = finding.severity.value
+            severity_counts[sev] = severity_counts.get(sev, 0) + 1
+        # Bake the explicit per-row verdict onto the BUILT TableSection's items
+        # (pydantic copied them at construction, so mutate the section, not the raw
+        # rows). Same canonicalization mechanism as a card field's severity (ADR
+        # 0010 D5 — no separate store). per_row is row-aligned; "not_evaluated"
+        # stays distinct from "good".
+        target = table_by_id.get(section_id)
+        if target is not None:
+            for item, verdict in zip(target.items, per_row):
+                if isinstance(item, dict):
+                    item["_verdict"] = verdict["verdict"]
+    if compliance_items:
+        has_findings_section = True
+        sections.append(FindingsSection(
+            type="findings",
+            id=f"{subject_id}.compliance",
+            title="Compliance",
+            items=compliance_items,
+        ))
 
     if not has_findings_section:
         # A metric or card section's verdict drives overall status when there
@@ -162,6 +232,8 @@ def result_to_artifact(
     section_failures = getattr(result, "section_failures", None)
     if section_failures:
         metadata["conformance_failures"] = dict(section_failures)
+    if evaluation_meta:
+        metadata["evaluation"] = evaluation_meta   # ADR 0010 layout slice 2
 
     return CanonicalArtifact(
         artifact_type=subject_id,
@@ -206,6 +278,33 @@ def _build_finding(section_id: str, row: dict[str, Any]) -> Finding:
         recommendation=recommendation,
         vendor_key=vendor_key,
         vendor_id=vendor_id,
+    )
+
+
+def _build_compliance_finding(section_id: str, derived: dict[str, Any]) -> Finding:
+    """ADR 0010: a row_match rule's rendered finding → a canonical Finding.
+
+    The id is stable per (rule_id, row_ref) so re-collection reproduces the same
+    finding ids (and the duplicate-name case is disambiguated by row_ref = id,
+    not name). ``category`` carries the source section_id."""
+    fid = hashlib.sha256(
+        f"{derived.get('rule_id')}:{derived.get('row_ref') or ''}".encode()
+    ).hexdigest()[:12]
+    severity = _SEVERITY_MAP.get(str(derived.get("severity")), FindingSeverity.info)
+    message = derived.get("message") or None
+    if isinstance(message, str) and not message.strip():
+        message = None
+    recommendation = derived.get("recommendation") or None
+    if isinstance(recommendation, str) and not recommendation.strip():
+        recommendation = None
+    return Finding(
+        id=fid,
+        severity=severity,
+        status=FindingStatus.open,
+        category=section_id,
+        title=str(derived.get("title") or ""),
+        description=message,
+        recommendation=recommendation,
     )
 
 

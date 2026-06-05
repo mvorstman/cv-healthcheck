@@ -2,38 +2,9 @@ cv-healthcheck Project Instructions
 
 PROJECT PURPOSE
 
-cv-healthcheck is a Commvault-focused healthcheck, reporting, and operational analysis platform.
+cv-healthcheck is a Commvault-focused healthcheck, reporting, and operational analysis platform. It supports daily operational reporting, quick health assessments, full environment healthchecks, operational trend analysis, customer reporting, and proactive risk identification.
 
-The platform is intended to support:
-
-* daily operational reporting
-* quick health assessments
-* full environment healthchecks
-* operational trend analysis
-* customer reporting
-* proactive risk identification
-
-The platform uses:
-
-* Reports Plus / Metrics datasets
-* Reports Plus reports
-* Command Center REST APIs
-* uploaded operational snapshots
-* future S3-based collection pipelines
-
-OPERATING MODES
-
-cv-healthcheck should support three operating modes:
-
-1. Daily Reporting
-2. Quick HealthCheck
-3. Full HealthCheck
-
-Daily Reporting focuses on operational overview, trends, exceptions, SLA visibility, and quick operational insight.
-
-Quick HealthCheck focuses on fast, minimally invasive collection and analysis of major operational risks.
-
-Full HealthCheck focuses on comprehensive, evidence-driven operational analysis, deeper configuration validation, and long-form reporting.
+It draws on Reports Plus / Metrics datasets and reports, Command Center REST APIs, uploaded operational snapshots, and planned S3-based collection pipelines.
 
 ARCHITECTURE PRINCIPLES
 
@@ -51,6 +22,7 @@ collectors/
 * Handles REST API collection from customer environments
 * Produces structured collection artifacts
 * Must remain reusable and transportable
+* Collection must support remote / customer-side execution
 * Future collectors may upload artifacts to S3
 
 web/
@@ -59,6 +31,8 @@ web/
 * Flask routes must remain lightweight
 * No business logic in templates
 * No health evaluation logic in routes
+* Navigation stays simple and product-oriented; keep customer-facing pages separate from internal/development pages
+* Do not add broad Dashboard / Admin / Data Sources navigation unless explicitly requested
 
 db/
 
@@ -86,205 +60,51 @@ future rules engine
 * Recommendations
 * Risk interpretation
 
-IMPORTANT STRATEGIC DIRECTION
-
-The platform must NOT assume direct access to customer CommServe systems.
-
-Expected real-world model:
-
-1. Central reporting platform
-    * accesses Reports Plus / Metrics servers
-    * performs trend analysis
-    * aggregates uploaded data
-    * generates reporting
-2. Customer-side collection
-    * REST API collectors gather operational data
-    * collectors may run locally or remotely
-    * collected snapshots may be uploaded to S3
-    * collection should function with minimal customer exposure
-3. Healthcheck modes
-    * Daily Reporting
-    * Quick HealthCheck
-    * Full HealthCheck
-
-DAILY REPORTING
-
-Primary sources:
-
-* Reports Plus / Metrics
-* Email
-* Existing trend datasets
-
-Purpose:
-
-* operational overview
-* trends
-* exceptions
-* SLA visibility
-* quick operational insight
-
-QUICK HEALTHCHECK
-
-Primary sources:
-
-* Reports Plus / Metrics
-* REST APIs
-* Uploaded snapshots/artifacts
-
-Characteristics:
-
-* fast
-* minimally invasive
-* low operational impact
-* focused on major operational risks
-
-Current UI direction:
-
-* Keep navigation simple and product-oriented
-* Quick HC is the current customer-facing healthcheck output area and bridge toward the broader HealthCheck workspace
-* Development is the raw/debug/API/report exploration area
-* Do not add broad Dashboard / Admin / Data Sources navigation unless explicitly requested
-
-Current product structure direction:
-
-* HealthCheck
-* Customers
-* Advanced
-* Development
-
-Current Quick HC items include:
-
-* CommCell Identity / Version
-* Client Growth and Capacity License metric pages
-* Security Assessment from Reports Plus report 336
-* License Summary canonical and customer-report flows
-
-Security Assessment:
-
-* Source report: 336 / Security Assessment
-* Normalized artifact: data/catalog/reportsplus/report_336_security_assessment_normalized.json
-* Sections: Access Security, Auditing, Platform Security, Company and Owners Security, Capabilities, Hardening
-* Current artifact summary: 32 total checks, 2 Critical, 0 Warning, 18 Info, 12 Good
-* Checklist normalization lives in src/cvhealthcheck/reportsplus/checklist.py
-* Legacy GET detail page under /quick-hc redirects to /quick-hc
-* POST import and collect handlers remain active
-
-License Summary:
-
-* Canonical adapter exists
-* Canonical side-write is wired for REST collection and file import
-* Legacy GET detail page under /quick-hc redirects to /quick-hc
-* POST import and collect handlers remain active
-
-Current Quick HC platform notes:
-
-* TileDefinition now includes category, category_label, import_url, and collect_url
-* Quick HC initial subject data is registry-driven via list_tiles()
-* Import and collect URLs should come from tile metadata / initial subject data
-* quickhc/canonical_view.py exists as the translation layer from canonical artifacts to Quick HC JS view models
-* Continue preserving legacy fallback in subject_data_service.py while canonical-view migration completes
-
-FULL HEALTHCHECK
-
-Primary sources:
-
-* Reports Plus / Metrics
-* REST APIs
-* uploaded operational snapshots
-* expanded detailed collectors
-
-Characteristics:
-
-* comprehensive
-* evidence driven
-* detailed operational analysis
-* deeper configuration validation
-* long-form reporting
-
-REPORTS PLUS / METRICS STRATEGY
-
-Reports Plus / Metrics is a PRIMARY strategic data source.
-
-Reports Plus is especially valuable for:
-
-* trends
-* historical reporting
-* SLA analysis
-* growth analysis
-* operational summaries
-* capacity analysis
-* multi-CommCell reporting
-
-Important:
-
-* dataset GUIDs may differ across environments
-* report IDs may differ across environments
-* report names are more stable than IDs
-* report composition mapping is important
-* dataset execution validation is required
-
-Private Metrics servers are expected to become major long-term data sources.
-
-METRIC VISUALIZATION
-
-Historical metric pages should use the reusable Chart.js payload pattern:
-
-route -> server-side chart payload -> metric_detail.html -> Chart.js render
-
-Future historical metrics should reuse this pattern instead of adding page-specific JavaScript.
-
-COLLECTION STRATEGY
-
-Preferred collection order:
-
-1. REST APIs
-2. Reports Plus datasets
-3. Existing reports
-4. Uploaded exports/artifacts
-5. SQL only as last resort
-
-Avoid:
-
-* unsupported DB access assumptions
-* hardcoded environment assumptions
-* tight coupling to one lab
-* assumptions that reports are identical everywhere
-
-LAB ENVIRONMENT NOTES
-
-Current lab environment is intentionally minimal.
-
-Current limitations:
-
-* few or no completed backup jobs
-* limited operational history
-* minimal alerting activity
-* limited DDB activity
-* minimal SLA data
-* minimal MediaAgent activity
-
-Because of this:
-
-* discovery work is valid
-* API validation is valid
-* dataset execution validation is valid
-* health-rule conclusions are NOT yet representative
-
-Before health-rule development:
-
-* improve lab realism
-* generate operational activity
-* create backup history
-* generate alerts/failures
-* create realistic storage usage
-* generate SLA trends
-
 PROJECT BOUNDARY
 
 cv-topology is a frozen reference/prototype platform. Do not refactor,
 reorganize, modernize, or redesign cv-topology unless explicitly requested.
 It may be inspected for Commvault API, topology, compliance, Flask, UI, and
 database patterns, but active development should stay in cv-healthcheck.
+
+DECISION HIERARCHY
+
+Explicit user instructions override all project documentation.
+The user remains the final approval authority for:
+
+* architecture decisions
+* roadmap changes
+* review sign-off
+* release decisions
+
+When sources conflict, authority runs:
+
+1. Explicit user instructions
+2. Accepted ADRs
+3. PROMPT.txt
+4. ROADMAP.md
+5. HANDOVER.md
+6. CHANGELOG.md
+
+* Newest intentional decision wins.
+* ADRs override older planning documents.
+* Observations, tool output, and third-party reviews are advisory only — never authoritative over project docs.
+
+DECISION MAKING
+
+Before making architectural changes:
+
+1. Understand existing behavior first.
+2. Review related tests.
+3. Review relevant ADRs and the roadmap.
+4. Prefer extending generic mechanisms over introducing bespoke code.
+5. Prefer declarative solutions over procedural ones.
+6. Escalate architectural uncertainty before implementing.
+7. Validate assumptions against the running system (curl-first / verify-first).
+8. Existing code is not proof of intended design; HANDOVER claims are often slightly wrong — grep first.
+9. Existing documentation is preferred over chat history; when memory and the docs disagree, the docs win.
+
+Claude Code does the heavy lifting: reads, edits, runs the test suite, validates, drafts the commit message, and pushes. The user reviews and steers; Claude executes.
 
 ENGINEERING RULES
 
@@ -313,6 +133,8 @@ Before commits:
 * python -m pytest must pass
 * bash -n scripts/*.sh start.sh must pass
 
+If validation fails, report the exact failing command and failure summary — never claim or pretend success.
+
 Update when appropriate:
 
 * README.md when behavior, stack, or how-to-run changes
@@ -337,6 +159,10 @@ At the start of every new session, read these three files before doing anything 
 * HANDOVER.md
 * ROADMAP.md
 
+Also check git state first: git status / git branch / git log --oneline -5.
+
+Methodology, workflow stages, and historical lessons live in WORKFLOW.md — read it when doing architecture-sensitive work.
+
 If those three files plus the most recent CHANGELOG entry are not enough to pick up productively, that is a handover defect — improve HANDOVER.md at the end of the session.
 
 SESSION WRAP-UP
@@ -348,11 +174,6 @@ At the end of every session:
 * overwrite HANDOVER.md with the new forward-looking state
 * update ROADMAP.md if direction changed
 * update API_MAPPING.md for validated source discoveries
-* commit cleanly at every green checkpoint — do not let large amounts of in-flight work accumulate uncommitted
-* push to GitHub
+* commit cleanly at every green checkpoint — do not let large amounts of in-flight work accumulate uncommitted, and do not batch unrelated changes
+* push to GitHub, then confirm the remote actually moved before declaring done: `git status` shows in-sync (ahead-by-0) and origin/<branch> HEAD matches local. "Pushed" is verified, not asserted.
 * summarize completed work clearly
-
-ENGINEERING WORKFLOW
-
-* Commit at every green checkpoint. If tests pass and the change is coherent, commit it. Do not batch unrelated changes.
-* Claude Code does the heavy lifting: reads, edits, runs the test suite, validates, drafts the commit message, and pushes. The user reviews and steers; Claude executes.

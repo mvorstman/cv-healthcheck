@@ -15,11 +15,13 @@ from __future__ import annotations
 import functools
 import json
 import logging
+import os
 import sqlite3
 from typing import Any
 from uuid import uuid4
 
 import anyio
+import requests
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -52,6 +54,16 @@ from cvhealthcheck.db.staging import (
     reject_staged_artifact as db_reject_staged_artifact,
 )
 from cvhealthcheck.db.subjects import delete_subject as db_delete_subject
+from cvhealthcheck.db.rules import (
+    bind_rule as db_bind_rule,
+    delete_rule as db_delete_rule,
+    list_rules as db_list_rules,
+    save_rule as db_save_rule,
+    validate_row_match_rule,
+)
+from cvhealthcheck.evaluative.subject_eval import (
+    evaluate_subject as _evaluate_subject_service,
+)
 
 
 run_migrations()
@@ -233,12 +245,28 @@ def propose_new_subject(
                      "default_selected": bool, "sort_order": int}
         section_type: findings | table | metric | chart
     extraction_instructions : dict
-        Keys are source types ("html", "csv", "rest", "json").
+        Keys are source types ("html", "csv", "rest", "json",
+        "rest_command_center_api").
         Each value is a dict with:
           - "extractable": bool
           - "non_extractable_reason": str | None  ("charts_only" | "client_side_rendered")
           - "recognition_hints": dict
           - "sections": dict mapping section_id to extraction instruction dict
+        ADR 0009 — Command Center API source ("rest_command_center_api"):
+        use this (NOT "rest") for a subject collected live through the Command
+        Center API, so it is classified as Command Center API rather than
+        flattened to Reports Plus. Its value dict additionally takes:
+          - "endpoint": str — the RELATIVE, read-only Command Center API path to
+            collect from, e.g. "/commandcenter/api/v4/servergroup". Omit to
+            default to the CommServ identity endpoint. The app validates it as
+            relative + read-only before persisting or collecting (an absolute
+            URL, or a path outside "/commandcenter/api/", is rejected — the AI
+            asserts only a classification + a relative path, never a token or a
+            host; ADR 0008/0009 D4).
+        Each section under "sections" sets "output_as": "card" (a single object)
+        or "output_as": "table" (a multi-record collection, with
+        {"table": {"root_key": <list key in the response>,
+        "columns": [{"id": <col>, "field": <dot-path into each element>}]}}).
     ai_notes : str
         Notes on confidence, data quality, empty-export caveats, etc.
     supersedes : int | None
@@ -342,6 +370,185 @@ def delete_subject(subject_id: str) -> dict:
     return result
 
 
+# ── probe: app-mediated Command Center REST GET (ADR-0008 E — retired) ───────
+#
+# The probe NO LONGER holds a CommServe token or calls the CommServe directly. It
+# POSTs to the app's loopback internal endpoint with the shared secret; the APP makes
+# the GET with its own held token, redacts, and returns. cv-healthcheck is the trust
+# boundary — the MCP layer reaches the CommServe ONLY through the app.
+
+_INTERNAL_ENDPOINT_DEFAULT = "http://127.0.0.1:5001/internal/commserve"
+
+
+def probe(path: str) -> dict:
+    """Exploratory read-only GET of a Command Center REST path (e.g.
+    ``/commandcenter/api/v4/user``), **mediated by the app** (ADR-0008). The MCP layer
+    holds NO CommServe token and never calls the CommServe directly: this POSTs to the
+    app's loopback internal endpoint with the shared secret, and the app fetches with its
+    own held token and returns the response **already redacted**. GET-only/read-only is
+    enforced app-side. Persists nothing.
+
+    Returns the redacted ``data`` plus ``status_code`` / ``ok`` / ``error`` so a CommServe
+    non-200 (e.g. 401) is visible, not swallowed. If the app is not connected (the operator
+    is signed out, or the held token expired) it returns a clear ``state`` of
+    ``disconnected`` / ``expired`` with a reconnect message — the visible-not-silent expiry
+    signal. Raises only when it cannot reach or authenticate to the app (missing
+    ``CV_INTERNAL_SECRET``, app unreachable, or a guard rejection).
+
+    Parameters
+    ----------
+    path : str
+        A Command Center REST path, e.g. ``/commandcenter/api/v4/user``.
+    """
+    secret = os.environ.get("CV_INTERNAL_SECRET")
+    if not secret:
+        # No direct fallback by design — the AI never holds a CommServe token.
+        raise ValueError(
+            "internal secret not configured (set CV_INTERNAL_SECRET); the probe reaches "
+            "the CommServe only through the app's internal endpoint"
+        )
+    url = os.environ.get("CV_INTERNAL_ENDPOINT_URL", _INTERNAL_ENDPOINT_DEFAULT)
+
+    try:
+        resp = requests.post(
+            url,
+            headers={"X-Internal-Secret": secret},
+            json={"path": path, "principal": "mcp-operator", "capability": "read"},
+            # (connect, read): a SHORT connect timeout so an unanswered loopback SYN
+            # (app not listening on this host / a dropped packet) fails FAST with a
+            # clear error instead of hanging silently; the read budget covers the
+            # app's CommServe round-trip. This hop must never silently hang.
+            timeout=(5, 30),
+        )
+    except requests.RequestException as exc:
+        raise ValueError(f"probe could not reach the app at {url}: {exc}")
+
+    if resp.status_code != 200:
+        # 503 not-configured (app side), 403 forbidden (secret mismatch / non-loopback),
+        # 400 bad request — surface the app's reason clearly rather than guessing.
+        try:
+            detail = resp.json().get("error", "")
+        except ValueError:
+            detail = resp.text[:200]
+        raise ValueError(f"app internal endpoint returned HTTP {resp.status_code}: {detail}")
+
+    envelope = resp.json()
+    state = envelope.get("state")
+    if state in ("disconnected", "expired"):
+        return {
+            "state": state,
+            "data": None,
+            "error": "not connected — log in via the app to reconnect",
+        }
+    # Connected: `data` is already redacted by the app; surface the CommServe verdict too.
+    return {
+        "state": state,
+        "ok": envelope.get("ok"),
+        "status_code": envelope.get("status_code"),
+        "data": envelope.get("data"),
+        "error": envelope.get("error"),
+    }
+
+
+def evaluate_subject(subject_id: str) -> dict:
+    """Dry-run the subject's enabled row-scope rules over its latest collected
+    artifact and return a findings PREVIEW — persists nothing (ADR 0010). The
+    rules-side parallel to ``probe``: reads the canonical/approved store's latest
+    artifact (not the staging queue), never re-collects, never mutates it.
+
+    Parameters
+    ----------
+    subject_id : str
+        The subject to evaluate, e.g. "server_groups".
+    """
+    db = get_db()
+    try:
+        return _evaluate_subject_service(db, subject_id)
+    finally:
+        db.close()
+
+
+def list_rules(subject_id: str | None = None, enabled: bool | None = None) -> list[dict]:
+    """List registered evaluation rules.
+
+    Parameters
+    ----------
+    subject_id : str | None
+        If given, only rules BOUND to this subject's sections (incl. disabled).
+    enabled : bool | None
+        If given, filter on the rule's ``enabled`` flag.
+    """
+    db = get_db()
+    try:
+        return db_list_rules(db, subject_id=subject_id, enabled=enabled)
+    finally:
+        db.close()
+
+
+def save_rule(rule: dict, bind: dict | None = None) -> dict:
+    """Author (upsert) a row-scope (``kind:"row_match"``) evaluation rule,
+    optionally binding it to a table section in one call.
+
+    Validated at authoring time (rejected, not silently dropped at collection):
+    unknown operator; ``between`` without ``value2``; ``emit:"count"`` without
+    ``count_operator``/``count_value``; ``scope`` other than "row"; and, when
+    binding, a missing section, a non-table section, or a condition target /
+    ``{"ref":col}`` that is not a column of that section.
+
+    Parameters
+    ----------
+    rule : dict
+        The rule definition. Required: ``rule_id``; ``conditions`` (list of
+        ``{target, operator, value?/value2?/{"ref":col}}`` — all AND-ed);
+        ``emit`` ("per_row" | "count"; count needs ``count_operator`` +
+        ``count_value``); ``severity`` (critical|warning|info|good); and the
+        ``title``/``message`` templates (``{value}/{target}/{count}/{row.<col>}``).
+        Optional: ``description`` (one authored sentence; rendered verbatim as the
+        criteria card's primary line — falls back to the static `title` text when
+        absent, never the raw id), ``recommendation``, ``enabled`` (default true).
+        ``kind`` defaults to "row_match", ``scope`` to "row"; ``version`` is managed
+        automatically (bumped when the body changes).
+    bind : dict | None
+        Optional ``{"subject_id", "section_id"}`` — adds the rule's ref onto that
+        table section's ``evaluative.row_rules`` (idempotent). Omit to save unbound
+        (bind later with another ``save_rule`` carrying a target). Rule body and
+        section binding stay separable, so one rule can bind to several sections.
+    """
+    db = get_db()
+    try:
+        validate_row_match_rule(db, rule, bind=bind)
+        # Persist the canonical kind/scope so the stored def is explicit and the
+        # evaluator's kind check always matches (it defaults missing kind to
+        # row_match too, so old kind-less rules still fire — belt and suspenders).
+        rule = {**rule, "kind": "row_match", "scope": "row"}
+        saved = db_save_rule(db, rule)
+        bound_sections = 0
+        if bind is not None:
+            bound_sections = db_bind_rule(
+                db, saved["rule_id"], bind["subject_id"], bind["section_id"]
+            )
+        return {"rule": saved, "bound_sections": bound_sections}
+    finally:
+        db.close()
+
+
+def delete_rule(rule_id: str) -> dict:
+    """Delete an evaluation rule from the registry and strip its ``{ref}`` from
+    every section binding (so a later collection can't hit a dangling-ref
+    failure).
+
+    Parameters
+    ----------
+    rule_id : str
+        The rule to delete.
+    """
+    db = get_db()
+    try:
+        return db_delete_rule(db, rule_id)
+    finally:
+        db.close()
+
+
 # ── Tool registration (ADR 0004 #35 hardening) ──
 #
 # FastMCP (mcp 1.27.1) runs a SYNC tool function *inline on the asyncio event
@@ -378,6 +585,11 @@ for _tool in (
     propose_new_subject,
     list_proposed_subjects,
     delete_subject,
+    probe,
+    evaluate_subject,
+    list_rules,
+    save_rule,
+    delete_rule,
 ):
     mcp.tool()(_run_in_thread(_tool))
 

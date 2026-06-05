@@ -43,7 +43,11 @@ from html.parser import HTMLParser
 from typing import Any
 
 from cvhealthcheck.db.rule_overrides import load_section_overrides
-from cvhealthcheck.db.rules import load_rules_registry
+from cvhealthcheck.db.rules import (
+    load_rules_registry,
+    load_subject_row_rules,
+    load_subject_section_scope,
+)
 from cvhealthcheck.db.section_types import (
     UnsupportedSectionTypeError,
     validate_section_type,
@@ -77,6 +81,10 @@ class RESTExtractor:
         # Phase 8 step 2: carry the rules registry so result_to_artifact can
         # resolve `ref`-based evaluative rules (catalog read, not evaluation).
         result.rules_registry = load_rules_registry(self._db)
+        # ADR 0010: carry the subject's bound row_match rules + section scope so the
+        # result_to_artifact compliance pass fires (scoped) on this collection.
+        result.section_row_rules = load_subject_row_rules(self._db, subject_id, version)
+        result.section_scope = load_subject_section_scope(self._db, subject_id, version)
         # Phase 8 step 3: carry the override layer for the active (customer,
         # project). Resolution into the verdict_chain is at canonicalization.
         result.section_overrides = load_section_overrides(

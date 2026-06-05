@@ -31,6 +31,16 @@ An adapter that reads legacy on-disk data into a `CanonicalArtifact` cannot loss
 
 System vs AI remains a runtime fork in source-building — by necessity, not just a database fact.
 
+## Amendment (2026-06-01, per ADR 0007)
+
+`environment` has been migrated to the canonical path and removed from `_legacy_builders` (ADR 0007 Phase 3, slice B). This is the retirement this ADR anticipated as the *sanctioned* path — not a reopening of the decision below.
+
+It needed **no schema unfreeze**. Environment's shape is a canonical **card** section, already representable — unlike the five legacy-shape subjects whose `counters` / `findings_grid` / `workload` / `chart_growth` views the frozen schema still cannot express. And the subject-level fields the Context's point 2 noted the generic path "doesn't synthesise" (subtitle `cs01 · 11 SP40.47`, source-level `meta` (Endpoint/Host), and the source status badge) are now derived generically by `_build_generic_subject` / `_build_generic_sources` from the canonical artifact, so environment renders identically through the uniform "canonical store wins" path with no live builder.
+
+`_legacy_builders` therefore now serves **five** subjects, not six: `security_assessment`, `license_summary`, `client_growth`, `capacity_license`, `backup_job_summary`.
+
+The core decision and its "don't delete `_legacy_builders` to feel cleaner" warning stand **unchanged** for those five: their legacy-shape views remain unrepresentable in the frozen schema. This amendment sanctions only the environment retirement — whose shape was always canonical — and is **not** a campaign to dissolve the fork. The two revisit triggers below are unchanged; environment qualified under neither (no schema unfreeze, no product redesign), because its shape never needed the schema extended in the first place.
+
 ## Consequences
 
 ### Preserved (the original goals that survive)

@@ -43,6 +43,15 @@ SOURCE_DESCRIPTIONS: dict[str, str] = {
     HTML_IMPORT_SOURCE_ID:             "Offline HTML import into the canonical Quick HC artifact contract.",
 }
 
+# ADR 0007 ph3 follow-on: the REST endpoint a live source collects from, keyed by
+# canonical source id. Source-TYPE metadata (a constant of the source, not of any
+# one collection), surfaced on the generic source panel so it survives the live
+# builder's retirement. Only sources with a fixed single endpoint appear here;
+# absent → no endpoint row (Reports Plus varies by report, imports have none).
+SOURCE_ENDPOINTS: dict[str, str] = {
+    REST_COMMAND_CENTER_API_SOURCE_ID: "GET /commandcenter/api/CommServ",
+}
+
 # Private tuple kept for canonical_view.py backward compatibility (legacy subject builders).
 _UNIVERSAL_SOURCES: tuple[SourceDefinition, ...] = tuple(
     SourceDefinition(id=sid, label=SOURCE_LABELS[sid], description=SOURCE_DESCRIPTIONS[sid])
@@ -369,6 +378,11 @@ _SOURCE_TYPE_TO_CANONICAL_ID: dict[str, str] = {
     "csv":  CSV_IMPORT_SOURCE_ID,
     "rest": REST_REPORTS_PLUS_SOURCE_ID,
     "json": JSON_IMPORT_SOURCE_ID,
+    # ADR 0007 ph3 follow-on: the single-object Command Center API source. Without
+    # this, a rest_command_center_api row (e.g. environment row 22) maps to
+    # src_id=None and is dropped below — so its source tab + Collect button never
+    # render in the generic path once a stored artifact wins precedence.
+    "rest_command_center_api": REST_COMMAND_CENTER_API_SOURCE_ID,
 }
 
 _SOURCE_TYPE_TO_LABEL: dict[str, str] = {
@@ -376,6 +390,7 @@ _SOURCE_TYPE_TO_LABEL: dict[str, str] = {
     "csv":  "CSV import",
     "rest": "REST / Reports Plus",
     "json": "JSON import",
+    "rest_command_center_api": "REST / Command Center API",
 }
 
 
@@ -395,7 +410,9 @@ def _build_db_source_entries(
         if src_id is None:
             continue
         has_instructions = bool(src.get("has_section_instructions", 0))
-        if source_type == "rest" and has_instructions and subject_id:
+        if source_type in ("rest", "rest_command_center_api") and has_instructions and subject_id:
+            # Both live-REST collect paths post to the same /collect route; the
+            # /collect dispatch (_has_command_center_source) picks the extractor.
             collect_url = f"/quick-hc/{subject_id}/collect"
         elif source_type == "json" and has_instructions and subject_id:
             # ADR 0004: internal fixture-backed subjects collect from a shipped
@@ -412,6 +429,18 @@ def _build_db_source_entries(
             "has_section_instructions": has_instructions,
             "collect_url": collect_url,
         })
+    # ADR 0007 ph3 follow-on: when a subject has the single-object Command Center
+    # API source, it SUPERSEDES the legacy plain-'rest' row for display. environment
+    # carries both a stale 'rest' row (its old generic placeholder, whose live-card
+    # rules only the now-bypassed bespoke builder reads) and the real
+    # 'rest_command_center_api' row — both would otherwise post to the same /collect,
+    # so a "REST / Reports Plus" tab for environment is a mislabeled duplicate.
+    # Hide the plain-'rest' tab so the user sees one correct Command Center tab.
+    # Generic (keyed on source_type, not subject id) and reversible; the 'rest' row
+    # itself is untouched — only its tab is suppressed. environment is the only
+    # command-center subject today, so nothing else is affected.
+    if any(e["source_type"] == "rest_command_center_api" for e in entries):
+        entries = [e for e in entries if e["source_type"] != "rest"]
     return entries or [
         {"id": sid, "label": SOURCE_LABELS.get(sid, sid), "description": SOURCE_DESCRIPTIONS.get(sid, "")}
         for sid in STANDARD_SOURCES

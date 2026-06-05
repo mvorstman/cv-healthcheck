@@ -48,7 +48,7 @@
         <span>{{ backup_job_summary.recent_jobs | length }} recent jobs</span>
         <span>
           {% if backup_job_summary.generated_at %}
-            Generated {{ backup_job_summary.generated_at }}
+            Generated {{ localtime_span(backup_job_summary.generated_at) }}
           {% else %}
             Generated time unavailable
           {% endif %}

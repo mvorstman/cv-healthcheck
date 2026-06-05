@@ -150,19 +150,65 @@ def worst_metric_severity(section: MetricSection) -> FindingSeverity | None:
     return worst
 
 
+_MISSING = object()
+
+
+def _resolve_field_path(record: Any, path: str, default: Any = None) -> Any:
+    """ADR 0007 D2 — resolve ``field`` as a dot-separated path through nested dicts.
+
+    The SHARED field-resolution helper for the card/metric item path: used by
+    ``_aggregate`` (below, per-row access) and by ``build_card_section``'s
+    no-agg path. Source-agnostic; not routed through CEL.
+
+    A single-segment path behaves exactly like ``record[seg]`` did before — for a
+    flat ``field`` this is byte-identical to the old ``row.get(field)`` /
+    ``field in row`` behaviour. A missing key / out-of-range index / wrong-type
+    segment resolves to ``default`` (None), consistent with today's ``.get()``
+    semantics.
+
+    A **numeric segment indexes into a list** (e.g.
+    ``...cacheContents.0.softwareCacheServicePackDetails``). Dict semantics win:
+    against a dict, a literal ``"0"`` key still resolves by key. Against a list, a
+    non-negative integer string indexes in (out-of-range / non-numeric ->
+    default). Purely additive — a numeric-on-list segment previously only ever
+    returned default."""
+    cur = record
+    for seg in path.split("."):
+        if isinstance(cur, dict):
+            if seg not in cur:
+                return default
+            cur = cur[seg]                          # dict key wins (a literal "0" key resolves here)
+        elif isinstance(cur, list):
+            if not seg.isdigit():                  # non-negative integer index only
+                return default
+            idx = int(seg)
+            if idx >= len(cur):                    # out of range
+                return default
+            cur = cur[idx]
+        else:
+            return default                         # scalar/None mid-path -> can't descend
+    return cur
+
+
 def _aggregate(rows: list[dict[str, Any]], field: str, agg: str) -> Any:
-    """Reduce a column across rows. Default 'latest' = the last row's value."""
-    present = [row[field] for row in rows if field in row and row[field] is not None]
+    """Reduce a column across rows (``field`` may be a dot-path, ADR 0007 D2).
+    Default 'latest' = the last row's value."""
+    present = [
+        v for v in (_resolve_field_path(row, field, _MISSING) for row in rows)
+        if v is not _MISSING and v is not None
+    ]
     if agg == "latest":
         # Last row that has the field at all (preserve sentinels, so don't filter None here).
         for row in reversed(rows):
-            if field in row:
-                return row[field]
+            v = _resolve_field_path(row, field, _MISSING)
+            if v is not _MISSING:
+                return v
         return None
     if agg == "first":
         for row in rows:
-            if field in row:
-                return row[field]
+            v = _resolve_field_path(row, field, _MISSING)
+            if v is not _MISSING:
+                return v
         return None
     if not present:
         return None
