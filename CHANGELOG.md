@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-05 (refactor(web) — retire the dev-only /development/security-assessment-registry view)
+
+**Branch:** `main`. Removes a self-contained read-only debug surface; no live consumer touched.
+
+### Removed
+- **`GET /development/security-assessment-registry`** (`web/routes/development.py`) — the internal registry-history debug view (`security_assessment_registry_view`). Read-only; listed registry-backed artifact/import-run/report-run metadata via `SecurityAssessmentService.get_history`.
+- **`templates/security_assessment_registry_history.html`** — its template (deleted whole).
+- **Dev-workspace link** (`templates/development.html`) — the "Security Assessment Registry (internal)" `<li>`.
+
+### Changed
+- **Tests trimmed, not deleted, where shared.** `test_platform_foundation.py`: dropped the registry path from the two `/development` login-guard loops (the `/development` assertions stay). `test_security_assessment_registry.py`: removed the `viewer_response` branch from `test_internal_registry_routes_require_login` (history/export branches kept); deleted the view-specific `test_internal_registry_view_renders_artifact_table`.
+- **Docs** — dropped the stale `/development/security-assessment-registry` line from `docs/subjects/security_assessment.md`.
+
+### Notes
+- **No orphaned imports.** Unlike the `/connections` pass, every one of `development.py`'s 18 shared imports is still used by another route in the file (`SecurityAssessmentService`, `_security_assessment_registry_filters`, `render_template`, `url_for` all have other callers), so no import line was dropped. `base.html:49`'s `'security_assessment_registry' in ep` active-state clause was left as-is (still matches the surviving `security_assessment_registry_export` endpoint; harmless).
+- **Backlog — UI-orphaned JSON endpoints kept this pass.** The deleted template was the sole UI link to two sibling routes, which remain registered and tested but are now reachable only by direct URL: `GET /security-assessment/registry-export` and `GET /security-assessment/history`. Retiring these is deferred pending a consumer sweep (confirm no MCP/CLI/automation reads them) — backlogged, not dropped.
+
 ## 2026-06-05 (refactor(web) — retire /connections; header pill modal is the sole connect surface)
 
 **Branch:** `main`. Surface consolidation; no change to the auth chokepoints themselves.

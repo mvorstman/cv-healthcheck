@@ -100,7 +100,6 @@ Internal history/registry tooling (authenticated, read-only; does not change the
 ```text
 /security-assessment/history
 /security-assessment/registry-export
-/development/security-assessment-registry
 ```
 
 Development/debug page:

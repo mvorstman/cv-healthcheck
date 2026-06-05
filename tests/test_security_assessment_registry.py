@@ -714,52 +714,8 @@ def test_internal_registry_routes_require_login(tmp_path, monkeypatch) -> None:
 
     history_response = client.get("/security-assessment/history")
     export_response = client.get("/security-assessment/registry-export")
-    viewer_response = client.get("/development/security-assessment-registry")
 
     assert history_response.status_code == 302
     assert "/login" in history_response.headers["Location"]
     assert export_response.status_code == 302
     assert "/login" in export_response.headers["Location"]
-    assert viewer_response.status_code == 302
-    assert "/login" in viewer_response.headers["Location"]
-
-
-def test_internal_registry_view_renders_artifact_table(tmp_path, monkeypatch) -> None:
-    artifact = build_security_assessment_artifact(
-        [
-            {
-                "section": "Auditing",
-                "parameter": "Audit retention",
-                "status": "Info",
-                "remarks": "30 days",
-                "action": "Review retention",
-            }
-        ],
-        source_type="csv",
-    )
-    persisted = persist_security_assessment_artifact(
-        artifact,
-        catalog_dir=tmp_path / "catalog",
-        registry_path=tmp_path / "registry.sqlite3",
-    )
-
-    import cvhealthcheck.security_assessment.service as service_module
-    import cvhealthcheck.reportsplus.security_assessment as security_assessment_module
-    import cvhealthcheck.security_assessment.artifact as artifact_module
-
-    monkeypatch.setattr(service_module, "SECURITY_ASSESSMENT_REGISTRY_PATH", tmp_path / "registry.sqlite3")
-    monkeypatch.setattr(service_module, "SECURITY_ASSESSMENT_CATALOG_DIR", tmp_path / "catalog")
-    monkeypatch.setattr(security_assessment_module, "SECURITY_ASSESSMENT_CATALOG_DIR", tmp_path / "catalog")
-    monkeypatch.setattr(artifact_module, "SECURITY_ASSESSMENT_CATALOG_DIR", tmp_path / "catalog")
-
-    app = create_app()
-    client = app.test_client()
-    token_store.set_active_token("test-token")   # ADR-0008 B: auth via the held-token store
-
-    response = client.get("/development/security-assessment-registry?source_type=csv")
-
-    assert response.status_code == 200
-    body = response.get_data(as_text=True)
-    assert "Internal debug/admin view" in body
-    assert persisted["artifact_id"] in body
-    assert persisted["file_path"] in body

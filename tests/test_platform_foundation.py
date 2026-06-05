@@ -62,7 +62,6 @@ def test_development_routes_require_login() -> None:
     # hub itself remains login-guarded (the held Security Assessment cluster).
     for path in (
         "/development",
-        "/development/security-assessment-registry",
     ):
         response = client.get(path)
         assert response.status_code == 302
@@ -78,7 +77,6 @@ def test_development_routes_render_after_login() -> None:
     # hub itself remains login-guarded (the held Security Assessment cluster).
     for path in (
         "/development",
-        "/development/security-assessment-registry",
     ):
         response = client.get(path)
         assert response.status_code == 200
