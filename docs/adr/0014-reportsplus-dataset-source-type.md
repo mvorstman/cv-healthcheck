@@ -53,7 +53,7 @@ Introduce a **new declarative source type, `reportsplus_dataset`**, for subjects
 ## Open questions
 
 - **Artifact `SourceType` mapping.** Map `reportsplus_dataset` to `SourceType.rest` (consistent with the existing `rest` collection output) or to the legacy `SourceType.reportsplus_rest` (today only the retired SA adapter value). Recommendation: `SourceType.rest`; decide at build time.
-- **Composite-address reality.** If the curl-first gate shows the composite form is *not* a path segment (e.g. it is itself a query parameter, or resolves to a different route), the address grammar in D1 adapts to the captured truth; the source-type decision stands regardless.
+- **Composite-address reality.** ~~If the curl-first gate shows the composite form is *not* a path segment, the address grammar in D1 adapts.~~ **Resolved 2026-06-11 by the gate** (`docs/research/adr0014-gate-findings.md`): the composite *is* a path segment and is the only working form for report-bound datasets; its second half is the report definition's per-report **entry `guid`** (not the underlying `dataSetGuid`). Bare GUIDs work for standalone datasets. The query convention is the generic `parameter.<datasetParamName>` (repeated `name[]` for lists); unknown names are **silently ignored** by the engine, so implementation must validate declared parameter names against the dataset's declared parameters and fail loudly on mismatch.
 
 ## Revisit triggers
 
