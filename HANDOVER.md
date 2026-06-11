@@ -1,4 +1,4 @@
-# HANDOVER — Declarative ("in-data") report authoring: engine work
+# HANDOVER — Declarative ("in-data") report authoring: ADR-0014 shipped, live verification pending
 
 You are continuing development on **cv-healthcheck**, a modular Commvault
 operational health check platform (Python/Flask, Pydantic v2 canonical
@@ -38,32 +38,36 @@ already resolved or moot:
   approval)**: `docs/adr/0014-reportsplus-dataset-source-type.md`.
   **Do not implement before the ADR is accepted.**
 
-## Next step (after ADR-0014 approval)
+## Status: ADR-0014 implemented (2026-06-11) — live end-to-end verification pending
 
-Implement `reportsplus_dataset` per the ADR, in this order:
+The gate ran and PASSED (`docs/research/adr0014-gate-findings.md`); ADR-0014
+is Accepted with two amendments (composite verified 2026-06-06 on CS01,
+gate = re-confirmation; artifact mapping = `SourceType.rest`). The feature
+is implemented and unit/integration-tested offline (suite: 1063 passed):
 
-1. **Curl-first gate** (via the ADR-0008 probe; the MCP layer never holds a
-   token): verify the composite `{reportGuid}:{componentGuid}` address form
-   and the `parameter.timeframe` / `parameter.datasource[]` conventions
-   against the live lab; record captured shapes. The bare-GUID form and
-   `parameter.*` params are already evidenced in
-   `data/catalog/execution_validation.json`.
-2. Address validation (format + read-only + path-prefix), beside
-   `extractors/cc_endpoint.py`.
-3. `ReportsPlusDatasetExtractor` ending at `ExtractionResult`, feeding the
-   unchanged `result_to_artifact` → `save_artifact` tail (ADR-0006 D1/D4.1).
-4. Collect dispatch (third branch in `/quick-hc/<subject_id>/collect`),
-   label map, `_SOURCE_TYPE_MAP`, source metadata, `propose_new_subject`
-   vocabulary.
-5. Tests per piece; full suite stays green (baseline: 1030 passed,
-   2026-06-11).
+- Migration 0031 (source_type CHECK widened; applies to `data/app.db` on
+  the next app start/reload).
+- `extractors/rp_dataset_address.py` (address + parameter policy, leaf),
+  `extractors/reportsplus_dataset.py` (`ReportsPlusDatasetExtractor`),
+  `CommvaultSession.get_dataset_metadata`, persist validation in
+  `create_subject_from_proposal`, `/collect` dispatch, registry/panel
+  wiring, `propose_new_subject` vocabulary.
+- Key traps encoded: the composite's second half is the per-report ENTRY
+  guid (not the inner `dataSetGuid`); unknown parameter names are silently
+  ignored by the engine, so the extractor validates declared names against
+  dataset metadata before any fetch and fails loudly.
 
-Known related quirk (verify before "fixing"): the probe handler reportedly
-401s (errorCode 5) on a leading-slash path while the collector requires the
-leading-slash form. `api_client._build_url` normalizes to a leading slash,
-so a trailing slash on `base_url` is the likely mechanism. If real, fix it
-in the probe/app path handling — never by changing the stored-endpoint
-convention (leading-slash relative).
+**Remaining: live end-to-end verification** (propose → human approval via
+web → Collect on `/quick-hc`): a throwaway `reportsplus_dataset` subject
+over a safe dataset (e.g. AuditTrailDataset bare GUID, or the License
+summary "Get Last Collection Time" composite). Proposal may be authored by
+the AI; approval is the human's manual step (never bypass staging). The
+operator must (re)connect first — and note the debug-reloader token wipe
+below: no `.py` edits between Connect and Collect.
+
+The brief's "leading-slash 401 errorCode 5" probe quirk did NOT reproduce
+(both slash forms behave identically; the observed 401s were stale-token
+artifacts of the reloader wipe). No path-handling fix is needed.
 
 ## Parked — legacy-builder conversion (decision 2026-06-11)
 
