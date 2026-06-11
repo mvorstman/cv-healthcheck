@@ -1,6 +1,6 @@
 # ADR 0014 — Reports Plus dataset extraction as a dedicated declarative source type
 
-- **Status:** Proposed — awaiting human approval (do not implement before acceptance)
+- **Status:** Accepted
 - **Date:** 2026-06-11
 - **Deciders:** Michiel (sole maintainer)
 - **Bounded by:** ADR 0006 (declarative extraction boundary — D1 one canonicalization path, D2 admissible declarative surface, D3 per-operator gate)
