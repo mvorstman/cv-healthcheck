@@ -305,12 +305,6 @@ class RESTExtractor:
         orderby: str | None = instructions.get("orderby")
         limit: int | None = instructions.get("limit")
         parameters: dict[str, str] | None = instructions.get("parameters")
-        timestamp_fields: list[str] = instructions.get("timestamp_fields") or []
-        timestamp_format: str = instructions.get("timestamp_format", "")
-        null_values: list[Any] = instructions.get("null_values") or []
-        column_map: list[dict[str, Any]] = instructions.get("column_map") or []
-        status_to_severity: dict[str, str] = instructions.get("status_to_severity") or {}
-        output_as: str = instructions.get("output_as", "table")
 
         try:
             raw_rows = self._session.fetch_dataset(
@@ -324,30 +318,51 @@ class RESTExtractor:
             errors.append(f"Section '{section_id}': fetch_dataset failed: {exc}")
             return [], warnings, errors
 
-        rows = []
-        for raw in raw_rows:
-            row = dict(raw)
-            for field in timestamp_fields:
-                if field in row:
-                    row[field] = _convert_timestamp(row[field], timestamp_format)
-            for key, val in list(row.items()):
-                if val in null_values:
-                    row[key] = None
-            if column_map:
-                row = _apply_column_map(row, column_map)
-            if output_as == "findings":
-                # Strip HTML from string values so the renderer doesn't show
-                # raw <a href>/<br> markup. Mirrors what the HTML extractor
-                # produces via BeautifulSoup-extracted cell text.
-                for key, val in list(row.items()):
-                    if isinstance(val, str) and "<" in val:
-                        row[key] = _strip_html(val)
-                if status_to_severity:
-                    status_val = str(row.get("status") or "")
-                    row["severity"] = status_to_severity.get(status_val, "info")
-            rows.append(row)
+        return shape_dataset_rows(raw_rows, instructions), warnings, errors
 
-        return rows, warnings, errors
+
+def shape_dataset_rows(
+    raw_rows: list[dict[str, Any]], instructions: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Apply the declarative row-shaping vocabulary to fetched dataset rows.
+
+    Reads ``timestamp_fields`` / ``timestamp_format``, ``null_values``,
+    ``column_map``, and (for ``output_as == "findings"``) HTML-stripping +
+    ``status_to_severity`` from ``instructions``. Shared by the ``rest`` and
+    ``reportsplus_dataset`` extractors — both speak the same dataset envelope,
+    so the shaping vocabulary is implemented once.
+    """
+    timestamp_fields: list[str] = instructions.get("timestamp_fields") or []
+    timestamp_format: str = instructions.get("timestamp_format", "")
+    null_values: list[Any] = instructions.get("null_values") or []
+    column_map: list[dict[str, Any]] = instructions.get("column_map") or []
+    status_to_severity: dict[str, str] = instructions.get("status_to_severity") or {}
+    output_as: str = instructions.get("output_as", "table")
+
+    rows = []
+    for raw in raw_rows:
+        row = dict(raw)
+        for field in timestamp_fields:
+            if field in row:
+                row[field] = _convert_timestamp(row[field], timestamp_format)
+        for key, val in list(row.items()):
+            if val in null_values:
+                row[key] = None
+        if column_map:
+            row = _apply_column_map(row, column_map)
+        if output_as == "findings":
+            # Strip HTML from string values so the renderer doesn't show
+            # raw <a href>/<br> markup. Mirrors what the HTML extractor
+            # produces via BeautifulSoup-extracted cell text.
+            for key, val in list(row.items()):
+                if isinstance(val, str) and "<" in val:
+                    row[key] = _strip_html(val)
+            if status_to_severity:
+                status_val = str(row.get("status") or "")
+                row["severity"] = status_to_severity.get(status_val, "info")
+        rows.append(row)
+
+    return rows
 
 
 class _HTMLTextExtractor(HTMLParser):
