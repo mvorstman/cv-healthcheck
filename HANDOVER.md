@@ -1,43 +1,107 @@
-# Handover — Next Session
+# HANDOVER — Declarative ("in-data") report authoring: engine work
 
-*Always overwritten at the end of every session. Forward-looking only — see `CHANGELOG.md` for what already happened.*
+You are continuing development on **cv-healthcheck**, a modular Commvault
+operational health check platform (Python/Flask, Pydantic v2 canonical
+artifact schema, MCP server for AI-assisted subject authoring).
 
-**Last updated:** 2026-06-05 (ADR-0013 reporting direction accepted; Customer/Project Context Isolation promoted to gating Now initiative)
-**Branch:** `main` — docs-only architecture direction changes are currently uncommitted/untracked.
-**Test status:** Docs-only checkpoint; no `src` changed. Latest venv run was **1039 passing + 2 `test_mcp_smoke` initialize timeouts = the 1041 baseline** — the 2 are known environmental smoke timeouts (`tests/test_mcp_smoke.py` initialize), **not a regression**. (System `python -m pytest` lacks pytest; run via the venv.)
+## Goal
 
----
+Make it possible to add **any** report subject purely as data
+(`extraction_instructions` in a subject definition) with **zero bespoke
+Python**. Simple subjects already work this way across HTML/CSV/REST and
+Command Center API sources.
 
-## Current state
+## State after the 2026-06-11 reconciliation (scope confirmed by Michiel)
 
-- **Domain Labels v1 complete and merged to `main`** — the additive label axis alongside the single-valued `category`: schema (`0029`) · MCP read (`labels` in `list_subjects` + `label` filter) · MCP author (`labels` on `propose_new_subject`, loud reject-unknown) · sparse backfill (`0030`) · ADR-0012.
-- **Category vocabulary centralized** — `CATEGORY_LABELS` / `CATEGORY_VOCABULARY` live in `db/categories.py` (single source of truth); `create_subject_from_proposal` and the Domain Labels disjointness invariant both read from it, no mirrored copy.
-- **ADR-0013 accepted as the report-composition principle ADR** — subjects + evidence + evaluations are the foundation; reports are read-only views over canonical subjects; first Report Profile is only selected subjects, selected sections, and view mode; report/customer presentation overrides must not mutate canonical artifacts or hide contextual evaluation in composition.
-- **ROADMAP updated to reflect ADR-0013** — Report Output Framework now explicitly starts with thin profiles over canonical subjects, no artifact mutation, and defers contextual evaluation, Health Domains, compliance/NIS2 profiles, and full profile persistence/schema.
-- **Customer/Project Context Isolation is now a gating Now initiative** (from a read-only isolation audit) — report generation must never mix data across customers/projects; the top risks are cross-customer read fallback and global `commserv.json` identity bleed. ROADMAP's Report Output framework now `Depends on` it, and Sequencing places it before Reporting. Formalization into an ADR is deferred (no ADR-0014 yet).
-- Working tree (docs-only checkpoint, not yet committed): `docs/adr/0013-subjects-as-foundation.md` (new), `docs/research/health_domains_notes.md` (new), `ROADMAP.md`, `README.md`, `docs/lab_environment.md`, `HANDOVER.md` (this file), and the deletion of `HEALTHCHECK_MATRIX.md`.
+An earlier version of this brief, written outside the repo, listed four
+engine fixes. Step-0 validation against the repo found three of them
+already resolved or moot:
 
----
+- **Fix 1 — `_resolve_field_path` list indexing: shipped.** Commit
+  `819c723` (2026-06-04); numeric path segments index into lists, dict-key
+  semantics win. Tests: `tests/test_resolve_field_path.py`. **Closed.**
+- **Fix 2 — "staging validator strips ADR-0009 fields": not reproducible.**
+  A proposal carrying every ADR-0009 field (declared `endpoint`, extra
+  `recognition_hints`, card spec, table `root_key`/`columns`/`transpose`)
+  round-trips byte-identical through `propose_new_subject` storage and
+  `create_subject_from_proposal`. A guard test now pins this:
+  `tests/test_proposal_field_roundtrip.py`. **Closed (guarded).**
+- **Fix 3 — `wrap_object_as_row` hint: superseded.** Commit `d1860c4` made
+  the single-object → one-row-table dict auto-wrap *unconditional* in
+  `_project_table_rows` (`extractors/command_center.py`); the hint is
+  deliberately not plumbed. Covered in
+  `tests/test_cc_api_multi_object_adr0009.py`. **Closed (no hint needed.)**
+- **Fix 4 — Reports Plus dataset extraction: the one genuine gap.**
+  No declarative path targets directly-addressed Reports Plus datasets
+  (`/commandcenter/api/cr/reportsplusengine/datasets/...`). Design decided
+  as a **new source type** in **ADR-0014 (Proposed — awaiting human
+  approval)**: `docs/adr/0014-reportsplus-dataset-source-type.md`.
+  **Do not implement before the ADR is accepted.**
 
-## Next-work decision (unactioned — for Michiel)
+## Next step (after ADR-0014 approval)
 
-Recommended next build:
+Implement `reportsplus_dataset` per the ADR, in this order:
 
-1. **Customer/Project Context Isolation (gating)** — close the HIGH cross-customer risks: scoped artifact reads with no global fallback, scoped environment/CommCell evidence (not a global `commserv.json`), scoped writes/uploads and composition selections, and an explicit active context (or "Default" as an unmistakable single-tenant lab mode). Per ROADMAP this **gates** the Report Output work below.
-2. **Thin Quick HC Report Profile implementation (ADR-0013)** — *blocked on (1)*: a minimal view contract consumed by `QuickHcReportService` (selected subjects, selected sections, view mode). Preserve current HTML report behavior, keep Flask routes thin, do not persist profiles yet, do not mutate canonical artifacts, and do not move evaluation logic into `reportsplus`, collectors, or report composition. Does not proceed until (1) closes.
-3. **Alternative if reporting pauses:** return to Rules & Evaluation maturity — summary-scope evaluation (`db/rules.py:264` TODO: `scope=summary` must reject `emit != once`, ADR-0010 §8) and display coercions (byte/bool, the ADR-0007 `type`-coercion family).
+1. **Curl-first gate** (via the ADR-0008 probe; the MCP layer never holds a
+   token): verify the composite `{reportGuid}:{componentGuid}` address form
+   and the `parameter.timeframe` / `parameter.datasource[]` conventions
+   against the live lab; record captured shapes. The bare-GUID form and
+   `parameter.*` params are already evidenced in
+   `data/catalog/execution_validation.json`.
+2. Address validation (format + read-only + path-prefix), beside
+   `extractors/cc_endpoint.py`.
+3. `ReportsPlusDatasetExtractor` ending at `ExtractionResult`, feeding the
+   unchanged `result_to_artifact` → `save_artifact` tail (ADR-0006 D1/D4.1).
+4. Collect dispatch (third branch in `/quick-hc/<subject_id>/collect`),
+   label map, `_SOURCE_TYPE_MAP`, source metadata, `propose_new_subject`
+   vocabulary.
+5. Tests per piece; full suite stays green (baseline: 1030 passed,
+   2026-06-11).
 
-## Standing backlog
-- **`propose_new_subject` does not validate `category` at authoring** — it accepts any value; `create_subject_from_proposal` title-cases unknowns via `CATEGORY_LABELS` (display only). Revisit only if `category` should become a closed vocabulary (the vocabulary is now importable, so this would be a small follow-up).
-- **Catalog reconstructibility / Subject Inventory convergence** — `0030` backfills 4 rows onto AI-authored runtime subjects (`audit_trail`/`users`/`metrics_reporting`) that aren't seed-represented, so a from-scratch migration can't fully reconstruct the labeled catalog. Resolves naturally once those subjects are seed-represented under Subject Inventory convergence.
-- **Quick HC registry `category_label` literals** — `quickhc/registry.py` carries per-tile `category_label="…"` strings (e.g. "Identity", "Licensing") not yet sourced from `CATEGORY_LABELS`. Candidate for the same consolidation onto the shared source.
-- **Domain Labels first consumer still deferred** — ADR-0013 and ROADMAP explicitly defer Health Domain / compliance-profile consumers. A thin Report Profile may read subjects/sections but must not turn Domain Labels into a full domain engine yet.
+Known related quirk (verify before "fixing"): the probe handler reportedly
+401s (errorCode 5) on a leading-slash path while the collector requires the
+leading-slash form. `api_client._build_url` normalizes to a leading slash,
+so a trailing slash on `base_url` is the likely mechanism. If real, fix it
+in the probe/app path handling — never by changing the stored-endpoint
+convention (leading-slash relative).
 
----
+## Parked — legacy-builder conversion (decision 2026-06-11)
 
-## Settled — do not relitigate
-- Migrations are forward-only numbered SQL (`schema_migrations`); no down-migrations. Next number is **0031**.
-- Connections come from `db/database.get_db` (`row_factory = Row`, `PRAGMA foreign_keys = ON`).
-- The category vocabulary lives in `db/categories.py` (`CATEGORY_LABELS` / `CATEGORY_VOCABULARY`) — the single source of truth; don't re-mirror it.
-- ADR-0013 governs report composition: reports are read-only views over canonical subjects; Report Profiles do not own evaluation logic; customer/report presentation overrides do not rewrite artifacts, verdicts, provenance, source metadata, or canonical data.
-- The MCP server is **stdio** transport, spawned by the client. After changing `mcp/server.py`, restart the client so it respawns one fresh instance. **Don't `pkill -f cv-healthcheck-mcp` from a shell whose own command line contains that string — it self-matches and kills the shell; kill by PID instead.**
+The six legacy Python builders (`report_service._report_builders`) are:
+environment, security_assessment, license_summary, client_growth,
+capacity_license, backup_job_summary. ("Health" in the earlier brief =
+**security_assessment**.)
+
+Converting License Summary (and security_assessment) to declarative form is
+**parked, not planned**: ADR-0006 D5 registers License Summary as
+*sanctioned bespoke, indefinite* (its param-substitution and per-row
+formulas failed the D3 gate), and ADR-0013 lists "License Summary generic
+extractor migration" as a non-goal. Those decisions stand.
+
+**Re-assessment trigger:** after Fix 4 ships, re-assess whether License
+Summary's blockers can now pass the declarative gate (ADR-0006 D3). If yes,
+that re-assessment becomes the evidence for an ADR superseding D5's
+register entry; if no, D5 remains correct. Do not start this without
+explicit confirmation.
+
+## Hard constraints (non-negotiable)
+
+- **Never approve staged artifacts.** Approval is always the human's
+  manual step via the web interface. Do not call approval endpoints, do
+  not set `reviewed_by`, do not bypass staging.
+- ADR-0008 trust boundary stays intact: no credentials in the AI/MCP layer;
+  live reads go through the loopback probe only.
+- Never probe or collect the `PackageDetails` catalog dataset
+  (credential-exposure risk).
+- `delete_subject` removes **all** versions; re-proposing without
+  `supersedes` creates duplicate actives — be careful with both.
+- Keep the legacy builder path working; conversion is parked (above).
+
+## Validation
+
+- `python -m compileall src`
+- `venv/bin/python -m pytest` (existing tests must keep passing)
+
+## Commit granularity
+
+One commit per coherent piece; ADR drafts committed separately.
