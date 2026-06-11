@@ -371,7 +371,7 @@ function secBody(sec) {
       // proposal shell shows its table structure. Bare message only when the
       // section declares no columns (collected-but-empty tables benefit too).
       if (!ncols) return `<div style="font-size:12px;color:var(--text-3)">${msg}</div>`;
-      return `<table class="wl-table"><thead><tr>${hdrs}</tr></thead><tbody><tr><td colspan="${ncols}" style="font-size:12px;color:var(--text-3);text-align:center;padding:10px">${msg}</td></tr></tbody></table>`;
+      return `<div class="tbl-scroll"><table class="wl-table"><thead><tr>${hdrs}</tr></thead><tbody><tr><td colspan="${ncols}" style="font-size:12px;color:var(--text-3);text-align:center;padding:10px">${msg}</td></tr></tbody></table></div>`;
     }
     const body = sec.rows.map((r, i) => {
       const cells = r.map(v => `<td style="font-family:var(--mono);font-size:11px">${esc(v != null ? v : '—')}</td>`).join('');
@@ -395,7 +395,10 @@ function secBody(sec) {
         <span class="legend-item"><span class="vdot vdot-na"></span>not evaluated</span>
         <span class="legend-item"><span class="vdot vdot-info"></span>info</span>` : '';
     const legend = (hasVerdicts || sec.scope_caption) ? `<div class="vdot-legend">${legendDots}${scopeCap}</div>` : '';
-    return `<table class="wl-table"><thead><tr>${hdrs}</tr></thead><tbody>${body}</tbody></table>${legend}`;
+    // Wide tables (e.g. 29-column storage_policy_copy_jobs) scroll inside the
+    // tile instead of being clipped by .sec-tile{overflow:hidden}. The legend
+    // stays OUTSIDE the scroll wrapper so it never scrolls away with the columns.
+    return `<div class="tbl-scroll"><table class="wl-table"><thead><tr>${hdrs}</tr></thead><tbody>${body}</tbody></table></div>${legend}`;
   }
 
   if (sec.type === 'criteria') {
