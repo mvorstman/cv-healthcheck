@@ -50,7 +50,26 @@ def extract_file(
     If subject_id is provided, skip recognition and use it directly.
     """
     if subject_id is not None:
-        v = version or 1
+        # Resolve the subject's ACTIVE version when the caller doesn't pin one.
+        # The old `version or 1` default silently read a superseded v1's
+        # extraction instructions once a v2 existed (the upload route never
+        # passes a version). The recognition path below and the /collect route
+        # already resolve by status='active'; this branch now matches them.
+        v = version if version is not None else _get_active_version(db_conn, subject_id)
+        if v is None:
+            return DispatchResult(
+                recognized=False,
+                subject_id=subject_id,
+                version=None,
+                source_type=None,
+                extractable=False,
+                non_extractable_reason=None,
+                artifact=None,
+                extraction_errors=[
+                    f"No active version found for subject '{subject_id}'"
+                    " (and no explicit version was given)"
+                ],
+            )
         title = _get_subject_title(db_conn, subject_id, v)
         source_type = _detect_source_type(file_path)
         if source_type in ("html", "csv"):
@@ -154,6 +173,23 @@ def extract_file(
         extraction_warnings=list(result.warnings),
         recognition_result=rec,
     )
+
+
+def _get_active_version(
+    db_conn: sqlite3.Connection, subject_id: str
+) -> int | None:
+    """The subject's active version number (highest active row), or None.
+
+    Same selection rule as ``db.subjects.get_subject(version=None)`` and the
+    recognition engine's ``s.status = 'active'`` join — the dispatcher's
+    explicit-subject branch must not diverge from those two."""
+    row = db_conn.execute(
+        "SELECT version FROM subjects"
+        " WHERE subject_id = ? AND status = 'active'"
+        " ORDER BY version DESC LIMIT 1",
+        (subject_id,),
+    ).fetchone()
+    return row["version"] if row else None
 
 
 def _get_subject_title(
