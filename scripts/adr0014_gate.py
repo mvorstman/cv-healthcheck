@@ -113,20 +113,25 @@ def _fetch_components(report_ref: str) -> tuple[dict, list[dict]]:
     payload = env["data"]
     definition = parse_content_field(payload)
 
+    # Live shape (verified against report 206, engine 11.34 lab): each page's
+    # ``dataSets.dataSet[]`` ENTRY carries the per-report component ``guid``;
+    # the underlying dataset's ``dataSetGuid``/``dataSetName`` sit one level
+    # down in the entry's inner ``dataSet`` dict.
     components: list[dict] = []
     seen: set[str] = set()
 
     def walk(node):
         if isinstance(node, dict):
-            ds = node.get("dataSet")
-            if isinstance(ds, dict) and (ds.get("dataSetGuid") or ds.get("guid")):
-                key = f"{ds.get('guid')}/{ds.get('dataSetGuid')}"
+            inner = node.get("dataSet")
+            if (isinstance(inner, dict) and inner.get("dataSetGuid")
+                    and node.get("guid")):
+                key = f"{node['guid']}/{inner['dataSetGuid']}"
                 if key not in seen:
                     seen.add(key)
                     components.append({
-                        "dataset_name": ds.get("dataSetName"),
-                        "component_guid": ds.get("guid"),
-                        "dataset_guid": ds.get("dataSetGuid"),
+                        "dataset_name": inner.get("dataSetName"),
+                        "component_guid": node["guid"],
+                        "dataset_guid": inner["dataSetGuid"],
                     })
             for v in node.values():
                 walk(v)
