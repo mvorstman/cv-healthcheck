@@ -105,6 +105,36 @@ class CommvaultSession:
             )
         return data
 
+    def get_dataset_metadata(self, dataset_guid: str) -> dict:
+        """
+        GET the dataset definition/metadata for `dataset_guid` (bare GUID or
+        the ADR-0014 composite ``{reportGuid}:{entryGuid}`` — both forms are
+        served by /datasets/<address>, verified in the 2026-06-11 gate).
+
+        Used to read the dataset's declared ``GetOperation.parameters`` so the
+        collect path can validate declared parameter names loudly — the data
+        endpoint silently ignores unknown names.
+
+        Raises:
+            requests.HTTPError: on a non-2xx response.
+            CommvaultSessionError: if the response body is not a JSON object.
+        """
+        url = self._url(f"{_DATASETS_BASE}/{dataset_guid}")
+        response = self._http.get(
+            url,
+            headers=self._headers(),
+            verify=self._verify_ssl,
+            timeout=self._timeout,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            raise CommvaultSessionError(
+                f"get_dataset_metadata({dataset_guid!r}): expected JSON object, "
+                f"got {type(data).__name__}"
+            )
+        return data
+
     def fetch_dataset(
         self,
         dataset_guid: str,

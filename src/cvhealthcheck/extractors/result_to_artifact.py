@@ -42,6 +42,10 @@ _SOURCE_TYPE_MAP: dict[str, SourceType] = {
     # ADR 0007 (single-object Command Center API source). Reuses the existing
     # canonical CommServe source type rather than adding a redundant enum value.
     "rest_command_center_api": SourceType.rest_commserve,
+    # ADR 0014 (directly-addressed Reports Plus dataset). SourceType.rest by
+    # resolved decision: the extraction type carries the addressing grammar,
+    # the artifact source type carries the transport.
+    "reportsplus_dataset": SourceType.rest,
 }
 
 # Source types that represent a LIVE collection (stamp collected_at), as opposed

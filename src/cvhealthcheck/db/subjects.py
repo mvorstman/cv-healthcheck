@@ -9,6 +9,10 @@ from cvhealthcheck.extractors.cc_endpoint import (
     COMMAND_CENTER_SOURCE_TYPE,
     validate_cc_endpoint,
 )
+from cvhealthcheck.extractors.rp_dataset_address import (
+    REPORTSPLUS_DATASET_SOURCE_TYPE,
+    validate_rp_dataset_address,
+)
 
 from .categories import CATEGORY_LABELS
 from .section_types import validate_section_type
@@ -218,6 +222,18 @@ def create_subject_from_proposal(db: sqlite3.Connection, proposal: dict) -> dict
                 declared = source_info.get("endpoint", recognition_hints.get("endpoint"))
                 if declared is not None:
                     recognition_hints["endpoint"] = validate_cc_endpoint(declared)
+            # ADR 0014: a Reports Plus dataset source carries an explicit
+            # dataset_address (bare GUID or {reportGuid}:{entryGuid}). Same
+            # pattern as the CC endpoint above, but the address is REQUIRED —
+            # there is no default dataset; a missing/invalid address raises,
+            # rolling back the whole proposal write below.
+            if source_type == REPORTSPLUS_DATASET_SOURCE_TYPE:
+                declared = source_info.get(
+                    "dataset_address", recognition_hints.get("dataset_address")
+                )
+                recognition_hints["dataset_address"] = validate_rp_dataset_address(
+                    declared
+                )
             db.execute(
                 """
                 INSERT OR REPLACE INTO subject_sources
