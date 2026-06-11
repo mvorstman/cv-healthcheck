@@ -32,6 +32,10 @@ from cvhealthcheck.extractors.command_center import (
 )
 from cvhealthcheck.extractors.dispatcher import extract_file
 from cvhealthcheck.extractors.fixture import FixtureExtractor
+from cvhealthcheck.extractors.reportsplus_dataset import (
+    REPORTSPLUS_DATASET_SOURCE_TYPE,
+    ReportsPlusDatasetExtractor,
+)
 from cvhealthcheck.extractors.rest import RESTExtractor
 from cvhealthcheck.extractors.result_to_artifact import result_to_artifact
 from cvhealthcheck.reportsplus.session import CommvaultSession
@@ -221,6 +225,19 @@ def _has_command_center_source(db, subject_id: str, version: int) -> bool:
         return False
 
 
+def _has_reportsplus_dataset_source(db, subject_id: str, version: int) -> bool:
+    """True iff the subject declares a ``reportsplus_dataset`` source — routes
+    its /collect to the directly-addressed dataset extractor (ADR 0014).
+    Defensive: any error -> False (falls back to the report-walk REST path)."""
+    try:
+        return any(
+            s.get("source_type") == REPORTSPLUS_DATASET_SOURCE_TYPE
+            for s in get_subject_sources(db, subject_id, version)
+        )
+    except Exception:
+        return False
+
+
 @bp.route("/quick-hc/<subject_id>/collect", methods=["POST"])
 def quick_hc_generic_collect(subject_id: str):
     """Collect a subject's REST data using the active customer's CommCell.
@@ -283,15 +300,20 @@ def quick_hc_generic_collect(subject_id: str):
         title = subject["title"]
         version = subject["version"]
         _, project_id = get_active_project(db)
-        # ADR 0007 ph2 — pluggable extractor selection by the subject's collect
-        # source type. Reports-Plus -> RESTExtractor (unchanged); the single-object
-        # Command Center API source -> CommandCenterExtractor. The auth checks above
-        # and the result_to_artifact -> save_artifact tail below are identical.
+        # ADR 0007 ph2 / ADR 0014 — pluggable extractor selection by the subject's
+        # collect source type. Command Center API -> CommandCenterExtractor;
+        # directly-addressed RP dataset -> ReportsPlusDatasetExtractor; default
+        # Reports-Plus report walk -> RESTExtractor. The auth checks above and the
+        # result_to_artifact -> save_artifact tail below are identical for all.
         if _has_command_center_source(db, active_subject_id, version):
             extractor = CommandCenterExtractor(
                 db, token=token, customer_id=customer_id, project_id=project_id
             )
             result = extractor.extract(active_subject_id, version)
+        elif _has_reportsplus_dataset_source(db, active_subject_id, version):
+            with CommvaultSession(base_url, token, verify_ssl=settings.verify_ssl) as cv_session:
+                extractor = ReportsPlusDatasetExtractor(db, cv_session, customer_id, project_id)
+                result = extractor.extract(active_subject_id, version)
         else:
             with CommvaultSession(base_url, token, verify_ssl=settings.verify_ssl) as cv_session:
                 extractor = RESTExtractor(db, cv_session, customer_id, project_id)

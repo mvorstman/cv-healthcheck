@@ -15,6 +15,10 @@ BACKUP_JOB_SUMMARY_SELECTION_ID = "backup_job_summary"
 
 REST_COMMAND_CENTER_API_SOURCE_ID = "rest_command_center_api"
 REST_REPORTS_PLUS_SOURCE_ID = "rest_reports_plus"
+# ADR 0014: directly-addressed Reports Plus dataset (distinct from the
+# report-walk REST_REPORTS_PLUS source above). NOT in STANDARD_SOURCES — it
+# only renders for subjects whose catalog rows declare it.
+REPORTSPLUS_DATASET_SOURCE_ID = "reportsplus_dataset"
 JSON_IMPORT_SOURCE_ID = "json_import"
 CSV_IMPORT_SOURCE_ID = "csv_import"
 HTML_IMPORT_SOURCE_ID = "html_import"
@@ -30,6 +34,7 @@ STANDARD_SOURCES: list[str] = [
 SOURCE_LABELS: dict[str, str] = {
     REST_COMMAND_CENTER_API_SOURCE_ID: "REST / Command Center API",
     REST_REPORTS_PLUS_SOURCE_ID:       "REST / Reports Plus",
+    REPORTSPLUS_DATASET_SOURCE_ID:     "REST / Reports Plus dataset",
     JSON_IMPORT_SOURCE_ID:             "JSON import",
     CSV_IMPORT_SOURCE_ID:              "CSV import",
     HTML_IMPORT_SOURCE_ID:             "HTML import",
@@ -38,6 +43,7 @@ SOURCE_LABELS: dict[str, str] = {
 SOURCE_DESCRIPTIONS: dict[str, str] = {
     REST_COMMAND_CENTER_API_SOURCE_ID: "Live collection through Command Center API endpoints.",
     REST_REPORTS_PLUS_SOURCE_ID:       "Live collection through Reports Plus report and dataset endpoints.",
+    REPORTSPLUS_DATASET_SOURCE_ID:     "Live collection from a directly-addressed Reports Plus dataset.",
     JSON_IMPORT_SOURCE_ID:             "Offline JSON import into the canonical Quick HC artifact contract.",
     CSV_IMPORT_SOURCE_ID:              "Offline CSV import into the canonical Quick HC artifact contract.",
     HTML_IMPORT_SOURCE_ID:             "Offline HTML import into the canonical Quick HC artifact contract.",
@@ -383,6 +389,8 @@ _SOURCE_TYPE_TO_CANONICAL_ID: dict[str, str] = {
     # src_id=None and is dropped below — so its source tab + Collect button never
     # render in the generic path once a stored artifact wins precedence.
     "rest_command_center_api": REST_COMMAND_CENTER_API_SOURCE_ID,
+    # ADR 0014: directly-addressed Reports Plus dataset.
+    "reportsplus_dataset": REPORTSPLUS_DATASET_SOURCE_ID,
 }
 
 _SOURCE_TYPE_TO_LABEL: dict[str, str] = {
@@ -410,9 +418,10 @@ def _build_db_source_entries(
         if src_id is None:
             continue
         has_instructions = bool(src.get("has_section_instructions", 0))
-        if source_type in ("rest", "rest_command_center_api") and has_instructions and subject_id:
-            # Both live-REST collect paths post to the same /collect route; the
-            # /collect dispatch (_has_command_center_source) picks the extractor.
+        if (source_type in ("rest", "rest_command_center_api", "reportsplus_dataset")
+                and has_instructions and subject_id):
+            # All live-REST collect paths post to the same /collect route; the
+            # /collect dispatch (source-type discriminators) picks the extractor.
             collect_url = f"/quick-hc/{subject_id}/collect"
         elif source_type == "json" and has_instructions and subject_id:
             # ADR 0004: internal fixture-backed subjects collect from a shipped

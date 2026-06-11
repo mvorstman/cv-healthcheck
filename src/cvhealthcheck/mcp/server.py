@@ -267,7 +267,7 @@ def propose_new_subject(
         section_type: findings | table | metric | chart
     extraction_instructions : dict
         Keys are source types ("html", "csv", "rest", "json",
-        "rest_command_center_api").
+        "rest_command_center_api", "reportsplus_dataset").
         Each value is a dict with:
           - "extractable": bool
           - "non_extractable_reason": str | None  ("charts_only" | "client_side_rendered")
@@ -288,6 +288,25 @@ def propose_new_subject(
         or "output_as": "table" (a multi-record collection, with
         {"table": {"root_key": <list key in the response>,
         "columns": [{"id": <col>, "field": <dot-path into each element>}]}}).
+        ADR 0014 — directly-addressed Reports Plus dataset
+        ("reportsplus_dataset"): use this (NOT "rest") for a subject collected
+        from one Reports Plus dataset addressed directly, without a report
+        walk. Its value dict additionally REQUIRES:
+          - "dataset_address": str — a bare dataset GUID (standalone
+            datasets), or "{reportGuid}:{entryGuid}" for a report-bound
+            dataset. The entry guid is the report definition's per-report
+            dataSets.dataSet[] entry "guid" (NOT the inner dataSetGuid).
+            Validated as a GUID grammar at approval; the proposal is rejected
+            if missing or malformed.
+        Each section's instruction dict may declare "fields", "orderby",
+        "limit", and "parameters" — a dict keyed by the dataset's BARE
+        declared parameter names (e.g. {"i_days": 7, "userlist": [1, 2]});
+        the app encodes them to parameter.<name> / parameter.<name>[] query
+        forms and validates every name against the dataset's declared
+        parameters at collect time (the engine silently ignores unknown
+        names, so typos are rejected loudly instead of collecting wrong
+        data). Row-shaping ("column_map", "null_values", "timestamp_fields",
+        "status_to_severity") and "output_as" work as for "rest".
     ai_notes : str
         Notes on confidence, data quality, empty-export caveats, etc.
     supersedes : int | None
