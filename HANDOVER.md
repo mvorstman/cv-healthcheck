@@ -1,4 +1,4 @@
-# HANDOVER — Declarative ("in-data") report authoring: ADR-0014 shipped, live verification pending
+# HANDOVER — Declarative ("in-data") report authoring: ADR-0014 shipped and verified live
 
 You are continuing development on **cv-healthcheck**, a modular Commvault
 operational health check platform (Python/Flask, Pydantic v2 canonical
@@ -38,12 +38,19 @@ already resolved or moot:
   approval)**: `docs/adr/0014-reportsplus-dataset-source-type.md`.
   **Do not implement before the ADR is accepted.**
 
-## Status: ADR-0014 implemented (2026-06-11) — live end-to-end verification pending
+## Status: ADR-0014 implemented and VERIFIED LIVE (2026-06-11)
 
 The gate ran and PASSED (`docs/research/adr0014-gate-findings.md`); ADR-0014
 is Accepted with two amendments (composite verified 2026-06-06 on CS01,
 gate = re-confirmation; artifact mapping = `SourceType.rest`). The feature
-is implemented and unit/integration-tested offline (suite: 1063 passed):
+is implemented, unit/integration-tested (suite: 1063 passed), and
+**end-to-end verified live** the same day: a throwaway `reportsplus_dataset`
+subject (`audit_trail_rp_dataset`, bare-GUID AuditTrailDataset with a
+list-valued `userlist` parameter) was AI-proposed, independently reviewed
+and human-approved through staging, and collected through the new source
+tab — 25 rows rendered with canonical column names, artifact stamped live
+`rest` with `collected_at` set. The throwaway subject, its artifact, and
+its staging record were deleted after the pass; no residue in the catalog.
 
 - Migration 0031 (source_type CHECK widened; applies to `data/app.db` on
   the next app start/reload).
@@ -57,17 +64,13 @@ is implemented and unit/integration-tested offline (suite: 1063 passed):
   ignored by the engine, so the extractor validates declared names against
   dataset metadata before any fetch and fails loudly.
 
-**Remaining: live end-to-end verification** (propose → human approval via
-web → Collect on `/quick-hc`): a throwaway `reportsplus_dataset` subject
-over a safe dataset (e.g. AuditTrailDataset bare GUID, or the License
-summary "Get Last Collection Time" composite). Proposal may be authored by
-the AI; approval is the human's manual step (never bypass staging). The
-operator must (re)connect first — and note the debug-reloader token wipe
-below: no `.py` edits between Connect and Collect.
-
 The brief's "leading-slash 401 errorCode 5" probe quirk did NOT reproduce
 (both slash forms behave identically; the observed 401s were stale-token
 artifacts of the reloader wipe). No path-handling fix is needed.
+
+**Nothing in flight.** The next piece of work, when Michiel triggers it, is
+the parked re-assessment below (its precondition — "after Fix 4 ships" —
+is now met). Do not start it unprompted.
 
 ## Parked — legacy-builder conversion (decision 2026-06-11)
 

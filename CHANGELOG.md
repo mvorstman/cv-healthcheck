@@ -10,6 +10,15 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-11 (verify — ADR-0014 end-to-end pass, live; throwaway subject cleaned up)
+
+**Branch:** `main`. Completes the entry below: the `reportsplus_dataset` source type is verified live, full loop.
+
+### Notes
+- **E2E pass (green):** throwaway subject `audit_trail_rp_dataset` (bare-GUID AuditTrailDataset, `parameters: {userlist: [1, 2]}`, `column_map`, `limit: 25`) was AI-proposed into staging (`stage_e739bbd5…`), independently reviewed (Claude web) and human-approved, then collected through the new "REST / Reports Plus dataset" source tab: 25 rows rendered with canonical column names (`id`/`time`/`user`/`severity_level`/`operation`/`details`), artifact stamped live `rest` with `collected_at` set. The pass exercised migration 0031 on the live DB, persist-time address validation, collect dispatch, metadata-backed parameter-name validation, `parameter.userlist[]` encoding, shared row-shaping, and the artifact tail — every new seam, one loop.
+- **Cleanup:** `delete_subject('audit_trail_rp_dataset')` removed the catalog rows (1 version), the stored artifact, and the staging record. No residue.
+- **Next (parked, human-triggered):** the ADR-0006 D5 re-assessment precondition ("after Fix 4 ships") is now met; License Summary / security_assessment conversion remains parked until Michiel asks.
+
 ## 2026-06-11 (feat — ADR-0014 reportsplus_dataset source type: declarative, directly-addressed Reports Plus datasets)
 
 **Branch:** `main`. Closes the last known source-family gap in the zero-code authoring path (HANDOVER Fix 4). Preceded by a Step-0 reconciliation that retired the brief's other three fixes as already-shipped/not-reproducible/superseded (HANDOVER commit `9567f5f`), and by the ADR-0014 curl-first gate run live through the ADR-0008 loopback.
