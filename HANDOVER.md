@@ -1,4 +1,4 @@
-# HANDOVER — Phase 1 in progress: Fix 2 landed (global-file layer retired)
+# HANDOVER — Phase 1: Fix 2 + D5 landed (Context Integrity enforced)
 
 You are continuing development on **cv-healthcheck**, a modular Commvault
 operational health check platform (Python/Flask, Pydantic v2 canonical
@@ -7,18 +7,21 @@ artifact schema, MCP server for AI-assisted subject authoring).
 ## Current state
 
 - **Branch:** `main`
-- **Latest commit:** `1c343c7` (Fix 2 final slice — global files deleted + orphan sweep)
-- **Test suite:** 1022 passed (full pytest, exit 0; count dropped with the
-  deliberate deletion of legacy-contract and report-layer tests)
-- **In flight:** Phase 1 (Context Integrity). **Fix 2 is done** (see the
-  2026-06-12 fix(isolation) CHANGELOG entry): the scoped store is the only
-  workspace data source; the legacy report layer is deleted — deliberate,
-  the presentation layer is a future project on the ADR-0015 foundation.
-  **Next: D5 — context-gate work** (explicit context required for
-  customer-data writes; the session-fallback hazard in
-  web/active_project.py). Pending human step: authenticated browser check
-  on a fresh project (anonymous smoke passed: /quick-hc/report 404,
-  workspace + commcell render).
+- **Latest commit:** `261f7d8` (D5 commit 4 — session-secret persistence)
+- **Test suite:** 1052 passed (full pytest, exit 0)
+- **In flight:** Phase 1 (Context Integrity). **Fix 2 and D5 are done** (see
+  the 2026-06-12 fix(isolation) and 2026-06-13 feat(context) CHANGELOG
+  entries): the scoped store is the only workspace data source, and the
+  Context Integrity invariant is ENFORCED — every named write choke point
+  requires `require_active_context()` (typed `NoExplicitContextError`,
+  never a silent Default); approval takes explicit context as an input
+  with stamp-coherence checks; the session secret persists across
+  restarts. Pending human step: authenticated fresh-browser check
+  (no project selected → collect yields the clean prompt; select a
+  project → collect lands scoped). Anonymous live check passed.
+  **Next: identity schema** — the connection_url / commserve_name split
+  on customers, + CCID + optional Reports Plus server (per the Phase-1
+  audit's F recommendation and ADR-0015's profile layer).
 
 ## What was just completed (Phase 0)
 

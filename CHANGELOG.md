@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat(context) — D5: the Context Integrity invariant is ENFORCED at the write layer)
+
+**Branch:** `main`. Commits `ef6adfb`, `a533da3`, `425136c`, `261f7d8`; suite 1052 passed. ADR-0015's **Context Integrity** invariant — *a customer-data write may only occur against an explicitly selected context; absence of explicit selection is an error, never a silent default* — is now enforced, not aspirational.
+
+### Added
+- **The enforcement primitive** (`ef6adfb`): `require_active_context()` in `web/active_project.py` returns (customer_id, project_id) ONLY when explicitly selected this session and raises typed `NoExplicitContextError` otherwise — it never consults the Default fallback. Typed errors live in the new leaf `cvhealthcheck/context.py` (`NoExplicitContextError`, `UnknownContextError`, `ContextMismatchError`) so db/ and web/ share the vocabulary without db importing web. The module docstring documents the read/write split: `get_active_project`/`resolve_default_project` survive for READ paths only.
+- **The write gates** (`a533da3`): collect, fixture-collect, import, artifact delete, version pin, the LS scoped saves (`_require_project_store` at the data layer + early route gate), and MCP `delete_subject` (artifact half requires explicit, row-validated customer/project params; the catalog half stays context-free by design — commented asymmetry). One web-layer translation (`_context_required_response`): "Select a customer and project before collecting/importing/deleting." (flash, or JSON 409 for X-Inline).
+- **Approval requires context as an input** (`425136c`): `execute_approval`'s artifact branch takes explicit customer_id + project_id (validated against existing rows; store constructed internally; `store` kwarg demoted to test-only). Stamp coherence: stamped-for-X-approved-under-Y → `ContextMismatchError`, nothing written; NULL-stamped legacy rows are back-stamped with the approval context (recorded in `ai_notes`). Staging writes stamp `customer_id` (web `?stage=1` from the gate; MCP `save_staged_artifact` validates caller-asserted ids). `propose_new_subject` stays NULL by design — Catalog Purity, commented as intent. `make_default_project_store` lost its last caller and was **deleted**.
+
+### Fixed
+- **Session-amplifier** (`261f7d8`): `start.sh` no longer regenerates `CV_SECRET_KEY` per start — the key persists in `data/.secret_key` (mode 600; env override wins), so a restart no longer invalidates every session cookie and silently reverts the active context. The gitignore was verified NOT to cover dotfiles under `data/` and the pattern was added in the same commit.
+
+### Notes
+- Tests: 30 new in `tests/test_context_gate_d5.py` — per choke point: no context → typed error and nothing written (tripwire monkeypatches prove the writes are unreached); with context → lands in exactly (customer, project); approval refuse/mismatch/back-stamp matrix; reads keep the fallback unchanged. Existing route/approval tests updated to select explicit context (new `explicit_context` conftest fixture).
+- Live check (fresh session, no cookie): anonymous collect → 302 + the clean prompt; artifact store byte-unchanged (no Default write). Authenticated fresh-browser check: Michiel.
+- Found along the way: `staged_artifacts.customer_id` carries an FK to `customers` — the back-stamp/stamp writes get a structural guard for free.
+
 ## 2026-06-12 (fix(isolation) — Fix 2: the unscoped global-file layer is retired)
 
 **Branch:** `main`. Commits `1892dd8`, `ab13f34`, `c9487e1`, `7e93c12`, `1c343c7`; suite 1022 passed. Closes the "new project shows old data" leak (2026-06-12 isolation audit): the scoped canonical store is now the ONLY data source for the workspace.
