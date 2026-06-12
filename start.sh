@@ -44,9 +44,30 @@ if [ -n "$PORT_PIDS" ]; then
   fi
 fi
 
-# Generate a fresh secret key for this session
-export CV_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-echo "[start] secret key generated"
+# Session secret: PERSISTED across restarts (D5 session-amplifier fix — the
+# old per-start key invalidated every session cookie on restart, silently
+# reverting the active customer/project context to the Default fallback).
+# An env-provided CV_SECRET_KEY (e.g. from ~/.cv-healthcheck-env) wins;
+# otherwise the key is generated once into data/.secret_key (mode 600,
+# gitignored) and reused.
+if [ -z "${CV_SECRET_KEY:-}" ]; then
+  SECRET_FILE="data/.secret_key"
+  mkdir -p data
+  if [ ! -s "$SECRET_FILE" ]; then
+    old_umask=$(umask)
+    umask 177
+    python3 -c "import secrets; print(secrets.token_hex(32))" > "$SECRET_FILE"
+    umask "$old_umask"
+    echo "[start] secret key generated and persisted to $SECRET_FILE"
+  else
+    echo "[start] secret key loaded from $SECRET_FILE"
+  fi
+  chmod 600 "$SECRET_FILE" 2>/dev/null || true
+  CV_SECRET_KEY="$(cat "$SECRET_FILE")"
+  export CV_SECRET_KEY
+else
+  echo "[start] secret key from environment"
+fi
 
 # Log level - default INFO, override via first argument
 export CV_LOG_LEVEL="${1:-INFO}"

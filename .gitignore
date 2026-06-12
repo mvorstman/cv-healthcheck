@@ -38,3 +38,7 @@ data/labreadiness/*.json
 .login_token
 .refresh_token
 *.local
+
+# D5 session-amplifier fix: the persisted Flask session secret (mode 600).
+# A committed secret would be unamendable — keep this pattern.
+data/.secret_key
