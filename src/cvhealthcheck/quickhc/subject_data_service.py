@@ -110,11 +110,8 @@ def build_subject_initial_data(
     except Exception:
         report_url = "/quick-hc/report"
 
-    legacy_loaders = _legacy_loaders()
-    legacy_builders = _legacy_builders()
-
     # Commcell header comes from the environment legacy loader (reads commserv.json).
-    commcell_loader = legacy_loaders.get("environment")
+    commcell_loader = _legacy_loaders().get("environment")
     commcell_raw = commcell_loader() if commcell_loader else None
     commcell_info = _build_commcell_header(commcell_raw)
 
@@ -131,29 +128,16 @@ def build_subject_initial_data(
                 "subjects": [],
             }
 
-        # Canonical store wins for all subjects when an artifact exists.
-        #
-        # Source-building fork: see docs/adr/0001-source-building-fork.md.
-        # The legacy_builder branch (six system subjects with custom
-        # view shapes: counters, findings_grid, workload, chart_growth)
-        # is intentional. It cannot be merged with _build_generic_subject
-        # without first migrating the canonical schema. Do not remove
-        # this fork without reading the ADR.
+        # The scoped canonical store is the ONLY data source for a subject's
+        # workspace view. The former fallthrough to the six legacy loaders read
+        # GLOBAL unscoped files (commserv.json, LS/SA catalog artifacts, metrics
+        # JSONs, backup_job_summary_latest.json), so any project with an empty
+        # store rendered another customer's last collection — the Fix-2
+        # isolation leak (2026-06-12 audit). An empty store now renders the
+        # subject's honest not-collected state. This retires the ADR-0001
+        # source-building fork's read path for workspace tiles.
         artifact = _load_from_canonical_store(subject_id)
-        if artifact is not None:
-            built = _build_generic_subject(tile, artifact)
-        else:
-            legacy_loader = legacy_loaders.get(subject_id)
-            legacy_builder = legacy_builders.get(subject_id)
-            if legacy_builder is not None:
-                loaded = legacy_loader() if legacy_loader else None
-                built = legacy_builder(loaded)
-            else:
-                # No artifact and no bespoke builder (e.g. environment after ADR
-                # 0007 ph3 slice B): the generic not-collected state. Works with or
-                # without a db (it reads only the tile + sources), so the no-db
-                # list_tiles path renders environment too instead of dropping it.
-                built = _build_generic_subject(tile, None)
+        built = _build_generic_subject(tile, artifact)
 
         built["created_by"] = tile.get("created_by", "system")
         # ADR 0004 source-tile cleanup: version dropdown + last-collected.

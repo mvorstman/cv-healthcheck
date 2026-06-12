@@ -64,52 +64,6 @@ def test_quick_hc_license_summary_page_renders_registry_backed_artifact(tmp_path
     assert "/quick-hc" in response.headers["Location"]
 
 
-def test_quick_hc_index_includes_license_summary_link(tmp_path, monkeypatch) -> None:
-    artifact = parse_license_summary_csv(CSV_SAMPLE, source_file="/tmp/license-summary.csv")
-    persist_license_summary_artifact(
-        artifact,
-        catalog_dir=tmp_path / "catalog",
-        registry_path=tmp_path / "registry.sqlite3",
-    )
-
-    import cvhealthcheck.license_summary.service as license_summary_service_module
-    import cvhealthcheck.license_summary.artifact as license_summary_artifact_module
-
-    monkeypatch.setattr(
-        license_summary_service_module,
-        "LICENSE_SUMMARY_REGISTRY_PATH",
-        tmp_path / "registry.sqlite3",
-    )
-    monkeypatch.setattr(
-        license_summary_service_module,
-        "LICENSE_SUMMARY_CATALOG_DIR",
-        tmp_path / "catalog",
-    )
-    monkeypatch.setattr(
-        license_summary_artifact_module,
-        "LICENSE_SUMMARY_CATALOG_DIR",
-        tmp_path / "catalog",
-    )
-
-    app = create_app()
-    client = app.test_client()
-
-    response = client.get("/quick-hc")
-
-    assert response.status_code == 200
-    body = response.get_data(as_text=True)
-    # Session 3 switched the import URL from the hyphenated form to
-    # the underscored unified form. Either form anywhere in the body
-    # indicates license_summary is being rendered.
-    assert (
-        "/quick-hc/license-summary" in body
-        or "/quick-hc/license_summary" in body
-    )
-    assert "1 other licenses" in body
-    assert '"title": "Agent / Feature Licenses table"' in body
-    assert '"Virtual Server"' in body
-
-
 def test_quick_hc_license_summary_upload_imports_csv_and_redirects(tmp_path, monkeypatch) -> None:
     import cvhealthcheck.license_summary.service as license_summary_service_module
     import cvhealthcheck.license_summary.artifact as license_summary_artifact_module
