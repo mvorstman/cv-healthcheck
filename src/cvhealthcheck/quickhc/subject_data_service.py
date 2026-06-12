@@ -110,10 +110,13 @@ def build_subject_initial_data(
     except Exception:
         report_url = "/quick-hc/report"
 
-    # Commcell header comes from the environment legacy loader (reads commserv.json).
-    commcell_loader = _legacy_loaders().get("environment")
-    commcell_raw = commcell_loader() if commcell_loader else None
-    commcell_info = _build_commcell_header(commcell_raw)
+    # Commcell header comes from the SCOPED environment artifact (Fix 2 (b)) —
+    # the same store the environment tile renders. Honest-empty when the
+    # active project hasn't collected environment yet. (Previously read the
+    # global commserv.json via the legacy loader: cross-customer.)
+    commcell_info = _build_commcell_header(
+        _load_from_canonical_store("environment")
+    )
 
     category_groups: dict[str, dict] = {}
     for tile in all_tiles:
@@ -763,20 +766,30 @@ def _legacy_loaders() -> dict[str, Any]:
 
 # ── HEADER ──
 
-def _build_commcell_header(cc: dict | None) -> dict:
-    """Header summary (subtitle name/version). ``cc`` is now the REAL GET CommServ
-    response (nested), so read commCellId/csGUID/TimeZoneName from their real
-    locations rather than the old flat fields."""
-    if not cc:
+def _build_commcell_header(artifact: CanonicalArtifact | None) -> dict:
+    """Header summary (subtitle name/version) from the SCOPED environment
+    artifact's identity card (Fix 2 (b)). Reads the card items by their
+    catalog-declared labels (Hostname / CommCell Name / CommCell GUID /
+    Version / Timezone); honest-empty when the active project has no
+    environment artifact. Replaces the global commserv.json read."""
+    if artifact is None:
         return {"exists": False, "name": "", "version": "", "id": "", "timezone": ""}
-    commcell = cc.get("commcell") if isinstance(cc.get("commcell"), dict) else {}
-    cstz = cc.get("csTimeZone") if isinstance(cc.get("csTimeZone"), dict) else {}
+    items: dict[str, Any] = {}
+    for sec in artifact.model_dump(mode="json").get("sections", []) or []:
+        if sec.get("type") != "card":
+            continue
+        for item in sec.get("items", []) or []:
+            label = item.get("label")
+            if label and item.get("value") not in (None, ""):
+                items.setdefault(label, item.get("value"))
+    if not items:
+        return {"exists": False, "name": "", "version": "", "id": "", "timezone": ""}
     return {
         "exists": True,
-        "name": cc.get("hostName") or "",
-        "version": cc.get("csVersionInfo") or "",
-        "id": commcell.get("csGUID") or cc.get("csGUID") or "",
-        "timezone": cstz.get("TimeZoneName") or cc.get("timeZone") or "",
+        "name": str(items.get("Hostname") or items.get("CommCell Name") or ""),
+        "version": str(items.get("Version") or ""),
+        "id": str(items.get("CommCell GUID") or items.get("CommCell ID") or ""),
+        "timezone": str(items.get("Timezone") or ""),
     }
 
 

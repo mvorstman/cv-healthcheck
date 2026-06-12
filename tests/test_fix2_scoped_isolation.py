@@ -72,6 +72,53 @@ def test_artifact_in_another_projects_store_does_not_leak(migrated_db_path):
         db.close()
 
 
+def test_commcell_header_empty_without_scoped_environment_artifact(migrated_db_path):
+    """Fix 2 (b): the header reads the scoped environment artifact, never the
+    global commserv.json — no artifact, no header identity."""
+    db = _conn(migrated_db_path)
+    try:
+        header = build_subject_initial_data(db)["commcell"]
+        assert header["exists"] is False
+        assert header["name"] == "" and header["version"] == ""
+    finally:
+        db.close()
+
+
+def test_commcell_header_from_scoped_environment_card(migrated_db_path):
+    db = _conn(migrated_db_path)
+    try:
+        res = ExtractionResult(subject_id="environment", source_type="rest_command_center_api")
+        res.sections["environment.metadata"] = [{}]
+        res.section_output_types["environment.metadata"] = "card"
+        res.section_titles["environment.metadata"] = "Metadata"
+        res.section_card_specs["environment.metadata"] = {"items": []}
+        artifact = result_to_artifact(res, subject_id="environment", subject_title="Environment")
+        # graft a minimal identity card the way the catalog card spec labels it
+        payload = artifact.model_dump(mode="json")
+        payload["sections"] = [{
+            "type": "card", "id": "environment.metadata", "title": "Metadata",
+            "items": [
+                {"label": "Hostname", "value": "cs01.lab"},
+                {"label": "Version", "value": "11.40"},
+                {"label": "CommCell GUID", "value": "ABC-123"},
+                {"label": "Timezone", "value": "UTC"},
+            ],
+        }]
+        from cvhealthcheck.artifacts.models import CanonicalArtifact
+        customer_id, project_id = resolve_default_project(db)
+        ArtifactStore(customer_id, project_id).save_artifact(
+            CanonicalArtifact.model_validate(payload)
+        )
+
+        header = build_subject_initial_data(db)["commcell"]
+        assert header == {
+            "exists": True, "name": "cs01.lab", "version": "11.40",
+            "id": "ABC-123", "timezone": "UTC",
+        }
+    finally:
+        db.close()
+
+
 def test_scoped_artifact_renders_for_its_project_only(migrated_db_path):
     db = _conn(migrated_db_path)
     try:
