@@ -134,15 +134,18 @@ def test_environment_emits_collect_action_on_command_center_source(migrated_db_p
     assert collect["requiresSession"] is True
 
 
-def test_environment_is_no_longer_a_legacy_builder():
-    """ADR 0007 ph3 slice B: the bespoke _build_environment_subject is GONE —
-    environment is no longer registered in the legacy_builders fork, and the
-    symbol no longer exists on the module."""
+def test_legacy_builder_fork_is_fully_retired():
+    """ADR 0007 ph3 slice B retired environment's bespoke builder; Fix 2
+    (2026-06-12) retired the entire legacy fork — no loaders, no builders,
+    no global-file reads. The module must not regrow them."""
     from cvhealthcheck.quickhc import subject_data_service as sds
-    assert "environment" not in sds._legacy_builders()
-    assert not hasattr(sds, "_build_environment_subject")
-    # the loader stays (it feeds the CommCell header), the VIEW builder is gone.
-    assert "environment" in sds._legacy_loaders()
+    for symbol in (
+        "_legacy_builders", "_legacy_loaders", "_build_environment_subject",
+        "_build_security_assessment_subject", "_build_license_summary_subject",
+        "_build_client_growth_subject", "_build_capacity_license_subject",
+        "_build_backup_job_summary_subject",
+    ):
+        assert not hasattr(sds, symbol), symbol
 
 
 def test_environment_generic_render_applies_command_center_cosmetics(migrated_db_path: Path):

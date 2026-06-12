@@ -477,13 +477,11 @@ def _patch_security_assessment_paths(tmp_path, monkeypatch) -> None:
     registry_path = tmp_path / "registry.sqlite3"
 
     import cvhealthcheck.security_assessment.artifact as artifact_module
-    import cvhealthcheck.reportsplus.security_assessment as security_assessment_module
     import cvhealthcheck.security_assessment.normalize as normalize_module
     import cvhealthcheck.security_assessment.service as service_module
 
     monkeypatch.setattr(artifact_module, "SECURITY_ASSESSMENT_CATALOG_DIR", catalog_dir)
     monkeypatch.setattr(normalize_module, "SECURITY_ASSESSMENT_CATALOG_DIR", catalog_dir)
-    monkeypatch.setattr(security_assessment_module, "SECURITY_ASSESSMENT_CATALOG_DIR", catalog_dir)
     monkeypatch.setattr(service_module, "SECURITY_ASSESSMENT_IMPORTS_DIR", imports_dir)
     monkeypatch.setattr(service_module, "SECURITY_ASSESSMENT_CATALOG_DIR", catalog_dir)
     monkeypatch.setattr(service_module, "SECURITY_ASSESSMENT_REGISTRY_PATH", registry_path)

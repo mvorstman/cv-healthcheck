@@ -35,10 +35,6 @@ from cvhealthcheck.license_summary import (
     LicenseSummaryService,
     import_license_summary_upload,
 )
-from cvhealthcheck.metrics import (
-    get_client_count_history,
-    get_client_growth_details,
-)
 from cvhealthcheck.output.json_report import to_pretty_json
 from cvhealthcheck.quickhc import get_commcell_identity
 from cvhealthcheck.reportsplus.catalog import catalog_status, read_json, write_catalog
@@ -55,10 +51,6 @@ from cvhealthcheck.reportsplus.inventory import (
 )
 from cvhealthcheck.reportsplus.metric_inventory import build_report_metric_inventory
 from cvhealthcheck.reportsplus.metadata import summarize_dataset_metadata
-from cvhealthcheck.reportsplus.security_assessment import (
-    load_security_assessment_artifact,
-    security_assessment_status,
-)
 # NOT dead: re-exported to quick_hc_api.py (SecurityAssessmentService().
 # get_canonical() at its /api read endpoint). The dev-SA retirement's other
 # three service imports (ImportError/export_registry/import_upload) were dead
