@@ -249,6 +249,8 @@ def test_collect_auth_gate_flashes_instead_of_silent_redirect(monkeypatch):
     })
 
     client = create_app().test_client()
+    with client.session_transaction() as sess:
+        sess["active_project"] = {"customer_id": "default", "project_id": "default"}
     resp = client.post("/quick-hc/environment/collect")
     assert resp.status_code == 302
     assert "/login" in resp.headers["Location"]

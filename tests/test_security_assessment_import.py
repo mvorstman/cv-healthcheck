@@ -380,7 +380,10 @@ def test_quick_hc_security_assessment_upload_imports_html_and_redirects(
     app = create_app()
     # Session 4 deleted the legacy /quick-hc/security-assessment/import
     # route; this URL-coupled test now uses the unified route.
-    response = app.test_client().post(
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["active_project"] = {"customer_id": "default", "project_id": "default"}
+    response = client.post(
         "/quick-hc/security_assessment/import",
         data={
             "assessment_file": (io.BytesIO(HTML_SAMPLE.encode("utf-8")), "assessment.html")
@@ -424,7 +427,10 @@ def test_fresh_security_assessment_import_creates_no_legacy_artifact_files(
     monkeypatch.setattr(_qhc, "make_active_project_store", lambda *a, **k: _store)
 
     app = create_app()
-    response = app.test_client().post(
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["active_project"] = {"customer_id": "default", "project_id": "default"}
+    response = client.post(
         "/quick-hc/security_assessment/import",
         data={"file": (io.BytesIO(SA_PANEL_HTML.encode("utf-8")), "assessment.html")},
         content_type="multipart/form-data",

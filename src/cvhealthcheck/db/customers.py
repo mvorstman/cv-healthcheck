@@ -218,3 +218,26 @@ def delete_customer(
         )
         conn.commit()
     return cursor.rowcount > 0
+
+
+def validate_known_context(
+    db: sqlite3.Connection, customer_id: str, project_id: str
+) -> None:
+    """D5: caller-asserted context is untrusted input — both ids must name
+    existing rows (and the project must belong to the customer) before
+    anything is written against them. Raises UnknownContextError."""
+    from cvhealthcheck.context import UnknownContextError
+
+    row = db.execute(
+        "SELECT 1 FROM customers WHERE customer_id = ?", (customer_id,)
+    ).fetchone()
+    if row is None:
+        raise UnknownContextError(f"unknown customer_id: {customer_id!r}")
+    row = db.execute(
+        "SELECT 1 FROM projects WHERE project_id = ? AND customer_id = ?",
+        (project_id, customer_id),
+    ).fetchone()
+    if row is None:
+        raise UnknownContextError(
+            f"unknown project_id {project_id!r} for customer {customer_id!r}"
+        )

@@ -10,11 +10,12 @@ from flask import jsonify
 from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.config import load_settings
 from cvhealthcheck.db import get_db
+from cvhealthcheck.context import NoExplicitContextError
 from cvhealthcheck.web.active_project import (
     ActiveProjectMissingError,
     get_active_customer,
-    get_active_project,
     make_active_project_store,
+    require_active_context,
 )
 from cvhealthcheck.db import staging as _staging_db
 from cvhealthcheck.db.subjects import (
@@ -87,6 +88,23 @@ def _workspace_redirect(subject_id: str | None = None):
     if subject_id:
         url = f"{url}#subject={subject_id}"
     return redirect(url)
+
+
+_CONTEXT_REQUIRED_MSG = (
+    "Select a customer and project before collecting/importing/deleting."
+)
+
+
+def _context_required_response(subject_id: str | None = None, *, inline: bool = False):
+    """The web layer's single translation of NoExplicitContextError (D5).
+
+    The data layer refuses unconditionally; this is the one place UI
+    judgment is applied: a clean flash+redirect (or JSON 409 for X-Inline
+    callers) telling the operator to select a customer/project first."""
+    if inline:
+        return jsonify({"success": False, "error": _CONTEXT_REQUIRED_MSG}), 409
+    flash(_CONTEXT_REQUIRED_MSG, "error")
+    return _workspace_redirect(subject_id)
 
 
 def _quick_hc_asset_version() -> str:
@@ -190,6 +208,11 @@ def quick_hc_settings():
 
 @bp.route("/quick-hc/<subject_id>/delete", methods=["POST"])
 def quick_hc_delete_subject(subject_id: str):
+    # D5 gate: deletes the scoped artifact too — explicit context only.
+    try:
+        ctx_customer_id, ctx_project_id = require_active_context()
+    except NoExplicitContextError:
+        return _context_required_response(subject_id)
     db = get_db()
     try:
         row = get_subject(db, subject_id)
@@ -200,7 +223,7 @@ def quick_hc_delete_subject(subject_id: str):
         return redirect(url_for("main.quick_hc"))
     finally:
         db.close()
-    make_active_project_store().delete_artifact(subject_id)
+    ArtifactStore(ctx_customer_id, ctx_project_id).delete_artifact(subject_id)
     flash(f"'{title}' removed from catalog.", "success")
     return redirect(url_for("main.quick_hc"))
 
@@ -242,6 +265,12 @@ def quick_hc_generic_collect(subject_id: str):
     from the customer row, not from the global commserv.json.
     """
     settings = load_settings()
+    # D5 gate: a collect WRITES customer data — explicit context only, never
+    # the silent Default fallback.
+    try:
+        ctx_customer_id, ctx_project_id = require_active_context()
+    except NoExplicitContextError:
+        return _context_required_response(subject_id)
     try:
         customer = get_active_customer()
     except ActiveProjectMissingError as exc:
@@ -292,7 +321,7 @@ def quick_hc_generic_collect(subject_id: str):
             return _workspace_redirect()
         title = subject["title"]
         version = subject["version"]
-        _, project_id = get_active_project(db)
+        project_id = ctx_project_id
         # ADR 0007 ph2 / ADR 0014 — pluggable extractor selection by the subject's
         # collect source type. Command Center API -> CommandCenterExtractor;
         # directly-addressed RP dataset -> ReportsPlusDatasetExtractor; default
@@ -328,7 +357,7 @@ def quick_hc_generic_collect(subject_id: str):
         commcell_id=customer.get("commcell_id"),
         commcell_name=customer.get("customer_name"),
     )
-    make_active_project_store().save_artifact(artifact)
+    ArtifactStore(ctx_customer_id, ctx_project_id).save_artifact(artifact)
 
     if result.warnings:
         warn_str = "; ".join(result.warnings[:2])
@@ -347,11 +376,11 @@ def quick_hc_pin_version(subject_id: str):
     real member of the subject's family.
     """
     chosen = (request.form.get("version") or "").strip()
+    # D5 gate: the pin is a customer-scoped write (customer_subject_pin).
     try:
-        customer = get_active_customer()
-    except ActiveProjectMissingError as exc:
-        flash(str(exc), "error")
-        return _workspace_redirect(subject_id)
+        ctx_customer_id, _ = require_active_context()
+    except NoExplicitContextError:
+        return _context_required_response(subject_id)
 
     db = get_db()
     try:
@@ -363,7 +392,7 @@ def quick_hc_pin_version(subject_id: str):
                 "error",
             )
             return _workspace_redirect(subject_id)
-        set_pinned_subject_id(db, customer["customer_id"], family, chosen)
+        set_pinned_subject_id(db, ctx_customer_id, family, chosen)
     finally:
         db.close()
 
@@ -376,6 +405,11 @@ def quick_hc_collect_fixture(subject_id: str):
     """ADR 0004 phase 2: collect an internal/test subject from its shipped JSON
     fixture. No lab/auth/CommCell needed — the FixtureExtractor reads a file
     sandboxed to data/test_fixtures/ and produces a canonical artifact."""
+    # D5 gate: the artifact write is store-scoped — explicit context only.
+    try:
+        ctx_customer_id, ctx_project_id = require_active_context()
+    except NoExplicitContextError:
+        return _context_required_response(subject_id)
     db = get_db()
     try:
         active_subject_id = resolve_active_version(db, None, subject_id)
@@ -397,7 +431,7 @@ def quick_hc_collect_fixture(subject_id: str):
         result, subject_id=active_subject_id, subject_title=title
     )
     try:
-        make_active_project_store().save_artifact(artifact)
+        ArtifactStore(ctx_customer_id, ctx_project_id).save_artifact(artifact)
     except Exception as exc:
         flash(f"Could not save artifact: {exc}", "error")
         return _workspace_redirect(subject_id)
@@ -471,9 +505,19 @@ def quick_hc_backup_job_summary():
 @bp.route("/quick-hc/license-summary/collect", methods=["POST"])
 @login_required
 def quick_hc_license_summary_collect():
+    # D5 gate, route-level: refuse BEFORE the REST round-trip. The service's
+    # _require_project_store refuses unconditionally as well (data layer);
+    # this early check just avoids collecting work that can't be persisted.
+    try:
+        require_active_context()
+    except NoExplicitContextError:
+        return _context_required_response("license_summary")
     service = LicenseSummaryService()
     try:
         result = service.collect_from_rest(client=_reportsplus_client())
+    except NoExplicitContextError:
+        # D5: the service's scoped save refused (data layer); translate here.
+        return _context_required_response("license_summary")
     except LicenseSummaryImportError as exc:
         flash(str(exc), "error")
         return redirect(url_for("main.quick_hc_license_summary"))
@@ -526,6 +570,15 @@ def quick_hc_subject_import(subject_id: str):
         staging, and the three-way error reporting
         (recognition / extractable / extraction).
     """
+    # D5 gate: every upload branch writes customer data (canonical store or
+    # a staged row) — one gate here covers the handler path (LS) and the
+    # generic dispatcher path alike.
+    try:
+        require_active_context()
+    except NoExplicitContextError:
+        return _context_required_response(
+            subject_id, inline=request.headers.get("X-Inline") == "1"
+        )
     db = get_db()
     try:
         subject = get_subject(db, subject_id)
@@ -661,7 +714,7 @@ def _unified_dispatcher_upload(subject_id: str):
                     return jsonify({"success": True, "message": msg, "title": title})
                 flash(msg, "success")
             else:
-                make_active_project_store().save_artifact(artifact)
+                ArtifactStore(*require_active_context()).save_artifact(artifact)
                 msg = f"Imported {title} successfully."
                 if inline:
                     return jsonify({"success": True, "message": msg, "title": title})

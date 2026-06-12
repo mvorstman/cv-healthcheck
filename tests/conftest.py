@@ -71,3 +71,18 @@ def authenticate():
                     sess[SESSION_USERNAME_KEY] = username
 
     return _auth
+
+
+@pytest.fixture()
+def explicit_context():
+    """Explicitly select the active (customer, project) the D5 way — the same
+    session entry set_active_project writes. Write-gated routes (collect,
+    import, delete, pin, LS collect) require this; without it they refuse
+    with the clean 'select a customer and project' response by design."""
+    def _select(client, customer_id: str = "default", project_id: str = "default"):
+        with client.session_transaction() as sess:
+            sess["active_project"] = {
+                "customer_id": customer_id,
+                "project_id": project_id,
+            }
+    return _select

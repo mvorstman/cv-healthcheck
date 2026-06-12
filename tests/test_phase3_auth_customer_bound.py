@@ -280,6 +280,8 @@ def test_collect_redirects_to_login_when_no_token(monkeypatch) -> None:
     )
     app = create_app()
     client = app.test_client()
+    with client.session_transaction() as session:
+        session["active_project"] = {"customer_id": "default", "project_id": "default"}
     response = client.post("/quick-hc/client_growth/collect")
     assert response.status_code == 302
     assert "/login" in response.headers["Location"]
@@ -297,6 +299,7 @@ def test_collect_clears_and_redirects_when_token_bound_to_wrong_customer(
     token_store.set_active_token("old-token")                   # held token...
     with client.session_transaction() as session:
         session[SESSION_CUSTOMER_ID_KEY] = "different_customer"  # ...bound to the wrong customer
+        session["active_project"] = {"customer_id": "default", "project_id": "default"}
 
     response = client.post("/quick-hc/client_growth/collect")
     assert response.status_code == 302

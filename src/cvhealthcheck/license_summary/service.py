@@ -55,10 +55,22 @@ logger = logging.getLogger(__name__)
 def _active_project_store() -> ArtifactStore:
     """Construct an ArtifactStore scoped to the active project on demand.
 
-    Replaces the module-level singleton from before ADR 0002 phase 2.
+    READ paths only (get_canonical) — keeps the Default fallback so the
+    workspace renders without a selection. Writes go through
+    :func:`_require_project_store` (D5).
     """
     from cvhealthcheck.web.active_project import make_active_project_store
     return make_active_project_store()
+
+
+def _require_project_store() -> ArtifactStore:
+    """ArtifactStore bound to the EXPLICITLY selected context — WRITE paths.
+
+    D5 gate at the data layer: the scoped saves refuse unconditionally when
+    no customer/project was explicitly selected (NoExplicitContextError
+    propagates to the LS routes, which translate it for the UI)."""
+    from cvhealthcheck.web.active_project import require_active_context
+    return ArtifactStore(*require_active_context())
 
 
 class LicenseSummaryImportError(ValueError):
@@ -137,7 +149,7 @@ class LicenseSummaryService:
             import_method="rest",
             write_legacy=False,
         )
-        _active_project_store().save_artifact(_adapt_license_summary(persisted))
+        _require_project_store().save_artifact(_adapt_license_summary(persisted))
         return {
             "extraction": collected["extraction"],
             "normalized": persisted,
@@ -197,7 +209,7 @@ def import_license_summary_upload(
         imported_by=imported_by,
         write_legacy=False,
     )
-    _active_project_store().save_artifact(_adapt_license_summary(persisted))
+    _require_project_store().save_artifact(_adapt_license_summary(persisted))
     return persisted
 
 

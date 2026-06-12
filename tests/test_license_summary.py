@@ -771,7 +771,12 @@ def test_license_summary_service_collect_from_rest_writes_canonical_only(
         catalog_dir=tmp_path / "catalog",
         registry_path=tmp_path / "registry.sqlite3",
     )
-    result = service.collect_from_rest()
+    # D5: the scoped save requires explicit context; select one for the test.
+    from cvhealthcheck.web.app import create_app
+    from cvhealthcheck.web.active_project import set_active_project
+    with create_app().test_request_context("/"):
+        set_active_project("default", "default")
+        result = service.collect_from_rest()
 
     # Option A — REST collection writes canonical only, not the legacy store.
     assert result["normalized"]["source_type"] == "rest"
@@ -781,7 +786,8 @@ def test_license_summary_service_collect_from_rest_writes_canonical_only(
     assert len(result["normalized"]["other_licenses"]) == 1
     assert not (tmp_path / "catalog" / "latest.json").exists()
     assert not (tmp_path / "catalog" / "registry.sqlite3").exists()
-    canonical = service.get_canonical()
+    from cvhealthcheck.artifacts.store import ArtifactStore
+    canonical = ArtifactStore("default", "default").load_latest_artifact("license_summary")
     assert canonical.artifact_type == "license_summary"
 
 

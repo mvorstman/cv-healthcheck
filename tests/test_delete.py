@@ -93,16 +93,17 @@ def client(monkeypatch: pytest.MonkeyPatch, migrated_db_path: Path, tmp_path: Pa
 
     monkeypatch.setattr(quick_hc_routes, "get_db", open_db)
 
-    artifact_dir = tmp_path / "artifacts"
-    isolated_store = ArtifactStore("default", "default", base_dir=artifact_dir)
-    monkeypatch.setattr(
-        quick_hc_routes, "make_active_project_store", lambda: isolated_store
-    )
+    # D5: the route builds ArtifactStore from the explicit context; the
+    # conftest autouse fixture isolates its base dir. Select the context the
+    # store below matches.
+    isolated_store = ArtifactStore("default", "default")
 
     app = create_app()
     app.config["TESTING"] = True
     app.config["SECRET_KEY"] = "test"
     with app.test_client() as c:
+        with c.session_transaction() as sess:
+            sess["active_project"] = {"customer_id": "default", "project_id": "default"}
         yield c, migrated_db_path, isolated_store
 
 
@@ -252,9 +253,6 @@ def test_delete_route_system_blocked(client) -> None:
 def test_delete_mcp_tool(monkeypatch: pytest.MonkeyPatch, migrated_db_path: Path, tmp_path: Path) -> None:
     from cvhealthcheck.mcp import server as mcp_server
 
-    artifact_dir = tmp_path / "artifacts"
-    isolated_store = ArtifactStore("default", "default", base_dir=artifact_dir)
-
     def open_db() -> sqlite3.Connection:
         conn = sqlite3.connect(str(migrated_db_path))
         conn.row_factory = sqlite3.Row
@@ -262,7 +260,6 @@ def test_delete_mcp_tool(monkeypatch: pytest.MonkeyPatch, migrated_db_path: Path
         return conn
 
     monkeypatch.setattr(mcp_server, "get_db", open_db)
-    monkeypatch.setattr(mcp_server, "ArtifactStore", lambda: isolated_store)
 
     # Create an ai-created subject and approve it
     conn = sqlite3.connect(str(migrated_db_path))
@@ -275,7 +272,14 @@ def test_delete_mcp_tool(monkeypatch: pytest.MonkeyPatch, migrated_db_path: Path
     ids_before = {s["subject_id"] for s in before}
     assert "storage_utilization" in ids_before
 
-    result = mcp_server.delete_subject("storage_utilization")
+    # D5: the artifact half requires explicit, validated context params.
+    from cvhealthcheck.web.active_project import resolve_default_project
+    conn = open_db()
+    customer_id, project_id = resolve_default_project(conn)
+    conn.close()
+    result = mcp_server.delete_subject(
+        "storage_utilization", customer_id=customer_id, project_id=project_id
+    )
     assert result["deleted"] == "storage_utilization"
 
     after = mcp_server.list_subjects()

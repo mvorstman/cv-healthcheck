@@ -91,6 +91,8 @@ def test_quick_hc_license_summary_upload_imports_csv_and_redirects(tmp_path, mon
 
     app = create_app()
     client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["active_project"] = {"customer_id": "default", "project_id": "default"}
 
     response = client.post(
         # Session 4: unified route URL (was /quick-hc/license-summary/import).
@@ -130,6 +132,8 @@ def test_quick_hc_license_summary_upload_rejects_unsupported_type(tmp_path, monk
 
     app = create_app()
     client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["active_project"] = {"customer_id": "default", "project_id": "default"}
 
     response = client.post(
         # Session 4: unified route URL (was /quick-hc/license-summary/import).
@@ -194,6 +198,8 @@ def test_quick_hc_license_summary_collect_calls_service_and_redirects(tmp_path, 
 
     app = create_app()
     client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["active_project"] = {"customer_id": "default", "project_id": "default"}
     token_store.set_active_token("test-token")   # ADR-0008 B: auth via the held-token store
 
     response = client.post(
@@ -245,6 +251,8 @@ def test_quick_hc_license_summary_page_renders_na_for_missing_license_expiry(tmp
 def test_quick_hc_license_summary_collect_requires_login() -> None:
     app = create_app()
     client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["active_project"] = {"customer_id": "default", "project_id": "default"}
 
     response = client.post("/quick-hc/license-summary/collect")
 

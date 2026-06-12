@@ -409,28 +409,49 @@ def list_proposed_subjects(status: str | None = None) -> list[dict]:
         db.close()
 
 
-def delete_subject(subject_id: str) -> dict:
+def delete_subject(
+    subject_id: str,
+    customer_id: str | None = None,
+    project_id: str | None = None,
+) -> dict:
     """
-    Delete a subject from the Report Inventory catalog.
+    Delete a subject from the Report Inventory catalog AND its collected
+    artifact from one (customer, project) store.
 
     Only subjects created by AI or user can be deleted.
     System subjects (created_by='system') cannot be deleted.
-
-    Also removes any imported artifact data for this subject.
 
     Parameters
     ----------
     subject_id : str
         The subject to delete, e.g. "storage_utilization"
+    customer_id, project_id : str
+        REQUIRED (D5): the explicit context whose stored artifact is
+        deleted. Validated against existing customers/projects rows —
+        unknown ids refuse before anything is deleted.
+
+    D5 asymmetry, deliberate: the CATALOG half is context-free by design
+    (the catalog is global — Catalog Purity), but this tool also deletes
+    the scoped artifact, so the composite operation demands explicit
+    context up front; without it, NOTHING is deleted (no half-done state
+    where the catalog row is gone but a stray artifact survives).
     """
-    from cvhealthcheck.web.active_project import make_default_project_store
+    from cvhealthcheck.artifacts.store import ArtifactStore
+    from cvhealthcheck.context import NoExplicitContextError
+    from cvhealthcheck.db.customers import validate_known_context
+
+    if not customer_id or not project_id:
+        raise NoExplicitContextError(
+            "delete_subject requires explicit customer_id and project_id "
+            "(the store whose artifact is deleted); no silent default."
+        )
     db = get_db()
     try:
+        validate_known_context(db, customer_id, project_id)
         result = db_delete_subject(db, subject_id)
-        store = make_default_project_store(db)
     finally:
         db.close()
-    store.delete_artifact(subject_id)
+    ArtifactStore(customer_id, project_id).delete_artifact(subject_id)
     return result
 
 

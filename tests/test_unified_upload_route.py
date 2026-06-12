@@ -56,6 +56,12 @@ from test_license_summary_web import CSV_SAMPLE
 # Touching those files is out of scope; copying is the price.
 # ---------------------------------------------------------------------------
 
+
+def _select_ctx(client, customer_id="default", project_id="default"):
+    """D5: write-gated routes require an explicitly selected context."""
+    with client.session_transaction() as sess:
+        sess["active_project"] = {"customer_id": customer_id, "project_id": project_id}
+
 def _patch_security_assessment_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     catalog_dir = tmp_path / "catalog"
     imports_dir = tmp_path / "imports"
@@ -114,6 +120,11 @@ def ai_subject_client(monkeypatch: pytest.MonkeyPatch, migrated_db_path: Path):
     saved: list[Any] = []
 
     class _FakeArtifactStore:
+        # D5: the route constructs ArtifactStore(customer_id, project_id)
+        # from the explicit context — accept and ignore the pair here.
+        def __init__(self, customer_id: str = "", project_id: str = "") -> None:
+            pass
+
         def save_artifact(self, artifact: Any) -> Path:
             saved.append(artifact)
             return Path("/tmp/fake.json")
@@ -121,14 +132,13 @@ def ai_subject_client(monkeypatch: pytest.MonkeyPatch, migrated_db_path: Path):
         def delete_artifact(self, artifact_type: str) -> bool:
             return False
 
-    monkeypatch.setattr(
-        quick_hc_routes, "make_active_project_store", lambda: _FakeArtifactStore()
-    )
+    monkeypatch.setattr(quick_hc_routes, "ArtifactStore", _FakeArtifactStore)
 
     app = create_app()
     app.config["TESTING"] = True
     app.config["SECRET_KEY"] = "test"
     with app.test_client() as c:
+        _select_ctx(c)
         yield c, saved, migrated_db_path
 
 
@@ -298,7 +308,9 @@ def test_unified_route_security_assessment_no_legacy_artifact_files(
     monkeypatch.setattr(_qhc, "make_active_project_store", lambda *a, **k: _store)
 
     app = create_app()
-    response = app.test_client().post(
+    client = app.test_client()
+    _select_ctx(client)
+    response = client.post(
         "/quick-hc/security_assessment/import",
         data={"file": (io.BytesIO(SA_PANEL_HTML.encode("utf-8")), "assessment.html")},
         content_type="multipart/form-data",
@@ -326,7 +338,9 @@ def test_unified_route_license_summary_no_legacy_artifact_files(
     _patch_license_summary_paths(tmp_path, monkeypatch)
 
     app = create_app()
-    response = app.test_client().post(
+    client = app.test_client()
+    _select_ctx(client)
+    response = client.post(
         "/quick-hc/license_summary/import",
         data={
             "license_summary_file": (
@@ -385,7 +399,9 @@ def test_system_upload_inline_returns_json_on_success(tmp_path, monkeypatch) -> 
     _patch_license_summary_paths(tmp_path, monkeypatch)
 
     app = create_app()
-    response = app.test_client().post(
+    client = app.test_client()
+    _select_ctx(client)
+    response = client.post(
         "/quick-hc/license_summary/import",
         data={
             "license_summary_file": (
@@ -408,7 +424,9 @@ def test_system_upload_inline_returns_400_when_no_file(tmp_path, monkeypatch) ->
     _patch_license_summary_paths(tmp_path, monkeypatch)
 
     app = create_app()
-    response = app.test_client().post(
+    client = app.test_client()
+    _select_ctx(client)
+    response = client.post(
         "/quick-hc/license_summary/import",
         data={},  # no file
         content_type="multipart/form-data",
@@ -432,7 +450,9 @@ def test_system_upload_inline_returns_422_on_handler_error_class(
     _patch_license_summary_paths(tmp_path, monkeypatch)
 
     app = create_app()
-    response = app.test_client().post(
+    client = app.test_client()
+    _select_ctx(client)
+    response = client.post(
         "/quick-hc/license_summary/import",
         data={
             "license_summary_file": (io.BytesIO(b"junk"), "report.txt"),  # .txt rejected
@@ -472,7 +492,9 @@ def test_system_upload_inline_returns_500_on_generic_exception(
     monkeypatch.setitem(dispatch_module.UPLOAD_HANDLERS, "license_summary", patched)
 
     app = create_app()
-    response = app.test_client().post(
+    client = app.test_client()
+    _select_ctx(client)
+    response = client.post(
         "/quick-hc/license_summary/import",
         data={
             "license_summary_file": (
