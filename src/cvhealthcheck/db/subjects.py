@@ -417,6 +417,10 @@ def delete_subject(db: sqlite3.Connection, subject_id: str) -> dict:
             (subject_id,),
         ).fetchall()
     ]
+    # Capture the rule ids this subject's bindings reference BEFORE the
+    # bindings are deleted — the reap below is scoped to these candidates, so
+    # a rule authored elsewhere but not yet bound is never touched.
+    candidate_rule_ids = _referenced_rule_ids(db, source_ids)
     if source_ids:
         placeholders = ",".join("?" * len(source_ids))
         db.execute(
@@ -434,13 +438,92 @@ def delete_subject(db: sqlite3.Connection, subject_id: str) -> dict:
     staging_rows_removed = db.execute(
         "DELETE FROM staged_artifacts WHERE subject_id = ?", (subject_id,)
     ).rowcount
+    # Reap rules this deletion just orphaned: referenced by the deleted
+    # subject's bindings, now bound to NO surviving subject and carrying NO
+    # override. In-transaction (delete_rule commits mid-flight, so it is not
+    # callable from here); the delete→rebuild workflow re-authors rules via
+    # save_rule after re-approval, so reaping is compatible with it.
+    rules_reaped = _reap_orphaned_rules(db, candidate_rule_ids)
     db.commit()
 
     return {
         "deleted": subject_id,
         "versions_removed": versions_removed,
         "staging_rows_removed": staging_rows_removed,
+        "rules_reaped": rules_reaped,
     }
+
+
+def _collect_rule_refs(node: Any, out: set[str]) -> None:
+    """Collect every ``{"ref": <rule_id>}`` value anywhere in a binding's
+    instruction JSON — covers ``evaluative.row_rules`` and the metric/card
+    ref shapes alike (the same ref-from-binding model, ADR 0010)."""
+    if isinstance(node, dict):
+        ref = node.get("ref")
+        if isinstance(ref, str):
+            out.add(ref)
+        for value in node.values():
+            _collect_rule_refs(value, out)
+    elif isinstance(node, list):
+        for value in node:
+            _collect_rule_refs(value, out)
+
+
+def _referenced_rule_ids(
+    db: sqlite3.Connection, source_ids: list[int]
+) -> set[str]:
+    """Rule ids referenced from the given sources' section bindings."""
+    if not source_ids:
+        return set()
+    placeholders = ",".join("?" * len(source_ids))
+    refs: set[str] = set()
+    for row in db.execute(
+        "SELECT extraction_instructions FROM subject_section_sources"
+        f" WHERE source_id IN ({placeholders})"
+        " AND extraction_instructions IS NOT NULL",
+        source_ids,
+    ).fetchall():
+        try:
+            instr = json.loads(row["extraction_instructions"])
+        except (json.JSONDecodeError, TypeError):
+            continue
+        _collect_rule_refs(instr, refs)
+    return refs
+
+
+def _reap_orphaned_rules(
+    db: sqlite3.Connection, candidate_rule_ids: set[str]
+) -> list[str]:
+    """Delete registry rules from ``candidate_rule_ids`` that have zero
+    remaining bindings (across ALL subjects) and zero ``rule_overrides`` rows.
+    Runs inside the caller's transaction — no commit here. Defensive against a
+    pre-rules schema (returns [])."""
+    if not candidate_rule_ids:
+        return []
+    try:
+        still_bound: set[str] = set()
+        for row in db.execute(
+            "SELECT extraction_instructions FROM subject_section_sources"
+            " WHERE extraction_instructions IS NOT NULL"
+        ).fetchall():
+            try:
+                instr = json.loads(row["extraction_instructions"])
+            except (json.JSONDecodeError, TypeError):
+                continue
+            _collect_rule_refs(instr, still_bound)
+        overridden = {
+            r["rule_id"]
+            for r in db.execute("SELECT DISTINCT rule_id FROM rule_overrides").fetchall()
+        }
+    except sqlite3.OperationalError:
+        return []
+
+    reaped: list[str] = []
+    for rule_id in sorted(candidate_rule_ids - still_bound - overridden):
+        cur = db.execute("DELETE FROM rules WHERE rule_id = ?", (rule_id,))
+        if cur.rowcount:
+            reaped.append(rule_id)
+    return reaped
 
 
 def get_subject_sources(
