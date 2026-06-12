@@ -196,13 +196,29 @@
     <dl class="cust-meta-grid">
       <dt>Customer ID</dt>
       <dd style="font-family: var(--mono); font-size: 12px; color: var(--text-2);">{{ customer.customer_id }}</dd>
+      {% if customer.connection_url or customer.commcell_hostname %}
+        <dt>Connection URL</dt>
+        <dd style="font-family: var(--mono); font-size: 12px;">{{ customer.connection_url or customer.commcell_hostname }}</dd>
+      {% endif %}
+      {% if customer.commserve_name %}
+        <dt>CommServe name</dt>
+        <dd style="font-family: var(--mono); font-size: 12px;">{{ customer.commserve_name }}</dd>
+      {% endif %}
       {% if customer.commcell_id %}
         <dt>CommCell ID</dt>
         <dd style="font-family: var(--mono); font-size: 12px;">{{ customer.commcell_id }}</dd>
       {% endif %}
-      {% if customer.commcell_hostname %}
-        <dt>CommCell hostname</dt>
-        <dd style="font-family: var(--mono); font-size: 12px;">{{ customer.commcell_hostname }}</dd>
+      {% if customer.registration_code %}
+        <dt>Registration code</dt>
+        <dd style="font-family: var(--mono); font-size: 12px;">{{ customer.registration_code }}</dd>
+      {% endif %}
+      {% if customer.rp_server_url %}
+        <dt>Reports Plus server</dt>
+        <dd style="font-family: var(--mono); font-size: 12px;">{{ customer.rp_server_url }}</dd>
+      {% endif %}
+      {% if customer.rp_scoping_id %}
+        <dt>Reports Plus scoping ID</dt>
+        <dd style="font-family: var(--mono); font-size: 12px;">{{ customer.rp_scoping_id }}</dd>
       {% endif %}
       {% if customer.company_guid %}
         <dt>Company GUID</dt>

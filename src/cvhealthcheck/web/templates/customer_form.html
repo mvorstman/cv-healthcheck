@@ -163,16 +163,45 @@
     </div>
 
     <div class="cust-field">
-      <label class="cust-label" for="commcell_id">CommCell ID</label>
-      <input class="cust-input" id="commcell_id" name="commcell_id" type="text"
-             value="{{ customer.commcell_id or '' }}" maxlength="200">
-      <span class="cust-hint">Optional. Set later if not known yet.</span>
+      <label class="cust-label" for="connection_url">Connection URL (WebServer/gateway)</label>
+      <input class="cust-input" id="connection_url" name="connection_url" type="text"
+             value="{{ customer.connection_url or customer.commcell_hostname or '' }}" maxlength="200">
+      <span class="cust-hint">Where the app <em>reaches</em> this CommCell — e.g. <code>https://cs01.lab:4433</code>. Scheme optional (https:// is added). This is reach, not identity.</span>
     </div>
 
     <div class="cust-field">
-      <label class="cust-label" for="commcell_hostname">CommCell hostname</label>
-      <input class="cust-input" id="commcell_hostname" name="commcell_hostname" type="text"
-             value="{{ customer.commcell_hostname or '' }}" maxlength="200">
+      <label class="cust-label" for="commserve_name">CommServe name</label>
+      <input class="cust-input" id="commserve_name" name="commserve_name" type="text"
+             value="{{ customer.commserve_name or '' }}" maxlength="200">
+      <span class="cust-hint">Optional. The CommServe's human/product identity label, e.g. <code>CS01</code>.</span>
+    </div>
+
+    <div class="cust-field">
+      <label class="cust-label" for="commcell_id">CommCell ID (licensed, hex or decimal)</label>
+      <input class="cust-input" id="commcell_id" name="commcell_id" type="text"
+             value="{{ customer.commcell_id or '' }}" maxlength="200">
+      <span class="cust-hint">Optional. The licensed CommCell ID — hex (<code>F9EE5</code>) or decimal (<code>1023717</code>); stored as canonical hex.</span>
+    </div>
+
+    <div class="cust-field">
+      <label class="cust-label" for="registration_code">Registration code</label>
+      <input class="cust-input" id="registration_code" name="registration_code" type="text"
+             value="{{ customer.registration_code or '' }}" maxlength="200">
+      <span class="cust-hint">Optional. License-bound secondary verifier, e.g. <code>8C8-CE7-EE39</code>.</span>
+    </div>
+
+    <div class="cust-field">
+      <label class="cust-label" for="rp_server_url">Reports Plus server URL</label>
+      <input class="cust-input" id="rp_server_url" name="rp_server_url" type="text"
+             value="{{ customer.rp_server_url or '' }}" maxlength="200">
+      <span class="cust-hint">Optional. Only if Reports Plus / Metrics lives on a separate server from the Connection URL above.</span>
+    </div>
+
+    <div class="cust-field">
+      <label class="cust-label" for="rp_scoping_id">Reports Plus scoping ID</label>
+      <input class="cust-input" id="rp_scoping_id" name="rp_scoping_id" type="text"
+             value="{{ customer.rp_scoping_id or '' }}" maxlength="200">
+      <span class="cust-hint">Optional. Resolved CommServUniqueId / datasource id for Reports Plus scoping.</span>
     </div>
 
     <div class="cust-field">

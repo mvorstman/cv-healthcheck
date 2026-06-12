@@ -112,12 +112,20 @@ def _count_projects(db: sqlite3.Connection, customer_id: str) -> int:
 
 @bp.route("/customers")
 def customers_list():
+    from cvhealthcheck.db.customers import legacy_hostname_review_flags
+
     db = get_db()
     try:
         customers = _fetch_customers_with_counts(db)
+        # Fix 3 flag mechanism: surface any legacy commcell_hostname that did
+        # not migrate to connection_url (non-URL value) for manual fix. Empty
+        # on lab data.
+        hostname_flags = legacy_hostname_review_flags(db)
     finally:
         db.close()
-    return render_template("customers_list.html", customers=customers)
+    return render_template(
+        "customers_list.html", customers=customers, hostname_flags=hostname_flags,
+    )
 
 
 @bp.route("/customers/<customer_id>")

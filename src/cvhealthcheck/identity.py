@@ -66,7 +66,7 @@ def normalize_connection_url(raw: object) -> str | None:
     host after repair."""
     if raw is None:
         return None
-    s = str(raw).strip().rstrip("/")
+    s = str(raw).strip()
     if not s:
         return None
     if not _SCHEME_RE.match(s):
@@ -74,7 +74,7 @@ def normalize_connection_url(raw: object) -> str | None:
     parsed = urlsplit(s)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise ValueError(f"not a valid connection URL: {raw!r}")
-    return s
+    return s.rstrip("/")
 
 
 def effective_connection_url(customer: Mapping[str, object]) -> str | None:

@@ -275,25 +275,24 @@ def validate_known_context(
 
 
 def legacy_hostname_review_flags(
-    *, db_path: Path | None = None
+    db: sqlite3.Connection,
 ) -> list[dict[str, Any]]:
     """Customers whose legacy commcell_hostname did NOT migrate to
     connection_url — i.e. a non-URL-shaped value that migration 0032 left in
     place for manual fix (Fix 3 flag mechanism).
 
-    Returns one dict per flagged row (customer_id, customer_name,
-    commcell_hostname). Expected EMPTY on the lab data (both non-NULL
-    hostnames are URL-shaped); it ships so a non-URL legacy value surfaces on
-    the customers page instead of silently vanishing when the column is later
-    dropped."""
-    path = db_path or DB_PATH
-    with _connect(path) as conn:
-        rows = conn.execute(
-            "SELECT customer_id, customer_name, commcell_hostname"
-            " FROM customers"
-            " WHERE commcell_hostname IS NOT NULL"
-            "   AND TRIM(commcell_hostname) != ''"
-            "   AND connection_url IS NULL"
-            " ORDER BY customer_name ASC, customer_id ASC"
-        ).fetchall()
+    Takes the caller's connection (the customers route's get_db()) so it
+    reads the same DB. Returns one dict per flagged row (customer_id,
+    customer_name, commcell_hostname). Expected EMPTY on the lab data (both
+    non-NULL hostnames are URL-shaped); it ships so a non-URL legacy value
+    surfaces on the customers page instead of silently vanishing when the
+    column is later dropped."""
+    rows = db.execute(
+        "SELECT customer_id, customer_name, commcell_hostname"
+        " FROM customers"
+        " WHERE commcell_hostname IS NOT NULL"
+        "   AND TRIM(commcell_hostname) != ''"
+        "   AND connection_url IS NULL"
+        " ORDER BY customer_name ASC, customer_id ASC"
+    ).fetchall()
     return [_row_to_dict(row) for row in rows]

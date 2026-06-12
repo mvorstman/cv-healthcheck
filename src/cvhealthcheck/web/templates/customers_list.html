@@ -151,6 +151,20 @@
     <a class="cust-btn" href="{{ url_for('main.customers_new') }}">+ New customer</a>
   </div>
 
+  {% if hostname_flags %}
+    <div class="cust-flag-banner" style="margin:12px 0;padding:10px 14px;border:1px solid var(--c-warn-bd, #b7791f);border-radius:6px;background:var(--c-warn-bg, rgba(183,121,31,.12));font-size:13px;">
+      <strong>Legacy CommCell hostname needs review.</strong>
+      The identity-schema migration (Fix 3) moved URL-shaped hostnames to the
+      Connection URL field but left these non-URL values in place for manual fix:
+      <ul style="margin:6px 0 0 18px;">
+        {% for f in hostname_flags %}
+          <li><a href="{{ url_for('main.customers_edit', customer_id=f.customer_id) }}">{{ f.customer_name }}</a>:
+              <code>{{ f.commcell_hostname }}</code></li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
   {% if customers %}
     <table class="cust-table">
       <thead>
