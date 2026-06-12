@@ -10,6 +10,25 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-12 (fix(isolation) — Fix 2: the unscoped global-file layer is retired)
+
+**Branch:** `main`. Commits `1892dd8`, `ab13f34`, `c9487e1`, `7e93c12`, `1c343c7`; suite 1022 passed. Closes the "new project shows old data" leak (2026-06-12 isolation audit): the scoped canonical store is now the ONLY data source for the workspace.
+
+### Fixed
+- **Legacy-loader fallthrough removed** (`1892dd8`): an empty scoped store renders the honest not-collected state — never another customer's last collection from the global files. Regression tests: `tests/test_fix2_scoped_isolation.py` (empty store → all six legacy subjects `nodata`; cross-project artifacts don't leak; scoped artifacts render only for their project).
+- **CommCell header reads the scoped environment artifact** (`ab13f34`) — was the global `commserv.json`, cross-customer in every project's banner.
+- **Global `commserv.json` write retired** (`c9487e1`): `get_commcell_identity` is payload-only; the unauthenticated `/quick-hc/commcell` cache view renders honest-empty. **Supersedes** ADR-0007's "raw payload remains as provenance" clause (recorded in the commit body); environment's collect semantics are otherwise unchanged.
+
+### Removed
+- **The legacy report layer — deliberate, on record** (`7e93c12`): `/quick-hc/report`, `quickhc/report_service.py`, `quick_hc_report.html`, the workspace report affordances, and the orphaned `overview_service.py`. Rationale: unused, output not customer-presentable, and **the presentation layer is a future project on the ADR-0015 template/profile/runtime foundation** — its absence is a decision, not a loss. It was also the isolation leak's second surface (its builders read the same global files).
+- **The frozen global files** (`1c343c7`, disk-only/gitignored — full path list in the commit body): LS/SA catalog artifacts + registries, the four metrics JSONs, `backup_job_summary_latest.json`, `commserv.json`. All reproducible by re-collection into the scoped store.
+- **The code they orphaned** (`1c343c7`): the six legacy loaders + five legacy view builders + their private helpers, the `reportsplus/security_assessment.py` wrapper, the `cvhealthcheck/metrics` package, and dead `shared.py` imports — every symbol multiline-grep verified zero-consumer first.
+
+### Notes
+- The description-override display (`resolve_tile_description`) turned out to be consumed ONLY by the deleted legacy builders — it was wired into `_build_generic_subject` so the workspace Save button keeps working for system subjects.
+- The BJS detail page (`/quick-hc/backup-job-summary`) tolerates the deleted global file (renders empty); its repoint-or-retire is a follow-up decision, not part of this fix.
+- Live smoke (anonymous): `/quick-hc/report` → 404, `/quick-hc` → 200, `/quick-hc/commcell` → 200 honest-empty. Authenticated fresh-project browser check: Michiel.
+
 ## 2026-06-12 (docs — ADR-0015 Proposed: template/profile/runtime separation)
 
 **Branch:** `main`. Status flip of the reviewed draft (`90433e7`); README ADR range updated to 0001–0015.

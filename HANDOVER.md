@@ -1,4 +1,4 @@
-# HANDOVER — Phase 0 complete; Phase 1 (Context Integrity) next
+# HANDOVER — Phase 1 in progress: Fix 2 landed (global-file layer retired)
 
 You are continuing development on **cv-healthcheck**, a modular Commvault
 operational health check platform (Python/Flask, Pydantic v2 canonical
@@ -7,9 +7,18 @@ artifact schema, MCP server for AI-assisted subject authoring).
 ## Current state
 
 - **Branch:** `main`
-- **Latest commit:** `5b91fbf` (chore(web): remove orphaned .lnav-sm CSS)
-- **Test suite:** 1070 passed (full pytest, exit 0)
-- **In flight: none — Phase 0 complete, Phase 1 (Context Integrity) next.**
+- **Latest commit:** `1c343c7` (Fix 2 final slice — global files deleted + orphan sweep)
+- **Test suite:** 1022 passed (full pytest, exit 0; count dropped with the
+  deliberate deletion of legacy-contract and report-layer tests)
+- **In flight:** Phase 1 (Context Integrity). **Fix 2 is done** (see the
+  2026-06-12 fix(isolation) CHANGELOG entry): the scoped store is the only
+  workspace data source; the legacy report layer is deleted — deliberate,
+  the presentation layer is a future project on the ADR-0015 foundation.
+  **Next: D5 — context-gate work** (explicit context required for
+  customer-data writes; the session-fallback hazard in
+  web/active_project.py). Pending human step: authenticated browser check
+  on a fresh project (anonymous smoke passed: /quick-hc/report 404,
+  workspace + commcell render).
 
 ## What was just completed (Phase 0)
 
