@@ -136,13 +136,6 @@ html,body{height:100%;background:var(--bg);color:var(--text-1);font-family:var(-
   padding:10px 10px 12px;
   flex-shrink:0;display:flex;flex-direction:column;gap:4px;
 }
-.lnav-sm{
-  display:block;font-size:11px;color:var(--text-3);text-decoration:none;
-  padding:3px 8px;border-radius:4px;opacity:.7;
-  transition:opacity .1s,color .1s;
-}
-.lnav-sm:hover{color:var(--text-2);opacity:1}
-
 /* ── MAIN CONTENT ── */
 .right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 
