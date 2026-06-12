@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from cvhealthcheck.api_client import CommvaultApiClient
 from cvhealthcheck.auth import load_login_token
-from cvhealthcheck.reportsplus.catalog import CATALOG_DIR, collected_at, write_json
+from cvhealthcheck.reportsplus.catalog import collected_at
 
 from .models import CommCellIdentity, QuickHcSource
 
-REST_CATALOG_DIR = CATALOG_DIR / "rest"
 COMMSERV_ENDPOINT = "/commandcenter/api/CommServ"
 COMMSERV_SOURCE = QuickHcSource(
     mode="Quick HealthCheck",
@@ -23,13 +21,15 @@ COMMSERV_SOURCE = QuickHcSource(
 def get_commcell_identity(
     api_client: CommvaultApiClient | None = None,
     token: str | None = None,
-    write: bool = True,
-    catalog_dir: Path = REST_CATALOG_DIR,
 ) -> dict[str, Any]:
+    """Live GET CommServ identity. Returns the payload only — the global
+    ``data/catalog/rest/commserv.json`` provenance write is retired (Fix 2
+    (c)): it was an unscoped cross-customer file; the scoped environment
+    artifact is the persisted identity record now."""
     client = api_client or CommvaultApiClient(token=token or load_login_token())
     result = client.get(COMMSERV_ENDPOINT)
     normalized = normalize_commserv(result.data)
-    payload = {
+    return {
         "collected_at": collected_at(),
         "source": COMMSERV_SOURCE.to_dict(),
         "http_status": result.status_code,
@@ -38,10 +38,6 @@ def get_commcell_identity(
         "raw": result.data,
         "error": result.error,
     }
-    if write:
-        path = write_json("commserv.json", payload, catalog_dir=catalog_dir)
-        payload["artifact"] = str(path)
-    return payload
 
 
 def normalize_commserv(payload: Any) -> CommCellIdentity:

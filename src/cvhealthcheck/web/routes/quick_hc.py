@@ -436,10 +436,17 @@ def quick_hc_commcell():
     if is_authenticated():
         result = get_commcell_identity(token=_current_token())
     else:
-        try:
-            result = read_json("commserv.json", catalog_dir=Path("data/catalog/rest"))
-        except FileNotFoundError:
-            return redirect(url_for("main.login", next=request.path))
+        # Fix 2 (c): the unauthenticated view used to serve the GLOBAL
+        # commserv.json cache — cross-customer identity. Honest-empty now;
+        # the live view requires authentication.
+        result = {
+            "collected_at": None,
+            "source": None,
+            "http_status": None,
+            "ok": False,
+            "identity": None,
+            "error": "Not connected — sign in to view live CommCell identity.",
+        }
     if result.get("http_status") == 401:
         clear_current_token()
         return redirect(url_for("main.login", next=request.path, expired="1"))

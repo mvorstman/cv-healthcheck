@@ -119,6 +119,31 @@ def test_commcell_header_from_scoped_environment_card(migrated_db_path):
         db.close()
 
 
+def test_get_commcell_identity_writes_no_global_file(tmp_path, monkeypatch):
+    """Fix 2 (c): the identity GET returns the payload only — the global
+    commserv.json provenance write is retired (ADR-0007's 'raw payload
+    remains as provenance' clause superseded)."""
+    import cvhealthcheck.reportsplus.catalog as catalog_module
+    from cvhealthcheck.quickhc.commcell import get_commcell_identity
+
+    monkeypatch.setattr(catalog_module, "CATALOG_DIR", tmp_path)
+
+    class FakeResult:
+        data = {"commcell": {"commCellName": "CS01"}, "hostName": "cs01.lab"}
+        status_code = 200
+        ok = True
+        error = None
+
+    class FakeClient:
+        def get(self, endpoint):
+            return FakeResult()
+
+    payload = get_commcell_identity(api_client=FakeClient())
+    assert payload["ok"] is True
+    assert "artifact" not in payload                    # no write-path key
+    assert list(tmp_path.rglob("commserv.json")) == []  # nothing on disk
+
+
 def test_scoped_artifact_renders_for_its_project_only(migrated_db_path):
     db = _conn(migrated_db_path)
     try:

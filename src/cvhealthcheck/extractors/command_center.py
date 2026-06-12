@@ -14,9 +14,11 @@ canonicalization path):
      ``recognition_hints.endpoint`` (validated relative + read-only by
      ``cc_endpoint.validate_cc_endpoint``), defaulting to
      ``/commandcenter/api/CommServ`` when none is declared. For that default the
-     existing ``get_commcell_identity`` path is kept verbatim (it still writes
-     ``commserv.json`` as raw provenance), so ``environment`` is byte-for-byte
-     unchanged; any other endpoint is a plain GET via ``CommvaultApiClient``.
+     existing ``get_commcell_identity`` path is kept (Fix 2 (c) superseded the
+     ADR-0007 "raw payload remains as provenance" clause: the global
+     ``commserv.json`` write is retired — the scoped environment artifact is
+     the persisted record); any other endpoint is a plain GET via
+     ``CommvaultApiClient``.
   2. Shape — a section binding's ``output_as`` selects the emission: ``card``
      (single record, the ADR 0007 path) or ``table`` (a multi-record collection
      projected into rows). Multi-record projection is structural only (field
@@ -72,8 +74,8 @@ class CommandCenterExtractor:
         # An explicit provider (offline tests) overrides the network fetch
         # entirely. When None, extract() fetches from the binding's declared
         # endpoint via _fetch — the default CommServ endpoint keeps the
-        # get_commcell_identity path (commserv.json provenance; `environment`
-        # unchanged), any other endpoint is a plain GET.
+        # get_commcell_identity path (payload-only since Fix 2 (c)), any
+        # other endpoint is a plain GET.
         self._identity_provider = identity_provider
 
     def extract(self, subject_id: str, version: int = 1) -> ExtractionResult:
@@ -165,9 +167,10 @@ class CommandCenterExtractor:
 
         An injected ``identity_provider`` (tests) overrides everything. The
         default CommServ endpoint keeps the ``get_commcell_identity`` path
-        verbatim (commserv.json provenance) so ``environment`` is unchanged; any
-        other endpoint is a plain read-only GET via ``CommvaultApiClient``
-        (ADR 0009 D4: still the app-side, in-process token path)."""
+        (payload-only — the global commserv.json provenance write was retired
+        by Fix 2 (c)); any other endpoint is a plain read-only GET via
+        ``CommvaultApiClient`` (ADR 0009 D4: still the app-side, in-process
+        token path)."""
         if self._identity_provider is not None:
             return self._identity_provider()
         if endpoint == DEFAULT_CC_ENDPOINT:
