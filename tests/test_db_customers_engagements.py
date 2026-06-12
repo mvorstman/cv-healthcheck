@@ -58,7 +58,12 @@ def test_create_customer_returns_all_fields(db: Path) -> None:
         "customer_id",
         "customer_name",
         "commcell_id",
-        "commcell_hostname",
+        "commcell_hostname",       # READ-ONLY-LEGACY (migration 0032)
+        "connection_url",          # identity-schema split (Fix 3)
+        "commserve_name",
+        "registration_code",
+        "rp_server_url",
+        "rp_scoping_id",
         "company_guid",
         "contact_info",
         "notes",
