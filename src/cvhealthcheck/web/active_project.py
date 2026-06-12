@@ -1,18 +1,23 @@
-"""Active-project session helper — phase 2 of ADR 0002.
+"""Active-project session helper — phase 2 of ADR 0002, hardened by D5.
 
 The "active project" is the customer/project the consultant is currently
 working on. It lives in the Flask session (server-side, cookie-backed).
-Phase 2 only needs the read/write/fallback plumbing; the UI for switching
-between projects lands in phase 4.
 
-When no active project is set in the session, the fallback path resolves
-to the "Default" customer's "Default" project — both auto-created by
-migration 0005. In a normally-migrated database both always exist, so
-this fallback is always satisfiable; the helper raises a clear error if
-something has corrupted that invariant.
+READ/WRITE SPLIT (ADR-0015 D5 — Context Integrity invariant):
 
-See docs/adr/0002-customer-and-project-entities.md for the design
-rationale (active-project session state, first-run experience).
+- READ paths may use ``get_active_project`` / ``resolve_default_project``:
+  when no active project is set in the session, reads fall back to the
+  "Default" customer's earliest project (both auto-created by migration
+  0005) so the workspace, status displays, and canonical reads keep
+  rendering.
+- WRITE paths must use ``require_active_context()``: it returns the pair
+  ONLY when the operator explicitly selected it this session, and raises
+  :class:`NoExplicitContextError` otherwise. It never falls through to
+  ``resolve_default_project`` — the fallback can NEVER satisfy a write.
+  Absence of explicit selection is an error, never a silent default.
+
+See docs/adr/0002-customer-and-project-entities.md (entities, session
+state) and docs/adr/0015-template-profile-runtime.md (the invariant).
 """
 from __future__ import annotations
 
@@ -22,6 +27,7 @@ from typing import Any
 from flask import has_request_context, session
 
 from cvhealthcheck.artifacts.store import ArtifactStore
+from cvhealthcheck.context import NoExplicitContextError
 from cvhealthcheck.db import get_db
 from cvhealthcheck.db.customers import get_customer
 
@@ -39,22 +45,50 @@ class ActiveProjectMissingError(RuntimeError):
     """
 
 
+def _explicit_context() -> tuple[str, str] | None:
+    """The session's explicitly selected (customer_id, project_id), or None.
+
+    The single place that decides "explicit": a well-formed session entry
+    written by ``set_active_project``. No DB, no fallback."""
+    if not has_request_context():
+        return None
+    stored = session.get(_SESSION_KEY)
+    if isinstance(stored, dict):
+        customer_id = stored.get("customer_id")
+        project_id = stored.get("project_id")
+        if isinstance(customer_id, str) and isinstance(project_id, str):
+            return customer_id, project_id
+    return None
+
+
 def get_active_project(db: sqlite3.Connection | None = None) -> tuple[str, str]:
-    """Return (customer_id, project_id) for the active project.
+    """Return (customer_id, project_id) for the active project — READ paths.
 
     Reads the Flask session first. If nothing is set there (no request
     context, or the user hasn't switched projects yet), falls back to
-    the Default customer's earliest-created project.
+    the Default customer's earliest-created project. Write paths must use
+    :func:`require_active_context` instead — the fallback here can never
+    authorize a write.
     """
-    if has_request_context():
-        stored = session.get(_SESSION_KEY)
-        if isinstance(stored, dict):
-            customer_id = stored.get("customer_id")
-            project_id = stored.get("project_id")
-            if isinstance(customer_id, str) and isinstance(project_id, str):
-                return customer_id, project_id
-
+    explicit = _explicit_context()
+    if explicit is not None:
+        return explicit
     return resolve_default_project(db)
+
+
+def require_active_context() -> tuple[str, str]:
+    """Return the explicitly selected (customer_id, project_id) — WRITE paths.
+
+    The D5 enforcement primitive: succeeds ONLY when the operator selected
+    a customer/project this session (``set_active_project``). Raises
+    :class:`NoExplicitContextError` otherwise — it never consults
+    ``resolve_default_project``, so the Default fallback cannot silently
+    absorb a customer-data write.
+    """
+    explicit = _explicit_context()
+    if explicit is None:
+        raise NoExplicitContextError()
+    return explicit
 
 
 def set_active_project(customer_id: str, project_id: str) -> None:
