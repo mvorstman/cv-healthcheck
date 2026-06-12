@@ -43,8 +43,6 @@ from cvhealthcheck.reportsplus.session import CommvaultSession
 from .shared import (
     LicenseSummaryImportError,
     LicenseSummaryService,
-    SecurityAssessmentImportError,
-    SecurityAssessmentService,
     _current_token,
     _reportsplus_client,
     bp,

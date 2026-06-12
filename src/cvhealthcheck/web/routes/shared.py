@@ -59,12 +59,11 @@ from cvhealthcheck.reportsplus.security_assessment import (
     load_security_assessment_artifact,
     security_assessment_status,
 )
-from cvhealthcheck.security_assessment.service import (
-    SecurityAssessmentImportError,
-    SecurityAssessmentService,
-    export_security_assessment_registry,
-    import_security_assessment_upload,
-)
+# NOT dead: re-exported to quick_hc_api.py (SecurityAssessmentService().
+# get_canonical() at its /api read endpoint). The dev-SA retirement's other
+# three service imports (ImportError/export_registry/import_upload) were dead
+# and are gone; this one has a live runtime consumer.
+from cvhealthcheck.security_assessment.service import SecurityAssessmentService
 
 bp = Blueprint("main", __name__)
 F = TypeVar("F", bound=Callable)
