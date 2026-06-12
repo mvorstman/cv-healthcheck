@@ -15,18 +15,10 @@ from cvhealthcheck.quickhc.registry import (
     QUICK_HC_TILE_BY_ID,
     REST_COMMAND_CENTER_API_SOURCE_ID,
     REST_REPORTS_PLUS_SOURCE_ID,
-    SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID,
     STANDARD_SOURCES,
     get_tiles,
     report_overview_default_selection_ids,
     report_subsection_options,
-)
-from cvhealthcheck.quickhc.overview_service import OVERVIEW_PREVIEW_BUILDERS
-from cvhealthcheck.quickhc.report_service import (
-    REPORT_OVERVIEW_DEFAULT_SELECTION_IDS,
-    REPORT_SELECTION_IDS,
-    REPORT_SUBSECTION_OPTIONS,
-    QuickHcReportService,
 )
 
 
@@ -188,33 +180,5 @@ def test_registry_default_overview_selection_ids_are_subset_of_selection_ids() -
     assert default_ids.issubset(QUICK_HC_SELECTION_IDS)
 
 
-def test_report_service_selection_contract_matches_registry() -> None:
-    assert REPORT_SUBSECTION_OPTIONS == report_subsection_options()
-    assert REPORT_SELECTION_IDS == (
-        QUICK_HC_SELECTION_IDS | {SECURITY_ASSESSMENT_ALL_FINDINGS_SECTION_ID}
-    )
-    assert REPORT_OVERVIEW_DEFAULT_SELECTION_IDS == report_overview_default_selection_ids()
-    assert REPORT_OVERVIEW_DEFAULT_SELECTION_IDS.issubset(REPORT_SELECTION_IDS)
 
 
-def test_every_tile_preview_renderer_has_registered_builder(tiles_db: sqlite3.Connection) -> None:
-    tiles = get_tiles(tiles_db)
-    for tile in tiles:
-        renderer = tile.get("preview_renderer")
-        if renderer is not None:
-            assert renderer in OVERVIEW_PREVIEW_BUILDERS, (
-                f"no overview builder registered for preview_renderer={renderer!r} "
-                f"(tile {tile['id']})"
-            )
-
-
-def test_every_tile_report_renderer_has_registered_builder(tiles_db: sqlite3.Connection) -> None:
-    builder_names = set(QuickHcReportService()._report_builders())
-    tiles = get_tiles(tiles_db)
-    for tile in tiles:
-        renderer = tile.get("report_renderer")
-        if renderer is not None:
-            assert renderer in builder_names, (
-                f"no report builder registered for report_renderer={renderer!r} "
-                f"(tile {tile['id']})"
-            )

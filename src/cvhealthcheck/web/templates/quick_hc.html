@@ -56,7 +56,6 @@
     <!-- 2. Primary navigation -->
     <nav class="left-primary-nav">
       <button class="lnav-item" id="nav-overview" onclick="showOverview()">Overview</button>
-      <a class="lnav-item" href="{{ url_for('main.quick_hc_report') }}">Reports</a>
       <a class="lnav-item" href="{{ url_for('main.customers_list') }}">Customers</a>
       <a class="lnav-item" href="{{ url_for('main.quick_hc_settings') }}">Settings</a>
       <a class="lnav-item" href="{{ url_for('main.quick_hc_staging') }}">Staging</a>
@@ -83,20 +82,11 @@
 
     <div class="right-body" id="right-body"></div>
 
-    <!-- Report action bar — shown when subjects are selected for a report -->
-    <div class="report-bar" id="report-bar" hidden>
-      <span id="report-bar-label" class="report-bar-label"></span>
-      <button class="btn-gen-bar" id="btn-gen">Generate Report</button>
-    </div>
-
     <footer class="right-footer" id="right-footer" style="display:none">
       <span class="rf-source" id="rf-source"></span>
     </footer>
   </main>
 </div>
-
-<!-- ── HIDDEN REPORT FORM ── -->
-<form id="report-form" method="post" action="{{ url_for('main.quick_hc_report') }}" style="display:none"></form>
 
 <!-- ── CONNECT MODAL ── -->
 <div class="modal-overlay" id="connect-modal" hidden aria-modal="true" role="dialog">

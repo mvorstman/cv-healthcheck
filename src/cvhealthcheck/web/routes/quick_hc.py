@@ -54,16 +54,11 @@ from .shared import (
     is_authenticated,
     is_authenticated_for,
     login_required,
-    read_json,
     redirect,
     render_template,
     request,
     to_pretty_json,
     url_for,
-)
-from cvhealthcheck.quickhc import QuickHcReportService
-from cvhealthcheck.quickhc.report_service import (
-    REPORT_SELECTION_IDS,
 )
 from cvhealthcheck.quickhc.subject_data_service import build_subject_initial_data
 from cvhealthcheck.quickhc.source_provenance import (
@@ -409,26 +404,6 @@ def quick_hc_collect_fixture(subject_id: str):
 
     flash(f"Collected '{title}' from fixture.", "success")
     return _workspace_redirect(subject_id)
-
-
-@bp.route("/quick-hc/report", methods=["GET", "POST"])
-def quick_hc_report():
-    if request.method == "POST":
-        selection_ids = {
-            item
-            for item in request.form.getlist("selection_ids")
-            if isinstance(item, str) and item.strip() in REPORT_SELECTION_IDS
-        }
-        report = QuickHcReportService().build_report(
-            selection_ids,
-            default_to_all=False,
-        )
-    else:
-        report = QuickHcReportService().build_report()
-    return render_template(
-        "quick_hc_report.html",
-        report=report,
-    )
 
 
 @bp.route("/quick-hc/commcell")

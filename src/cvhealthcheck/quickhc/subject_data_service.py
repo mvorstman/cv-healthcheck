@@ -104,12 +104,6 @@ def build_subject_initial_data(
     else:
         all_tiles = [_tile_def_to_dict(t) for t in list_tiles()]
 
-    try:
-        from flask import url_for
-        report_url = url_for("main.quick_hc_report")
-    except Exception:
-        report_url = "/quick-hc/report"
-
     # Commcell header comes from the SCOPED environment artifact (Fix 2 (b)) —
     # the same store the environment tile renders. Honest-empty when the
     # active project hasn't collected environment yet. (Previously read the
@@ -159,7 +153,6 @@ def build_subject_initial_data(
         "commcell": commcell_info,
         "cats": cats,
         "staging": staging,
-        "report_url": report_url,
     }
 
 

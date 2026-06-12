@@ -122,20 +122,6 @@ function _startConnBadgePolling() {
   window.addEventListener('focus', _updateConnBadge);
 }
 
-// ── REPORT ACTION BAR ──
-function _updateReportBar() {
-  const included = allSubjs().filter(s => s.included);
-  const bar = document.getElementById('report-bar');
-  const label = document.getElementById('report-bar-label');
-  if (!bar) return;
-  if (included.length > 0) {
-    bar.hidden = false;
-    if (label) label.textContent = included.length + ' subject' + (included.length !== 1 ? 's' : '') + ' selected for report';
-  } else {
-    bar.hidden = true;
-  }
-}
-
 // ── SIDEBAR NAV ACTIVE STATE ──
 function _setNavActive(id) {
   document.querySelectorAll('.lnav-item').forEach(el => el.classList.remove('lnav-active'));
@@ -159,7 +145,6 @@ function _subjRow(s) {
 
 function renderLeft() {
   _updateConnBadge();
-  _updateReportBar();
 
   const groups = [];
 
@@ -206,7 +191,6 @@ function toggleCat(id) {
 function toggleInclude(id, val) {
   findSubj(id).included = val;
   _saveState();
-  _updateReportBar();
   renderLeft();
 }
 
@@ -1123,27 +1107,6 @@ async function submitSignOut() {
     if (btn) { btn.disabled = false; btn.textContent = 'Sign out'; }
   }
 }
-
-// ── GENERATE REPORT ──
-document.getElementById('btn-gen').addEventListener('click', () => {
-  const form = document.getElementById('report-form');
-  form.querySelectorAll('input[name="selection_ids"]').forEach(el => el.remove());
-  for (const cat of CATS) {
-    for (const s of cat.subjects) {
-      if (!s.included) continue;
-      const inp = document.createElement('input');
-      inp.type = 'hidden'; inp.name = 'selection_ids'; inp.value = s.id;
-      form.appendChild(inp);
-      for (const sec of (s.sections || [])) {
-        if (!sec.included) continue;
-        const si = document.createElement('input');
-        si.type = 'hidden'; si.name = 'selection_ids'; si.value = sec.id;
-        form.appendChild(si);
-      }
-    }
-  }
-  form.submit();
-});
 
 // ── INIT ──
 _restoreState();
