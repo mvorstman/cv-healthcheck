@@ -139,14 +139,33 @@ def execute_approval(
     db: sqlite3.Connection,
     stage_id: str,
     reviewed_by: str | None = None,
+    *,
+    customer_id: str | None = None,
+    project_id: str | None = None,
     store: ArtifactStore | None = None,
 ) -> dict[str, Any]:
     """
     Execute the approval for a staged artifact.
-    Handles both artifact and subject_proposal types.
-    Returns a result dict with type, subject_id, and outcome.
+
+    D5 (ADR-0015 Context Integrity): an ARTIFACT approval requires explicit
+    ``customer_id`` + ``project_id`` — proof of selection as an input, not an
+    ambient default. Both are validated against existing rows; the store is
+    constructed internally from the pair. ``store`` is retained for tests
+    only — production callers pass the context, never a pre-built store.
+
+    Coherence with the staged row's stamp:
+      - row stamped for a DIFFERENT customer -> ContextMismatchError, nothing
+        written, row untouched;
+      - NULL-stamped row (legacy) -> the approval context wins and BACK-STAMPS
+        the row (customer_id set; the back-stamp recorded in ai_notes).
+
+    SUBJECT-PROPOSAL approvals need no context: the catalog is global by
+    design (Catalog Purity) — a proposal carries no customer data.
+
     Raises ValueError if not pending or not found.
     """
+    from cvhealthcheck.context import ContextMismatchError, NoExplicitContextError
+    from cvhealthcheck.db.customers import validate_known_context
     from cvhealthcheck.db.subjects import create_subject_from_proposal
 
     existing = get_staged_artifact(db, stage_id)
@@ -156,6 +175,7 @@ def execute_approval(
         raise ValueError("artifact is not pending")
 
     if existing.get("artifact_type") == "subject_proposal":
+        # Catalog-global by design — no customer context involved.
         proposal = json.loads(existing["artifact_json"])
         created = create_subject_from_proposal(db, proposal)
         approve_staged_artifact(db, stage_id, reviewed_by=reviewed_by)
@@ -170,8 +190,34 @@ def execute_approval(
 
     artifact = CanonicalArtifact.model_validate_json(existing["artifact_json"])
     if store is None:
-        from cvhealthcheck.web.active_project import make_default_project_store
-        store = make_default_project_store(db)
+        if not customer_id or not project_id:
+            raise NoExplicitContextError(
+                "approving a staged ARTIFACT requires explicit customer_id "
+                "and project_id (the store it lands in); no silent default."
+            )
+        validate_known_context(db, customer_id, project_id)
+        stamped = existing.get("customer_id")
+        if stamped and stamped != customer_id:
+            raise ContextMismatchError(
+                f"staged row {stage_id} is stamped for customer "
+                f"{stamped!r} but approval was attempted under "
+                f"{customer_id!r}; nothing written."
+            )
+        if not stamped:
+            # Legacy NULL-stamped row: the approval context wins; record the
+            # back-stamp on the row (ai_notes — no schema change).
+            db.execute(
+                "UPDATE staged_artifacts SET customer_id = ?,"
+                " ai_notes = COALESCE(ai_notes, '') || ?"
+                " WHERE stage_id = ?",
+                (
+                    customer_id,
+                    f"\n[customer_id back-stamped to {customer_id!r} at approval {_now()}]",
+                    stage_id,
+                ),
+            )
+            db.commit()
+        store = ArtifactStore(customer_id, project_id)
     store.save_artifact(artifact)
     approved = approve_staged_artifact(db, stage_id, reviewed_by=reviewed_by)
     return {

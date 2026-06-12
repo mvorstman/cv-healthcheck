@@ -168,6 +168,16 @@ def save_staged_artifact(
     stage_id = f"stage_{uuid4().hex}"
     db = get_db()
     try:
+        # D5: a caller-asserted customer_id is untrusted input — it must name
+        # an existing customer before anything is written. (engagement_id is
+        # left unvalidated: the engagements table is vestigial/empty today.)
+        if customer_id is not None:
+            from cvhealthcheck.context import UnknownContextError
+            row = db.execute(
+                "SELECT 1 FROM customers WHERE customer_id = ?", (customer_id,)
+            ).fetchone()
+            if row is None:
+                raise UnknownContextError(f"unknown customer_id: {customer_id!r}")
         return create_staged_artifact(
             db,
             stage_id,
@@ -202,14 +212,26 @@ def list_staged_artifacts(
 def approve_staged_artifact(
     stage_id: str,
     reviewed_by: str | None = None,
+    customer_id: str | None = None,
+    project_id: str | None = None,
 ) -> dict:
     """
     Approve a staged artifact and promote it to the production
     canonical store. Only pending artifacts can be approved.
+
+    D5: approving a staged ARTIFACT requires explicit customer_id +
+    project_id (the store it lands in), validated against existing rows;
+    without them the approval refuses with NoExplicitContextError.
+    Subject-proposal approvals are catalog-global and need no context.
+    A row stamped for a different customer refuses (ContextMismatchError);
+    a NULL-stamped legacy row is back-stamped with the approval context.
     """
     db = get_db()
     try:
-        return execute_approval(db, stage_id, reviewed_by=reviewed_by)
+        return execute_approval(
+            db, stage_id, reviewed_by=reviewed_by,
+            customer_id=customer_id, project_id=project_id,
+        )
     finally:
         db.close()
 
@@ -356,6 +378,11 @@ def propose_new_subject(
             "labels": labels,
         })
 
+        # D5/Catalog Purity: customer_id and engagement_id stay NULL BY
+        # DESIGN — a subject proposal is catalog-global (it must be
+        # reviewable and transportable without any customer), so the NULL
+        # here is intent, not omission. Artifact-type staging rows, by
+        # contrast, are customer evidence and ARE stamped.
         db.execute(
             """
             INSERT INTO staged_artifacts

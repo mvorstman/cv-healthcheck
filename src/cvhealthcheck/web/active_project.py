@@ -184,13 +184,3 @@ def make_active_project_store(db: sqlite3.Connection | None = None) -> ArtifactS
     customer_id, project_id = get_active_project(db)
     return ArtifactStore(customer_id, project_id)
 
-
-def make_default_project_store(db: sqlite3.Connection | None = None) -> ArtifactStore:
-    """Construct an ArtifactStore for the migration-seeded Default project.
-
-    Used by non-request contexts (MCP staging, CLI) that don't have a
-    Flask session to read from. Equivalent to make_active_project_store
-    in a context where the session is always empty.
-    """
-    customer_id, project_id = resolve_default_project(db)
-    return ArtifactStore(customer_id, project_id)

@@ -30,6 +30,17 @@ def patch_db(monkeypatch: pytest.MonkeyPatch, db_path: Path) -> None:
     monkeypatch.setattr(server, "get_db", open_db)
 
 
+
+def _default_pair() -> tuple[str, str]:
+    """The migrated test db's seeded Default (customer, project) — the explicit
+    context the D5 approval signature requires for artifact approvals."""
+    from cvhealthcheck.web.active_project import resolve_default_project
+    conn = server.get_db()
+    try:
+        return resolve_default_project(conn)
+    finally:
+        conn.close()
+
 def _artifact_payload(subject_id: str = "security_assessment") -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -319,14 +330,22 @@ def test_approve_staged_artifact_promotes_to_artifact_store(
     saved_artifacts = []
 
     class FakeArtifactStore:
+        def __init__(self, customer_id: str = "", project_id: str = "") -> None:
+            pass
+
         def save_artifact(self, artifact):  # type: ignore[no-untyped-def]
             saved_artifacts.append(artifact)
             return Path("/tmp/fake.json")
 
-    from cvhealthcheck.web import active_project as _active_project_mod; monkeypatch.setattr(_active_project_mod, "make_default_project_store", lambda db=None: FakeArtifactStore())
+    import cvhealthcheck.db.staging as _staging_mod
+    monkeypatch.setattr(_staging_mod, "ArtifactStore", FakeArtifactStore)
     staged = server.save_staged_artifact("security_assessment", json.dumps(_artifact_payload()))
 
-    approved = server.approve_staged_artifact(staged["stage_id"], reviewed_by="alice")
+    customer_id, project_id = _default_pair()
+    approved = server.approve_staged_artifact(
+        staged["stage_id"], reviewed_by="alice",
+        customer_id=customer_id, project_id=project_id,
+    )
 
     assert approved["status"] == "approved"
     assert approved["reviewed_by"] == "alice"
@@ -339,15 +358,26 @@ def test_approve_staged_artifact_double_approval_raises(
     patch_db: None,
 ) -> None:
     class FakeArtifactStore:
+        def __init__(self, customer_id: str = "", project_id: str = "") -> None:
+            pass
+
         def save_artifact(self, artifact):  # type: ignore[no-untyped-def]
             return Path("/tmp/fake.json")
 
-    from cvhealthcheck.web import active_project as _active_project_mod; monkeypatch.setattr(_active_project_mod, "make_default_project_store", lambda db=None: FakeArtifactStore())
+    import cvhealthcheck.db.staging as _staging_mod
+    monkeypatch.setattr(_staging_mod, "ArtifactStore", FakeArtifactStore)
     staged = server.save_staged_artifact("security_assessment", json.dumps(_artifact_payload()))
-    server.approve_staged_artifact(staged["stage_id"], reviewed_by="alice")
+    customer_id, project_id = _default_pair()
+    server.approve_staged_artifact(
+        staged["stage_id"], reviewed_by="alice",
+        customer_id=customer_id, project_id=project_id,
+    )
 
     with pytest.raises(ValueError, match="artifact is not pending"):
-        server.approve_staged_artifact(staged["stage_id"], reviewed_by="bob")
+        server.approve_staged_artifact(
+            staged["stage_id"], reviewed_by="bob",
+            customer_id=customer_id, project_id=project_id,
+        )
 
 
 def test_reject_staged_artifact_returns_rejected_record(patch_db: None) -> None:
@@ -569,10 +599,14 @@ def test_approve_subject_proposal_does_not_call_artifact_store(
     store_calls: list = []
 
     class TrackingArtifactStore:
+        def __init__(self, customer_id: str = "", project_id: str = "") -> None:
+            store_calls.append(("constructed", customer_id, project_id))
+
         def save_artifact(self, artifact):  # type: ignore[no-untyped-def]
             store_calls.append(artifact)
 
-    from cvhealthcheck.web import active_project as _active_project_mod; monkeypatch.setattr(_active_project_mod, "make_default_project_store", lambda db=None: TrackingArtifactStore())
+    import cvhealthcheck.db.staging as _staging_mod
+    monkeypatch.setattr(_staging_mod, "ArtifactStore", TrackingArtifactStore)
     result = server.propose_new_subject(**_proposal_kwargs())
     server.approve_staged_artifact(result["stage_id"])
 
@@ -594,13 +628,20 @@ def test_approve_regular_artifact_still_calls_artifact_store_regression(
     saved: list = []
 
     class FakeArtifactStore:
+        def __init__(self, customer_id: str = "", project_id: str = "") -> None:
+            pass
+
         def save_artifact(self, artifact):  # type: ignore[no-untyped-def]
             saved.append(artifact)
             return Path("/tmp/fake.json")
 
-    from cvhealthcheck.web import active_project as _active_project_mod; monkeypatch.setattr(_active_project_mod, "make_default_project_store", lambda db=None: FakeArtifactStore())
+    import cvhealthcheck.db.staging as _staging_mod
+    monkeypatch.setattr(_staging_mod, "ArtifactStore", FakeArtifactStore)
     staged = server.save_staged_artifact("security_assessment", json.dumps(_artifact_payload()))
-    approved = server.approve_staged_artifact(staged["stage_id"])
+    customer_id, project_id = _default_pair()
+    approved = server.approve_staged_artifact(
+        staged["stage_id"], customer_id=customer_id, project_id=project_id
+    )
 
     assert approved["status"] == "approved"
     assert len(saved) == 1

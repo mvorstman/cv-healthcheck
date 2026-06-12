@@ -50,20 +50,39 @@ def client(monkeypatch: pytest.MonkeyPatch, db_path: Path):
     monkeypatch.setattr(staging_routes, "get_db", open_db)
 
     class _FakeArtifactStore:
+        def __init__(self, customer_id: str = "", project_id: str = "") -> None:
+            pass
+
         def save_artifact(self, artifact: Any) -> Path:
             return Path("/tmp/fake.json")
 
-    from cvhealthcheck.web import active_project as _active_project_mod
-    monkeypatch.setattr(
-        _active_project_mod,
-        "make_default_project_store",
-        lambda db=None: _FakeArtifactStore(),
-    )
+    import cvhealthcheck.db.staging as _staging_mod
+    monkeypatch.setattr(_staging_mod, "ArtifactStore", _FakeArtifactStore)
 
     app = create_app()
     app.config["TESTING"] = True
     app.config["SECRET_KEY"] = "test"
     with app.test_client() as c:
+        # These tests run against deliberately-emptied customer/project
+        # tables; create a real pair for the D5 approval context (it is
+        # validated against existing rows).
+        conn = open_db()
+        try:
+            conn.execute(
+                "INSERT INTO customers (customer_id, customer_name, created_at, updated_at)"
+                " VALUES ('ctx_cust', 'Ctx', '2026-01-01', '2026-01-01')"
+            )
+            conn.execute(
+                "INSERT INTO projects (project_id, customer_id, project_number)"
+                " VALUES ('ctx_proj', 'ctx_cust', 'P-1')"
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        with c.session_transaction() as sess:
+            sess["active_project"] = {
+                "customer_id": "ctx_cust", "project_id": "ctx_proj",
+            }
         yield c
 
 
@@ -154,17 +173,6 @@ def migrated_client(monkeypatch: pytest.MonkeyPatch, migrated_db_path: Path):
         return conn
 
     monkeypatch.setattr(staging_routes, "get_db", open_db)
-
-    class _FakeArtifactStore:
-        def save_artifact(self, artifact: Any) -> Path:
-            return Path("/tmp/fake.json")
-
-    from cvhealthcheck.web import active_project as _active_project_mod
-    monkeypatch.setattr(
-        _active_project_mod,
-        "make_default_project_store",
-        lambda db=None: _FakeArtifactStore(),
-    )
 
     app = create_app()
     app.config["TESTING"] = True

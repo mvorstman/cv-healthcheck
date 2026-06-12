@@ -10,7 +10,7 @@ from flask import jsonify
 from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.config import load_settings
 from cvhealthcheck.db import get_db
-from cvhealthcheck.context import NoExplicitContextError
+from cvhealthcheck.context import ContextMismatchError, NoExplicitContextError
 from cvhealthcheck.web.active_project import (
     ActiveProjectMissingError,
     get_active_customer,
@@ -150,14 +150,32 @@ def quick_hc():
 def quick_hc_proposal_approve(stage_id: str):
     """Approve a pending subject proposal from the consolidated /quick-hc page.
 
-    Routes through the UNCHANGED execute_approval (shared with the MCP review
-    loop and the still-live /quick-hc/staging page) so the proposal is promoted
-    into the subjects catalog, then full-page redirects to /quick-hc — both zones
-    re-render from fresh server state (ADR 0009 Phase 1; no DOM surgery)."""
+    Routes through the shared execute_approval (MCP review loop + the
+    /quick-hc/staging page) so the proposal is promoted into the subjects
+    catalog, then full-page redirects to /quick-hc — both zones re-render
+    from fresh server state (ADR 0009 Phase 1; no DOM surgery).
+
+    D5: artifact-type approvals require the explicitly selected context;
+    proposal approvals are catalog-global and pass context=None through."""
+    ctx = None
+    try:
+        ctx = require_active_context()
+    except NoExplicitContextError:
+        pass  # fine for proposals; execute_approval refuses artifact rows
     db = get_db()
     try:
-        result = _staging_db.execute_approval(db, stage_id, reviewed_by="web")
+        result = _staging_db.execute_approval(
+            db, stage_id, reviewed_by="web",
+            customer_id=ctx[0] if ctx else None,
+            project_id=ctx[1] if ctx else None,
+        )
+    except NoExplicitContextError:
+        return _context_required_response()
+    except ContextMismatchError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("main.quick_hc"))
     except ValueError as exc:
+        # incl. UnknownContextError (a ValueError): unknown customer/project.
         flash(str(exc), "error")
         return redirect(url_for("main.quick_hc"))
     finally:
@@ -701,6 +719,9 @@ def _unified_dispatcher_upload(subject_id: str):
             stage_flag = request.args.get("stage") == "1"
             if stage_flag:
                 stage_id = f"stage_{uuid.uuid4().hex[:12]}"
+                # D5 (c): staged customer evidence is stamped with the
+                # explicitly selected customer (the route gate guarantees
+                # the selection exists).
                 _staging_db.create_staged_artifact(
                     db,
                     stage_id,
@@ -708,6 +729,7 @@ def _unified_dispatcher_upload(subject_id: str):
                     artifact.model_dump_json(),
                     source_file=filename,
                     source_type=dispatch.source_type,
+                    customer_id=require_active_context()[0],
                 )
                 msg = f"Imported {title} — review in staging before approving."
                 if inline:

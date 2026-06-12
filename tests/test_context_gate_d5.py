@@ -379,3 +379,215 @@ def test_mcp_delete_with_valid_context_deletes_catalog_and_scoped_artifact(
     ).fetchone()[0] == 0
     db.close()
     assert not _store_artifact_exists(customer_id, project_id, "_d5_del3")
+
+
+# ── STAGING STAMPS + APPROVAL CONTEXT (D5 (c)+(d)) ────────────────────────────
+
+from cvhealthcheck.context import ContextMismatchError, UnknownContextError
+from cvhealthcheck.db.staging import create_staged_artifact, execute_approval
+
+
+def _stage_artifact_row(db, stage_id, subject_id="storage_policies", customer_id=None):
+    return create_staged_artifact(
+        db, stage_id, subject_id,
+        _mk_artifact(subject_id).model_dump_json(),
+        source_type="html", customer_id=customer_id,
+    )
+
+
+def _migrated_conn(migrated_db_path):
+    conn = sqlite3.connect(str(migrated_db_path))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
+
+
+def test_approval_refuses_artifact_without_context(migrated_db_path):
+    db = _migrated_conn(migrated_db_path)
+    try:
+        _stage_artifact_row(db, "st_noctx")
+        with pytest.raises(NoExplicitContextError):
+            execute_approval(db, "st_noctx", reviewed_by="test")
+        row = db.execute(
+            "SELECT status FROM staged_artifacts WHERE stage_id='st_noctx'"
+        ).fetchone()
+        assert row["status"] == "pending"          # row untouched
+        assert not _store_artifact_exists("default", "default", "storage_policies")
+    finally:
+        db.close()
+
+
+def test_approval_refuses_unknown_context(migrated_db_path):
+    db = _migrated_conn(migrated_db_path)
+    try:
+        _stage_artifact_row(db, "st_ghost")
+        with pytest.raises(UnknownContextError):
+            execute_approval(db, "st_ghost", customer_id="ghost", project_id="gp")
+        assert db.execute(
+            "SELECT status FROM staged_artifacts WHERE stage_id='st_ghost'"
+        ).fetchone()["status"] == "pending"
+    finally:
+        db.close()
+
+
+def test_approval_refuses_on_stamp_mismatch(migrated_db_path):
+    db = _migrated_conn(migrated_db_path)
+    try:
+        customer_id, project_id = resolve_default_project(db)
+        # the FK on staged_artifacts.customer_id needs a real row to stamp
+        db.execute(
+            "INSERT INTO customers (customer_id, customer_name, created_at, updated_at)"
+            " VALUES ('someone_else', 'Someone Else', '2026-01-01', '2026-01-01')"
+        )
+        db.commit()
+        _stage_artifact_row(db, "st_mismatch", customer_id="someone_else")
+        with pytest.raises(ContextMismatchError):
+            execute_approval(
+                db, "st_mismatch", customer_id=customer_id, project_id=project_id
+            )
+        row = db.execute(
+            "SELECT status, customer_id FROM staged_artifacts WHERE stage_id='st_mismatch'"
+        ).fetchone()
+        assert row["status"] == "pending"
+        assert row["customer_id"] == "someone_else"   # stamp untouched
+        assert not _store_artifact_exists(customer_id, project_id, "storage_policies")
+    finally:
+        db.close()
+
+
+def test_approval_back_stamps_null_rows_and_lands_scoped(migrated_db_path):
+    db = _migrated_conn(migrated_db_path)
+    try:
+        customer_id, project_id = resolve_default_project(db)
+        _stage_artifact_row(db, "st_null", customer_id=None)
+        result = execute_approval(
+            db, "st_null", reviewed_by="test",
+            customer_id=customer_id, project_id=project_id,
+        )
+        assert result["status"] == "approved"
+        row = db.execute(
+            "SELECT customer_id, ai_notes FROM staged_artifacts WHERE stage_id='st_null'"
+        ).fetchone()
+        assert row["customer_id"] == customer_id              # back-stamped
+        assert "back-stamped" in (row["ai_notes"] or "")      # recorded on the row
+        assert _store_artifact_exists(customer_id, project_id, "storage_policies")
+    finally:
+        db.close()
+
+
+def test_approval_matching_stamp_proceeds(migrated_db_path):
+    db = _migrated_conn(migrated_db_path)
+    try:
+        customer_id, project_id = resolve_default_project(db)
+        _stage_artifact_row(db, "st_match", subject_id="users", customer_id=customer_id)
+        result = execute_approval(
+            db, "st_match", customer_id=customer_id, project_id=project_id
+        )
+        assert result["status"] == "approved"
+        assert _store_artifact_exists(customer_id, project_id, "users")
+    finally:
+        db.close()
+
+
+def test_proposal_approval_needs_no_context(migrated_db_path):
+    """Catalog-global by design (Catalog Purity): subject proposals carry no
+    customer context and approve without one."""
+    db = _migrated_conn(migrated_db_path)
+    try:
+        from cvhealthcheck.mcp.server import propose_new_subject
+        import cvhealthcheck.mcp.server as mcp
+        # stage via the db directly (propose_new_subject uses its own get_db)
+        import json as _json
+        db.execute(
+            "INSERT INTO staged_artifacts (stage_id, subject_id, artifact_type,"
+            " subject_version, source_type, status, artifact_json, created_at)"
+            " VALUES ('st_prop', '_d5_prop', 'subject_proposal', 1, 'ai', 'pending', ?,"
+            " strftime('%Y-%m-%dT%H:%M:%SZ','now'))",
+            (_json.dumps({
+                "subject_id": "_d5_prop", "version": 1, "title": "P",
+                "description": "", "category": "operations",
+                "sections": [{"section_id": "s", "title": "S",
+                              "section_type": "table", "default_selected": True,
+                              "sort_order": 0}],
+                "extraction_instructions": {"html": {"extractable": True,
+                                                     "sections": {"s": {}}}},
+            }),),
+        )
+        db.commit()
+        result = execute_approval(db, "st_prop", reviewed_by="test")
+        assert result["type"] == "subject_proposal"
+    finally:
+        db.close()
+
+
+def test_web_stage_import_stamps_customer(monkeypatch, migrated_db_path):
+    from cvhealthcheck.extractors.dispatcher import DispatchResult
+    from cvhealthcheck.extractors.recognition import RecognitionResult
+    import cvhealthcheck.web.routes.quick_hc as route_module
+
+    def open_db():
+        return _migrated_conn(migrated_db_path)
+    monkeypatch.setattr(route_module, "get_db", open_db)
+    # the AI subject must exist for the route's subject lookup
+    db = open_db()
+    from cvhealthcheck.db.subjects import create_subject_from_proposal
+    create_subject_from_proposal(db, {
+        "subject_id": "_d5_stage", "version": 1, "title": "t", "description": "",
+        "category": "operations",
+        "sections": [{"section_id": "s", "title": "S", "section_type": "table",
+                      "default_selected": True, "sort_order": 0}],
+        "extraction_instructions": {"html": {"extractable": True, "sections": {"s": {}}}},
+    })
+    db.close()
+
+    rec = RecognitionResult(subject_id="_d5_stage", version=1, source_type="html",
+                            extractable=True, non_extractable_reason=None, title="t")
+    monkeypatch.setattr(
+        route_module, "extract_file",
+        lambda *a, **k: DispatchResult(
+            recognized=True, subject_id="_d5_stage", version=1, source_type="html",
+            extractable=True, non_extractable_reason=None,
+            artifact=_mk_artifact("_d5_stage"), recognition_result=rec,
+        ),
+    )
+    db = open_db()
+    db.execute(
+        "INSERT INTO customers (customer_id, customer_name, created_at, updated_at)"
+        " VALUES ('cust_stamp', 'Stamp', '2026-01-01', '2026-01-01')"
+    )
+    db.commit()
+    db.close()
+    import io
+    client = _client()
+    _set_context(client, "cust_stamp", "proj_stamp")
+    resp = client.post(
+        "/quick-hc/_d5_stage/import?stage=1",
+        data={"file": (io.BytesIO(b"<html></html>"), "x.html")},
+        content_type="multipart/form-data",
+        headers={"X-Inline": "1"},
+    )
+    assert resp.status_code == 200, resp.get_json()
+    db = open_db()
+    row = db.execute(
+        "SELECT customer_id FROM staged_artifacts ORDER BY created_at DESC LIMIT 1"
+    ).fetchone()
+    db.close()
+    assert row["customer_id"] == "cust_stamp"
+
+
+def test_mcp_save_staged_artifact_validates_customer(monkeypatch, migrated_db_path):
+    import cvhealthcheck.mcp.server as mcp
+    monkeypatch.setattr(mcp, "get_db", lambda: _migrated_conn(migrated_db_path))
+    artifact_json = _mk_artifact("storage_policies").model_dump_json()
+    with pytest.raises(UnknownContextError):
+        mcp.save_staged_artifact(
+            "storage_policies", artifact_json, customer_id="ghost_cust"
+        )
+    db = _migrated_conn(migrated_db_path)
+    assert db.execute("SELECT COUNT(*) FROM staged_artifacts").fetchone()[0] == 0
+    db.close()
+    # a KNOWN customer stamps cleanly
+    saved = mcp.save_staged_artifact(
+        "storage_policies", artifact_json, customer_id="default"
+    )
+    assert saved["customer_id"] == "default"
