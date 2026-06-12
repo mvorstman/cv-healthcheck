@@ -1,95 +1,48 @@
-# HANDOVER — Declarative ("in-data") report authoring: ADR-0014 shipped and verified live
+# HANDOVER — Phase 0 complete; Phase 1 (Context Integrity) next
 
 You are continuing development on **cv-healthcheck**, a modular Commvault
 operational health check platform (Python/Flask, Pydantic v2 canonical
 artifact schema, MCP server for AI-assisted subject authoring).
 
-## Goal
+## Current state
 
-Make it possible to add **any** report subject purely as data
-(`extraction_instructions` in a subject definition) with **zero bespoke
-Python**. Simple subjects already work this way across HTML/CSV/REST and
-Command Center API sources.
+- **Branch:** `main`
+- **Latest commit:** `5b91fbf` (chore(web): remove orphaned .lnav-sm CSS)
+- **Test suite:** 1070 passed (full pytest, exit 0)
+- **In flight: none — Phase 0 complete, Phase 1 (Context Integrity) next.**
 
-## State after the 2026-06-11 reconciliation (scope confirmed by Michiel)
+## What was just completed (Phase 0)
 
-An earlier version of this brief, written outside the repo, listed four
-engine fixes. Step-0 validation against the repo found three of them
-already resolved or moot:
+See the CHANGELOG entries for 2026-06-11 (×3) and 2026-06-12 — re-read them
+before starting work:
 
-- **Fix 1 — `_resolve_field_path` list indexing: shipped.** Commit
-  `819c723` (2026-06-04); numeric path segments index into lists, dict-key
-  semantics win. Tests: `tests/test_resolve_field_path.py`. **Closed.**
-- **Fix 2 — "staging validator strips ADR-0009 fields": not reproducible.**
-  A proposal carrying every ADR-0009 field (declared `endpoint`, extra
-  `recognition_hints`, card spec, table `root_key`/`columns`/`transpose`)
-  round-trips byte-identical through `propose_new_subject` storage and
-  `create_subject_from_proposal`. A guard test now pins this:
-  `tests/test_proposal_field_roundtrip.py`. **Closed (guarded).**
-- **Fix 3 — `wrap_object_as_row` hint: superseded.** Commit `d1860c4` made
-  the single-object → one-row-table dict auto-wrap *unconditional* in
-  `_project_table_rows` (`extractors/command_center.py`); the hint is
-  deliberately not plumbed. Covered in
-  `tests/test_cc_api_multi_object_adr0009.py`. **Closed (no hint needed.)**
-- **Fix 4 — Reports Plus dataset extraction: the one genuine gap.**
-  No declarative path targets directly-addressed Reports Plus datasets
-  (`/commandcenter/api/cr/reportsplusengine/datasets/...`). Design decided
-  as a **new source type** in **ADR-0014 (Proposed — awaiting human
-  approval)**: `docs/adr/0014-reportsplus-dataset-source-type.md`.
-  **Do not implement before the ADR is accepted.**
+- **ADR-0014 `reportsplus_dataset` source type** — implemented, live-gated,
+  end-to-end verified (propose → human approval → collect), throwaway subject
+  cleaned up. Key traps are encoded in code + `docs/research/adr0014-gate-findings.md`.
+- **Wide-table horizontal scroll** in /quick-hc (`2eee3c4`; sticky first
+  column deferred).
+- **Dispatcher active-version fix** (`6359f57`) — imports extract with the
+  ACTIVE subject version, not a hardcoded v1.
+- **`delete_subject` orphan-rule reaping** (`39758f1`) + one-time sweep of the
+  12 dangling csc_*/ccprop_* registry rules.
+- **Dead-code sweeps** (`16d0dec`, `5b91fbf`) — with one correction:
+  `SecurityAssessmentService` is NOT dead (live consumer
+  `quick_hc_api.py:142`); see CHANGELOG 2026-06-12 Notes.
+- **#36 scoped (read-only):** SA module retirement is an LS-coupled decision
+  (SA `ArtifactRegistry` alias + 7 shared model classes), not an API cleanup.
 
-## Status: ADR-0014 implemented and VERIFIED LIVE (2026-06-11)
+## Recommended next action — Phase 1: Customer/Project Context Integrity
 
-The gate ran and PASSED (`docs/research/adr0014-gate-findings.md`); ADR-0014
-is Accepted with two amendments (composite verified 2026-06-06 on CS01,
-gate = re-confirmation; artifact mapping = `SourceType.rest`). The feature
-is implemented, unit/integration-tested (suite: 1063 passed), and
-**end-to-end verified live** the same day: a throwaway `reportsplus_dataset`
-subject (`audit_trail_rp_dataset`, bare-GUID AuditTrailDataset with a
-list-valued `userlist` parameter) was AI-proposed, independently reviewed
-and human-approved through staging, and collected through the new source
-tab — 25 rows rendered with canonical column names, artifact stamped live
-`rest` with `collected_at` set. The throwaway subject, its artifact, and
-its staging record were deleted after the pass; no residue in the catalog.
-
-- Migration 0031 (source_type CHECK widened; applies to `data/app.db` on
-  the next app start/reload).
-- `extractors/rp_dataset_address.py` (address + parameter policy, leaf),
-  `extractors/reportsplus_dataset.py` (`ReportsPlusDatasetExtractor`),
-  `CommvaultSession.get_dataset_metadata`, persist validation in
-  `create_subject_from_proposal`, `/collect` dispatch, registry/panel
-  wiring, `propose_new_subject` vocabulary.
-- Key traps encoded: the composite's second half is the per-report ENTRY
-  guid (not the inner `dataSetGuid`); unknown parameter names are silently
-  ignored by the engine, so the extractor validates declared names against
-  dataset metadata before any fetch and fails loudly.
-
-The brief's "leading-slash 401 errorCode 5" probe quirk did NOT reproduce
-(both slash forms behave identically; the observed 401s were stale-token
-artifacts of the reloader wipe). No path-handling fix is needed.
-
-**Nothing in flight.** The next piece of work, when Michiel triggers it, is
-the parked re-assessment below (its precondition — "after Fix 4 ships" —
-is now met). Do not start it unprompted.
-
-## Parked — legacy-builder conversion (decision 2026-06-11)
-
-The six legacy Python builders (`report_service._report_builders`) are:
-environment, security_assessment, license_summary, client_growth,
-capacity_license, backup_job_summary. ("Health" in the earlier brief =
-**security_assessment**.)
-
-Converting License Summary (and security_assessment) to declarative form is
-**parked, not planned**: ADR-0006 D5 registers License Summary as
-*sanctioned bespoke, indefinite* (its param-substitution and per-row
-formulas failed the D3 gate), and ADR-0013 lists "License Summary generic
-extractor migration" as a non-goal. Those decisions stand.
-
-**Re-assessment trigger:** after Fix 4 ships, re-assess whether License
-Summary's blockers can now pass the declarative gate (ADR-0006 D3). If yes,
-that re-assessment becomes the evidence for an ADR superseding D5's
-register entry; if no, D5 remains correct. Do not start this without
-explicit confirmation.
+Per ROADMAP (Now). The first concrete step is **read-only**: stand up the
+two-customer lab (one REST-collected customer, one JSON-import customer with
+multiple report versions) and run an isolation audit across
+collection/storage/evaluation/reporting **before any fix**. The known
+wrong-customer hazard to audit first: `web/active_project.py:42-57` —
+`get_active_project` silently falls back to the Default customer's earliest
+project when the session key is absent or there is no request context. The
+design direction (move active context out of the Flask session into app.db)
+follows the audit, not the other way around. Couple report-identity /
+dataset-GUID portability (#34) into this work.
 
 ## Hard constraints (non-negotiable)
 
@@ -100,14 +53,25 @@ explicit confirmation.
   live reads go through the loopback probe only.
 - Never probe or collect the `PackageDetails` catalog dataset
   (credential-exposure risk).
-- `delete_subject` removes **all** versions; re-proposing without
-  `supersedes` creates duplicate actives — be careful with both.
-- Keep the legacy builder path working; conversion is parked (above).
+- `delete_subject` removes **all** versions, and now also reaps rules its
+  deletion orphaned (zero bindings across all subjects + zero overrides,
+  scoped to the deleted subject's own refs); re-proposing without
+  `supersedes` creates duplicate actives — be careful with all of these.
+- Keep the legacy builder path working; LS/security_assessment conversion is
+  a Later item gated by the ADR-0006 D5 re-assessment.
+
+## Operational notes
+
+- `flask run --debug`'s reloader wipes the in-memory held token on any `.py`
+  edit — finish code edits before asking the operator to Connect.
+- MCP server must be restarted after any code change
+  (`pkill -f cv-healthcheck-mcp`, relaunch).
 
 ## Validation
 
 - `python -m compileall src`
-- `venv/bin/python -m pytest` (existing tests must keep passing)
+- `venv/bin/python -m pytest` (1070 must keep passing)
+- Never gate a commit on piped pytest output — check the exit code.
 
 ## Commit granularity
 

@@ -70,7 +70,14 @@ Set the Commvault Command Center base URL:
 export CV_BASE_URL=https://192.168.182.129:4433
 ```
 
-Place an authentication token in `.token` at the project root, either plain or JSON:
+**Web app / MCP auth does not use a token file.** Under ADR-0008 the app holds
+a live token in memory, minted by the operator's Connect action (header pill);
+the AI/MCP layer reaches the CommServe only through the app's loopback endpoint
+(`CV_INTERNAL_SECRET`). No CommServe credential is stored at rest.
+
+**CLI inventory commands only:** a `.token` file at the project root remains the
+auth source for the standalone CLI (`cv-healthcheck reportsplus …`, lab probes),
+either plain or JSON:
 
 ```text
 plain-token-value
@@ -80,7 +87,7 @@ plain-token-value
 {"access_token": "plain-token-value"}
 ```
 
-It may also contain a JSON `refresh_token`; lab probes and Reports Plus calls use `access_token`.
+It may also contain a JSON `refresh_token`; the CLI and lab probes use `access_token`.
 
 SSL verification is enabled by default. Disable it only for isolated lab usage; the clients log a warning when it is off:
 
@@ -201,4 +208,4 @@ Customer-facing pages:
 - [docs/PATTERNS.md](docs/PATTERNS.md) — project-wide patterns and standing conventions to know before adding code.
 - [docs/lab_environment.md](docs/lab_environment.md) — lab setup, connection, token, and realism.
 - [docs/data_flow_audit.md](docs/data_flow_audit.md) — on-disk data-flow audit.
-- [docs/adr/](docs/adr/) — Architecture Decision Records (0001–0013). Required reading before touching the areas they govern.
+- [docs/adr/](docs/adr/) — Architecture Decision Records (0001–0014). Required reading before touching the areas they govern.

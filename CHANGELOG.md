@@ -10,6 +10,33 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-12 (fix(catalog) — delete_subject reaps orphaned rules; dead-code sweeps; 12-rule registry cleanup)
+
+**Branch:** `main`. Commits `39758f1`, `16d0dec`, `5b91fbf`; suite 1070 passed.
+
+### Fixed
+- **`delete_subject` reaps rules its deletion orphaned** (`39758f1`). It cascaded catalog rows, staging rows, and the stored artifact, but never the rules registry — a rule whose only binding was the deleted subject's sections survived as inert residue. Reap semantics, scoped deliberately: candidates are only the rule ids referenced by the deleted subject's own bindings (captured before the binding rows are deleted, by JSON-walking every `{"ref": …}` — row_rules + metric/card shapes, one ref model per ADR-0010); a candidate is reaped iff it now has zero bindings across ALL subjects AND zero `rule_overrides` rows. In-transaction direct DELETEs (`db/rules.delete_rule` commits mid-flight, so it is not callable from inside `delete_subject`'s all-or-nothing transaction); the return gains `rules_reaped`. Four regression cases (`tests/test_delete_rule_reaping.py`): bound-only-to-deleted → reaped; shared-with-survivor → survives, and reaps when the last binder goes; orphaned-with-override → kept; authored-but-unbound-elsewhere → never swept by an unrelated delete.
+
+### Removed
+- **Dead security-assessment imports in `web/routes/shared.py`** (`16d0dec`): `SecurityAssessmentImportError`, `export_security_assessment_registry`, `import_security_assessment_upload` — orphans of the 2026-06-05 dev-SA retirement — plus `quick_hc.py`'s dead re-imports of ImportError/Service from `.shared`. **Correction to the prior read-only pass:** `SecurityAssessmentService` was NOT dead — `quick_hc_api.py:142` consumes it live (`SecurityAssessmentService().get_canonical()` behind `/api/security-assessment/canonical`); the earlier zero-consumer conclusion missed multiline `from .shared import (…)` blocks. Its re-export stays, with a comment naming the live consumer.
+- **Orphaned `.lnav-sm` CSS** (`5b91fbf`): base rule + `:hover` in `quick_hc.css` — left behind when their only user (the workspace "Dev tools" link) was removed in the 2026-06-05 `/development` retirement; flagged there as the follow-up, closed here.
+
+### Notes
+- **DB maintenance (not a code commit):** swept 12 dangling rules from the `app.db` registry — `csc_ua_package_cache_not_zero`, `csc_cache_sp_below_min`, and 10 `ccprop_*` — residue of the deleted `commserve_software_cache` / `commcell_properties` subjects. Each deleted through the app's own `delete_rule` path, guarded by a fresh zero-binding + zero-override re-assert immediately before deletion; all confirmed pure registry residue (`bindings_stripped=0` each). Registry now holds the 16 live rules.
+- **#36 scoping (read-only):** the SA canonical read is already generic (`get_canonical()` = `load_latest_artifact("security_assessment")` on the standard ArtifactStore), but License Summary is structurally welded to the SA module — its import machinery runs on the SA `ArtifactRegistry` alias (`artifact_registry.py` → `license_summary/service.py`) and it shares 7 SA model classes (`license_summary/models.py`). #36 is an LS-coupled decision, not an API cleanup.
+- **Process lessons (recorded):** single-line greps miss multiline parenthesized imports — prove a symbol dead by grepping the bare name repo-wide; and never gate a commit on piped pytest (`pytest | tail` takes tail's exit code — `16d0dec` initially landed red and was amended).
+
+## 2026-06-11 (fixes — wide-table horizontal scroll; dispatcher active-version resolution)
+
+**Branch:** `main`. Commits `2eee3c4`, `6359f57` (same day as the ADR-0014 entries below; logged here as their own entry).
+
+### Fixed
+- **Horizontal scroll for wide table sections in /quick-hc** (`2eee3c4`). Table sections wider than the tile (the 29-column `storage_policy_copy_jobs` exposed it) were clipped by `.sec-tile{overflow:hidden}` (the border-radius clip) with no scrollbar. The column-table branch of `secBody` now wraps the `<table class="wl-table">` in `<div class="tbl-scroll">` at both emission sites (data rows + the ADR-0009 empty header shell); the verdict legend stays outside the wrapper. CSS: `.tbl-scroll{overflow-x:auto;max-width:100%}` + `.tbl-scroll .wl-table{width:max-content;min-width:100%}` — natural width inside the wrapper, never narrower than the tile, so narrow tables render unchanged. `view_mode 'card'`, kv-table, and workload tables untouched (verified by executing `secBody` against all seven shapes). **Deferred:** sticky first column (opaque sticky-cell background vs the semi-transparent row borders + excluded-tile opacity interaction).
+- **Import extracts with the subject's ACTIVE version, not version 1** (`6359f57`). `extract_file`'s explicit-subject_id branch (the upload route's call shape — it never passes a version) defaulted `v = version or 1`, so once a superseding v2 existed, imports silently read the superseded v1's instructions: HTML failed with "missing selector or title_match" (a v2-only key), CSV "succeeded" with 0 rows (v1's empty `column_map`). First hit by `storage_policy_copy_jobs` v1→v2 — the catalog's first superseding subject. The branch now resolves the highest `status='active'` version (the same selection rule as `get_subject(version=None)` and the recognition engine's `status='active'` join); an explicit `version` still pins; no active version is a loud named error. Regression tests: `tests/test_dispatcher_active_version.py`.
+
+### Notes
+- The dispatcher bug's approval flow was ruled out (it writes the new version's source rows correctly) and the extractors' per-version queries were already correct — they were fed the wrong version. REST collect and the recognition path were already version-correct by mechanism.
+
 ## 2026-06-11 (verify — ADR-0014 end-to-end pass, live; throwaway subject cleaned up)
 
 **Branch:** `main`. Completes the entry below: the `reportsplus_dataset` source type is verified live, full loop.

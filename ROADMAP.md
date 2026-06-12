@@ -35,39 +35,39 @@ The stable "why" behind the work.
 
 *Status: In Progress.*
 
-- **Customer/Project Context Isolation** — gating report-correctness item; precedes the Report Output framework (Next).
-  - *Goal:* report generation never mixes data between customers or projects.
-  - *Success:* every artifact read, write, report render, upload/import, evaluation, and composition selection is explicitly scoped to one (customer, project) or explicitly global by design; no cross-customer read fallback; environment/CommCell evidence is scoped, not a global single file; report-composition selections are scoped; operating on customer data requires an explicit active context (or "Default" is an unmistakable single-tenant lab mode).
-- **Rules & Evaluation maturity**
-  - *Goal:* increase rule expressiveness and consistency across all canonical section types.
-  - *Success:* Rules can be authored, versioned, bound, evaluated, and surfaced without code changes. Evaluation supports row-scope and summary-scope rules across all canonical section types.
-- **Quick HC canonical pipeline completion**
-  - *Goal:* a single canonical render path across REST/HTML/CSV, with the legacy subject-shaping fallback retired once parity is validated.
-- **Domain Labels** (catalog classification) — **v1 complete** (schema · MCP read · MCP author · sparse backfill; ADR-0012). The additive label axis alongside the single-valued `category` is in place; the first downstream consumer (report profiles / health domains / rule packs reading the labels) is future work.
+**Customer/Project Context Integrity (gating).** Enforce scoped
+reads/writes/storage/reporting on the existing ADR-0002 customer+project
+entities. First move active context out of the Flask session into app.db
+(today `get_active_project` silently falls back to the Default customer's
+earliest project when the session key is absent or there's no request
+context — a wrong-customer hazard). Stand up the two-customer lab (one REST,
+one JSON import with multiple report versions); run a read-only isolation
+audit across collection/storage/evaluation/reporting before any fix. Couple
+report-identity / dataset-GUID portability (#34) here.
 
 ## Initiatives — Next
 
 *Status: Planned.*
 
-- **Report Output framework** — docx/PDF composition and report profiles.
-  - *Depends on:* Customer/Project Context Isolation (Now) — thin Report Profiles and docx/PDF output do not proceed until the HIGH cross-customer risks are closed.
-  - *Direction:* ADR-0013 governs this work: canonical subjects are the foundation; reports are read-only views; canonical artifacts are never mutated by report/customer overrides.
-  - *First slice:* introduce only a thin Report Profile view contract — selected subjects, selected sections, and view mode. Do not build full profile persistence/schema, contextual evaluation, health-domain consumers, or compliance profiles in this slice.
-  - *Success:* Customer reports can be generated entirely from canonical artifacts and thin report definitions without subject-specific report builders, without rewriting verdicts, provenance, source metadata, or canonical artifact data.
-- **Subject Inventory convergence** — migrate the system subjects into the database Report Inventory as seed data; grow subject coverage via MCP.
-  - *Success:* A new report type can be added through catalog/MCP authoring without Python code changes. System subjects are represented in the same inventory model as user-authored subjects.
+- **Finish ADR-0004 phase 8** (Shapes + recommend stage) and ratify ADR-0004.
+- **Build the thin Report Profile** (ADR-0013: selected subjects/sections/view-mode).
+- **Report Output framework** — HTML master → PDF/DOCX via docxtpl+python-docx /
+  WeasyPrint or LibreOffice; matplotlib on the shared severity palette.
 
 ## Initiatives — Later
 
 *Status: Proposed.*
 
-- **Version Intelligence** — live Commvault release / maintenance-release / advisory baseline matching (builds on the shipped version-compare primitive).
-- **Contextual Evaluation** — advisory, lifecycle, supportability, policy, and compliance-profile evaluation outside canonical artifacts; deferred until an explicit evaluation context is designed.
-- **Health Domains and Compliance Profiles** — consumers over subjects / labels / evaluations, including possible NIS2 mapping; deferred until there is a second genuinely different report/profile need.
-- **Distributed Collection & Operating Modes** — Daily Reporting and Full HealthCheck modes; customer-side REST collectors → S3 evidence store → central analysis.
-- **Evidence Confidence scoring** — source-quality/freshness weighting (the provenance metadata is already in place).
-- **Report-Definition (XML) parser** — a generic Commvault report-definition parser.
-- **Trend Analytics & Production Dashboard.**
+- **LS + security_assessment declarative conversion** — gated by the ADR-0006
+  D5 re-assessment. This subsumes backlog #36: the SA canonical read is
+  already generic, but License Summary is structurally welded to the SA
+  module (runs on the SA `ArtifactRegistry` alias; shares 7 SA model
+  classes), so the SA module cannot be retired without the LS conversion —
+  #36 is an LS-coupled decision, not an API cleanup.
+- **Growth & Trends (report 318)** as the first composite-address subject.
+- **Probe oversized-response handling** (1MB Desktop cap).
+- **Set-CVJobRetention.ps1 un-retain opType capture.**
+- **Health Domains, version intelligence, distributed/air-gapped collection.**
 
 ## Sequencing & Dependencies
 
