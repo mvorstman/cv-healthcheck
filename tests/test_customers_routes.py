@@ -92,7 +92,7 @@ def test_create_form_post_valid_creates_and_redirects(customers_client) -> None:
         "/customers/new",
         data={
             "customer_name": "Acme Corp",
-            "commcell_id": "cs-001",
+            "commcell_id": "337F",          # mixed-case hex -> normalized
             "notes": "Test notes",
         },
     )
@@ -109,7 +109,7 @@ def test_create_form_post_valid_creates_and_redirects(customers_client) -> None:
         conn.close()
     assert row is not None
     assert row[0] == "acme_corp"
-    assert row[2] == "cs-001"
+    assert row[2] == "337f"             # Fix 3: canonical lowercase hex
     assert row[3] == "Test notes"
 
 
@@ -164,7 +164,7 @@ def test_edit_form_post_updates_row(customers_client) -> None:
         "/customers/default/edit",
         data={
             "customer_name": "Renamed Default",
-            "commcell_id": "cs-999",
+            "commcell_id": "1023717",       # decimal -> normalized hex (F9EE5)
             "notes": "Updated",
         },
     )
@@ -177,7 +177,7 @@ def test_edit_form_post_updates_row(customers_client) -> None:
         ).fetchone()
     finally:
         conn.close()
-    assert row == ("Renamed Default", "cs-999", "Updated")
+    assert row == ("Renamed Default", "f9ee5", "Updated")
 
 
 def test_edit_form_post_empty_name_rerenders_with_error(customers_client) -> None:

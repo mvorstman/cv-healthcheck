@@ -68,12 +68,19 @@ def create_customer(
     *,
     customer_id: str | None = None,
     commcell_id: str | None = None,
-    commcell_hostname: str | None = None,
+    connection_url: str | None = None,
+    commserve_name: str | None = None,
+    registration_code: str | None = None,
+    rp_server_url: str | None = None,
+    rp_scoping_id: str | None = None,
     company_guid: str | None = None,
     contact_info: str | None = None,
     notes: str | None = None,
     db_path: Path | None = None,
 ) -> dict[str, Any]:
+    # commcell_hostname is READ-ONLY-LEGACY (migration 0032) — never written;
+    # new rows get connection_url. The identity-schema columns are written
+    # distinct from commcell_id (Fix 3 conflation fix).
     if not str(customer_name or "").strip():
         raise ValueError("customer_name is required.")
     path = db_path or DB_PATH
@@ -82,14 +89,19 @@ def create_customer(
     with _connect(path) as conn:
         conn.execute(
             "INSERT INTO customers (customer_id, customer_name, commcell_id,"
-            " commcell_hostname, company_guid, contact_info, notes,"
+            " connection_url, commserve_name, registration_code,"
+            " rp_server_url, rp_scoping_id, company_guid, contact_info, notes,"
             " created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 cid,
                 customer_name.strip(),
                 commcell_id,
-                commcell_hostname,
+                connection_url,
+                commserve_name,
+                registration_code,
+                rp_server_url,
+                rp_scoping_id,
                 company_guid,
                 contact_info,
                 notes,
@@ -163,7 +175,11 @@ def update_customer(
     *,
     customer_name: str | None = None,
     commcell_id: str | None = None,
-    commcell_hostname: str | None = None,
+    connection_url: str | None = None,
+    commserve_name: str | None = None,
+    registration_code: str | None = None,
+    rp_server_url: str | None = None,
+    rp_scoping_id: str | None = None,
     company_guid: str | None = None,
     contact_info: str | None = None,
     notes: str | None = None,
@@ -174,6 +190,9 @@ def update_customer(
     Any field passed as None is left unchanged. To explicitly null a
     nullable column, pass an empty string and the caller can decide whether
     to coerce — this function only treats None as "no change."
+
+    commcell_hostname is READ-ONLY-LEGACY (migration 0032) and is deliberately
+    not updatable here — connection_url replaces it.
     """
     path = db_path or DB_PATH
     now = _now()
@@ -182,7 +201,11 @@ def update_customer(
     field_map = {
         "customer_name": customer_name,
         "commcell_id": commcell_id,
-        "commcell_hostname": commcell_hostname,
+        "connection_url": connection_url,
+        "commserve_name": commserve_name,
+        "registration_code": registration_code,
+        "rp_server_url": rp_server_url,
+        "rp_scoping_id": rp_scoping_id,
         "company_guid": company_guid,
         "contact_info": contact_info,
         "notes": notes,

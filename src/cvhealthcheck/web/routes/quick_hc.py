@@ -11,6 +11,7 @@ from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.config import load_settings
 from cvhealthcheck.db import get_db
 from cvhealthcheck.context import ContextMismatchError, NoExplicitContextError
+from cvhealthcheck.identity import effective_connection_url, normalize_commcell_id
 from cvhealthcheck.web.active_project import (
     ActiveProjectMissingError,
     get_active_customer,
@@ -296,12 +297,13 @@ def quick_hc_generic_collect(subject_id: str):
         return _workspace_redirect(subject_id)
 
     customer_id = customer["customer_id"]
-    base_url = customer.get("commcell_hostname")
+    # Fix 3: connection_url with READ-ONLY-LEGACY commcell_hostname fallback.
+    base_url = effective_connection_url(customer)
     if not base_url:
         customer_name = customer.get("customer_name") or customer_id
         flash(
-            f"Customer '{customer_name}' has no CommCell URL configured. "
-            "Edit the customer to set commcell_hostname before collecting.",
+            f"Customer '{customer_name}' has no connection URL configured. "
+            "Edit the customer to set its Connection URL before collecting.",
             "error",
         )
         return _workspace_redirect(subject_id)
@@ -368,12 +370,21 @@ def quick_hc_generic_collect(subject_id: str):
         flash(f"Collection errors: {'; '.join(result.errors)}", "error")
         return _workspace_redirect(subject_id)
 
+    # Fix 3 conflation fix: stamp the CommCell IDENTITY, not the customer
+    # label. commcell_name <- commserve_name (None when unset — NEVER
+    # customer_name, which re-creates the conflation we are killing).
+    # commcell_id <- the normalized CCID, or None if the stored value is
+    # not yet a clean id (flagged-for-manual-fix data must not crash collect).
+    try:
+        stamped_ccid = normalize_commcell_id(customer.get("commcell_id"))
+    except ValueError:
+        stamped_ccid = None
     artifact = result_to_artifact(
         result,
         subject_id=active_subject_id,
         subject_title=title,
-        commcell_id=customer.get("commcell_id"),
-        commcell_name=customer.get("customer_name"),
+        commcell_id=stamped_ccid,
+        commcell_name=customer.get("commserve_name"),
     )
     ArtifactStore(ctx_customer_id, ctx_project_id).save_artifact(artifact)
 

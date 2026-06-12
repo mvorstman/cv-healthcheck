@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from flask import jsonify
 
+from cvhealthcheck.identity import effective_connection_url
 from cvhealthcheck.web.active_project import (
     ActiveProjectMissingError,
     get_active_customer,
@@ -39,14 +40,14 @@ def api_login():
         customer = get_active_customer()
     except ActiveProjectMissingError as exc:
         return jsonify({"success": False, "error": str(exc)}), 500
-    base_url = customer.get("commcell_hostname")
+    base_url = effective_connection_url(customer)
     if not base_url:
         customer_name = customer.get("customer_name") or customer["customer_id"]
         return jsonify({
             "success": False,
             "error": (
-                f"Customer '{customer_name}' has no CommCell URL configured. "
-                "Edit the customer and set commcell_hostname before signing in."
+                f"Customer '{customer_name}' has no connection URL configured. "
+                "Edit the customer and set its Connection URL before signing in."
             ),
         }), 400
     try:

@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from cvhealthcheck.db import get_db
+from cvhealthcheck.identity import normalize_commcell_id, normalize_connection_url
 
 from .shared import bp, flash, redirect, render_template, request, url_for
 
@@ -48,6 +49,12 @@ def _slugify_customer_id(name: str, existing_ids: set[str]) -> str:
 def _form_payload(form: Any) -> dict[str, Any]:
     """Pull customer fields from a request form, trimming whitespace.
     Optional fields with empty values resolve to None (= NULL in storage).
+
+    Identity-schema split (Fix 3): commcell_id is normalized to canonical hex
+    and connection_url / rp_server_url are repaired (schemeless -> https://)
+    and validated at this seam. A bad value raises ValueError, which the
+    POST handlers translate into a form error (never a 500, never stored
+    garbage). commcell_hostname is NOT read — it is READ-ONLY-LEGACY.
     """
     def _clean(value: str | None) -> str | None:
         if value is None:
@@ -57,8 +64,12 @@ def _form_payload(form: Any) -> dict[str, Any]:
 
     return {
         "customer_name": (form.get("customer_name") or "").strip(),
-        "commcell_id": _clean(form.get("commcell_id")),
-        "commcell_hostname": _clean(form.get("commcell_hostname")),
+        "commcell_id": normalize_commcell_id(_clean(form.get("commcell_id"))),
+        "connection_url": normalize_connection_url(_clean(form.get("connection_url"))),
+        "commserve_name": _clean(form.get("commserve_name")),
+        "registration_code": _clean(form.get("registration_code")),
+        "rp_server_url": normalize_connection_url(_clean(form.get("rp_server_url"))),
+        "rp_scoping_id": _clean(form.get("rp_scoping_id")),
         "company_guid": _clean(form.get("company_guid")),
         "contact_info": _clean(form.get("contact_info")),
         "notes": _clean(form.get("notes")),
@@ -67,7 +78,8 @@ def _form_payload(form: Any) -> dict[str, Any]:
 
 _SELECT_COLUMNS = (
     "customer_id, customer_name, commcell_id, commcell_hostname, "
-    "company_guid, contact_info, notes, created_at, updated_at"
+    "connection_url, commserve_name, registration_code, rp_server_url, "
+    "rp_scoping_id, company_guid, contact_info, notes, created_at, updated_at"
 )
 
 
@@ -145,7 +157,13 @@ def customers_detail(customer_id: str):
 @bp.route("/customers/new", methods=["GET", "POST"])
 def customers_new():
     if request.method == "POST":
-        payload = _form_payload(request.form)
+        try:
+            payload = _form_payload(request.form)
+        except ValueError as exc:
+            return render_template(
+                "customer_form.html",
+                customer=request.form, mode="new", error=str(exc),
+            )
         if not payload["customer_name"]:
             return render_template(
                 "customer_form.html",
@@ -161,16 +179,23 @@ def customers_new():
                 for row in db.execute("SELECT customer_id FROM customers").fetchall()
             }
             customer_id = _slugify_customer_id(payload["customer_name"], existing)
+            # Fix 3: write connection_url + identity columns; commcell_hostname
+            # is READ-ONLY-LEGACY and never written.
             db.execute(
                 "INSERT INTO customers (customer_id, customer_name, commcell_id,"
-                " commcell_hostname, company_guid, contact_info, notes,"
-                " created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " connection_url, commserve_name, registration_code,"
+                " rp_server_url, rp_scoping_id, company_guid, contact_info,"
+                " notes, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     customer_id,
                     payload["customer_name"],
                     payload["commcell_id"],
-                    payload["commcell_hostname"],
+                    payload["connection_url"],
+                    payload["commserve_name"],
+                    payload["registration_code"],
+                    payload["rp_server_url"],
+                    payload["rp_scoping_id"],
                     payload["company_guid"],
                     payload["contact_info"],
                     payload["notes"],
@@ -203,7 +228,14 @@ def customers_edit(customer_id: str):
         return ("Customer not found.", 404)
 
     if request.method == "POST":
-        payload = _form_payload(request.form)
+        try:
+            payload = _form_payload(request.form)
+        except ValueError as exc:
+            return render_template(
+                "customer_form.html",
+                customer={"customer_id": customer_id, **request.form},
+                mode="edit", error=str(exc),
+            )
         if not payload["customer_name"]:
             return render_template(
                 "customer_form.html",
@@ -214,15 +246,22 @@ def customers_edit(customer_id: str):
         now = _now()
         db = get_db()
         try:
+            # Fix 3: write connection_url + identity columns; commcell_hostname
+            # is frozen READ-ONLY-LEGACY (migration 0032) and never updated.
             db.execute(
                 "UPDATE customers SET customer_name = ?, commcell_id = ?,"
-                " commcell_hostname = ?, company_guid = ?, contact_info = ?,"
-                " notes = ?, updated_at = ?"
+                " connection_url = ?, commserve_name = ?, registration_code = ?,"
+                " rp_server_url = ?, rp_scoping_id = ?, company_guid = ?,"
+                " contact_info = ?, notes = ?, updated_at = ?"
                 " WHERE customer_id = ?",
                 (
                     payload["customer_name"],
                     payload["commcell_id"],
-                    payload["commcell_hostname"],
+                    payload["connection_url"],
+                    payload["commserve_name"],
+                    payload["registration_code"],
+                    payload["rp_server_url"],
+                    payload["rp_scoping_id"],
                     payload["company_guid"],
                     payload["contact_info"],
                     payload["notes"],

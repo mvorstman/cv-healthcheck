@@ -118,6 +118,7 @@ _FAKE_CUSTOMER_NO_HOSTNAME = {
     "customer_id": "default",
     "customer_name": "Default",
     "commcell_hostname": None,
+    "connection_url": None,
     "commcell_id": None,
     "company_guid": None,
     "contact_info": None,
@@ -268,7 +269,7 @@ def test_api_login_without_hostname_returns_400(monkeypatch) -> None:
     assert response.status_code == 400
     payload = response.get_json()
     assert payload["success"] is False
-    assert "commcell_hostname" in payload["error"].lower() or "commcell url" in payload["error"].lower()
+    assert "connection url" in payload["error"].lower()
 
 
 # ── /quick-hc/<subject_id>/collect ───────────────────────────────────────────
