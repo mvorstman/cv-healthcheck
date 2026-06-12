@@ -10,6 +10,16 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-12 (docs — ADR-0015 Proposed: template/profile/runtime separation)
+
+**Branch:** `main`. Status flip of the reviewed draft (`90433e7`); README ADR range updated to 0001–0015.
+
+### Added
+- **ADR-0015 → Proposed** (`docs/adr/0015-template-profile-runtime.md`, reviewed by Michiel + external reviewer): the subject-catalog lifecycle separates **template definition** (transferable, customer-free), **project/customer profile binding** (per-customer resolved ids, parameters, customer-assertion rules), and **runtime-only execution artifacts** (re-resolvable GUIDs, DOM ids, paging mechanics) — allocated element-by-element in a normative table. Names four invariants: **Context Integrity** (customer-data writes require explicit context selection — never a silent default), **Publication Integrity** (the object reviewed is the object executed; published templates are immutable, rule bindings move out of the template blob), **Template Catalog** (a template transfers to a brand-new customer without modification), and **Catalog Purity** (review criterion: the catalog is understandable/reviewable/transportable without access to any customer). Relations: **amends ADR-0013** (subjects-as-foundation gains the draft→template→profile lifecycle), **tightens ADR-0010** (rules registry gains a template-vs-profile axis), **hardens ADR-0014** (the typed RP source becomes the enforced authoring path).
+
+### Notes
+- Cross-reference annotations on ADR-0013/0010/0014 themselves are deliberately deferred until ADR-0015 reaches Accepted.
+
 ## 2026-06-12 (fix(catalog) — delete_subject reaps orphaned rules; dead-code sweeps; 12-rule registry cleanup)
 
 **Branch:** `main`. Commits `39758f1`, `16d0dec`, `5b91fbf`; suite 1070 passed.

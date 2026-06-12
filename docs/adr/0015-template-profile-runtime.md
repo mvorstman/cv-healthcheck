@@ -1,6 +1,6 @@
 # ADR-0015: Template / Profile / Runtime separation — the subject catalog lifecycle
 
-**Status:** DRAFT — not yet Proposed. For review by Michiel + external reviewer.
+**Status:** Proposed (2026-06-12) — reviewed by Michiel + external reviewer
 **Date:** 2026-06-12
 **Relations:** Amends ADR-0013 (subjects-as-foundation gains the draft→template→profile lifecycle). Tightens ADR-0010 (rules registry gains a template-vs-profile axis). Hardens ADR-0014 (typed RP source becomes the enforced authoring path). Builds on ADR-0002 (customer/project entities) and ADR-0003 (name-based dataset resolution).
 
