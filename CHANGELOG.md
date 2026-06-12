@@ -10,6 +10,29 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat — Fix 3: identity-schema split, the three identity values kept distinct)
+
+**Branch:** `main`. Commits `1fc94d2`, `6a4ae97`, `8a52589`; suite 1072 passed. Splits the conflated customer identity into distinct, normalized fields (ADR-0015 profile layer) — the foundation Fix 4 (report-identity / dataset-GUID portability, #34) consumes.
+
+### Added
+- **Migration 0032** — five additive customers columns: `connection_url` (reach URL), `commserve_name` (human/product label, e.g. CS01), `registration_code` (license verifier), `rp_server_url` + `rp_scoping_id` (optional Reports Plus server + resolved scoping id). URL-shaped-only data move: `commcell_hostname` values matching `http(s)://` migrate to `connection_url`; non-URL values stay put, flagged (`db.customers.legacy_hostname_review_flags`). No backfill guesses — `default.commcell_id='SMOKE-TEST-CS'` and `test_customer_1.commcell_id='33f7'` (suspected transposition of 337f) left for manual fix.
+- **`cvhealthcheck/identity.py`** (leaf): `normalize_commcell_id` (canonical lowercase hex; hex F9EE5 == decimal 1023717 -> `f9ee5`; junk raises), `normalize_connection_url` (schemeless -> https://, validated; kills the `gw02:4433`-read-as-scheme class), `effective_connection_url` (connection_url with legacy fallback, junk -> None).
+- **Customer form** identity fields teaching reach-vs-identity: "Connection URL (WebServer/gateway)", "CommServe name", "CommCell ID (licensed, hex or decimal)", "Registration code", "Reports Plus server URL", "Reports Plus scoping ID". Detail page shows the split; customers list shows the flag banner.
+- **Tests** (+20, `tests/test_identity_schema_fix3.py`): normalization (hex≡decimal, scheme repair, junk), migration data-move (re-runs the real UPDATE loaded from the .sql), conflation fix, writer-freeze.
+
+### Changed
+- **Writers re-pointed; `commcell_hostname` is READ-ONLY-LEGACY** (frozen, never written; dropped in a later cleanup that also removes the read fallback): customers routes + `db.customers.create_customer`/`update_customer` write `connection_url` + the identity columns; `commcell_id` stored normalized. Bad input at the customers page re-renders with a form error, never a 500/garbage.
+- **Readers** at the three connect sites (basic `/login`, quick_hc collect, quick_hc_api `/api/login`) read `connection_url` with the legacy fallback, validated.
+- **Conflation fix (honest-empty):** the collect stamp sets `commcell_name <- commserve_name` (None when unset — **never** `customer_name`) and `commcell_id <- normalized CCID or None`; the silent `commcell_name=customer_name` conflation is gone.
+
+### Fixed
+- **`start.sh`** no longer regenerates the session secret per start (D5 amplifier — landed alongside; persists to `data/.secret_key`, gitignored).  *(carried from the D5 entry; noted here as the same-session amplifier.)*
+
+### Notes
+- Live validation on `data/app.db`: migration applied, both URL hostnames moved to `connection_url`, `commcell_hostname` frozen, flagged CCIDs untouched (zero flags). Edit form renders all six identity fields; a schemeless save (`gw02:4433`) normalized to `https://gw02:4433` and a decimal CCID (`1023717`) to `f9ee5`, with `commcell_hostname` unchanged. Fabricated test values were restored — HomeLab carries no guessed identity data.
+- **Later cleanup (own commit):** drop `commcell_hostname` + remove the read-time fallback in `effective_connection_url` and the three connect sites, once no row needs the legacy value.
+- `commcell_hostname` write-path retirement makes the column safe to drop; `company_guid` left entirely untouched (Step-1 found zero consumers; unproven — no rename on suspicion).
+
 ## 2026-06-13 (feat(context) — D5: the Context Integrity invariant is ENFORCED at the write layer)
 
 **Branch:** `main`. Commits `ef6adfb`, `a533da3`, `425136c`, `261f7d8`; suite 1052 passed. ADR-0015's **Context Integrity** invariant — *a customer-data write may only occur against an explicitly selected context; absence of explicit selection is an error, never a silent default* — is now enforced, not aspirational.

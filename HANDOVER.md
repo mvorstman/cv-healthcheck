@@ -1,4 +1,4 @@
-# HANDOVER — Phase 1: Fix 2 + D5 landed (Context Integrity enforced)
+# HANDOVER — Phase 1: Fix 2 + D5 + Fix 3 landed (isolation, context, identity)
 
 You are continuing development on **cv-healthcheck**, a modular Commvault
 operational health check platform (Python/Flask, Pydantic v2 canonical
@@ -7,21 +7,25 @@ artifact schema, MCP server for AI-assisted subject authoring).
 ## Current state
 
 - **Branch:** `main`
-- **Latest commit:** `261f7d8` (D5 commit 4 — session-secret persistence)
-- **Test suite:** 1052 passed (full pytest, exit 0)
-- **In flight:** Phase 1 (Context Integrity). **Fix 2 and D5 are done** (see
-  the 2026-06-12 fix(isolation) and 2026-06-13 feat(context) CHANGELOG
-  entries): the scoped store is the only workspace data source, and the
-  Context Integrity invariant is ENFORCED — every named write choke point
-  requires `require_active_context()` (typed `NoExplicitContextError`,
-  never a silent Default); approval takes explicit context as an input
-  with stamp-coherence checks; the session secret persists across
-  restarts. Pending human step: authenticated fresh-browser check
-  (no project selected → collect yields the clean prompt; select a
-  project → collect lands scoped). Anonymous live check passed.
-  **Next: identity schema** — the connection_url / commserve_name split
-  on customers, + CCID + optional Reports Plus server (per the Phase-1
-  audit's F recommendation and ADR-0015's profile layer).
+- **Latest commit:** `8a52589` (Fix 3 commit 3 — form + tests) + a docs commit
+- **Test suite:** 1072 passed (full pytest, exit 0)
+- **Unpushed:** the D5 commits (`ef6adfb`..`261f7d8`) AND the Fix-3 commits
+  (`1fc94d2`, `6a4ae97`, `8a52589`) are all local-only — they go together
+  after the browser pass (Michiel's call).
+- **In flight:** Phase 1. **Fix 2, D5, and Fix 3 are done** (CHANGELOG
+  2026-06-12 fix(isolation), 2026-06-13 feat(context), 2026-06-13 feat Fix 3):
+  scoped store is the only workspace data source; Context Integrity is
+  enforced at every write choke point; the three identity values are split
+  into distinct normalized columns (connection_url / commserve_name /
+  commcell_id / registration_code / rp_server_url / rp_scoping_id),
+  commcell_hostname frozen READ-ONLY-LEGACY, the conflation killed.
+  Pending human step: authenticated fresh-browser check (D5: no project →
+  clean prompt, selected → scoped; Fix 3: edit a customer, see the new
+  fields, save). Anonymous + headless live checks passed.
+  **Next: Fix 4 — report-identity / dataset-GUID portability (#34)**, which
+  consumes the identity columns (rp_scoping_id resolution) per ADR-0015's
+  profile layer. Also queued: the later cleanup commit to drop
+  commcell_hostname + its read-time fallback once no row needs it.
 
 ## What was just completed (Phase 0)
 
