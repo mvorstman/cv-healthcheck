@@ -101,9 +101,10 @@ def test_staging_page_returns_200(client) -> None:
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Staging Review" in body
-    assert "No pending staged artifacts." in body
-    assert "No approved staged artifacts yet." in body
-    assert "No rejected staged artifacts." in body
+    assert "No pending proposals." in body
+    assert "No rejected proposals." in body
+    # ADR-0015 slice 1: the approved-artifact column was removed (proposals-only).
+    assert "Approved" not in body
 
 
 def test_reject_pending_artifact_redirects(client, db_path: Path) -> None:

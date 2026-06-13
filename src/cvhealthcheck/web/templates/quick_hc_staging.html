@@ -349,7 +349,7 @@
       <section class="staging-section">
         <div class="staging-section-head">
           <h2 class="staging-section-title">Pending</h2>
-          <span class="staging-count">{{ pending|length }} artifact{{ '' if pending|length == 1 else 's' }}</span>
+          <span class="staging-count">{{ pending|length }} proposal{{ '' if pending|length == 1 else 's' }}</span>
         </div>
         {% if pending %}
           <div class="staging-card-list">
@@ -358,30 +358,14 @@
             {% endfor %}
           </div>
         {% else %}
-          <p class="staging-empty">No pending staged artifacts.</p>
-        {% endif %}
-      </section>
-
-      <section class="staging-section">
-        <div class="staging-section-head">
-          <h2 class="staging-section-title">Approved</h2>
-          <span class="staging-count">{{ approved|length }} artifact{{ '' if approved|length == 1 else 's' }}</span>
-        </div>
-        {% if approved %}
-          <div class="staging-card-list">
-            {% for artifact in approved %}
-              {{ artifact_card(artifact, "approved") }}
-            {% endfor %}
-          </div>
-        {% else %}
-          <p class="staging-empty">No approved staged artifacts yet.</p>
+          <p class="staging-empty">No pending proposals.</p>
         {% endif %}
       </section>
 
       <section class="staging-section">
         <div class="staging-section-head">
           <h2 class="staging-section-title">Rejected</h2>
-          <span class="staging-count">{{ rejected|length }} artifact{{ '' if rejected|length == 1 else 's' }}</span>
+          <span class="staging-count">{{ rejected|length }} proposal{{ '' if rejected|length == 1 else 's' }}</span>
         </div>
         {% if rejected %}
           <div class="staging-card-list">
@@ -390,7 +374,7 @@
             {% endfor %}
           </div>
         {% else %}
-          <p class="staging-empty">No rejected staged artifacts.</p>
+          <p class="staging-empty">No rejected proposals.</p>
         {% endif %}
       </section>
     </div>
