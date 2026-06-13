@@ -10,6 +10,25 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (docs — ADR-0016 Proposed: recipe transform layer)
+
+**Branch:** `main`. Single docs commit; the reviewed draft's status set to **Proposed** at `docs/adr/0016-recipe-transform-layer.md`; README ADR range → 0001–0016. From the Piece-B recipe-feasibility inventory (two specimens: client_growth verdict **(a)** mis-authored, no model change; License Summary verdict **(c)** needs model work before any de-bespoke).
+
+### Added
+- **ADR-0016 (Proposed) — recipe transform layer: declarative shaping without code-in-data.** Adds bounded, declarative shaping to the recipe model: `source: []` coalesce/first-present (report-version / license-type column variance), a closed named-transform registry (`trim`, `null_if_empty`, `to_integer`, `to_float`, `number_with_unit`, `mask_registration_code`), a `metadata_pairs` section format (deterministic exact-label→value only — no regex/fuzzy/nested), and minimal computed sections (`row_count` / `distinct_count` / `grouped_count`).
+- **Four named invariants** keep it from becoming code-in-data:
+  - **Closed Registry** — transforms invoked only by name from a platform-owned closed registry; no arbitrary-expression escape hatch (this is what keeps transforms data, not code).
+  - **Compile-Validated** — every transform name is validated at publish against the registry; an unknown name is a compile error and the template cannot publish.
+  - **Security-by-Construction** — a field tagged *sensitive* MUST carry its mandatory transform via a gate-enforced mapping (initial: `registration_code` → `mask_registration_code`); a missing required transform is a compile error, never a silent gap.
+  - **Reusable, not subject-specific** — every transform is a general capability usable by any subject; LS is the first consumer, not the owner.
+
+### Notes
+- **Relation to ADR-0015:** extends it — the recipe is the template's extraction definition, and the transform registry becomes part of the ADR-0015 compile gate's validation contract. The gate is therefore built **transform-aware from its first implementation**, which reorders the redesign: the transform-layer design (this ADR) precedes the compile gate. Builds on ADR-0010 (rules) and the Fix-3/Fix-4 identity/provenance work.
+- **Deliberate bet, recorded:** the strongest evidence today is a single subject (LS); accepting this ADR accepts that bet, bounded by the closed-registry design.
+- **Build order (fixed):** ADR Proposed → parity harness (all 41 real LS exports) → transform layer → LS conversion → delete bespoke LS (only behind parity proof).
+- **Open item:** `number_with_unit` return shape is unresolved and blocks that transform, pending a grounding pass over the 41 exports.
+- Proposed, not Accepted — Accepted requires one full implementation cycle (transform layer + parity harness passing all 41 exports + bespoke LS deleted with no regression), the same standard as ADR-0015.
+
 ## 2026-06-13 (refactor — ADR-0015 redesign slice 1: delete the vestigial artifact-approval path)
 
 **Branch:** `main`. Commits `e9acf2e`, `6971734`, `a12d59e`, `03f00c4`; suite 1075 passed. Subtractive cleanup only — NO compile gate, NO profile schema, NO schema drops (those are later slices). Verdict from the design pass: the redesign is mostly subtraction; this slice removes the vestige.
