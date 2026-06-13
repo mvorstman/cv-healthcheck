@@ -10,6 +10,21 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (test — ADR-0016 parity harness for License Summary)
+
+**Branch:** `main`. Harness only — **no transform layer, no LS conversion, no bespoke-LS deletion, no user-facing change.** Suite 1095 passed (+11). The acceptance gate for the later LS de-bespoke is in place; transform implementation NOT started.
+
+### Added
+- **`tests/ls_parity_harness.py`** — reusable semantic `CanonicalArtifact` comparator + a bespoke-pipeline baseline (`parse → persist(write_legacy=False) → adapt`, side-effect-free) + a pluggable candidate seam (`bespoke_candidate`, today the bespoke pipeline; the generic recipe output plugs in here during the conversion). Parity definitions are exactly ADR-0016 §4: semantic equivalence (sections / items / field values — not raw-JSON, timestamps, or artifact ids); `registration_code` / sensitive fields compared in **masked** form with both-sides-masked asserted (a raw value is a FAIL); computed summaries compared semantically; **three outcomes — pass / fail / PENDING-UNIT**, where unit-bearing fields (the `number_with_unit` domain, ADR-0016 Open Item 1) are quarantined — never silently skipped, never auto-failed.
+- **`tests/test_ls_parity_harness.py`** (11 tests) — fixture discovery, the bespoke baseline over the corpus, comparator reflexivity, and targeted tests proving the comparator genuinely detects value / section / summary differences, quarantines a differing unit field as PENDING-UNIT, and FAILs on a raw (unmasked) sensitive value — so a green run is meaningful, not vacuous. Plus a pluggable-seam test (a degraded candidate is detected).
+
+### Notes — baseline corpus findings (recorded before transforms exist)
+- **41 real exports** under `data/imports/license_summary/` — **10 csv, 31 html**; **all 41 produce a `CanonicalArtifact`, 0 parse errors.**
+- **3 produce no license rows** (documented, not a failure): two stray Security-Assessment HTML exports + the `cv_redesign_option_a_refined` mock are filed in the LS imports dir but are not license summaries.
+- **Bespoke-vs-bespoke parity: 5067 pass, 0 fail, 1632 PENDING-UNIT** — comparator reflexive.
+- **PENDING-UNIT field classes encountered** (feeds the `number_with_unit` grounding probe next): `used` (544), `available_total` (360), `unit` (360), `entitlement_value` (184), `usage_percent` (184).
+- **Transform layer NOT started** — ADR-0016 build order: this harness (step 2) precedes the transform layer (step 3); the `number_with_unit` return shape (Open Item 1) remains unresolved and is the next grounding probe.
+
 ## 2026-06-13 (docs — ADR-0016 Proposed: recipe transform layer)
 
 **Branch:** `main`. Single docs commit; the reviewed draft's status set to **Proposed** at `docs/adr/0016-recipe-transform-layer.md`; README ADR range → 0001–0016. From the Piece-B recipe-feasibility inventory (two specimens: client_growth verdict **(a)** mis-authored, no model change; License Summary verdict **(c)** needs model work before any de-bespoke).
