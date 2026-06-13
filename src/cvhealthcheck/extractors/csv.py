@@ -46,6 +46,7 @@ from pathlib import Path
 from typing import Any
 
 from cvhealthcheck.extractors.column_map import (
+    extract_computed,
     extract_metadata_pairs,
     extract_row,
     header_has_all,
@@ -104,6 +105,9 @@ class CSVExtractor:
                 rows, warnings = self._extract_metadata_pairs(
                     rows_raw, extraction, null_values, section_id
                 )
+            elif fmt == "computed":
+                warnings = []
+                rows = extract_computed(extraction, result.sections, section_id, warnings)
             else:
                 result.errors.append(f"Unknown CSV format '{fmt}' for section '{section_id}'")
                 continue

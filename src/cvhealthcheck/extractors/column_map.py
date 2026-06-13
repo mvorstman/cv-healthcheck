@@ -39,6 +39,15 @@ class SensitiveFieldError(ValueError):
     by author oversight."""
 
 
+class UnknownComputedTypeError(ValueError):
+    """Raised when a computed section names a type outside the closed set.
+
+    Interim enforcement: raised at application time now; the ADR-0015 compile gate
+    rejects at publish later (ADR-0016 D1d — the computed set is minimal,
+    enumerated, and CLOSED: no expressions, filters, arithmetic, or custom
+    functions)."""
+
+
 @dataclass
 class ResolvedColumn:
     canonical: str
@@ -416,3 +425,64 @@ def extract_metadata_pairs(
         section_id=section_id, warnings=warnings, case_sensitive=True,
     )
     return extract_row(cell_texts, resolved, null_values, section_id, warnings)
+
+
+# ---------------------------------------------------------------------------
+# computed sections (ADR-0016 slice 6 / D1d)
+#
+# Exactly three EXTRACTION-TIME row aggregates over an already-extracted
+# section's rows — a minimal, enumerated, CLOSED set. NO expressions, filters,
+# arithmetic, arbitrary aggregation, or custom functions. Distinct from the
+# ADR-0010 evaluative layer (verdicts computed AFTER extraction): computed
+# sections SHAPE, rules JUDGE.
+# ---------------------------------------------------------------------------
+
+COMPUTED_TYPES = frozenset({"row_count", "distinct_count", "grouped_count"})
+
+
+def compute_section(computed_type: str, rows: list[dict] | None, field: str | None) -> Any:
+    """One of the three closed aggregates over ``rows``:
+      row_count      → int (number of rows)
+      distinct_count → int (distinct non-null values of ``field``)
+      grouped_count  → {group: count} over ``field``
+    Unknown type raises UnknownComputedTypeError (interim enforcement)."""
+    if computed_type not in COMPUTED_TYPES:
+        raise UnknownComputedTypeError(
+            f"Unknown computed-section type '{computed_type}'. "
+            f"Known: {sorted(COMPUTED_TYPES)}."
+        )
+    safe_rows = [r for r in (rows or []) if isinstance(r, dict)]
+    if computed_type == "row_count":
+        return len(safe_rows)
+    if computed_type == "distinct_count":
+        return len({str(r.get(field)) for r in safe_rows if r.get(field) is not None})
+    counts: dict[str, int] = {}
+    for r in safe_rows:
+        value = r.get(field)
+        if value is None:
+            continue
+        key = str(value)
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def extract_computed(
+    extraction: dict,
+    sections: dict[str, list[dict]],
+    section_id: str,
+    warnings: list[str],
+) -> list[dict[str, Any]]:
+    """Build a computed section's single output row from another (already-
+    extracted) section's rows. A missing/empty source yields 0 / {} — never a
+    crash. The aggregate lands under ``output_field`` (default "value")."""
+    computed_type = extraction.get("computed_type", "")
+    source_section = extraction.get("source_section", "")
+    field = extraction.get("field")
+    output_field = extraction.get("output_field", "value")
+    if source_section and source_section not in sections:
+        warnings.append(
+            f"Computed section '{section_id}': source section '{source_section}' "
+            f"not found (treated as empty)"
+        )
+    value = compute_section(computed_type, sections.get(source_section, []), field)
+    return [{output_field: value}]

@@ -44,6 +44,7 @@ from bs4 import BeautifulSoup
 from bs4.element import Tag
 
 from cvhealthcheck.extractors.column_map import (
+    extract_computed,
     extract_metadata_pairs,
     extract_row,
     resolve_columns,
@@ -163,6 +164,15 @@ class HTMLExtractor:
                     result.warnings.append(
                         f"Section '{section_id}' metadata_pairs matched no labels"
                     )
+                result.sections[section_id] = rows
+                result.section_output_types[section_id] = output_as
+                result.section_titles[section_id] = section_title
+                continue
+
+            if extraction.get("format") == "computed":
+                comp_warnings: list[str] = []
+                rows = extract_computed(extraction, result.sections, section_id, comp_warnings)
+                result.warnings.extend(comp_warnings)
                 result.sections[section_id] = rows
                 result.section_output_types[section_id] = output_as
                 result.section_titles[section_id] = section_title

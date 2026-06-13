@@ -10,6 +10,18 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat — ADR-0016 transform layer slice 6: computed sections — transform layer complete)
+
+**Branch:** `main`. Sixth and LAST transform-layer slice — the three computed sections only. NOT the compile gate, NOT the LS recipe, NOT bespoke deletion. Suite 1197 passed (+13). Parity harness over the 38 unchanged. With this slice the ADR-0016 transform layer (coalesce + closed registry + mask + number_with_unit + metadata_pairs + computed) is feature-complete; next is the compile gate, then the LS recipe + parity flip.
+
+### Added
+- **computed sections (`format: "computed"`)** on both extractors — exactly three extraction-time row aggregates over another (already-extracted) section's rows (ADR-0016 D1d, closed set): `row_count` → int; `distinct_count` (non-null values of a named `field`) → int; `grouped_count` (over `field`) → `{group: count}`. The aggregate lands as one output row under `output_field` (default "value"). A missing/empty source section yields 0 / `{}` (no crash); an unknown computed type raises `UnknownComputedTypeError` (interim apply-time enforcement; the compile gate rejects at publish later). NO expressions / filters / arithmetic / custom functions. These SHAPE at extraction time — distinct from the ADR-0010 evaluative layer, which JUDGES after extraction.
+- **`tests/test_computed_sections.py`** (13) — the three aggregates (incl. None exclusion), missing/empty source → 0/empty, unknown type → raises, the `extract_computed` builder (output_field, missing-source warning), the `grouped_count` `{group: count}` map round-tripping through the `CanonicalArtifact` model, and a compose test (one CSV → table + metadata_pairs + `row_count` + `grouped_count`, all produced in a single extraction).
+
+### Notes
+- Ordering: a computed section reads `result.sections[source_section]`, so its `sort_order` must exceed its source's (the source is extracted first) — a recipe-authoring responsibility; out-of-order resolves to an empty source (0/empty + warning), never a crash.
+- NOT done: the compile gate, the LS recipe, bespoke-LS deletion. The harness PENDING-UNIT fields still move pending→comparable only when the LS recipe is authored to use the transforms.
+
 ## 2026-06-13 (feat — ADR-0016 transform layer slice 5: metadata_pairs)
 
 **Branch:** `main`. Fifth transform-layer slice — the `metadata_pairs` section format only. NOT computed sections (slice 6), the compile gate, the LS recipe, or `number_with_unit` changes. Suite 1184 passed (+17). Parity harness over the 38 unchanged.
