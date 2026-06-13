@@ -201,16 +201,33 @@ def execute_approval(
                 "and project_id (the store it lands in); no silent default."
             )
         validate_known_context(db, customer_id, project_id)
-        stamped = existing.get("customer_id")
-        if stamped and stamped != customer_id:
+        # Coherence-read of the row's CREATION context (migration 0033). When a
+        # row carries its own stamp, that stamp is AUTHORITY — the approval-
+        # supplied context is checked against it (mismatch -> nothing written).
+        # When a row's stamp is NULL (legacy), D5 behaviour is unchanged: the
+        # approval-supplied context is authority and the customer_id is
+        # back-stamped. This is an inert enabler — on the match case the store
+        # built below is identical to D5 (approval context == stamp); the
+        # "approval stops re-asking" UX change is deliberately deferred.
+        stamped_customer = existing.get("customer_id")
+        stamped_project = existing.get("project_id")
+        if stamped_customer and stamped_customer != customer_id:
             raise ContextMismatchError(
                 f"staged row {stage_id} is stamped for customer "
-                f"{stamped!r} but approval was attempted under "
+                f"{stamped_customer!r} but approval was attempted under "
                 f"{customer_id!r}; nothing written."
             )
-        if not stamped:
+        if stamped_project and stamped_project != project_id:
+            raise ContextMismatchError(
+                f"staged row {stage_id} is stamped for project "
+                f"{stamped_project!r} but approval was attempted under "
+                f"{project_id!r}; nothing written."
+            )
+        if not stamped_customer:
             # Legacy NULL-stamped row: the approval context wins; record the
-            # back-stamp on the row (ai_notes — no schema change).
+            # back-stamp on the row (ai_notes — no schema change). D5 logic,
+            # unchanged: customer_id only (project_id back-stamp is not part of
+            # the preserved D5 behaviour).
             db.execute(
                 "UPDATE staged_artifacts SET customer_id = ?,"
                 " ai_notes = COALESCE(ai_notes, '') || ?"

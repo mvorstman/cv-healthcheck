@@ -128,3 +128,122 @@ def test_subject_proposal_stays_catalog_global_null(monkeypatch, migrated_db_pat
     assert row["artifact_type"] == "subject_proposal"
     assert row["customer_id"] is None
     assert row["project_id"] is None
+
+
+# ── PART 1 (commit 2): approval reads the row's creation context ──────────────
+
+from cvhealthcheck.context import ContextMismatchError
+from cvhealthcheck.db.staging import create_staged_artifact, execute_approval
+
+
+def _seed_customer_project(db, customer_id, project_id):
+    db.execute(
+        "INSERT OR IGNORE INTO customers (customer_id, customer_name, created_at, updated_at)"
+        " VALUES (?, ?, '2026-01-01', '2026-01-01')", (customer_id, customer_id),
+    )
+    db.execute(
+        "INSERT OR IGNORE INTO projects (project_id, customer_id, project_number)"
+        " VALUES (?, ?, ?)", (project_id, customer_id, f"P-{project_id}"),
+    )
+    db.commit()
+
+
+def _store_exists(customer_id, project_id, subject_id) -> bool:
+    try:
+        ArtifactStore(customer_id, project_id).load_latest_artifact(subject_id)
+        return True
+    except FileNotFoundError:
+        return False
+
+
+def test_stamped_row_matching_context_approves(migrated_db_path):
+    db = _conn(migrated_db_path)
+    try:
+        _seed_customer_project(db, "cm", "pm")
+        create_staged_artifact(
+            db, "st_match", "users", _mk_artifact("users").model_dump_json(),
+            source_type="html", customer_id="cm", project_id="pm",
+        )
+        result = execute_approval(db, "st_match", customer_id="cm", project_id="pm")
+        assert result["status"] == "approved"
+        assert _store_exists("cm", "pm", "users")
+    finally:
+        db.close()
+
+
+def test_stamped_row_mismatched_project_refuses(migrated_db_path):
+    db = _conn(migrated_db_path)
+    try:
+        _seed_customer_project(db, "cm", "pm")
+        _seed_customer_project(db, "cm", "pOTHER")
+        create_staged_artifact(
+            db, "st_projmiss", "users", _mk_artifact("users").model_dump_json(),
+            source_type="html", customer_id="cm", project_id="pm",
+        )
+        with pytest.raises(ContextMismatchError):
+            execute_approval(db, "st_projmiss", customer_id="cm", project_id="pOTHER")
+        assert db.execute(
+            "SELECT status FROM staged_artifacts WHERE stage_id='st_projmiss'"
+        ).fetchone()["status"] == "pending"          # row untouched
+        assert not _store_exists("cm", "pOTHER", "users")
+    finally:
+        db.close()
+
+
+def test_stamped_row_mismatched_customer_refuses(migrated_db_path):
+    db = _conn(migrated_db_path)
+    try:
+        _seed_customer_project(db, "cm", "pm")
+        _seed_customer_project(db, "cOTHER", "pm2")
+        create_staged_artifact(
+            db, "st_custmiss", "users", _mk_artifact("users").model_dump_json(),
+            source_type="html", customer_id="cm", project_id="pm",
+        )
+        with pytest.raises(ContextMismatchError):
+            execute_approval(db, "st_custmiss", customer_id="cOTHER", project_id="pm2")
+    finally:
+        db.close()
+
+
+def test_legacy_null_project_row_keeps_d5_behaviour(migrated_db_path):
+    """A pre-0033 row (project_id NULL, customer_id NULL) -> D5 unchanged:
+    approval context is authority, customer_id back-stamped, lands scoped."""
+    db = _conn(migrated_db_path)
+    try:
+        customer_id, project_id = "cm", "pm"
+        _seed_customer_project(db, customer_id, project_id)
+        create_staged_artifact(
+            db, "st_legacy", "users", _mk_artifact("users").model_dump_json(),
+            source_type="html",   # no customer_id, no project_id
+        )
+        result = execute_approval(
+            db, "st_legacy", reviewed_by="t",
+            customer_id=customer_id, project_id=project_id,
+        )
+        assert result["status"] == "approved"
+        row = db.execute(
+            "SELECT customer_id, project_id, ai_notes FROM staged_artifacts"
+            " WHERE stage_id='st_legacy'"
+        ).fetchone()
+        assert row["customer_id"] == customer_id        # back-stamped (D5)
+        assert row["project_id"] is None                # D5 unchanged: not back-stamped
+        assert "back-stamped" in (row["ai_notes"] or "")
+        assert _store_exists(customer_id, project_id, "users")
+    finally:
+        db.close()
+
+
+def test_d5_refusal_without_context_preserved(migrated_db_path):
+    """D5's refusal-without-context still stands for artifact approvals."""
+    from cvhealthcheck.context import NoExplicitContextError
+    db = _conn(migrated_db_path)
+    try:
+        _seed_customer_project(db, "cm", "pm")
+        create_staged_artifact(
+            db, "st_noctx", "users", _mk_artifact("users").model_dump_json(),
+            source_type="html", customer_id="cm", project_id="pm",
+        )
+        with pytest.raises(NoExplicitContextError):
+            execute_approval(db, "st_noctx", reviewed_by="t")
+    finally:
+        db.close()
