@@ -10,6 +10,25 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (test — ADR-0017 LS recipe: first parity signal, generic-vs-bespoke)
+
+**Branch:** `main`. First parity SIGNAL — the generic LS recipe authored against the ADR-0017 target + adjusted comparator, published through the compile gate, compared generic-vs-bespoke over the corpus. Bespoke LS STAYS; no UI/upload change, no bespoke deletion, no recipe-model change, no compile-gate change. NOT green, NOT retirement. Suite 1228 passed (+2). **The compile gate accepted the recipe.**
+
+### Added
+- **`tests/ls_generic_recipe.py`** — the generic LS recipe proposal (canonicals match the bespoke ADAPTER's field/section ids), `publish_ls_recipe` (through the gate), `generic_candidate` (the harness candidate seam), `run_signal` (generic-vs-bespoke with failure-class aggregation). Extracts only what files carry: other_licenses (single_table + `number_with_unit`), agent_feature_licenses (single_table + `to_integer`, no dedup), workload ×6 (HTML `section_title_selector` + coalesce + `number_with_unit` — HTML-only; no CSV carries workload), registration_code (metadata_pairs, exact label `"Registration code"`, mask), computed other_license_count / agent_feature_count (computed sections). NO commcell_info identity (D2, deferred), NO usage_percent (D5).
+- **`tests/test_ls_parity_signal.py`** (2) — the recipe publishes through the gate; the generic candidate produces an artifact for every fixture and the comparison runs (pass>0, pending==0, fail>0 — the signal).
+
+### Notes — first parity breakdown (41 fixtures): **pass 6141, fail 280, pending 0**
+Failure classes (to read together, NOT yet fixed):
+- **F5/D3 computed counts (164 = 4×41):** generic emits computed SECTIONS; bespoke emits SUMMARY METRICS — no summary-metric ≡ computed-section equivalence in the comparator.
+- **D2 commcell_info (41):** bespoke always emits a context-injected commcell_info; the recipe omits it (D2 enrichment seam, deferred).
+- **registration_code (8):** the recipe extracts + masks it; the bespoke adapter drops it from the canonical.
+- **other_licenses HTML (60):** `_to_snake("Other Licenses")` workload id COLLIDES with the other_licenses table id (comparator id-map keeps the workload one → table compared against workload fields); plus a unit-parse divergence (`"0 source VMs"` → generic unit `"source VMs"` vs bespoke trailing-word `"VMs"`).
+- **HTML section not found (7):** `.reportstabletitle`/title_match misses on some exports.
+
+### Findings flagged (ADR items, not silent workarounds)
+F5 needs a comparator equivalence (summary-metric ≡ computed-section) or a bespoke-side move; D2 commcell_info awaits the enrichment seam; the `other_licenses` ⇄ "Other Licenses" workload id collision is a bespoke quirk; the `number_with_unit` (everything-after-number) vs bespoke (trailing-word) unit-parse divergence.
+
 ## 2026-06-13 (test — ADR-0017 comparator adjustment: decided equivalences in the LS parity harness)
 
 **Branch:** `main`. Harness-side only — adjusts the parity comparator so subsequent LS-recipe parity failures are REAL differences, not comparator artifacts. NOT the LS recipe, no recipe-model change, no bespoke change. Suite 1226 passed (+15).
