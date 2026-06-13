@@ -105,6 +105,24 @@ params; `.staging-badge-approved` CSS. Named in the CHANGELOG slice-1 entry.
   row's creation context instead of re-asking" UX flip is deliberately
   deferred (the current behaviour is identical-to-D5 on the match case).
 
+## Piece-B inputs (recipe-feasibility / LS de-bespoke specimens)
+
+A concrete specimen for LS de-bespoke / recipe-feasibility work, NOT a Piece-A
+fix. Leave the recipe untouched.
+
+```
+client_growth CSV/HTML import recipe mismatch:
+Real Growth-and-Trends export has TWO sections —
+  Summary: MonthStart, None_Added, None_Total (monthly time-series)
+  Details: CommCell Name, year + month columns, Monthly Growth (per-CommCell pivot)
+Current client_growth recipe does not match this export shape; import can
+succeed while rendering zero rows (verdict stamps correctly; extraction yields
+nothing). The None_-prefix is the report's unnamed series label.
+Test fixtures saved for recipe/data-shape feasibility (Piece B):
+Growth_20and_20Trends_2026-06-13-11-05-58.csv (data),
+Growth_20and_20Trends_2026-06-13-11-05-38.html (charts_only — refused honestly).
+```
+
 ## Hard constraints (non-negotiable)
 
 - **Never approve staged artifacts.** Approval is always the human's
