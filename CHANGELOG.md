@@ -10,6 +10,24 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat — ADR-0015 compile gate: publish-time recipe validation, transform-aware)
+
+**Branch:** `main`. The ADR-0015 compile/publish gate, built transform-aware per ADR-0016 D2 — runs at the publish chokepoint before any write and rejects a proposal whose recipe fails validation, listing every violation. The interim apply-time raises stay as defense-in-depth. NOT the LS recipe, no bespoke deletion, no new transforms, no recipe-model changes. Suite 1211 passed (+14). Parity harness over the 38 unchanged.
+
+### Added
+- **`compile_validate_proposal` (`db/compile_gate.py`)**, called at the top of `create_subject_from_proposal` (`db/subjects.py`) before any INSERT. Walks every `(source_type, section_id)` recipe in `proposal["extraction_instructions"][…]["sections"][…]`, collects ALL violations, and raises one `ProposalCompileError` (per-violation messages with source/section/field context) before the write transaction starts — a rejected proposal never becomes catalog-live. Four recipe-static checks:
+  1. every `transforms` name ∈ the closed `TRANSFORMS` registry (column_map AND label_map entries);
+  2. a canonical field ∈ `SENSITIVE_FIELD_REQUIREMENTS` carries its required transform(s) (column_map AND label_map);
+  3. a `format:"computed"` section's `computed_type` ∈ `COMPUTED_TYPES`;
+  4. a section's `format` ∈ the allowed set for its source type — csv `{single_table, multi_section, metadata_pairs, computed}`, html `{table, metadata_pairs, computed}` — replacing today's soft handling (CSV → `result.errors`, HTML → silent fall-through) with a loud publish rejection (a format valid for CSV used in an HTML section is rejected).
+  Scope confirmed from the extractors: only csv/html have a format dispatch and feed `resolve_columns` — REST has its own transform-free `_apply_column_map`, and CC/RP/json use neither — so checks 1-4 are csv/html-scoped.
+- **Defense-in-depth retained:** the apply-time raises (`UnknownTransformError`, `SensitiveFieldError`, `UnknownComputedTypeError` in `column_map`) stay; publish is now the primary gate, apply-time the backstop.
+- **`tests/test_compile_gate.py`** (14) — each violation type rejected; a CSV-only format used in HTML rejected; MULTIPLE violations → one rejection naming all three (not fail-on-first); clean proposal publishes; rejection happens AT PUBLISH before any write (subject not created); apply-time backstop still raises; non-csv/html sources not format-checked.
+
+### Notes
+- Parked (named, not built): unknown-keys hardening — would reject a smuggled `regex`/`fuzzy` field on a metadata_pairs recipe (defense against a non-existent capability, deferred).
+- The gate VALIDATES the closed model; it does not extend it. NOT done: the LS recipe, bespoke-LS deletion.
+
 ## 2026-06-13 (feat — ADR-0016 transform layer slice 6: computed sections — transform layer complete)
 
 **Branch:** `main`. Sixth and LAST transform-layer slice — the three computed sections only. NOT the compile gate, NOT the LS recipe, NOT bespoke deletion. Suite 1197 passed (+13). Parity harness over the 38 unchanged. With this slice the ADR-0016 transform layer (coalesce + closed registry + mask + number_with_unit + metadata_pairs + computed) is feature-complete; next is the compile gate, then the LS recipe + parity flip.

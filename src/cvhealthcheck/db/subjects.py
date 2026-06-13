@@ -15,6 +15,7 @@ from cvhealthcheck.extractors.rp_dataset_address import (
 )
 
 from .categories import CATEGORY_LABELS
+from .compile_gate import compile_validate_proposal
 from .section_types import validate_section_type
 
 
@@ -127,6 +128,12 @@ def create_subject_from_proposal(db: sqlite3.Connection, proposal: dict) -> dict
     Write a subject proposal dict into the catalog tables.
     Runs in a single transaction — either all writes succeed or none do.
     """
+    # ADR-0015 compile/publish gate (transform-aware per ADR-0016 D2): validate
+    # the proposal's recipe BEFORE any write. A violation raises
+    # ProposalCompileError here, so the transaction never starts and nothing
+    # becomes catalog-live. The interim apply-time raises stay as a backstop.
+    compile_validate_proposal(proposal)
+
     subject_id = proposal["subject_id"]
     version = proposal["version"]
     title = proposal["title"]
