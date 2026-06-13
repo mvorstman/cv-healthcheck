@@ -333,6 +333,25 @@ def _section_is_empty(section: Any) -> bool:
     )
 
 
+def _is_masked_sensitive_section(section: Any) -> bool:
+    """ADR-0017 D7: True iff the section carries at least one sensitive field and
+    EVERY sensitive value is masked (no raw survives). A generic-present section of
+    this kind is accepted against a bespoke-absent one — bespoke dropping
+    registration_code was a historical omission, not a canonical requirement; the
+    generic path is the more faithful one (same class as D4/F3). A RAW value makes
+    the section unsafe → NOT accepted (security preserved)."""
+    saw_sensitive = False
+    for row in getattr(section, "items", []) or []:
+        if not isinstance(row, dict):
+            continue
+        for field_id, value in row.items():
+            if field_id in SENSITIVE_FIELD_IDS:
+                saw_sensitive = True
+                if not _is_masked(value):
+                    return False
+    return saw_sensitive
+
+
 def _compare_summary(
     report: ParityReport, baseline: CanonicalArtifact, candidate: CanonicalArtifact
 ) -> None:
@@ -448,6 +467,18 @@ def compare_artifacts(
         sid, tag = key
         base_sec, cand_sec = base_map.get(key), cand_map.get(key)
         if base_sec is None or cand_sec is None:
+            # ADR-0017 D7: a generic(candidate)-only section carrying only masked
+            # sensitive fields (e.g. registration_code) is ACCEPTED — bespoke
+            # dropping registration_code was an omission, not a canonical
+            # requirement; parity proves the decided target, not bespoke gaps. A
+            # raw value still FAILS (security).
+            candidate_only = base_sec is None and cand_sec is not None
+            if candidate_only and _is_masked_sensitive_section(cand_sec):
+                report.results.append(FieldResult(
+                    file, sid, "", "<section>", "absent", "present (masked sensitive)",
+                    Outcome.PASS,
+                    "D7 — generic-present masked sensitive ≡ bespoke-absent (no raw)"))
+                continue
             report.results.append(FieldResult(
                 file, sid, "", "<section>",
                 "present" if base_sec is not None else "absent",

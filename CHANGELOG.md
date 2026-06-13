@@ -10,6 +10,20 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (test — ADR-0017 D7: registration_code is part of the LS canonical target)
+
+**Branch:** `main`. Amendment D7 applied to the parity comparator. (No ADR-0017 doc file exists yet — the ADR-0017 decisions live in the comparator + this CHANGELOG.) No recipe/bespoke change. Suite 1233 passed (+3).
+
+### D7 (recorded)
+registration_code is part of the LS canonical target when the source carries it. The generic recipe extracts + masks it (ADR-0016 Security-by-Construction); bespoke dropping registration_code was a historical omission, not a canonical requirement. Parity ACCEPTS generic-present masked registration_code vs bespoke-absent, provided the generic value is masked and no raw survives — same class as D4/F3: where bespoke lost data the file carries, the generic path is the more faithful one; parity proves the decided target, not replication of bespoke gaps.
+
+### Changed (`tests/ls_parity_harness.py`)
+- A generic(candidate)-only section carrying only masked sensitive fields (`_is_masked_sensitive_section`) is accepted (PASS) against a bespoke-absent one; a RAW value still FAILS (security). Directional: a bespoke-only sensitive section is NOT auto-accepted (the generic dropping data is a real difference).
+- +3 tests (accepted-when-masked; fails-on-raw; directional).
+
+### Notes — post-D7 breakdown (38): pass 6067, fail 241 (was 249)
+The reg_code / commcell_meta class (8) is resolved → PASS. Remaining failure classes: F5/D3 computed-counts-as-sections vs summary metrics (152), D2 commcell_info context-injected (38), B2 unit-parse one pattern (28), "Other Licenses" title ambiguity (22), one sample structural variation (1).
+
 ## 2026-06-13 (test — ADR-0017 LS parity: B1 comparator fix (section-id collision) + failure decomposition)
 
 **Branch:** `main`. ONE comparator bug-fix (B1) + read-only decomposition. No recipe change, no bespoke change, no ADR-decided-class fixes (pending decisions). Suite 1230 passed (+2).

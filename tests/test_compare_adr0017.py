@@ -181,6 +181,44 @@ def test_b1_reflexive_collision_both_sections_compared_equal():
     assert not report.failed
 
 
+# ── D7 — generic-present masked registration_code ≡ bespoke-absent ───────────
+
+def test_d7_generic_only_masked_registration_code_accepted():
+    bespoke = _artifact([_table("other_licenses", [{"license": "L1", "available_total": 1}])])
+    generic = _artifact([
+        _table("other_licenses", [{"license": "L1", "available_total": 1}]),
+        _table("commcell_meta", [{"registration_code": "***-***-E34D"}]),
+    ])
+    report = compare_artifacts("f", bespoke, generic)
+    assert not report.failed  # the generic-only masked-sensitive section is accepted
+    assert any(r.section == "commcell_meta" and r.outcome is Outcome.PASS
+               for r in report.passed)
+
+
+def test_d7_generic_only_raw_registration_code_fails():
+    bespoke = _artifact([_table("other_licenses", [{"license": "L1", "available_total": 1}])])
+    generic = _artifact([
+        _table("other_licenses", [{"license": "L1", "available_total": 1}]),
+        _table("commcell_meta", [{"registration_code": "ABCD1234EFGH"}]),  # RAW
+    ])
+    report = compare_artifacts("f", bespoke, generic)
+    assert any(r.section == "commcell_meta" and r.outcome is Outcome.FAIL
+               for r in report.failed)
+
+
+def test_d7_is_directional_bespoke_only_sensitive_still_fails():
+    # a BESPOKE-only masked-sensitive section is NOT auto-accepted — there the
+    # generic dropped data (less faithful), which is a real difference.
+    bespoke = _artifact([
+        _table("other_licenses", [{"license": "L1", "available_total": 1}]),
+        _table("commcell_meta", [{"registration_code": "***-***-E34D"}]),
+    ])
+    generic = _artifact([_table("other_licenses", [{"license": "L1", "available_total": 1}])])
+    report = compare_artifacts("f", bespoke, generic)
+    assert any(r.section == "commcell_meta" and r.outcome is Outcome.FAIL
+               for r in report.failed)
+
+
 # ── guards: the equivalences must not make it an always-pass ──────────────────
 
 def test_still_fails_on_plain_value_difference():
