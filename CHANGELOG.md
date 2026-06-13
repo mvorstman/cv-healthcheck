@@ -10,6 +10,24 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (refactor — ADR-0015 redesign slice 1: delete the vestigial artifact-approval path)
+
+**Branch:** `main`. Commits `e9acf2e`, `6971734`, `a12d59e`, `03f00c4`; suite 1075 passed. Subtractive cleanup only — NO compile gate, NO profile schema, NO schema drops (those are later slices). Verdict from the design pass: the redesign is mostly subtraction; this slice removes the vestige.
+
+### Removed
+- **Web `?stage=1` artifact-staging branch** (`quick_hc.py`): no UI ever set it (grep zero); imports now always write the artifact to the scoped store directly. Dropped unused `import uuid`.
+- **`execute_approval`'s artifact branch** (`db/staging.py`): it did `store.save_artifact` — identical to direct collect, which already writes scoped + context-gated (D5) + provenance-verified (Fix 4). `execute_approval` is now proposal-only (the ADR-0015 compile/publish boundary); a non-proposal row raises `ValueError`. Dropped the dead `CanonicalArtifact` import and the D5/0033 coherence machinery inside it.
+- **MCP `save_staged_artifact` tool**: no producer (the AI holds no token and the probe persists nothing — ADR-0008), and its only consumer was the deleted artifact-approval. Removed the tool, registration, and `create_staged_artifact`/`ValidationError` imports. `approve_staged_artifact` stays (publishes proposals).
+- **`/quick-hc/staging` approved-artifact column** + the two approve handlers' context dance / dead artifact-result branches; page is a proposals-only review queue.
+- **Tests:** the artifact-approval tests deleted with the behavior (delete, not gut) — ?stage=1 tests, the D5 + evidence-context approval-coherence sets, the MCP save/approve-artifact sets, the staging-route artifact-approve set, the core-solidity artifact case; proposal-flow + D5 write-gates + Fix-4 round-trip stay green.
+
+### Notes — DOCUMENTED-DEAD (for the later, separate schema-drop cleanup; named so it's discoverable)
+- **`staged_artifacts` columns now inert** (no production writer remains; proposals leave them NULL by design): `customer_id`, `project_id` (migration 0033), `engagement_id`, and the pre-existing-unused `verification_status` / `verification_sources` / `verification_notes` / `verified_at` / `user_edits_json` / `filter_state_json`. Safe to `DROP COLUMN` in a deliberate later migration — **not dropped this slice**.
+- **`db.staging.create_staged_artifact`** — no production caller now (test-only). Kept as a generic primitive; candidate for removal with the schema cleanup.
+- **Accepted-but-unused params:** `execute_approval(customer_id, project_id, store)` and MCP `approve_staged_artifact(customer_id, project_id)` — kept so callers were undisturbed this slice; drop in a follow-up.
+- **`.staging-badge-approved`** CSS — trivially-dead after the approved column removal.
+- Slice 1 of the ADR-0015 redesign. Next slice is the only construction: attach the **compile gate** (allocation-table validation / Catalog Purity / Publication Integrity) to the now-clean `execute_approval` publish boundary. Profile schema lands later, with the redesign — not before.
+
 ## 2026-06-13 (feat — Fix 4: declared-vs-wire CommCell ID guard, provenance not workflow)
 
 **Branch:** `main`. Commits `6607caf`, `413abdb`; suite 1102 passed. The verification-result home (pre-Fix-4 foundation) is now populated by a declared-vs-wire CCID guard — recorded as evidence, never enforced.

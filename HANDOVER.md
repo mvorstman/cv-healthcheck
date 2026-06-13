@@ -1,4 +1,4 @@
-# HANDOVER — Provenance arc complete (Fix 4 live-verified); ADR-0015 redesign next
+# HANDOVER — ADR-0015 redesign slice 1 done (artifact-approval deleted); compile gate next
 
 You are continuing development on **cv-healthcheck**, a modular Commvault
 operational health check platform (Python/Flask, Pydantic v2 canonical
@@ -7,15 +7,17 @@ artifact schema, MCP server for AI-assisted subject authoring).
 ## Current state
 
 - **Branch:** `main`
-- **Current main:** `b78f897` — **1102 tests green** (full pytest, exit 0).
-- **In flight:** none.
-- **Completed (the provenance arc, all on `main`, all pushed):** Fix 2
-  (unscoped global-file layer retired), D5 (Context Integrity enforced at the
-  write layer), Fix 3 (identity-schema split — three identity values kept
-  distinct), the evidence-context foundation (project_id stamp + approval
-  coherence-read + verification-result home on ArtifactSource), and **Fix 4
-  (declared-vs-wire CommCell ID guard)** — the arc is complete and
-  **LIVE-VERIFIED** (see the ground-truth block below).
+- **Local HEAD:** ADR-0015 slice 1 (`e9acf2e`/`6971734`/`a12d59e`/`03f00c4` +
+  a docs commit) — **1075 tests green** (full pytest, exit 0).
+- **UNPUSHED:** slice 1's commits are local-only — **awaiting Michiel's review +
+  a browser check** (proposal-publish still works; collect still lands scoped +
+  verified) before push. The provenance-arc commits below are already pushed
+  (`b78f897`).
+- **In flight:** ADR-0015 redesign, slice 1 done (see "Next architectural focus").
+- **Completed (the provenance arc, pushed, LIVE-VERIFIED):** Fix 2 (unscoped
+  global-file layer retired), D5 (Context Integrity enforced at the write
+  layer), Fix 3 (identity-schema split), the evidence-context foundation, and
+  **Fix 4 (declared-vs-wire CommCell ID guard)** — ground-truth block below.
 
 ## Verified Ground Truth — Fix 4 Live Validation (2026-06-13)
 
@@ -56,20 +58,32 @@ Architectural implications (resolved, not open):
 
 ## Next architectural focus — ADR-0015 compile/publish redesign
 
-Start with a **read-only design pass** (no code). The redesign separates the
-catalog lifecycle into **template / profile / runtime** (ADR-0015) and splits
-the staging table accordingly. The gap-audit already scoped the problem:
+The design pass answered the headline question: artifact-approval was
+**vestigial**, and the redesign is **mostly subtraction**. **Slice 1 is done**
+(CHANGELOG 2026-06-13 refactor — ADR-0015 slice 1): the `?stage=1` branch,
+`execute_approval`'s artifact branch, the MCP `save_staged_artifact` tool, and
+the staging page's approved-artifact column are deleted. `execute_approval` is
+now proposal-only — the clean compile/publish boundary. `staged_artifacts`
+holds only `subject_proposal` rows; collection writes evidence directly to the
+scoped store (context-gated + provenance-verified), never through staging.
 
-- **Staging conflates template-drafts with evidence** — `staged_artifacts`
-  holds both `subject_proposal` rows (catalog-global template drafts) and
-  `artifact` rows (customer evidence) in one table with one status lifecycle.
-- **`execute_approval` is overloaded** — one function branches on
-  `artifact_type` to do two unrelated jobs (promote a catalog subject vs
-  persist scoped evidence with the D5/0033 context coherence checks).
-- **Open question: "is artifact-approval even needed?"** — with collection now
-  scoped + context-gated + provenance-verified, whether staged *artifacts*
-  (as opposed to *proposals*) still need a human approval step is genuinely
-  open; the design pass should answer it before any table split.
+**Next slice — the only construction:** attach the **compile gate** to the
+now-clean `execute_approval` publish boundary — allocation-table validation
+(no profile/runtime content in a template, per ADR-0015 §1), transferability,
+Catalog Purity, Publication Integrity (published templates immutable). Today
+`create_subject_from_proposal` writes the proposal verbatim with no such
+check; that's the gap to close.
+
+**Then, deferred — lands WITH the redesign, never before:** the profile schema
+(per-customer resolved ids, parameter overrides, customer-assertion rule
+packs). ADR-0015 defers it; the compile gate must precede it.
+
+**Documented-dead from slice 1** (drop in a deliberate later schema cleanup,
+not piecemeal): the now-inert `staged_artifacts` columns (`customer_id`,
+`project_id`, `engagement_id`, `verification_*`, `user_edits_json`,
+`filter_state_json`); `db.staging.create_staged_artifact` (test-only now); the
+accepted-but-unused `execute_approval` / MCP `approve_staged_artifact` context
+params; `.staging-badge-approved` CSS. Named in the CHANGELOG slice-1 entry.
 
 ## Deferred / named register (none of these is forgotten)
 
@@ -119,7 +133,7 @@ the staging table accordingly. The gap-audit already scoped the problem:
 ## Validation
 
 - `python -m compileall src`
-- `venv/bin/python -m pytest` (1102 must keep passing)
+- `venv/bin/python -m pytest` (1075 must keep passing)
 - Never gate a commit on piped pytest output — check the exit code.
 
 ## Commit granularity
