@@ -39,7 +39,6 @@ except ImportError:  # pragma: no cover - fallback for environments without the 
         def run(self) -> None:
             raise RuntimeError("mcp SDK is not installed")
 
-from pydantic import ValidationError
 
 from cvhealthcheck.artifacts.models import CanonicalArtifact
 from cvhealthcheck.db.section_types import SUPPORTED_SECTION_TYPES
@@ -48,7 +47,6 @@ from cvhealthcheck.db import get_db
 from cvhealthcheck.db.domain_labels import domain_label_vocabulary, subject_labels_map
 from cvhealthcheck.db.migrations import run_migrations
 from cvhealthcheck.db.staging import (
-    create_staged_artifact,
     execute_approval,
     get_staged_artifact,
     list_staged_artifacts as db_list_staged_artifacts,
@@ -77,7 +75,7 @@ def _canonical_schema() -> dict[str, Any]:
 
     ADR 0004 backlog #30: previously this was a hand-maintained dict that
     drifted two phases behind the models (missing template_version, the rich
-    MetricItem surface, render_mode, VerdictEntry, …) while save_staged_artifact
+    MetricItem surface, render_mode, VerdictEntry, …) while proposal staging
     validated against the live model — so the schema advertised shapes the
     validator then rejected. Deriving from ``model_json_schema()`` makes drift
     structurally impossible: any model change is reflected automatically.
@@ -147,52 +145,6 @@ def list_subjects(status: str | None = None, label: str | None = None) -> list[d
         db.close()
 
 
-def save_staged_artifact(
-    subject_id: str,
-    artifact_json: str,
-    source_file: str | None = None,
-    source_type: str | None = None,
-    ai_notes: str | None = None,
-    customer_id: str | None = None,
-    engagement_id: str | None = None,
-) -> dict:
-    """
-    Validate and save an AI-interpreted canonical artifact to staging
-    for human review. Returns the created staging record.
-    """
-    try:
-        CanonicalArtifact.model_validate_json(artifact_json)
-    except ValidationError as exc:
-        raise ValueError(f"artifact_json is not a valid CanonicalArtifact: {exc}") from exc
-
-    stage_id = f"stage_{uuid4().hex}"
-    db = get_db()
-    try:
-        # D5: a caller-asserted customer_id is untrusted input — it must name
-        # an existing customer before anything is written. (engagement_id is
-        # left unvalidated: the engagements table is vestigial/empty today.)
-        if customer_id is not None:
-            from cvhealthcheck.context import UnknownContextError
-            row = db.execute(
-                "SELECT 1 FROM customers WHERE customer_id = ?", (customer_id,)
-            ).fetchone()
-            if row is None:
-                raise UnknownContextError(f"unknown customer_id: {customer_id!r}")
-        return create_staged_artifact(
-            db,
-            stage_id,
-            subject_id,
-            artifact_json,
-            source_file=source_file,
-            source_type=source_type,
-            ai_notes=ai_notes,
-            engagement_id=engagement_id,
-            customer_id=customer_id,
-        )
-    finally:
-        db.close()
-
-
 def list_staged_artifacts(
     status: str | None = None,
     subject_id: str | None = None,
@@ -216,15 +168,12 @@ def approve_staged_artifact(
     project_id: str | None = None,
 ) -> dict:
     """
-    Approve a staged artifact and promote it to the production
-    canonical store. Only pending artifacts can be approved.
-
-    D5: approving a staged ARTIFACT requires explicit customer_id +
-    project_id (the store it lands in), validated against existing rows;
-    without them the approval refuses with NoExplicitContextError.
-    Subject-proposal approvals are catalog-global and need no context.
-    A row stamped for a different customer refuses (ContextMismatchError);
-    a NULL-stamped legacy row is back-stamped with the approval context.
+    Approve (publish) a pending SUBJECT PROPOSAL into the catalog. Artifact
+    approval was removed (ADR-0015 slice 1) — collection writes evidence
+    directly, so only subject_proposal rows are approvable; a non-proposal
+    row raises. customer_id/project_id are accepted but unused (proposals are
+    catalog-global); they remain so callers are undisturbed, dropped in a
+    later cleanup.
     """
     db = get_db()
     try:
@@ -690,7 +639,6 @@ def _run_in_thread(fn):
 for _tool in (
     get_canonical_schema,
     list_subjects,
-    save_staged_artifact,
     list_staged_artifacts,
     approve_staged_artifact,
     reject_staged_artifact,

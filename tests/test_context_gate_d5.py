@@ -433,19 +433,3 @@ def test_proposal_approval_needs_no_context(migrated_db_path):
         db.close()
 
 
-def test_mcp_save_staged_artifact_validates_customer(monkeypatch, migrated_db_path):
-    import cvhealthcheck.mcp.server as mcp
-    monkeypatch.setattr(mcp, "get_db", lambda: _migrated_conn(migrated_db_path))
-    artifact_json = _mk_artifact("storage_policies").model_dump_json()
-    with pytest.raises(UnknownContextError):
-        mcp.save_staged_artifact(
-            "storage_policies", artifact_json, customer_id="ghost_cust"
-        )
-    db = _migrated_conn(migrated_db_path)
-    assert db.execute("SELECT COUNT(*) FROM staged_artifacts").fetchone()[0] == 0
-    db.close()
-    # a KNOWN customer stamps cleanly
-    saved = mcp.save_staged_artifact(
-        "storage_policies", artifact_json, customer_id="default"
-    )
-    assert saved["customer_id"] == "default"

@@ -267,8 +267,7 @@ Writes `data/catalog/quickhc/backup_job_summary_latest.json` via `write_json(...
 
 | Tool | Writes |
 |---|---|
-| `save_staged_artifact` (`server.py:210`) | `staged_artifacts` row in `data/app.db` via `db/staging.py:create_staged_artifact` |
-| `approve_staged_artifact` (`server.py:264`) | For `artifact_type=artifact`: writes to canonical store via `ArtifactStore.save_artifact` (`db/staging.py:172`); marks staging row approved. For `artifact_type=subject_proposal`: creates a `subjects` row + sibling tables via `create_subject_from_proposal` |
+| `approve_staged_artifact` | Publishes a pending **subject_proposal** into the catalog: `subjects` row + sibling tables via `create_subject_from_proposal`, then marks the staging row approved. (Artifact approval was removed in the ADR-0015 redesign slice 1 — collection writes evidence directly to the scoped store, so `save_staged_artifact` and the artifact-approval branch no longer exist.) |
 | `reject_staged_artifact` (`server.py:280`) | Marks staging row rejected (no canonical-store write) |
 | `propose_new_subject` (`server.py:299`) | Creates a `staged_artifacts` row of type `subject_proposal` |
 

@@ -282,67 +282,9 @@ def test_list_subjects_category_fields_unchanged(patch_db: None) -> None:
     assert "id" not in sample
 
 
-def test_save_staged_artifact_saves_valid_artifact(
-    patch_db: None,
-) -> None:
-    record = server.save_staged_artifact(
-        "security_assessment",
-        json.dumps(_artifact_payload()),
-        source_file="report.json",
-    )
-    assert record["stage_id"].startswith("stage_")
-    assert record["status"] == "pending"
-    assert record["source_file"] == "report.json"
-
-
-def test_save_staged_artifact_invalid_json_raises(patch_db: None) -> None:
-    with pytest.raises(ValueError):
-        server.save_staged_artifact("security_assessment", "{not-json")
-
-
-def test_save_staged_artifact_invalid_canonical_structure_raises(patch_db: None) -> None:
-    invalid_payload = _artifact_payload()
-    del invalid_payload["artifact_type"]
-    with pytest.raises(ValueError):
-        server.save_staged_artifact("security_assessment", json.dumps(invalid_payload))
-
-
 def test_list_staged_artifacts_returns_list_when_empty(patch_db: None) -> None:
     assert server.list_staged_artifacts() == []
 
-
-def test_list_staged_artifacts_status_filter_works(patch_db: None) -> None:
-    pending = server.save_staged_artifact("security_assessment", json.dumps(_artifact_payload()))
-    rejected = server.save_staged_artifact("security_assessment", json.dumps(_artifact_payload()))
-    server.reject_staged_artifact(rejected["stage_id"], reviewed_by="reviewer")
-
-    pending_records = server.list_staged_artifacts(status="pending")
-    rejected_records = server.list_staged_artifacts(status="rejected")
-
-    assert [record["stage_id"] for record in pending_records] == [pending["stage_id"]]
-    assert [record["stage_id"] for record in rejected_records] == [rejected["stage_id"]]
-
-
-def test_reject_staged_artifact_returns_rejected_record(patch_db: None) -> None:
-    staged = server.save_staged_artifact("security_assessment", json.dumps(_artifact_payload()))
-
-    rejected = server.reject_staged_artifact(staged["stage_id"], reviewed_by="alice")
-
-    assert rejected["status"] == "rejected"
-    assert rejected["reviewed_by"] == "alice"
-
-
-def test_reject_staged_artifact_double_rejection_raises(patch_db: None) -> None:
-    staged = server.save_staged_artifact("security_assessment", json.dumps(_artifact_payload()))
-    server.reject_staged_artifact(staged["stage_id"], reviewed_by="alice")
-
-    with pytest.raises(ValueError, match="artifact is not pending"):
-        server.reject_staged_artifact(staged["stage_id"], reviewed_by="bob")
-
-
-# ---------------------------------------------------------------------------
-# propose_new_subject
-# ---------------------------------------------------------------------------
 
 def _proposal_kwargs() -> dict:
     return {
