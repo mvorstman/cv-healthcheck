@@ -730,9 +730,11 @@ def _unified_dispatcher_upload(subject_id: str):
             stage_flag = request.args.get("stage") == "1"
             if stage_flag:
                 stage_id = f"stage_{uuid.uuid4().hex[:12]}"
-                # D5 (c): staged customer evidence is stamped with the
-                # explicitly selected customer (the route gate guarantees
-                # the selection exists).
+                # D5 (c) + migration 0033: staged customer evidence is stamped
+                # with the explicitly selected (customer, project) — the full
+                # creation context (the route gate guarantees the selection
+                # exists).
+                _ctx_customer, _ctx_project = require_active_context()
                 _staging_db.create_staged_artifact(
                     db,
                     stage_id,
@@ -740,7 +742,8 @@ def _unified_dispatcher_upload(subject_id: str):
                     artifact.model_dump_json(),
                     source_file=filename,
                     source_type=dispatch.source_type,
-                    customer_id=require_active_context()[0],
+                    customer_id=_ctx_customer,
+                    project_id=_ctx_project,
                 )
                 msg = f"Imported {title} — review in staging before approving."
                 if inline:

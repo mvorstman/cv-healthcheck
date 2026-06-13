@@ -28,6 +28,7 @@ def create_staged_artifact(
     ai_notes: str | None = None,
     engagement_id: str | None = None,
     customer_id: str | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     if not str(artifact_json or "").strip():
         raise ValueError("artifact_json is not valid JSON")
@@ -37,11 +38,14 @@ def create_staged_artifact(
         raise ValueError("artifact_json is not valid JSON") from exc
 
     created_at = _now()
+    # project_id (migration 0033) completes the creation-context stamp alongside
+    # customer_id. NULL for legacy/catalog-global rows.
     db.execute(
         "INSERT INTO staged_artifacts"
         " (stage_id, subject_id, source_file, source_type, status, artifact_json,"
-        " ai_notes, created_at, reviewed_at, reviewed_by, engagement_id, customer_id)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " ai_notes, created_at, reviewed_at, reviewed_by, engagement_id,"
+        " customer_id, project_id)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             stage_id,
             subject_id,
@@ -55,6 +59,7 @@ def create_staged_artifact(
             None,
             engagement_id,
             customer_id,
+            project_id,
         ),
     )
     db.commit()
