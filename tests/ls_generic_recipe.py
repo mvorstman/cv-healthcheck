@@ -122,7 +122,12 @@ def _html_table(title, column_map):
 
 def _html_sections() -> dict:
     secs = {
-        "other_licenses": _html_table("Other Licenses", _OTHER_CM),
+        # Match the TABLE by its EXACT full title so it no longer collides with the
+        # bare "Other Licenses" workload-summary title (ADR-0017 "Other Licenses"
+        # disambiguation). The workload "Other Licenses" can't be authored here too
+        # — its bespoke _to_snake id is also "other_licenses" and the recipe can't
+        # declare two sections with one id (DB unique); see the slice finding.
+        "other_licenses": _html_table("Other Licenses - current usage details", _OTHER_CM),
         "agent_feature_licenses": _html_table("Agent and Feature Licenses", _AGENT_CM),
         "other_license_count": _computed("row_count", "other_licenses"),
         "agent_feature_count": _computed("distinct_count", "agent_feature_licenses", "license"),

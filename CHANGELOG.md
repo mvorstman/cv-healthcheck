@@ -10,6 +10,24 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (test — ADR-0017 "Other Licenses" recipe disambiguation (table by full title))
+
+**Branch:** `main`. Recipe-side "Other Licenses" disambiguation + decomposition of the residual. No B2 / D2 / comparator / bespoke change. Suite 1239 passed (+2).
+
+### Changed (`tests/ls_generic_recipe.py`)
+- The other_licenses TABLE (HTML) is matched by its EXACT full title `"Other Licenses - current usage details"`, so it no longer collides with the bare `"Other Licenses"` workload-summary title — the generic stops mis-grabbing the workload as a degenerate table.
+- +2 tests (full-title table extracted, not the workload; a bare-`"Other Licenses"` workload is not grabbed as a degenerate table).
+
+### Notes — post-disambiguation breakdown (38): pass 6136, fail 88 (was 104)
+The full-title fix cleared the 8 degenerate generic-only tables + their 8 downstream count fails (16 total). Remaining classes:
+- **D2 commcell_info (38)** — enrichment seam, deferred.
+- **B2 unit-parse (28)** — one pattern, OPEN.
+- **workload "Other Licenses" (8)** — DB-constraint residual: bespoke `_to_snake("Other Licenses")` = `other_licenses` (the table's id); the recipe can't declare two `other_licenses` sections (`subject_sections` unique). NOT recipe-fixable — needs an ADR decision (distinct target id + comparator mapping, or accept the bespoke collision as a dropped quirk). Authoring it under a distinct id would double the fails.
+- **HTML-structure variation (14: 6 table + 6 count + 1 agent + 1 count)** — 6 files (lab-*, some License20summary, the sample) carry no `.reportstabletitle` element; the selector-based recipe can't reach their tables (the bespoke custom DOM-walk can). Separate from "Other Licenses"; this is the "HTML section not found" class.
+
+### Findings (ADR-0017 open questions updated)
+The title-prefix ambiguity is fixed; the two residuals (DB section-id collision; HTML-structure variation) are recorded in ADR-0017's open questions — neither is the title-prefix problem.
+
 ## 2026-06-13 (feat/docs — ADR-0017 D3/F5 comparator equivalence + ADR-0017 doc (Proposed))
 
 **Branch:** `main`. Harness-side D3/F5 comparator equivalence + the ADR-0017 decision record (the doc that was missing — D1–D7 lived only in the comparator + CHANGELOG). No recipe/bespoke/enrichment/unit change. Suite 1237 passed (+4).

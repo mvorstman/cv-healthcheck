@@ -121,10 +121,20 @@ class of decision as D4/F3 — the generic is the more faithful path.
 ## Open questions
 
 - **B2** unit-parse: last-word unit vs trailing-word normalization.
-- **"Other Licenses" title ambiguity**: the source title "Other Licenses" matches
-  both the table ("Other Licenses - current usage details") and the workload
-  ("Other Licenses") — the recipe must disambiguate (match the table title exactly;
-  author the workload "Other Licenses" with a non-colliding id).
+- **"Other Licenses" — title-prefix ambiguity RESOLVED; two residuals remain.** The
+  TABLE is now matched by its exact full title "Other Licenses - current usage
+  details", so the recipe no longer grabs the bare-"Other Licenses" workload as a
+  degenerate table. Residuals needing a decision: **(a) workload-vs-table id
+  collision** — the bespoke workload "Other Licenses" has `_to_snake` id
+  `other_licenses` (the table's id); the recipe CANNOT declare two `other_licenses`
+  sections (`subject_sections` is unique on section_id), so the workload can't be
+  mirrored under that id (authoring it under a distinct id would double the fails,
+  not clear them). Decision needed: give the target workload a distinct id + a
+  comparator mapping, or accept the bespoke collision as a quirk the target drops
+  (D7-class). **(b) HTML-structure variation** — 6 files (lab-*, some
+  License20summary, the sample) carry no `.reportstabletitle` element, so the
+  selector-based recipe can't reach their tables (the bespoke custom DOM-walk can);
+  this is the "HTML section not found" class, separate from "Other Licenses".
 - **D2 enrichment seam**: the mechanism that attaches context identity onto the
   artifact at assembly.
 
