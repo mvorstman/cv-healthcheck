@@ -103,6 +103,52 @@ def build_growth_and_trends_csv() -> str:
     )
 
 
+def build_ls_workload_heavy_html() -> str:
+    """A real-shaped workload-heavy LS export: MORE THAN 2 tables, and the FIRST
+    table's headers carry unit suffixes ("Available Total (TB)"). These are the two
+    conditions the old recognition (table_count:2 + first_table_headers exact
+    subset) rejected before extraction — the direct cause of the live HTML failure.
+    """
+    titles = ["Capacity Licenses", "Virtualization Licenses", "Other Licenses"]
+    blocks = ""
+    for t in titles:
+        blocks += (
+            f'<div class="reportstabletitle">{t}</div>'
+            "<table><thead><tr>"
+            "<th>License</th><th>Available Total (TB)</th><th>Used (TB)</th><th>Summary</th>"
+            "</tr></thead><tbody></tbody></table>"
+        )
+    return (
+        '<!DOCTYPE html><html><head><title>License summary</title></head>'
+        f"<body>{blocks}</body></html>"
+    )
+
+
+def build_ls_h2_title_html() -> str:
+    """LS export whose section title is a plain <h2> heading (no .reportstabletitle
+    wrapper) — the sample-style markup. Recognition must accept the <h2> marker."""
+    return (
+        '<!DOCTYPE html><html><head><title>License summary</title></head><body>'
+        "<h2>Other Licenses - current usage details</h2>"
+        "<table><thead><tr>"
+        "<th>License</th><th>Available Total</th><th>Used</th>"
+        "</tr></thead><tbody></tbody></table>"
+        "</body></html>"
+    )
+
+
+def build_ls_titleless_table_html() -> str:
+    """A bare [License, Available Total, Used] table with NO title marker of any
+    kind (no <title>/<h1>, no .reportstabletitle, no <h2>) — the scoped-out
+    classifier-fixture shape. Recognition must NOT fall back to header shape."""
+    return (
+        "<html><body><table><thead><tr>"
+        "<th>License</th><th>Available Total</th><th>Used</th>"
+        "</tr></thead><tbody><tr><td>X</td><td>1</td><td>1</td></tr></tbody>"
+        "</table></body></html>"
+    )
+
+
 def build_unknown_html() -> str:
     return (
         "<html><head><title>Unknown Report Type</title></head>"
@@ -170,6 +216,59 @@ def test_recognize_license_summary_html(recog_db: sqlite3.Connection, tmp_path: 
     assert result is not None
     assert result.subject_id == "license_summary"
     assert result.source_type == "html"
+
+
+# ── ADR-0017 commit 3: broadened LS recognition (workload-heavy + h2) ─────────
+
+def test_recognize_license_summary_workload_heavy_html(
+    recog_db: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """The workload-heavy export (>2 tables, unit-suffixed first table) now passes
+    recognition — it was rejected before by table_count:2 + first_table_headers."""
+    f = tmp_path / "workload.html"
+    f.write_text(build_ls_workload_heavy_html(), encoding="utf-8")
+
+    result = RecognitionEngine(recog_db).identify(f)
+
+    assert result is not None
+    assert result.subject_id == "license_summary"
+    assert result.source_type == "html"
+    assert result.extractable is True
+
+
+def test_recognize_license_summary_h2_title_marker(
+    recog_db: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """Recognition accepts an <h2> title marker (not only .reportstabletitle)."""
+    f = tmp_path / "h2.html"
+    f.write_text(build_ls_h2_title_html(), encoding="utf-8")
+
+    result = RecognitionEngine(recog_db).identify(f)
+
+    assert result is not None
+    assert result.subject_id == "license_summary"
+
+
+def test_titleless_table_not_recognized_as_license_summary(
+    recog_db: sqlite3.Connection, tmp_path: Path
+) -> None:
+    """Recognition does NOT broaden to header shape: a bare
+    [License, Available Total, Used] table with no title marker is NOT recognized
+    (the scoped-out fixture class stays out — ADR-0017 D3)."""
+    f = tmp_path / "titleless.html"
+    f.write_text(build_ls_titleless_table_html(), encoding="utf-8")
+
+    result = RecognitionEngine(recog_db).identify(f)
+
+    assert result is None
+
+
+def test_upload_route_still_bespoke_after_recognition_broadening() -> None:
+    """Commit 3 is recognition only — the LS upload still runs the bespoke handler
+    (the route switch is commit 4)."""
+    from cvhealthcheck.web.routes.upload_dispatch import UPLOAD_HANDLERS
+
+    assert "license_summary" in UPLOAD_HANDLERS
 
 
 def test_recognize_growth_and_trends_csv(recog_db: sqlite3.Connection, tmp_path: Path) -> None:

@@ -163,7 +163,11 @@ def test_compile_gate_accepts_the_recipe():
 
 # ── gate 9: commit 1 does NOT do D2-live / recognition / route (commits 2–4) ──
 
-def test_recognition_not_broadened_yet(migrated_db_path: Path):
+def test_recognition_broadened_by_commit3(migrated_db_path: Path):
+    # Commit 1 did NOT touch recognition; commit 3 (migration 0035) broadens it.
+    # The migrated db includes 0035, so the live html recognition is now the
+    # broadened form: accepts .reportstabletitle OR <h2>, with the over-strict
+    # table_count + first_table_headers fingerprints removed.
     conn = _conn(migrated_db_path)
     try:
         row = conn.execute(
@@ -171,9 +175,10 @@ def test_recognition_not_broadened_yet(migrated_db_path: Path):
             " WHERE subject_id='license_summary' AND source_type='html'"
         ).fetchone()
         rec = json.loads(row["recognition_hints"])
-        # still the 0003 fingerprint — untouched by commit 1 (commit 3 broadens it)
-        assert rec.get("has_selector") == ".reportstabletitle"
-        assert rec.get("table_count") == 2
+        assert rec.get("has_selector") == ".reportstabletitle, h2"
+        assert "table_count" not in rec
+        assert "first_table_headers" not in rec
+        assert rec.get("title_contains") == "License summary"  # retained — keeps titleless out
     finally:
         conn.close()
 

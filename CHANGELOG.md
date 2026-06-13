@@ -10,6 +10,24 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat — ADR-0017 LS promotion commit 3/4: broaden HTML recognition)
+
+**Branch:** `main`. Broaden License Summary HTML recognition so the live generic path can RECOGNIZE real workload-heavy exports (it can already extract them; recognition rejected them first). Recognition ONLY — NO route switch, NO recipe change, NO D2 change, NO REST change, NO header-shape recognition. Full suite 1274 passed.
+
+### Added
+- **`src/cvhealthcheck/db/migrations/0035_license_summary_recognition.sql`** — `UPDATE`s the `license_summary` html `recognition_hints`:
+  - `has_selector` `.reportstabletitle` → `.reportstabletitle, h2` (accept either title marker).
+  - **DROP `table_count`** (was `2`, matched with `!=`) — real workload exports have 7 tables, so they were rejected before extraction (the direct cause of the live HTML failure). Not replaced with another exact count.
+  - **DROP `first_table_headers`** (`["License","Available Total","Used"]`, exact subset). A workload export's first table is "Capacity Licenses" with `Available Total (TB)` — the unit suffix fails the exact subset, so this *also* rejected the file. Removed, not fuzzed (fuzzing → header-shape recognition, which ADR-0017 D3 retires).
+  - `title_contains "License summary"` **retained** — it keeps the scoped-out titleless fixtures (no `<title>`/`<h1>`, no marker) from recognizing; recognition does NOT fall back to header shape.
+
+### Tests (`tests/test_recognition.py`)
+- workload-heavy export (>2 tables, unit-suffixed first table) now recognizes as `license_summary`; an `<h2>`-titled export recognizes; a bare titleless `[License, Available Total, Used]` table is still NOT recognized (no header-shape fallback); standard 2-table export still recognizes (existing test); LS upload still bespoke (`UPLOAD_HANDLERS` unchanged).
+- Migration count 34 → 35; the commit-1 recognition gate updated to assert the broadened form.
+
+### Notes — post-state (still boring on routing)
+recognition: **broadened**; catalog recipe: live (commit 1); D2 seam: **NOT yet live (commit 2 pending)**; routing: still **bespoke** (commit 4 pending); REST: untouched. So the workload-only HTML now RECOGNIZES but still fails LIVE via the bespoke guard until the commit-4 route switch — recognition is necessary, not yet sufficient. **Note:** the plan's expected post-state listed D2 as live, but commit 2 has not been done in this sequence.
+
 ## 2026-06-13 (feat — ADR-0017 LS promotion commit 1/4: generic recipe → production migration)
 
 **Branch:** `main`. Port the generic License Summary recipe into the catalog under subject_id `license_summary` (replacing the 0003-era bespoke-shaped recipe), via a GENERATED, drift-guarded SQL migration. Recipe-only — NO D2-live, NO recognition change, NO route switch, NO bespoke deletion (those are commits 2–4). Full suite 1270 passed.
