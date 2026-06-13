@@ -176,6 +176,14 @@ def run_signal(db) -> dict[str, Any]:
         Outcome, bespoke_canonical, compare_artifacts, discover_ls_fixtures,
     )
 
+    def _is_ls_content(art) -> bool:
+        # Real LS corpus = 38: exclude the 3 misfiled non-LS exports (2 Security
+        # Assessment + the cv_redesign mock), which yield no LS table rows.
+        return any(
+            getattr(s, "type", None) == "table" and (getattr(s, "items", []) or [])
+            for s in art.sections
+        )
+
     total = {"pass": 0, "fail": 0, "pending": 0}
     classes: dict[tuple, dict] = collections.OrderedDict()
     candidate_errors: list[tuple] = []
@@ -183,7 +191,9 @@ def run_signal(db) -> dict[str, Any]:
         try:
             base = bespoke_canonical(path)
         except Exception:
-            continue  # non-LS / misfiled (the 3) — skip, as the baseline test does
+            continue
+        if not _is_ls_content(base):
+            continue  # misfiled non-LS (the 3) — exclude from the real LS corpus
         try:
             cand = generic_candidate(path, db)
         except Exception as exc:

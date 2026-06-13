@@ -411,31 +411,50 @@ def _compare_section(
         f"whole-section compare (type={stype})"))
 
 
+def _shape_tag(section: Any) -> str:
+    """Distinguish the LS "Other Licenses" WORKLOAD section from the
+    other_licenses TABLE — both collapse to the same `_to_snake` id
+    ('other_licenses') in the bespoke output. A workload section carries the
+    distinctive `entitlement_value` field; the table does not. Keying sections by
+    (id, shape-tag) stops the comparator from cross-comparing a table against
+    workload fields (ADR-0017 B1 — a comparator correctness fix)."""
+    if getattr(section, "type", None) == "table":
+        fields = {c.id for c in getattr(section, "columns", []) or []}
+        for row in getattr(section, "items", []) or []:
+            fields.update(row.keys())
+    else:
+        fields = {it.id for it in getattr(section, "items", []) or []}
+    return "workload" if "entitlement_value" in fields else "default"
+
+
+def _section_key(section: Any) -> tuple[str, str]:
+    return (section.id, _shape_tag(section))
+
+
 def compare_artifacts(
     file: str, baseline: CanonicalArtifact, candidate: CanonicalArtifact
 ) -> ParityReport:
-    """Semantic CanonicalArtifact parity (ADR-0016 + ADR-0017 equivalences)."""
+    """Semantic CanonicalArtifact parity (ADR-0016 + ADR-0017 equivalences).
+
+    Sections are keyed by (id, shape-tag) so a table and a same-id workload
+    section don't collide (B1); empty sections are treated as absent (D4/F4), so a
+    section present-and-non-empty on only one side is a real difference."""
     report = ParityReport(file=file)
     _compare_summary(report, baseline, candidate)
 
-    base_secs = {s.id: s for s in baseline.sections}
-    cand_secs = {s.id: s for s in candidate.sections}
-    for sid in sorted(set(base_secs) | set(cand_secs)):
-        if sid not in base_secs or sid not in cand_secs:
-            # ADR-0017 D4/F4: an empty section ≡ an absent section.
-            present = base_secs.get(sid) or cand_secs.get(sid)
-            if _section_is_empty(present):
-                report.results.append(FieldResult(
-                    file, sid, "", "<section>", "absent/empty", "absent/empty",
-                    Outcome.PASS, "empty section ≡ absent section (D4/F4)"))
-            else:
-                report.results.append(FieldResult(
-                    file, sid, "", "<section>",
-                    "present" if sid in base_secs else "absent",
-                    "present" if sid in cand_secs else "absent",
-                    Outcome.FAIL, "section presence mismatch (non-empty)"))
+    base_map = {_section_key(s): s for s in baseline.sections if not _section_is_empty(s)}
+    cand_map = {_section_key(s): s for s in candidate.sections if not _section_is_empty(s)}
+    for key in sorted(set(base_map) | set(cand_map)):
+        sid, tag = key
+        base_sec, cand_sec = base_map.get(key), cand_map.get(key)
+        if base_sec is None or cand_sec is None:
+            report.results.append(FieldResult(
+                file, sid, "", "<section>",
+                "present" if base_sec is not None else "absent",
+                "present" if cand_sec is not None else "absent",
+                Outcome.FAIL, f"section present on one side only (kind={tag})"))
             continue
-        _compare_section(report, sid, base_secs[sid], cand_secs[sid])
+        _compare_section(report, sid, base_sec, cand_sec)
     return report
 
 

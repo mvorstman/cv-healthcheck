@@ -150,6 +150,37 @@ def test_f3_different_distinct_set_fails():
     assert any(r.outcome is Outcome.FAIL for r in report.failed)
 
 
+# ── B1: table vs same-id workload section are not cross-compared ──────────────
+
+def test_b1_table_and_workload_other_licenses_not_cross_compared():
+    # bespoke "Other Licenses" workload (entitlement_value/status) and the
+    # other_licenses TABLE (available_total/used) share the id 'other_licenses'
+    # via _to_snake — they must NOT be field-cross-compared.
+    workload = _artifact([_table("other_licenses", [
+        {"license": "L1", "entitlement_value": "0", "status": "License not purchased"}])])
+    table = _artifact([_table("other_licenses", [
+        {"license": "L1", "available_total": 25, "used": 10}])])
+    report = compare_artifacts("f", workload, table)
+    fields = {r.field for r in report.results}
+    # no field-level cross-compare of workload fields against table fields
+    assert "entitlement_value" not in fields
+    assert "available_total" not in fields
+    # instead each is a distinct section present on one side only
+    section_fails = [r for r in report.failed if r.field == "<section>"]
+    assert len(section_fails) == 2
+
+
+def test_b1_reflexive_collision_both_sections_compared_equal():
+    # an artifact carrying BOTH a table and a workload 'other_licenses' compares
+    # equal to itself — both are kept (distinct keys), neither dropped/collapsed.
+    art = _artifact([
+        _table("other_licenses", [{"license": "L1", "available_total": 25, "used": 10}]),
+        _table("other_licenses", [{"license": "WL", "entitlement_value": "5", "status": "ok"}]),
+    ])
+    report = compare_artifacts("f", art, art)
+    assert not report.failed
+
+
 # ── guards: the equivalences must not make it an always-pass ──────────────────
 
 def test_still_fails_on_plain_value_difference():

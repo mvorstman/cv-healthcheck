@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (test — ADR-0017 LS parity: B1 comparator fix (section-id collision) + failure decomposition)
+
+**Branch:** `main`. ONE comparator bug-fix (B1) + read-only decomposition. No recipe change, no bespoke change, no ADR-decided-class fixes (pending decisions). Suite 1230 passed (+2).
+
+### Fixed (B1 — comparator correctness, `tests/ls_parity_harness.py`)
+- Sections are keyed by **(id, shape-tag)** instead of id alone. The bespoke `_to_snake("Other Licenses")` workload section and the other_licenses TABLE collapse to the same id `other_licenses`; the old `{id: s}` map dropped one and cross-compared a table against workload fields. The shape-tag (`"workload"` iff the section carries `entitlement_value`, else `"default"`) keeps them distinct. Empty sections are dropped (D4/F4: empty ≡ absent), so a non-empty section present on one side only is a real difference. (Bonus: an artifact carrying BOTH a table and a workload `other_licenses` now compares both, instead of silently collapsing one.)
+- `run_signal` excludes the 3 misfiled non-LS exports (real LS corpus = 38).
+- `tests/test_compare_adr0017.py` +2: table vs same-id workload not cross-compared; reflexive collision keeps both sections.
+
+### Notes — post-B1 breakdown (38 files): pass 6059, fail 249 (was 280 / 41)
+- **F5/D3 computed counts (152 = 4×38):** generic computed SECTIONS vs bespoke SUMMARY METRICS — ADR-decided, unchanged by B1.
+- **D2 commcell_info (38):** context-injected, recipe omits it — ADR-decided, unchanged.
+- **reg_code commcell_meta (8):** recipe extracts + masks, bespoke drops it — ADR-decided, unchanged.
+- **B2 unit-parse divergence (28):** ONE pattern — raw `"0 source VMs"` → bespoke unit `"VMs"` (trailing word) vs generic `"source VMs"` (everything after the number; `number_with_unit`). Decision pending.
+- **"Other Licenses" title ambiguity (22):** the SOURCE title "Other Licenses" matches both the table ("Other Licenses - current usage details") and the workload ("Other Licenses") — generic grabs the workload as a degenerate table (8), misses the real table (6), and omits the workload (8). Recipe disambiguation, pending.
+- **license-summary-sample structural variation (1):** agent_feature_licenses missed on one mock sample export.
+
 ## 2026-06-13 (test — ADR-0017 LS recipe: first parity signal, generic-vs-bespoke)
 
 **Branch:** `main`. First parity SIGNAL — the generic LS recipe authored against the ADR-0017 target + adjusted comparator, published through the compile gate, compared generic-vs-bespoke over the corpus. Bespoke LS STAYS; no UI/upload change, no bespoke deletion, no recipe-model change, no compile-gate change. NOT green, NOT retirement. Suite 1228 passed (+2). **The compile gate accepted the recipe.**
