@@ -189,10 +189,10 @@ def test_upload_route_not_switched_yet():
     assert "license_summary" in UPLOAD_HANDLERS
 
 
-def test_d2_enrichment_not_live_yet():
-    # result_to_artifact must NOT assemble commcell_info yet (that is commit 2).
+def test_d2_enrichment_is_live_in_result_to_artifact():
+    # Commit 2: result_to_artifact now calls the D2 enrichment seam (caller-fed).
     import inspect
 
     import cvhealthcheck.extractors.result_to_artifact as rta
 
-    assert "commcell_info" not in inspect.getsource(rta)
+    assert "enrich_commcell_info" in inspect.getsource(rta)

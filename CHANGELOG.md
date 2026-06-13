@@ -10,6 +10,22 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat — ADR-0017 LS promotion commit 2/4: D2 commcell_info enrichment → live seam)
+
+**Branch:** `main`. Port the D2 `commcell_info` enrichment from test/parity-support into PRODUCTION, called from `result_to_artifact`, caller-fed. Hard prerequisite for commit 4 (else the promoted path drops `commcell_info`). NO recognition change, NO route switch, NO upload-handler change, NO REST change. Full suite 1282 passed.
+
+### Added
+- **`src/cvhealthcheck/extractors/commcell_enrich.py`** — `enrich_commcell_info(artifact, commcell_name=None)` assembles the `commcell_info` MetricSection from caller-fed identity + report-evidence observational fields (consumed from the recipe's `_commcell_observed` staging section). `COMMCELL_OBSERVED_SECTION` / `COMMCELL_PLACEHOLDER` constants. Identity precedence: declared context > report evidence > `"Unknown CommCell"` — the placeholder is treated as absence-of-identity (so real evidence beats it; ADR-0017 D2). ADDITIVE + DATA-DRIVEN: a no-op returning the SAME object when the staging section is absent (non-LS byte-unchanged).
+- **`tests/test_commcell_enrich.py`** — the gates: caller-fed assembly via `result_to_artifact` with NO db/session (gate 4); non-LS artifact passes through as the SAME object (gate 5); placeholder-as-absence precedence; observational `"N/A"` preserved; evidence-when-no-context.
+
+### Changed
+- **`result_to_artifact`** calls `enrich_commcell_info(artifact, commcell_name)` before returning — reusing the existing caller-fed `commcell_name` param (Fix-3/4) as the D2 identity. No new param; still caller-fed (no DB / session / context discovery).
+- **`license_summary/generic_recipe.py`** sources `_OBSERVED_SECTION` from `COMMCELL_OBSERVED_SECTION` (single source of truth; same string → migration 0034 byte-unchanged).
+- **Parity harness** (`tests/ls_generic_recipe.py`): `generic_candidate` now feeds `commcell_name` to `result_to_artifact` (enrichment happens IN the seam) instead of calling a separate test-side enrich; the test-side `_enrich_commcell_info` is removed and re-exported from production. D2 unit-test signatures updated to the caller-fed name; `_art_with_observed` now emits an EMPTY staging section for the no-evidence case (matching the recipe, which always emits the section). Commit-1 gate flips from "D2 not live" to "D2 live".
+
+### Notes — post-state
+D2 seam: **live**; recipe: live (commit 1); recognition: broadened (commit 3); routing: still **bespoke** (commit 4 pending); REST: untouched. The seam CAN now assemble `commcell_info`, but LS upload is still bespoke. Parity unchanged: pass 738, fail 0. With commit 2 done, commit 4's route switch will no longer drop `commcell_info`.
+
 ## 2026-06-13 (feat — ADR-0017 LS promotion commit 3/4: broaden HTML recognition)
 
 **Branch:** `main`. Broaden License Summary HTML recognition so the live generic path can RECOGNIZE real workload-heavy exports (it can already extract them; recognition rejected them first). Recognition ONLY — NO route switch, NO recipe change, NO D2 change, NO REST change, NO header-shape recognition. Full suite 1274 passed.

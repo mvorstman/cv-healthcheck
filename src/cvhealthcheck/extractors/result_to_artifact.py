@@ -22,6 +22,7 @@ from cvhealthcheck.artifacts.models import (
 )
 from cvhealthcheck.evaluative.row_match import evaluate_section_rows, format_conditions
 from cvhealthcheck.extractors.card_section import build_card_section
+from cvhealthcheck.extractors.commcell_enrich import enrich_commcell_info
 from cvhealthcheck.extractors.chart_section import build_chart_section
 from cvhealthcheck.extractors.html import ExtractionResult
 from cvhealthcheck.extractors.metric_section import build_metric_section, worst_metric_severity
@@ -275,7 +276,7 @@ def result_to_artifact(
     if evaluation_meta:
         metadata["evaluation"] = evaluation_meta   # ADR 0010 layout slice 2
 
-    return CanonicalArtifact(
+    artifact = CanonicalArtifact(
         artifact_type=subject_id,
         generated_at=now,
         source=source,
@@ -284,6 +285,12 @@ def result_to_artifact(
         sections=sections,
         metadata=metadata,
     )
+    # ADR-0017 D2: assemble commcell_info from the caller-fed identity
+    # (commcell_name) + report-evidence observational fields (the recipe's
+    # _commcell_observed staging section). No-op when that staging section is
+    # absent, so non-LS artifacts are byte-unchanged. Caller-fed only — no DB,
+    # no session, no context discovery here.
+    return enrich_commcell_info(artifact, commcell_name)
 
 
 def _build_finding(section_id: str, row: dict[str, Any]) -> Finding:

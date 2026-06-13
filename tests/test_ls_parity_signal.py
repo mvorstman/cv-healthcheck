@@ -43,12 +43,15 @@ _NOW = datetime(2026, 6, 13, 12, 0, tzinfo=timezone.utc)
 
 
 def _art_with_observed(observed_row):
-    sections = []
-    if observed_row is not None:
-        sections.append(TableSection(
-            type="table", id=_OBSERVED_SECTION, title="obs",
-            columns=[TableColumn(id=k, label=k) for k in observed_row],
-            items=[observed_row]))
+    # The recipe ALWAYS emits the staging section (metadata_pairs), empty when the
+    # report carries no evidence — so "no evidence" is an EMPTY section, not an
+    # absent one. (Enrichment is a no-op only when the section is truly absent —
+    # i.e. non-LS — which gate 5 covers in test_commcell_enrich.)
+    keys = list(observed_row) if observed_row else ["commcell_name"]
+    sections = [TableSection(
+        type="table", id=_OBSERVED_SECTION, title="obs",
+        columns=[TableColumn(id=k, label=k) for k in keys],
+        items=[observed_row] if observed_row is not None else [])]
     return CanonicalArtifact(
         artifact_type="x", generated_at=_NOW,
         source=ArtifactSource(type=SourceType.html_import),
@@ -236,7 +239,7 @@ def test_other_licenses_bare_workload_not_grabbed_as_table(migrated_db_path: Pat
 
 def test_d2_context_identity_beats_evidence():
     art = _art_with_observed({"commcell_name": "CommServe A", "commcell_version": "11.40"})
-    out = _enrich_commcell_info(art, {"commserve_name": "DeclaredCS"})
+    out = _enrich_commcell_info(art, "DeclaredCS")    # caller-fed declared identity
     ci = _commcell_info(out)
     assert ci["commcell_name"] == "DeclaredCS"        # context > evidence
     assert ci["commcell_version"] == "11.40"           # observational from evidence

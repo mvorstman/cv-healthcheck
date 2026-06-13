@@ -27,6 +27,7 @@ import json
 from typing import Any
 
 from cvhealthcheck.db.subjects import create_subject_from_proposal
+from cvhealthcheck.extractors.commcell_enrich import COMMCELL_OBSERVED_SECTION
 
 # The LIVE subject id — the generic recipe REPLACES the 0003-era bespoke-shaped
 # license_summary recipe under the same id (so the tile/route/API/store keep
@@ -96,7 +97,9 @@ _OBSERVED_LM = [
                 "Last Collection Time", "Usage Collection Time"],
      "canonical": "last_collection"},
 ]
-_OBSERVED_SECTION = "_commcell_observed"  # staging section, consumed by enrichment
+# staging section the D2 enrichment seam consumes (same id as the production
+# constant — single source of truth; the generated migration is unaffected).
+_OBSERVED_SECTION = COMMCELL_OBSERVED_SECTION
 
 
 def _section_decls() -> list[dict]:

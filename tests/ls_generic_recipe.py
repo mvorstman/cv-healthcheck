@@ -18,14 +18,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from cvhealthcheck.artifacts.models import (
-    CanonicalArtifact,
-    MetricItem,
-    MetricSection,
-)
+from cvhealthcheck.artifacts.models import CanonicalArtifact
 from cvhealthcheck.extractors.csv import CSVExtractor
 from cvhealthcheck.extractors.html import HTMLExtractor
 from cvhealthcheck.extractors.result_to_artifact import result_to_artifact
+
+# D2 enrichment now lives in PRODUCTION (commit 2 — the result_to_artifact seam).
+# Re-exported here as _enrich_commcell_info so the D2 unit tests keep importing it.
+from cvhealthcheck.extractors.commcell_enrich import (  # noqa: F401
+    enrich_commcell_info as _enrich_commcell_info,
+)
 
 # Production recipe (source of truth) — re-exported for the harness + tests.
 from cvhealthcheck.license_summary.generic_recipe import (  # noqa: F401
@@ -41,53 +43,19 @@ from ls_parity_harness import fixture_format
 
 def generic_candidate(path: Path, db, customer: dict | None = None) -> CanonicalArtifact:
     """The generic recipe output for a real export — the harness candidate seam.
-    Includes the D2 enrichment: assemble commcell_info from {context identity +
-    report-evidence observational}. ``customer`` is the active-customer context
-    (None in the harness, where no customer is selected — matching bespoke's
+    D2 enrichment is now performed INSIDE result_to_artifact (commit 2): we feed
+    the declared-context identity (``customer["commserve_name"]``) and the seam
+    assembles commcell_info from it + the report-evidence staging section.
+    ``customer`` is None in the harness (no customer selected — matching bespoke's
     no-context "Unknown CommCell" default)."""
     fmt = fixture_format(path)
     extractor = CSVExtractor(db) if fmt == "csv" else HTMLExtractor(db)
     result = extractor.extract(path, GENERIC_SUBJECT_ID)
-    artifact = result_to_artifact(result, subject_id=GENERIC_SUBJECT_ID,
-                                  subject_title="License Summary")
-    return _enrich_commcell_info(artifact, customer)
-
-
-def _enrich_commcell_info(artifact: CanonicalArtifact, customer: dict | None) -> CanonicalArtifact:
-    """ADR-0017 D2: assemble the commcell_info MetricSection from context identity
-    (commcell_name) + report-evidence observational fields (consumed from the
-    staged metadata_pairs section). Present only where each value exists, matching
-    bespoke's per-file variation. The staging section is dropped (enrichment-
-    assembled, not a recipe section)."""
-    observed: dict = {}
-    kept = []
-    for section in artifact.sections:
-        if section.id == _OBSERVED_SECTION:
-            rows = getattr(section, "items", []) or []
-            if rows:
-                observed = rows[0]
-            continue  # consume the staging section — never appears in the output
-        kept.append(section)
-
-    # identity precedence: real declared context > real report-evidence > placeholder
-    ctx_name = (customer or {}).get("commserve_name")
-    ctx_name = ctx_name if (ctx_name and str(ctx_name).strip()) else None
-    evidence_name = observed.get("commcell_name") or None
-    commcell_name = ctx_name or evidence_name or "Unknown CommCell"
-
-    items: list[MetricItem] = []
-    _add_metric_item(items, "commcell_name", "CommCell Name", commcell_name)
-    _add_metric_item(items, "commcell_version", "CommCell Version", observed.get("commcell_version"))
-    _add_metric_item(items, "license_expiry", "License Expiry", observed.get("license_expiry"))
-    _add_metric_item(items, "last_collection", "Last Collection Time", observed.get("last_collection"))
-    kept.append(MetricSection(type="metric", id="commcell_info", title="CommCell Info", items=items))
-    return artifact.model_copy(update={"sections": kept})
-
-
-def _add_metric_item(items: list[MetricItem], item_id: str, label: str, value) -> None:
-    # Mirror the bespoke adapter's _add_metric: skip None / blank.
-    if value is not None and str(value).strip():
-        items.append(MetricItem(id=item_id, label=label, value=str(value)))
+    commcell_name = (customer or {}).get("commserve_name")
+    return result_to_artifact(
+        result, subject_id=GENERIC_SUBJECT_ID, subject_title="License Summary",
+        commcell_name=commcell_name,
+    )
 
 
 # ---------------------------------------------------------------------------
