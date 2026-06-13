@@ -147,14 +147,17 @@ def extractor(extractor_db: sqlite3.Connection) -> CSVExtractor:
 # 1. single_table populated
 # ---------------------------------------------------------------------------
 
-def test_single_table_other_licenses_returns_rows(extractor: CSVExtractor, tmp_path: Path) -> None:
+def test_single_table_other_licenses_returns_rows(
+    extractor: CSVExtractor, machinery_subject: str, tmp_path: Path
+) -> None:
     csv_path = tmp_path / "license.csv"
     csv_path.write_text(build_license_summary_csv(), encoding="utf-8")
 
-    result = extractor.extract(csv_path, "license_summary")
+    result = extractor.extract(csv_path, machinery_subject)
 
-    assert "license_summary.other_licenses" in result.sections
-    rows = result.sections["license_summary.other_licenses"]
+    sid = f"{machinery_subject}.other_licenses"
+    assert sid in result.sections
+    rows = result.sections[sid]
     assert len(rows) == 2
     assert rows[0]["license_name"] == "License A"
     assert rows[0]["available_total_raw"] == "10"
@@ -165,14 +168,17 @@ def test_single_table_other_licenses_returns_rows(extractor: CSVExtractor, tmp_p
 # 2. single_table empty section
 # ---------------------------------------------------------------------------
 
-def test_single_table_empty_section_warns(extractor: CSVExtractor, tmp_path: Path) -> None:
+def test_single_table_empty_section_warns(
+    extractor: CSVExtractor, machinery_subject: str, tmp_path: Path
+) -> None:
     csv_path = tmp_path / "license.csv"
     csv_path.write_text(build_license_summary_csv(other_rows=[]), encoding="utf-8")
 
-    result = extractor.extract(csv_path, "license_summary")
+    result = extractor.extract(csv_path, machinery_subject)
 
-    assert "license_summary.other_licenses" in result.sections
-    assert result.sections["license_summary.other_licenses"] == []
+    sid = f"{machinery_subject}.other_licenses"
+    assert sid in result.sections
+    assert result.sections[sid] == []
     assert any("no data rows" in w for w in result.warnings)
 
 
@@ -180,15 +186,17 @@ def test_single_table_empty_section_warns(extractor: CSVExtractor, tmp_path: Pat
 # 3. null_values → None
 # ---------------------------------------------------------------------------
 
-def test_single_table_null_values_become_none(extractor: CSVExtractor, tmp_path: Path) -> None:
+def test_single_table_null_values_become_none(
+    extractor: CSVExtractor, machinery_subject: str, tmp_path: Path
+) -> None:
     csv_path = tmp_path / "license.csv"
     csv_path.write_text(
         build_license_summary_csv(other_rows=[("License X", "N/A", "-")]),
         encoding="utf-8",
     )
 
-    result = extractor.extract(csv_path, "license_summary")
-    rows = result.sections["license_summary.other_licenses"]
+    result = extractor.extract(csv_path, machinery_subject)
+    rows = result.sections[f"{machinery_subject}.other_licenses"]
 
     assert rows[0]["available_total_raw"] is None
     assert rows[0]["used_raw"] is None
@@ -265,15 +273,18 @@ def test_multi_section_missing_label_warns(extractor: CSVExtractor, tmp_path: Pa
 # 8. UTF-8 BOM encoding
 # ---------------------------------------------------------------------------
 
-def test_utf8_bom_csv_is_read_correctly(extractor: CSVExtractor, tmp_path: Path) -> None:
+def test_utf8_bom_csv_is_read_correctly(
+    extractor: CSVExtractor, machinery_subject: str, tmp_path: Path
+) -> None:
     csv_path = tmp_path / "license_bom.csv"
     # Write with BOM (utf-8-sig)
     csv_path.write_text(build_license_summary_csv(), encoding="utf-8-sig")
 
-    result = extractor.extract(csv_path, "license_summary")
+    result = extractor.extract(csv_path, machinery_subject)
 
-    assert "license_summary.other_licenses" in result.sections
-    rows = result.sections["license_summary.other_licenses"]
+    sid = f"{machinery_subject}.other_licenses"
+    assert sid in result.sections
+    rows = result.sections[sid]
     assert len(rows) == 2
     # BOM stripping is tested indirectly: if the first cell were '﻿License summary'
     # the header detection would fail and rows would be empty.
@@ -283,14 +294,16 @@ def test_utf8_bom_csv_is_read_correctly(extractor: CSVExtractor, tmp_path: Path)
 # 9. metadata rows before header are skipped
 # ---------------------------------------------------------------------------
 
-def test_single_table_skips_metadata_rows(extractor: CSVExtractor, tmp_path: Path) -> None:
+def test_single_table_skips_metadata_rows(
+    extractor: CSVExtractor, machinery_subject: str, tmp_path: Path
+) -> None:
     # The CSV builder puts "License summary" and "Generated on:..." before the header.
     csv_path = tmp_path / "license.csv"
     csv_path.write_text(build_license_summary_csv(), encoding="utf-8")
 
-    result = extractor.extract(csv_path, "license_summary")
+    result = extractor.extract(csv_path, machinery_subject)
 
-    rows = result.sections["license_summary.other_licenses"]
+    rows = result.sections[f"{machinery_subject}.other_licenses"]
     # If metadata rows were not skipped the extractor would find no matching
     # header and return []; assert we got actual data instead.
     assert len(rows) > 0

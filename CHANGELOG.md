@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat — ADR-0017 LS promotion commit 1/4: generic recipe → production migration)
+
+**Branch:** `main`. Port the generic License Summary recipe into the catalog under subject_id `license_summary` (replacing the 0003-era bespoke-shaped recipe), via a GENERATED, drift-guarded SQL migration. Recipe-only — NO D2-live, NO recognition change, NO route switch, NO bespoke deletion (those are commits 2–4). Full suite 1270 passed.
+
+### Added
+- **`src/cvhealthcheck/license_summary/generic_recipe.py`** — the production recipe (single source of truth): `LS_RECIPE_PROPOSAL` (subject_id `license_summary`), `publish_ls_recipe`, and `render_migration_sql` — a DETERMINISTIC generator (`sort_keys`, fixed separators/order) that renders the proposal into the migration SQL. The parity harness (`tests/ls_generic_recipe.py`) now re-exports from here, so live catalog and parity share ONE recipe.
+- **`src/cvhealthcheck/db/migrations/0034_license_summary_generic_recipe.sql`** — GENERATED from the recipe (`python -m cvhealthcheck.license_summary.generic_recipe`). Tears down the prior `license_summary` recipe content (every source's section_sources + all its sections) and installs the generic recipe's bare-id sections + csv/html instructions. The `subjects` row is NOT touched (`created_by='system'` preserved); csv/html `recognition_hints` are NOT rewritten (`INSERT OR IGNORE` keeps the 0003 values — commit 3 broadens them); the `rest` source row is NOT touched (REST is out of scope).
+- **`tests/test_ls_generic_recipe_migration.py`** — the 9 commit-1 gates: file committed + SQL-only runner; byte-identical regeneration; drift guard FAILS on a real recipe mutation (transform change + section add) and still matches when unmutated; subject_id stays `license_summary`; `created_by='system'` preserved; no stale `license_summary.*` ids; compile gate accepts the recipe; recognition/route/D2 untouched. Plus a functional check: the migrated catalog recipe extracts the workload-only 2 MB export end-to-end (the file bespoke rejects).
+
+### Changed
+- **Bare section ids for LS are now the catalog shape** (matching the bespoke adapter, `registry/catalog.py`, and the ADR-0017 parity target). `test_every_section_id_starts_with_tile_id_prefix` gets ONE named, justified exemption for `license_summary` (the prefix invariant still holds for every other subject — not generalized).
+- **Extractor-machinery tests decoupled from the LS recipe:** the 7 `test_extractor_{csv,html}` LS-vehicle tests now run against a synthetic, prefixed-id `extractor_machinery` subject (new `conftest.machinery_subject` fixture). They test extractor machinery (single_table scan, null_values, BOM, metadata-skip, html title-match), not LS's canonical recipe — so future LS recipe changes don't churn them.
+- Migration-count assertion 33 → 34.
+
+### Notes
+Migrations are SQL-only (`run_migrations` globs `*.sql`), so the recipe can't call `create_subject_from_proposal` from a migration — hence the generate-from-proposal + byte-identical drift-guard approach (the recipe, not hand-written SQL, stays the source of truth). Parity unchanged: pass 738, fail 0. The live LS upload is STILL bespoke until commit 4.
+
 ## 2026-06-13 (test/docs — ADR-0017 residual (b): named scope-out + corpus dedup → parity GREEN)
 
 **Branch:** `main`. Formal close of ADR-0017 Open-question residual (b): the 5 titleless synthetic classifier fixtures are excluded from the parity corpus BY NAME, and duplicate upload copies are collapsed to distinct contents, leaving parity green over the real-export corpus.

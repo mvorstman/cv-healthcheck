@@ -209,20 +209,24 @@ def test_security_assessment_extract_empty(extractor: HTMLExtractor, tmp_path: P
 # Test 3 — license_summary, populated tables
 # ---------------------------------------------------------------------------
 
-def test_license_summary_extract_populated(extractor: HTMLExtractor, tmp_path: Path) -> None:
+def test_license_summary_extract_populated(
+    extractor: HTMLExtractor, machinery_subject: str, tmp_path: Path
+) -> None:
     html = build_license_summary_html([
         {"title": "Other Licenses",            "columns": _LS_COLUMNS_OTHER, "rows": _LS_OTHER_ROWS},
         {"title": "Agent and Feature Licenses", "columns": _LS_COLUMNS_AGENT, "rows": _LS_AGENT_ROWS},
     ])
     html_path = _write_html(tmp_path, html)
 
-    result = extractor.extract(html_path, "license_summary")
+    result = extractor.extract(html_path, machinery_subject)
 
+    other_id = f"{machinery_subject}.other_licenses"
+    agent_id = f"{machinery_subject}.agent_feature_licenses"
     assert not result.errors, f"Unexpected errors: {result.errors}"
-    assert "license_summary.other_licenses" in result.sections
-    assert "license_summary.agent_feature_licenses" in result.sections
+    assert other_id in result.sections
+    assert agent_id in result.sections
 
-    other = result.sections["license_summary.other_licenses"]
+    other = result.sections[other_id]
     assert len(other) == 2
     assert other[0]["license_name"] == "Metallic"
     assert other[0]["available_total_raw"] == "0 TB"
@@ -231,7 +235,7 @@ def test_license_summary_extract_populated(extractor: HTMLExtractor, tmp_path: P
     assert other[1]["available_total_raw"] is None
     assert other[1]["used_raw"] is None
 
-    agent = result.sections["license_summary.agent_feature_licenses"]
+    agent = result.sections[agent_id]
     assert len(agent) == 1
     assert agent[0]["license_name"] == "Server File System"
 
@@ -240,18 +244,20 @@ def test_license_summary_extract_populated(extractor: HTMLExtractor, tmp_path: P
 # Test 4 — license_summary, empty tables
 # ---------------------------------------------------------------------------
 
-def test_license_summary_extract_empty(extractor: HTMLExtractor, tmp_path: Path) -> None:
+def test_license_summary_extract_empty(
+    extractor: HTMLExtractor, machinery_subject: str, tmp_path: Path
+) -> None:
     html = build_license_summary_html([
         {"title": "Other Licenses",            "columns": _LS_COLUMNS_OTHER, "rows": []},
         {"title": "Agent and Feature Licenses", "columns": _LS_COLUMNS_AGENT, "rows": []},
     ])
     html_path = _write_html(tmp_path, html)
 
-    result = extractor.extract(html_path, "license_summary")
+    result = extractor.extract(html_path, machinery_subject)
 
     assert not result.errors, f"Unexpected errors: {result.errors}"
-    assert result.sections["license_summary.other_licenses"] == []
-    assert result.sections["license_summary.agent_feature_licenses"] == []
+    assert result.sections[f"{machinery_subject}.other_licenses"] == []
+    assert result.sections[f"{machinery_subject}.agent_feature_licenses"] == []
     empty_warnings = [w for w in result.warnings if "no data rows" in w]
     assert len(empty_warnings) == 2
 

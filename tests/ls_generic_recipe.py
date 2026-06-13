@@ -1,17 +1,17 @@
-"""ADR-0017 LS recipe (first parity signal) — the generic License Summary recipe.
+"""ADR-0017 LS recipe — harness wrapper around the PRODUCTION recipe.
 
-Authored against the settled ADR-0017 target + adjusted comparator. The bespoke LS
-pipeline STAYS; this recipe is published into a harness-local DB (through the
-compile gate) and used to produce a GENERIC candidate CanonicalArtifact for the
-parity harness — no catalog/migration change, no UI change, no bespoke change.
+The recipe itself now lives in production
+(:mod:`cvhealthcheck.license_summary.generic_recipe`) — a single source of truth
+shared by the live catalog (migration ``0034``) and this parity harness. This
+module re-exports it and adds the harness-only pieces:
 
-Canonicals match the BESPOKE ADAPTER's field/section ids (license / available_total
-/ used / permanent_total… ; section ids other_licenses / agent_feature_licenses /
-the _to_snake workload names) so the comparator aligns sections. Extracts ONLY
-what files carry (ADR-0017): NO commcell_info identity (D2 — context-enrichment,
-deferred), NO usage_percent (D5). Counts are COMPUTED SECTIONS, not summary
-metrics (D3/F5). Workload is HTML-only (section_title_selector), not csv
-multi_section (no CSV export carries workload blocks).
+  - the D2 ``commcell_info`` enrichment (still test-side here; its promotion to the
+    live ``result_to_artifact`` seam is commit 2),
+  - the candidate producer (extract → result_to_artifact → enrich), and
+  - the signal runner (generic-vs-bespoke over the corpus).
+
+No bespoke change. The enrichment + candidate path mirror what the live generic
+path will do once commit 2 lands.
 """
 from __future__ import annotations
 
@@ -23,169 +23,20 @@ from cvhealthcheck.artifacts.models import (
     MetricItem,
     MetricSection,
 )
-from cvhealthcheck.db.subjects import create_subject_from_proposal
 from cvhealthcheck.extractors.csv import CSVExtractor
 from cvhealthcheck.extractors.html import HTMLExtractor
 from cvhealthcheck.extractors.result_to_artifact import result_to_artifact
 
+# Production recipe (source of truth) — re-exported for the harness + tests.
+from cvhealthcheck.license_summary.generic_recipe import (  # noqa: F401
+    GENERIC_SUBJECT_ID,
+    LS_RECIPE_PROPOSAL,
+    _OBSERVED_SECTION,
+    publish_ls_recipe,
+    render_migration_sql,
+)
+
 from ls_parity_harness import fixture_format
-
-GENERIC_SUBJECT_ID = "license_summary_generic"
-_NULLS = ["N/A", "-", ""]
-
-# Workload sections (HTML-only): bespoke section_name → _to_snake id. "Other
-# Licenses" workload is OMITTED — its _to_snake id collides with the
-# other_licenses TABLE section (a known bespoke collision; flagged, not resolved).
-_WORKLOAD = [
-    ("Capacity Licenses", "capacity_licenses"),
-    ("Operating Instance Licenses", "operating_instance_licenses"),
-    ("Virtualization Licenses", "virtualization_licenses"),
-    ("User Licenses", "user_licenses"),
-    ("Data Insights Licenses", "data_insights_licenses"),
-    ("Air Gap Protect Licenses", "air_gap_protect_licenses"),
-]
-
-# Coalesce candidate columns for the workload entitlement / used (the exact
-# variants the bespoke _first_present_text walks — report-version / license-type).
-_AVAIL = [
-    "Available Total", "Available Total (TB)", "Available Total (instances)",
-    "Available Total (users)", "Available Total (VMs)",
-    "Permanent Purchased", "Permanent Purchased (TB)", "Permanent Purchased (instances)",
-    "Permanent Purchased (users)",
-    "Term Purchased", "Term Purchased (TB)", "Term Purchased (instances)",
-    "Term Purchased (users)",
-]
-_USED = ["Used", "Used (TB)", "Used (instances)", "Used (users)", "Used (VMs)"]
-
-_OTHER_CM = [
-    {"source": "License", "canonical": "license", "type": "string"},
-    {"source": "Available Total", "canonical": "available_total", "transforms": ["number_with_unit"]},
-    {"source": "Used", "canonical": "used", "transforms": ["number_with_unit"]},
-]
-_AGENT_CM = [
-    {"source": "License", "canonical": "license", "type": "string"},
-    {"source": "Permanent Total", "canonical": "permanent_total", "transforms": ["to_integer"]},
-    {"source": "Permanent Used", "canonical": "permanent_used", "transforms": ["to_integer"]},
-    {"source": "Term Total", "canonical": "term_total", "transforms": ["to_integer"]},
-    {"source": "Term Used", "canonical": "term_used", "transforms": ["to_integer"]},
-]
-_WORKLOAD_CM = [
-    {"source": "License", "canonical": "license", "type": "string"},
-    {"source": _AVAIL, "canonical": "entitlement_value", "transforms": ["number_with_unit"]},
-    {"source": _USED, "canonical": "used", "transforms": ["number_with_unit"]},
-    {"source": "Summary", "canonical": "status", "type": "string"},
-]
-# Exact label confirmed in the deciding-reads: "Registration code" (lowercase 'c').
-_META_LM = [
-    {"source": "Registration code", "canonical": "registration_code",
-     "transforms": ["trim", "mask_registration_code"]},
-]
-
-# D2 OBSERVATIONAL metadata (report evidence) — exact labels confirmed across the
-# corpus. Extracted into a staging section the enrichment CONSUMES into
-# commcell_info. null_values=[] so "N/A" (a real bespoke value) is preserved.
-# "CommCell Name" is report-evidence identity (used only as the precedence
-# fallback when no declared context is present).
-_OBSERVED_LM = [
-    {"source": ["CommCell Name"], "canonical": "commcell_name"},
-    {"source": ["Version", "CommCell Version"], "canonical": "commcell_version"},
-    {"source": ["License expiration", "License Expiry", "License expiry"],
-     "canonical": "license_expiry"},
-    {"source": ["Usage collection time", "Last collection time",
-                "Last Collection Time", "Usage Collection Time"],
-     "canonical": "last_collection"},
-]
-_OBSERVED_SECTION = "_commcell_observed"  # staging section, consumed by enrichment
-
-
-def _section_decls() -> list[dict]:
-    decls = [
-        ("other_licenses", "table"),
-        ("agent_feature_licenses", "table"),
-        ("other_license_count", "metric"),       # computed (sort after its source)
-        ("agent_feature_count", "metric"),       # computed (sort after its source)
-        ("commcell_meta", "metric"),             # metadata_pairs (registration_code)
-        (_OBSERVED_SECTION, "metric"),           # metadata_pairs (observational; staged)
-    ]
-    decls += [(sid, "table") for _name, sid in _WORKLOAD]
-    return [
-        {"section_id": sid, "title": sid, "section_type": st,
-         "default_selected": True, "sort_order": i}
-        for i, (sid, st) in enumerate(decls)
-    ]
-
-
-def _computed(ctype, source_section, field=None):
-    r = {"format": "computed", "computed_type": ctype,
-         "source_section": source_section, "output_as": "table"}
-    if field:
-        r["field"] = field
-    return r
-
-
-def _csv_sections() -> dict:
-    return {
-        "other_licenses": {"format": "single_table", "column_map": _OTHER_CM,
-                           "null_values": _NULLS, "output_as": "table"},
-        "agent_feature_licenses": {"format": "single_table", "column_map": _AGENT_CM,
-                                   "null_values": _NULLS, "output_as": "table"},
-        "other_license_count": _computed("row_count", "other_licenses"),
-        "agent_feature_count": _computed("distinct_count", "agent_feature_licenses", "license"),
-        "commcell_meta": {"format": "metadata_pairs", "label_map": _META_LM,
-                          "null_values": _NULLS, "output_as": "table"},
-        _OBSERVED_SECTION: {"format": "metadata_pairs", "label_map": _OBSERVED_LM,
-                            "null_values": [], "output_as": "table"},
-    }
-
-
-def _html_table(title, column_map):
-    # Title-anchored: a section title may live in the Commvault export wrapper
-    # (.reportstabletitle) OR in a plain <h2> heading (the sample-style export).
-    # Still EXACT section_title_match, still title-anchored — NOT header-shape
-    # matching. The extractor associates the title with the table that FOLLOWS it.
-    return {"section_title_selector": ".reportstabletitle, h2", "section_title_match": title,
-            "column_map": column_map, "null_values": _NULLS, "output_as": "table"}
-
-
-def _html_sections() -> dict:
-    secs = {
-        # Match the TABLE by its EXACT full title so it no longer collides with the
-        # bare "Other Licenses" workload-summary title (ADR-0017 "Other Licenses"
-        # disambiguation). The workload "Other Licenses" can't be authored here too
-        # — its bespoke _to_snake id is also "other_licenses" and the recipe can't
-        # declare two sections with one id (DB unique); see the slice finding.
-        "other_licenses": _html_table("Other Licenses - current usage details", _OTHER_CM),
-        "agent_feature_licenses": _html_table("Agent and Feature Licenses", _AGENT_CM),
-        "other_license_count": _computed("row_count", "other_licenses"),
-        "agent_feature_count": _computed("distinct_count", "agent_feature_licenses", "license"),
-        "commcell_meta": {"format": "metadata_pairs", "label_map": _META_LM,
-                          "null_values": _NULLS, "output_as": "table"},
-        _OBSERVED_SECTION: {"format": "metadata_pairs", "label_map": _OBSERVED_LM,
-                            "null_values": [], "output_as": "table"},
-    }
-    for name, sid in _WORKLOAD:
-        secs[sid] = _html_table(name, _WORKLOAD_CM)
-    return secs
-
-
-LS_RECIPE_PROPOSAL: dict[str, Any] = {
-    "subject_id": GENERIC_SUBJECT_ID,
-    "version": 1,
-    "title": "License Summary (generic)",
-    "description": "ADR-0017 generic LS recipe — first parity signal.",
-    "category": "reporting",
-    "sections": _section_decls(),
-    "extraction_instructions": {
-        "csv": {"extractable": True, "sections": _csv_sections()},
-        "html": {"extractable": True, "sections": _html_sections()},
-    },
-}
-
-
-def publish_ls_recipe(db) -> dict:
-    """Publish the generic recipe THROUGH the compile gate. Raises
-    ProposalCompileError if the gate rejects it (caller must STOP + report)."""
-    return create_subject_from_proposal(db, LS_RECIPE_PROPOSAL)
 
 
 def generic_candidate(path: Path, db, customer: dict | None = None) -> CanonicalArtifact:
@@ -244,8 +95,8 @@ def _add_metric_item(items: list[MetricItem], item_id: str, label: str, value) -
 # ---------------------------------------------------------------------------
 
 def run_signal(db) -> dict[str, Any]:
-    """Generic-vs-bespoke over the 38, against a db with the recipe published.
-    Returns pass/fail/pending totals + failure classes (section|field|note)."""
+    """Generic-vs-bespoke over the distinct real-export corpus, against a db with
+    the recipe published. Returns pass/fail/pending totals + failure classes."""
     import collections
 
     from ls_parity_harness import (
@@ -253,8 +104,8 @@ def run_signal(db) -> dict[str, Any]:
     )
 
     def _is_ls_content(art) -> bool:
-        # Real LS corpus = 38: exclude the 3 misfiled non-LS exports (2 Security
-        # Assessment + the cv_redesign mock), which yield no LS table rows.
+        # Exclude the misfiled non-LS exports (a stray Security Assessment + the
+        # cv_redesign mock), which yield no LS table rows.
         return any(
             getattr(s, "type", None) == "table" and (getattr(s, "items", []) or [])
             for s in art.sections
@@ -269,7 +120,7 @@ def run_signal(db) -> dict[str, Any]:
         except Exception:
             continue
         if not _is_ls_content(base):
-            continue  # misfiled non-LS (the 3) — exclude from the real LS corpus
+            continue  # misfiled non-LS — exclude from the real LS corpus
         try:
             cand = generic_candidate(path, db)
         except Exception as exc:
@@ -317,4 +168,3 @@ if __name__ == "__main__":  # pragma: no cover - manual report
             f, exp, act = info["sample"]
             print(f"  [{info['count']:4}] section={section!r} field={field!r} note={note!r}")
             print(f"         e.g. {f}: expected={exp!r} actual={act!r}")
-        conn.close()

@@ -35,6 +35,81 @@ def migrated_db_path(tmp_path: Path) -> Path:
     return path
 
 
+# A synthetic, PREFIXED-id subject used by the generic-extractor MACHINERY tests
+# (single_table header scan, null_values, BOM, metadata-skip, html title-match).
+# It deliberately follows the prefix convention so those tests stay decoupled from
+# any real recipe's section-id choices — in particular from License Summary, whose
+# canonical ids are bare (ADR-0017). Change a real recipe and these stay green.
+_MACHINERY_SUBJECT_ID = "extractor_machinery"
+_MACHINERY_NULLS = ["N/A", "-", ""]
+_MACHINERY_OTHER = f"{_MACHINERY_SUBJECT_ID}.other_licenses"
+_MACHINERY_AGENT = f"{_MACHINERY_SUBJECT_ID}.agent_feature_licenses"
+_MACHINERY_OTHER_CM = [
+    {"source": "License", "canonical": "license_name", "type": "string"},
+    {"source": "Available Total", "canonical": "available_total_raw", "type": "string"},
+    {"source": "Used", "canonical": "used_raw", "type": "string"},
+]
+_MACHINERY_AGENT_CM = [
+    {"source": "License", "canonical": "license_name", "type": "string"},
+    {"source": "Permanent Total", "canonical": "permanent_total_raw", "type": "string"},
+    {"source": "Permanent Used", "canonical": "permanent_used_raw", "type": "string"},
+    {"source": "Term Total", "canonical": "term_total_raw", "type": "string"},
+    {"source": "Term Used", "canonical": "term_used_raw", "type": "string"},
+]
+_MACHINERY_PROPOSAL = {
+    "subject_id": _MACHINERY_SUBJECT_ID,
+    "version": 1,
+    "title": "Extractor Machinery (test)",
+    "description": "Synthetic prefixed-id subject for testing extractor machinery "
+                   "decoupled from any real recipe.",
+    "category": "operations",
+    "sections": [
+        {"section_id": _MACHINERY_OTHER, "title": "Other Licenses",
+         "section_type": "table", "default_selected": True, "sort_order": 0},
+        {"section_id": _MACHINERY_AGENT, "title": "Agent and Feature Licenses",
+         "section_type": "table", "default_selected": True, "sort_order": 1},
+    ],
+    "extraction_instructions": {
+        "csv": {"extractable": True, "sections": {
+            _MACHINERY_OTHER: {"format": "single_table", "column_map": _MACHINERY_OTHER_CM,
+                               "null_values": _MACHINERY_NULLS, "output_as": "table"},
+            _MACHINERY_AGENT: {"format": "single_table", "column_map": _MACHINERY_AGENT_CM,
+                               "null_values": _MACHINERY_NULLS, "output_as": "table"},
+        }},
+        "html": {"extractable": True, "sections": {
+            _MACHINERY_OTHER: {"section_title_selector": ".reportstabletitle",
+                               "section_title_match": "Other Licenses",
+                               "column_map": _MACHINERY_OTHER_CM,
+                               "null_values": _MACHINERY_NULLS, "output_as": "table"},
+            _MACHINERY_AGENT: {"section_title_selector": ".reportstabletitle",
+                               "section_title_match": "Agent and Feature Licenses",
+                               "column_map": _MACHINERY_AGENT_CM,
+                               "null_values": _MACHINERY_NULLS, "output_as": "table"},
+        }},
+    },
+}
+
+
+@pytest.fixture()
+def machinery_subject(migrated_db_path: Path) -> str:
+    """Publish the synthetic prefixed-id machinery subject into the migrated db and
+    return its subject_id. Used by the generic-extractor tests so they exercise
+    extractor machinery, not a real recipe's section-id contract."""
+    import sqlite3
+
+    from cvhealthcheck.db.subjects import create_subject_from_proposal
+
+    conn = sqlite3.connect(str(migrated_db_path))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        create_subject_from_proposal(conn, _MACHINERY_PROPOSAL)
+        conn.commit()
+    finally:
+        conn.close()
+    return _MACHINERY_SUBJECT_ID
+
+
 @pytest.fixture(autouse=True)
 def _reset_token_store():
     """Clear the process-global held-token store around every test (ADR-0008 B).
