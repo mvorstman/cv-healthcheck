@@ -375,32 +375,86 @@ def quick_hc_generic_collect(subject_id: str):
     else:
         flash(f"REST collection completed for '{title}'.", "success")
     # Fix 4 surfacing (display only — collection already succeeded and persisted):
-    # a mismatch/unverifiable CCID verdict gets a loud flash; verified is quiet.
-    _flash_ccid_verdict(artifact)
+    # mismatch is loud, verified quiet, unverifiable visible; attested is silent
+    # on collect (every non-identity collect is attested — banner blindness).
+    _flash_ccid_verdict(artifact, silent_when_attested=True)
     return _workspace_redirect(subject_id)
 
 
-def _flash_ccid_verdict(artifact) -> None:
-    """Surface the stamped declared-vs-wire CCID verdict (Fix 4) as a flash.
-    Display only — collection has already succeeded and persisted regardless of
-    the verdict. mismatch/unverifiable are loud (warning); verified is a brief
-    success; attested is silent (no wire to compare is the normal import case)."""
+def _parse_ccid_notes(notes: str) -> tuple[str | None, str | None]:
+    """Pull (declared_normalized, wire_normalized) out of the verdict notes
+    string (``declared_normalized=X; wire_normalized=Y``). The literal ``none``
+    becomes None. Used to word the mismatch banner concretely."""
+    declared = wire = None
+    for part in notes.split(";"):
+        key, _, val = part.strip().partition("=")
+        val = val.strip()
+        val = None if val in ("", "none") else val
+        if key == "declared_normalized":
+            declared = val
+        elif key == "wire_normalized":
+            wire = val
+    return declared, wire
+
+
+def _ccid_verdict_display(artifact) -> tuple[str | None, str, str]:
+    """The single source of truth for how a stamped declared-vs-wire CCID
+    verdict is worded and surfaced — used by the collect flash, the import
+    flash, and the inline-import JSON so all three agree.
+
+    Returns ``(status, message, flash_category)``. The three surfacings are
+    visually distinct: a true mismatch is LOUD (error) and names both ids so a
+    wrong-customer import is unmistakable; verified is a quiet success; attested
+    and unverifiable are neutral (info) — benign, not alarms. Display only:
+    collection/import already succeeded and persisted regardless of the verdict."""
     status = getattr(artifact.source, "verification_status", None)
     notes = getattr(artifact.source, "verification_notes", "") or ""
+    declared, wire = _parse_ccid_notes(notes)
     if status == "mismatch":
-        flash(
-            f"CommCell ID MISMATCH — collected and recorded as evidence, not "
-            f"blocked. {notes}. Check the customer's declared CommCell ID "
-            f"against the CommServe.",
+        return (
+            status,
+            f"CommCell ID MISMATCH — declared {declared or '?'}, source reports "
+            f"{wire or '?'}. Possible wrong-customer data. Recorded as evidence, "
+            f"not blocked — verify the customer's declared CommCell ID against "
+            f"the source.",
             "error",
         )
-    elif status == "unverifiable":
-        flash(
-            f"CommCell ID not verified ({notes}) — recorded as evidence.",
-            "warning",
+    if status == "verified":
+        return (status, "CommCell ID verified against the source.", "success")
+    if status == "attested":
+        return (
+            status,
+            "CommCell ID trusted, not verified — the source carries no identity "
+            "to compare.",
+            "info",
         )
-    elif status == "verified":
-        flash("CommCell ID verified against the CommServe.", "success")
+    if status == "unverifiable":
+        return (
+            status,
+            "CommCell ID could not be verified — no declared CommCell ID "
+            "available to compare.",
+            "info",
+        )
+    return (None, "", "info")
+
+
+def _flash_ccid_verdict(artifact, *, silent_when_attested: bool = False) -> None:
+    """Surface the stamped declared-vs-wire CCID verdict (Fix 4) as a flash.
+    Display only — collection/import has already succeeded and persisted
+    regardless of the verdict.
+
+    ``silent_when_attested`` suppresses the benign ``attested`` verdict on the
+    collect path: every non-identity collect (client_growth, capacity_license,
+    backup_job_summary, …) is attested, so flashing it there is banner blindness
+    that drowns the one signal that matters — a ``mismatch`` (which always
+    shows). On import, attested IS informative (you trusted a file's declared
+    identity), so it stays visible there."""
+    status, message, category = _ccid_verdict_display(artifact)
+    if status is None:
+        return
+    if status == "attested" and silent_when_attested:
+        return
+    flash(message, category)
 
 
 @bp.route("/quick-hc/<subject_id>/pin-version", methods=["POST"])
@@ -740,9 +794,21 @@ def _unified_dispatcher_upload(subject_id: str):
             # stage=1, and approval added nothing over this direct write).
             ArtifactStore(*require_active_context()).save_artifact(artifact)
             msg = f"Imported {title} successfully."
+            # Surface the declared-vs-wire CCID verdict (import-verification
+            # slice). Display only — the artifact is already saved; a mismatch is
+            # the loud wrong-customer alarm, attested/unverifiable are neutral.
+            v_status, v_message, v_category = _ccid_verdict_display(artifact)
             if inline:
-                return jsonify({"success": True, "message": msg, "title": title})
+                body = {"success": True, "message": msg, "title": title}
+                if v_status is not None:
+                    body["verification"] = {
+                        "status": v_status,
+                        "message": v_message,
+                        "severity": v_category,
+                    }
+                return jsonify(body)
             flash(msg, "success")
+            _flash_ccid_verdict(artifact)
     except Exception as exc:
         if inline:
             return jsonify({"success": False, "error": str(exc)}), 500

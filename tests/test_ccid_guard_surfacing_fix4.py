@@ -22,6 +22,16 @@ def _cc_api_result(commcell_id_value):
     return res
 
 
+def _cc_api_result_no_identity():
+    """A CC-API result whose records carry NO commcell.commCellId -> the source
+    offers no wire identity -> attested (declared present)."""
+    res = ExtractionResult(subject_id="environment", source_type="rest_command_center_api")
+    res.sections["environment.list"] = [{"name": "x"}]
+    res.section_output_types["environment.list"] = "table"
+    res.section_titles["environment.list"] = "List"
+    return res
+
+
 def test_artifact_to_view_exposes_verification():
     from cvhealthcheck.quickhc.canonical_view import artifact_to_view
     artifact = result_to_artifact(
@@ -101,3 +111,46 @@ def test_mismatch_collect_flashes_does_not_block(monkeypatch, migrated_db_path):
     with client.session_transaction() as sess:
         flashes = " | ".join(str(m) for _, m in sess.get("_flashes", []))
     assert "MISMATCH" in flashes
+
+
+def test_attested_collect_is_silent_but_persists(monkeypatch, migrated_db_path):
+    """attested on COLLECT must NOT flash — every non-identity collect is
+    attested, so a banner there is blindness. The verdict still persists; only
+    the surfacing is suppressed (mismatch always shows; this proves attested
+    does not)."""
+    from cvhealthcheck.web.app import create_app
+    import cvhealthcheck.web.routes.quick_hc as route_module
+
+    res = _cc_api_result_no_identity()   # declared 337f, no wire -> attested
+    saved = {}
+
+    class FakeStore:
+        def __init__(self, *a, **k): pass
+        def save_artifact(self, artifact): saved["a"] = artifact
+
+    class FakeExtractor:
+        def __init__(self, *a, **k): pass
+        def extract(self, *a, **k): return res
+
+    monkeypatch.setattr(route_module, "get_active_customer", lambda *a, **k: {
+        "customer_id": "c", "customer_name": "Acme",
+        "connection_url": "https://h:4433", "commcell_hostname": None,
+        "commserve_name": "CS01", "commcell_id": "337f",
+    })
+    monkeypatch.setattr(route_module, "is_authenticated_for", lambda *a, **k: True)
+    monkeypatch.setattr(route_module, "_current_token", lambda *a, **k: "t")
+    monkeypatch.setattr(route_module, "_has_command_center_source", lambda *a, **k: True)
+    monkeypatch.setattr(route_module, "CommandCenterExtractor", FakeExtractor)
+    monkeypatch.setattr(route_module, "ArtifactStore", FakeStore)
+
+    client = create_app().test_client()
+    with client.session_transaction() as sess:
+        sess["active_project"] = {"customer_id": "c", "project_id": "p"}
+    resp = client.post("/quick-hc/environment/collect")
+
+    assert resp.status_code == 302
+    assert saved["a"].source.verification_status == "attested"     # persisted
+    with client.session_transaction() as sess:
+        flashes = " | ".join(str(m) for _, m in sess.get("_flashes", []))
+    assert "trusted, not verified" not in flashes                  # silent on collect
+    assert "could not be verified" not in flashes

@@ -921,6 +921,12 @@ async function submitImport(subjId, importUrl, fieldName) {
     const data = await resp.json();
     if (data.success) {
       _showImportResult(resultEl, 'success', data.message || 'Import successful.');
+      // Declared-vs-wire CommCell ID verdict (import-verification slice):
+      // mismatch is a loud wrong-customer alarm, attested/unverifiable neutral,
+      // verified quiet — the import itself already succeeded either way.
+      if (data.verification && data.verification.message) {
+        _showImportVerdict(resultEl, data.verification);
+      }
       // Reload subject data from the API to reflect new artifact
       _reloadSubject(subjId);
     } else {
@@ -936,6 +942,17 @@ function _showImportResult(el, status, message) {
   el.hidden = false;
   el.className = 'import-result import-' + status;
   el.textContent = message;
+}
+
+function _showImportVerdict(el, v) {
+  // Append the CCID verdict as a distinct styled line beneath the import
+  // result. Class carries the status so mismatch reads loud (red) and
+  // attested/unverifiable read neutral (grey); verified reads green.
+  if (!el || !v || !v.message) return;
+  const note = document.createElement('div');
+  note.className = 'import-verdict import-verdict-' + (v.status || 'info');
+  note.textContent = v.message;
+  el.appendChild(note);
 }
 
 async function _reloadSubject(subjId) {

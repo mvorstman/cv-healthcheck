@@ -216,6 +216,7 @@ html,body{height:100%;background:var(--bg);color:var(--text-1);font-family:var(-
 .flash-success{background:var(--c-good-bg);border-bottom:1px solid var(--c-good-bd);color:var(--c-good-tx)}
 .flash-error{background:var(--c-crit-bg);border-bottom:1px solid var(--c-crit-bd);color:var(--c-crit-tx)}
 .flash-warning{background:var(--c-warn-bg);border-bottom:1px solid var(--c-warn-bd);color:var(--c-warn-tx)}
+.flash-info{background:var(--bg-hover);border-bottom:1px solid var(--border);color:var(--text-2)}
 
 /* ── SHARED CONTENT ── */
 .cfg-wrap{padding:22px 28px}
@@ -284,6 +285,12 @@ html,body{height:100%;background:var(--bg);color:var(--text-1);font-family:var(-
 .import-loading{color:var(--text-2);background:var(--bg-hover)}
 .import-success{color:var(--c-good-tx);background:var(--c-good-bg);border:1px solid var(--c-good-bd)}
 .import-error{color:var(--c-crit-tx);background:var(--c-crit-bg);border:1px solid var(--c-crit-bd)}
+/* Declared-vs-wire CommCell ID verdict, shown beneath an import result.
+   mismatch reads loud; attested/unverifiable neutral; verified quiet. */
+.import-verdict{margin-top:6px;font-size:11px;padding:5px 9px;border-radius:4px}
+.import-verdict-mismatch{color:var(--c-crit-tx);background:var(--c-crit-bg);border:1px solid var(--c-crit-bd);font-weight:600}
+.import-verdict-verified{color:var(--c-good-tx);background:var(--c-good-bg);border:1px solid var(--c-good-bd)}
+.import-verdict-attested,.import-verdict-unverifiable{color:var(--text-2);background:var(--bg-hover);border:1px solid var(--border)}
 
 /* ── REPORT SECTION TILES ── */
 .sec-tile{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden}
