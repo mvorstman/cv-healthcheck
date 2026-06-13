@@ -19,7 +19,7 @@ from cvhealthcheck.artifacts.models import (
     TableSection,
 )
 
-from ls_parity_harness import Outcome, compare_artifacts, unit_value_equal
+from ls_parity_harness import Outcome, compare_artifacts, unit_value_equal, _unit_token
 
 _NOW = datetime(2026, 6, 13, 12, 0, tzinfo=timezone.utc)
 
@@ -96,6 +96,53 @@ def test_d1_value_difference_fails():
     report = compare_artifacts("f", flat, nested)
     assert any(r.field == "available_total" and r.outcome is Outcome.FAIL
                for r in report.failed)
+
+
+# ── B2 — unit trailing-token equivalence ─────────────────────────────────────
+
+def test_b2_unit_token_extraction():
+    assert _unit_token("source VMs") == "VMs"
+    assert _unit_token("target VMs") == "VMs"
+    assert _unit_token("VMs") == "VMs"
+    assert _unit_token("") is None
+    assert _unit_token(None) is None
+
+
+def test_b2_qualifier_ignored_positive():
+    # the qualifier before the unit token is ignored (qualifies quantity, not unit)
+    assert unit_value_equal((0, "source VMs"), (0, "VMs"))
+    assert unit_value_equal((0, "target VMs"), (0, "VMs"))
+    assert unit_value_equal((0, "source VMs"), (0, "target VMs"))
+
+
+def test_b2_unit_respected_negative():
+    # the unit token itself is respected — NOT collapsed
+    assert not unit_value_equal((0, "VMs"), (0, "TB"))
+    assert not unit_value_equal((0, "VMs"), (0, "users"))
+    assert not unit_value_equal((0, "TB"), (0, "users"))
+
+
+def test_b2_value_still_matters():
+    # equal only when BOTH value and trailing token match
+    assert not unit_value_equal((0, "VMs"), (5, "source VMs"))
+    assert unit_value_equal((5, "VMs"), (5, "source VMs"))
+
+
+def test_b2_null_empty_unit_safe():
+    assert unit_value_equal((0, None), (0, ""))      # both → None token
+    assert not unit_value_equal((0, None), (0, "VMs"))
+
+
+def test_b2_through_comparator_other_licenses():
+    # bespoke flat (value + trailing-word unit "VMs") ≡ generic nested with a
+    # qualifier-bearing unit "source VMs"
+    bespoke = _artifact([_table("other_licenses", [
+        {"license": "L1", "available_total": 0, "used": 0, "unit": "VMs"}])])
+    generic = _artifact([_table("other_licenses", [
+        {"license": "L1",
+         "available_total": {"value": 0, "unit": "source VMs"},
+         "used": {"value": 0, "unit": "source VMs"}}])])
+    assert not compare_artifacts("f", bespoke, generic).failed
 
 
 # ── D4/F4 — empty section ≡ absent section ────────────────────────────────────

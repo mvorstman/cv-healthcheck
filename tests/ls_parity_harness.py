@@ -238,11 +238,25 @@ def _num_norm(value: Any) -> Any:
         return s
 
 
+def _unit_token(unit: Any) -> Any:
+    """ADR-0017 B2: a unit's identity is its TRAILING token. A qualifier before the
+    unit (e.g. "source" in "source VMs") qualifies the QUANTITY, not the unit, and
+    is ignored for parity — parity proves the same measurement UNIT, not string
+    relatedness. Trailing-token, NOT suffix-match: "source VMs" and "target VMs"
+    both → "VMs" (equal), where a suffix comparison would wrongly differ."""
+    if unit is None:
+        return None
+    s = str(unit).strip()
+    if not s:
+        return None
+    return s.split()[-1]
+
+
 def _to_unit_pair(operand: Any) -> tuple[Any, Any]:
-    """Normalize a unit-field operand to (value_norm, unit_or_None). Accepts a
-    (value, unit) tuple (bespoke flat: number + the row's separate `unit`), a
-    {value, unit} dict (generic nested), a "N unit" string (bespoke workload
-    text), a bare number, or None."""
+    """Normalize a unit-field operand to (value_norm, unit_trailing_token). Accepts
+    a (value, unit) tuple (bespoke flat: number + the row's separate `unit`), a
+    {value, unit} dict (generic nested), a "N unit" string (bespoke workload text),
+    a bare number, or None. The unit is reduced to its trailing token (B2)."""
     if operand is None:
         return (None, None)
     if isinstance(operand, tuple):
@@ -257,7 +271,7 @@ def _to_unit_pair(operand: Any) -> tuple[Any, Any]:
             value, unit = operand, None
     else:  # bare number
         value, unit = operand, None
-    return (_num_norm(value), unit or None)
+    return (_num_norm(value), _unit_token(unit))
 
 
 def unit_value_equal(left: Any, right: Any) -> bool:

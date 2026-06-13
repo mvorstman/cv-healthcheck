@@ -10,6 +10,20 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (test — ADR-0017 B2: unit trailing-token equivalence)
+
+**Branch:** `main`. Comparator-side B2: a unit's identity is its TRAILING token; the qualifier before it is ignored for parity (it qualifies the quantity, not the unit). No `number_with_unit` / recipe / D2 / bespoke change. Suite 1245 passed (+6).
+
+### Changed (`tests/ls_parity_harness.py`)
+- `_to_unit_pair` normalizes each unit to its trailing token (`_unit_token`): `"source VMs"` → `"VMs"`, `"target VMs"` → `"VMs"`, `"VMs"` → `"VMs"`. Equal iff value AND trailing token match. **Trailing-token, NOT suffix-match** — so `"source VMs"` ≡ `"target VMs"` (a suffix comparison would wrongly differ). The unit token itself is still respected (`VMs` ≠ `TB` ≠ `users`); a value difference still FAILS.
+- +6 tests (qualifier-ignored positive; unit-respected negative; value-still-matters; null/empty safe; token extraction; through-the-comparator).
+
+### Notes — post-B2 breakdown (38): pass 6164, fail 60 (was 88)
+The 28 B2 unit-parse fails cleared. Remaining classes — exactly the non-B2 set:
+- **D2 commcell_info (38)** — context-injected; awaits the enrichment seam (deferred).
+- **workload "Other Licenses" (8)** — DB-constraint residual (bespoke `_to_snake` id collides with the table; the recipe can't declare two `other_licenses` sections; needs an ADR decision).
+- **HTML-structure variation (14: 6 table + 6 count + 1 agent + 1 count)** — 6 files have no `.reportstabletitle` element; the selector recipe can't reach their tables (the bespoke custom DOM-walk can).
+
 ## 2026-06-13 (test — ADR-0017 "Other Licenses" recipe disambiguation (table by full title))
 
 **Branch:** `main`. Recipe-side "Other Licenses" disambiguation + decomposition of the residual. No B2 / D2 / comparator / bespoke change. Suite 1239 passed (+2).
