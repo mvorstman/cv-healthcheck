@@ -217,9 +217,10 @@ def test_b1_table_and_workload_other_licenses_not_cross_compared():
     # no field-level cross-compare of workload fields against table fields
     assert "entitlement_value" not in fields
     assert "available_total" not in fields
-    # instead each is a distinct section present on one side only
-    section_fails = [r for r in report.failed if r.field == "<section>"]
-    assert len(section_fails) == 2
+    # each is handled at the SECTION level as a distinct key (not cross-compared);
+    # one of them (the bespoke-only workload) is D8-accepted, the other a real diff.
+    section_results = [r for r in report.results if r.field == "<section>"]
+    assert len(section_results) == 2
 
 
 def test_b1_reflexive_collision_both_sections_compared_equal():
@@ -303,6 +304,51 @@ def test_d3_computed_section_with_no_matching_metric_fails():
     generic = _artifact([_count_section("orphan", 5)])
     report = compare_artifacts("f", bespoke, generic)
     assert any(r.field == "orphan" and r.outcome is Outcome.FAIL for r in report.failed)
+
+
+# ── D8 — workload "Other Licenses" id-collision quirk (scoped acceptance) ─────
+
+def test_d8_bespoke_only_workload_other_licenses_accepted():
+    # bespoke has a workload "Other Licenses" (entitlement_value → workload tag);
+    # the generic target does not preserve the id-collision quirk
+    bespoke = _artifact([_table("other_licenses", [
+        {"license": "WL", "entitlement_value": "5", "status": "ok"}])])
+    generic = _artifact([])
+    report = compare_artifacts("f", bespoke, generic)
+    assert not report.failed
+    assert any(r.section == "other_licenses" and r.outcome is Outcome.PASS
+               for r in report.passed)
+
+
+def test_d8_scoped_unrelated_bespoke_only_section_still_fails():
+    # an UNRELATED bespoke-only section is NOT auto-accepted
+    bespoke = _artifact([_table("agent_feature_licenses", [{"license": "A"}])])
+    generic = _artifact([])
+    report = compare_artifacts("f", bespoke, generic)
+    assert any(r.section == "agent_feature_licenses" and r.outcome is Outcome.FAIL
+               for r in report.failed)
+
+
+def test_d8_scoped_bespoke_only_other_licenses_TABLE_still_fails():
+    # a bespoke-only other_licenses TABLE (default tag, not workload) still FAILS —
+    # D8 is scoped to the workload-tagged collision, not the table
+    bespoke = _artifact([_table("other_licenses", [
+        {"license": "L1", "available_total": 1, "used": 0}])])
+    generic = _artifact([])
+    report = compare_artifacts("f", bespoke, generic)
+    assert any(r.section == "other_licenses" and r.outcome is Outcome.FAIL
+               for r in report.failed)
+
+
+def test_d8_scoped_other_workload_section_id_still_fails():
+    # a bespoke-only workload section with a DIFFERENT id (capacity_licenses) still
+    # FAILS — D8 is scoped to "other_licenses", not any workload section
+    bespoke = _artifact([_table("capacity_licenses", [
+        {"license": "C", "entitlement_value": "5", "status": "ok"}])])
+    generic = _artifact([])
+    report = compare_artifacts("f", bespoke, generic)
+    assert any(r.section == "capacity_licenses" and r.outcome is Outcome.FAIL
+               for r in report.failed)
 
 
 # ── guards: the equivalences must not make it an always-pass ──────────────────

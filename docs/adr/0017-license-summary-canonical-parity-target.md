@@ -105,6 +105,21 @@ requirement. Parity ACCEPTS generic-present masked `registration_code` versus
 bespoke-absent, provided the generic value is masked and no raw survives. Same
 class of decision as D4/F3 — the generic is the more faithful path.
 
+**D8 — the workload "Other Licenses" section-id collision is NOT preserved.**
+Bespoke `_to_snake("Other Licenses")` gives the workload section the id
+`other_licenses` — the SAME id as the `other_licenses` TABLE. Across the 38-file
+corpus the two never co-occur (30 table / 8 workload / 0 both), so the shared id
+never modeled a real relationship; it is a historical naming artifact. The recipe
+CANNOT mirror the workload under `other_licenses` (`subject_sections` is unique on
+section_id), and authoring it under a distinct id would double the fails rather
+than clear them. The canonical target therefore does NOT preserve the bespoke
+workload "Other Licenses" section. Parity ACCEPTS a bespoke-only workload
+"Other Licenses" section (keyed `(other_licenses, workload)` by the B1 shape-tag)
+as a non-preserved quirk. Same class as D7 — a deliberate, named drop. SCOPED to
+this exact (id, shape-tag) pair: an unrelated bespoke-only section, the
+bespoke-only `other_licenses` TABLE, and any other workload section id all still
+FAIL (negative guards).
+
 ### Comparator bug-fixes (not decisions)
 
 - **B1 — section-id collision.** The bespoke `_to_snake("Other Licenses")` workload
@@ -121,8 +136,8 @@ class of decision as D4/F3 — the generic is the more faithful path.
 
 ## Consequences
 
-- The parity harness encodes D1, D3, D4, D6, D7 as comparator equivalences and B1
-  as a section-identity fix; D2 and D5 are recipe omissions (the generic recipe
+- The parity harness encodes D1, D3, D4, D6, D7, D8 as comparator equivalences and
+  B1 as a section-identity fix; D2 and D5 are recipe omissions (the generic recipe
   does not extract them). A parity failure now denotes a real difference.
 - The generic LS canonical SHAPE differs from the old bespoke shape (nested
   `{value, unit}`, counts as sections, `registration_code` present); this is the
@@ -131,8 +146,8 @@ class of decision as D4/F3 — the generic is the more faithful path.
   the conversion can fully close (it is not a recipe concern).
 - Acceptance criteria (ADR → Accepted): the generic LS recipe converts, parity (by
   these definitions) holds over the 38, B2 and the "Other Licenses" title
-  ambiguity are resolved, the enrichment seam supplies `commcell_info`, and the
-  bespoke LS path is retired with no regression.
+  ambiguity (residual (b)) is resolved, the enrichment seam supplies
+  `commcell_info`, and the bespoke LS path is retired with no regression.
 
 ## Open questions
 
@@ -151,6 +166,8 @@ class of decision as D4/F3 — the generic is the more faithful path.
   License20summary, the sample) carry no `.reportstabletitle` element, so the
   selector-based recipe can't reach their tables (the bespoke custom DOM-walk can);
   this is the "HTML section not found" class, separate from "Other Licenses".
+  Residual (a) — RESOLVED by D8: the workload-vs-table id collision is accepted as
+  a non-preserved quirk (the target drops the bespoke workload "Other Licenses").
 - **D2 enrichment seam**: the mechanism that attaches context identity onto the
   artifact at assembly.
 
@@ -171,4 +188,4 @@ class of decision as D4/F3 — the generic is the more faithful path.
 - ADR-0015 (compile gate) — the recipe publishes through it.
 - `tests/ls_parity_harness.py` (comparator), `tests/ls_generic_recipe.py` (the
   recipe + signal runner), CHANGELOG 2026-06-13 entries (deciding-reads, comparator
-  slices, B1, D7, F5/D3).
+  slices, B1, D7, D8, F5/D3).

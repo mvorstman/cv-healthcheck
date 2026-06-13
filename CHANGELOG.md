@@ -10,6 +10,22 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (test/docs — ADR-0017 D8: workload "Other Licenses" id-collision not preserved)
+
+**Branch:** `main`. ADR-0017 D8 recorded (docs) + scoped comparator acceptance. No recipe change, no bespoke change, no general bespoke-only pass. Comparator suite 34 passed; full suite green.
+
+### D8 (recorded, `docs/adr/0017-license-summary-canonical-parity-target.md`)
+- The bespoke workload "Other Licenses" section takes `_to_snake` id `other_licenses` — the same id as the `other_licenses` TABLE. Across the 38-file corpus the two never co-occur (30 table / 8 workload / 0 both): the shared id never modeled a real relationship, it is a historical naming artifact. `subject_sections` is unique on section_id, so the recipe cannot mirror the workload under `other_licenses`; the canonical target does NOT preserve it. Same class as D7 — a deliberate, named drop.
+- Resolves Open-question residual (a) (workload-vs-table id collision); residual (b) (HTML-structure variation, 14 fails) is the next read.
+
+### Changed (`tests/ls_parity_harness.py`)
+- `compare_artifacts` accepts a bespoke(baseline)-only section keyed `(other_licenses, workload)` as a D8 PASS ("workload 'Other Licenses' id-collision quirk, not preserved"). SCOPED to that exact (id, shape-tag) pair.
+- **+4 D8 tests** (`tests/test_compare_adr0017.py`): accepted workload-only `other_licenses`; **negative guards** — an unrelated bespoke-only section still FAILS, the bespoke-only `other_licenses` TABLE (default tag) still FAILS, another workload section id (`capacity_licenses`) still FAILS.
+- Updated the B1 cross-compare test: the baseline-only workload `other_licenses` is now a D8 PASS, so the assertion checks both sections are handled at the section level (no field cross-compare) rather than counting two section FAILs.
+
+### Notes — post-D8 breakdown (38): pass 6236, fail 14 (was 22)
+The 8 workload "Other Licenses" present-on-one-side fails cleared. Remaining 14 are exactly the HTML-structure-variation residual across the 6 files with no `.reportstabletitle` (6 `other_licenses` present-on-one-side + 6 `other_license_count` value + 1 `agent_feature_licenses` present-on-one-side + 1 `agent_feature_count` value) — the subject of the next read-only DOM investigation (no recipe change until classified Case A/Case B).
+
 ## 2026-06-13 (feat/docs — ADR-0017 D2: commcell_info mixed-source enrichment)
 
 **Branch:** `main`. ADR-0017 D2 clarified (mixed-source) + the enrichment implemented (candidate-seam side). No comparator tolerance, no recipe "inject context", no bespoke change. Suite 1250 passed (+5).

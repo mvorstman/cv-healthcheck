@@ -530,6 +530,19 @@ def compare_artifacts(
                     Outcome.PASS,
                     "D7 — generic-present masked sensitive ≡ bespoke-absent (no raw)"))
                 continue
+            # ADR-0017 D8: the bespoke-only workload "Other Licenses" section is a
+            # historical id-collision quirk (its _to_snake id is `other_licenses`,
+            # the table's id; corpus: 30 table / 8 workload / 0 both — they never
+            # co-occur, so the collision never modeled a real relationship). The
+            # target does not preserve it (same class as D7 — generic cleaner than
+            # bespoke). SCOPED to this named (id, shape) case — NOT a general
+            # bespoke-only pass.
+            baseline_only = cand_sec is None and base_sec is not None
+            if baseline_only and sid == "other_licenses" and tag == "workload":
+                report.results.append(FieldResult(
+                    file, sid, "", "<section>", "present", "absent", Outcome.PASS,
+                    "D8 — workload 'Other Licenses' id-collision quirk, not preserved"))
+                continue
             report.results.append(FieldResult(
                 file, sid, "", "<section>",
                 "present" if base_sec is not None else "absent",
