@@ -7,11 +7,13 @@ artifact schema, MCP server for AI-assisted subject authoring).
 ## Current state
 
 - **Branch:** `main`
-- **Latest commit:** `8a52589` (Fix 3 commit 3 — form + tests) + a docs commit
-- **Test suite:** 1072 passed (full pytest, exit 0)
-- **Unpushed:** the D5 commits (`ef6adfb`..`261f7d8`) AND the Fix-3 commits
-  (`1fc94d2`, `6a4ae97`, `8a52589`) are all local-only — they go together
-  after the browser pass (Michiel's call).
+- **Latest commit:** evidence-context foundation (`a6cccd3`/`754287e`/`a3d0dd0`)
+  + a docs commit
+- **Test suite:** 1082 passed (full pytest, exit 0)
+- **Unpushed:** the whole Phase-1 batch is local-only — D5 (`ef6adfb`..
+  `261f7d8`), Fix 3 (`1fc94d2`/`6a4ae97`/`8a52589`), and the evidence-context
+  foundation (`a6cccd3`/`754287e`/`a3d0dd0`) plus their docs commits. They go
+  together after the browser pass (Michiel's call).
 - **In flight:** Phase 1. **Fix 2, D5, and Fix 3 are done** (CHANGELOG
   2026-06-12 fix(isolation), 2026-06-13 feat(context), 2026-06-13 feat Fix 3):
   scoped store is the only workspace data source; Context Integrity is
@@ -22,9 +24,14 @@ artifact schema, MCP server for AI-assisted subject authoring).
   Pending human step: authenticated fresh-browser check (D5: no project →
   clean prompt, selected → scoped; Fix 3: edit a customer, see the new
   fields, save). Anonymous + headless live checks passed.
+  The evidence-context foundation is also in (migration 0033 project_id stamp;
+  approval coherence-reads the row's creation context; the verification-result
+  home on ArtifactSource) — all inert enablers, nothing populates the
+  verification fields yet.
   **Next: Fix 4 — report-identity / dataset-GUID portability (#34)**, which
-  consumes the identity columns (rp_scoping_id resolution) per ADR-0015's
-  profile layer. Also queued: the later cleanup commit to drop
+  consumes the identity columns (rp_scoping_id resolution) AND writes the
+  ArtifactSource verification fields via the declared-vs-wire check, per
+  ADR-0015's profile layer. Also queued: the later cleanup commit to drop
   commcell_hostname + its read-time fallback once no row needs it.
 
 ## What was just completed (Phase 0)

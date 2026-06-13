@@ -10,6 +10,21 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat — evidence-context + verification-result foundation, pre-Fix-4)
+
+**Branch:** `main`. Commits `a6cccd3`, `754287e`, `a3d0dd0`; suite 1082 passed. An inert enabler for Fix 4 — NO declared-vs-wire check, NO approval authority flip, NO D5 weakening.
+
+### Added
+- **Migration 0033** — `project_id` on `staged_artifacts` (additive/nullable). Completes the creation-context stamp (customer_id from D5 + project_id now). `create_staged_artifact` accepts/writes it; the web `?stage=1` path stamps the full explicitly-selected (customer, project). subject_proposal rows stay catalog-global (both NULL by design).
+- **Verification-result home on `ArtifactSource`** — `verification_status`, `verification_sources`, `verification_notes`, `verified_at` (optional, default None; names mirror the `staged_artifacts` columns). Nothing populates them yet — Fix 4 does. Confirmed round-trips through ArtifactStore; pre-existing artifacts load with them None.
+
+### Changed
+- **`execute_approval` coherence-reads the row's creation context:** a stamped row's (customer, project) is AUTHORITY — the approval-supplied context is checked against BOTH stamped customer_id and project_id (mismatch on either → ContextMismatchError, row untouched). Legacy NULL-stamped rows keep D5 behaviour unchanged (approval context authority; customer_id back-stamped, project_id not). Behaviorally identical to D5 on the match case; the "approval stops re-asking" UX change stays deferred.
+
+### Notes
+- Tests (+10, `tests/test_evidence_context_foundation.py`): project_id stamped on web artifact rows / NULL on proposals; approval match/mismatch(project)/mismatch(customer)/legacy-NULL/refusal-without-context; ArtifactSource defaults + full round-trip + pre-fields-artifact load.
+- No verdict is written anywhere; nothing touches subjects / subject_sources / staged_artifacts.status / ai_notes.
+
 ## 2026-06-13 (feat — Fix 3: identity-schema split, the three identity values kept distinct)
 
 **Branch:** `main`. Commits `1fc94d2`, `6a4ae97`, `8a52589`; suite 1072 passed. Splits the conflated customer identity into distinct, normalized fields (ADR-0015 profile layer) — the foundation Fix 4 (report-identity / dataset-GUID portability, #34) consumes.
