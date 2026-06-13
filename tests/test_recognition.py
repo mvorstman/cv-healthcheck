@@ -263,12 +263,13 @@ def test_titleless_table_not_recognized_as_license_summary(
     assert result is None
 
 
-def test_upload_route_still_bespoke_after_recognition_broadening() -> None:
-    """Commit 3 is recognition only — the LS upload still runs the bespoke handler
-    (the route switch is commit 4)."""
-    from cvhealthcheck.web.routes.upload_dispatch import UPLOAD_HANDLERS
+def test_ls_upload_handler_unregistered_after_route_switch() -> None:
+    """After commit 4b the bespoke LS handler is unregistered — LS upload falls
+    through to the generic dispatcher."""
+    from cvhealthcheck.web.routes.upload_dispatch import UPLOAD_HANDLERS, get_handler
 
-    assert "license_summary" in UPLOAD_HANDLERS
+    assert "license_summary" not in UPLOAD_HANDLERS
+    assert get_handler("license_summary") is None
 
 
 def test_recognize_growth_and_trends_csv(recog_db: sqlite3.Connection, tmp_path: Path) -> None:

@@ -38,7 +38,21 @@ from cvhealthcheck.artifacts.models import (
 from cvhealthcheck.extractors.dispatcher import DispatchResult
 from cvhealthcheck.extractors.recognition import RecognitionResult
 import cvhealthcheck.web.routes.quick_hc as quick_hc_routes
+import cvhealthcheck.web.routes.upload_dispatch as upload_dispatch_module
 from cvhealthcheck.web.app import create_app
+
+
+def _register_ls_bespoke_handler(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ADR-0017 4b: the LS bespoke upload handler is UNREGISTERED in production
+    (LS routes through the generic dispatcher). It is RETAINED as a one-line-revert
+    safety net. These handler-machinery tests re-register it for the duration of
+    the test to exercise _handle_system_upload + the retained handler (the revert
+    path)."""
+    monkeypatch.setitem(
+        upload_dispatch_module.UPLOAD_HANDLERS,
+        "license_summary",
+        upload_dispatch_module._LICENSE_SUMMARY_BESPOKE_HANDLER,
+    )
 
 
 # Reuse the SA-HTML and LS-CSV builders from the existing tests so the
@@ -300,6 +314,7 @@ def test_unified_route_license_summary_no_legacy_artifact_files(
     produce zero legacy artifact JSON files in data/catalog/license_summary/.
     """
     _patch_license_summary_paths(tmp_path, monkeypatch)
+    _register_ls_bespoke_handler(monkeypatch)  # 4b: test the retained handler
 
     app = create_app()
     client = app.test_client()
@@ -361,6 +376,7 @@ def test_system_upload_inline_returns_json_on_success(tmp_path, monkeypatch) -> 
     Covers LS; SA's identical because the handler shape is shared.
     """
     _patch_license_summary_paths(tmp_path, monkeypatch)
+    _register_ls_bespoke_handler(monkeypatch)  # 4b: test the retained handler
 
     app = create_app()
     client = app.test_client()
@@ -412,6 +428,7 @@ def test_system_upload_inline_returns_422_on_handler_error_class(
     import_license_summary_upload rejects with LicenseSummaryImportError.
     """
     _patch_license_summary_paths(tmp_path, monkeypatch)
+    _register_ls_bespoke_handler(monkeypatch)  # 4b: test the retained handler
 
     app = create_app()
     client = app.test_client()
@@ -445,7 +462,7 @@ def test_system_upload_inline_returns_500_on_generic_exception(
     def _boom(stream, *, original_filename):
         raise RuntimeError("upstream crashed")
 
-    original = dispatch_module.UPLOAD_HANDLERS["license_summary"]
+    original = dispatch_module._LICENSE_SUMMARY_BESPOKE_HANDLER  # retained (4b)
     patched = dispatch_module.UploadHandler(
         form_field=original.form_field,
         import_fn=_boom,
@@ -491,41 +508,35 @@ def test_system_upload_inline_returns_500_on_generic_exception(
 # provenance path instead of the nodata path).
 # ---------------------------------------------------------------------------
 
-def test_upload_action_field_matches_handler_form_field() -> None:
-    """The action dict's importField must equal handler.form_field for
-    each system subject with a registered upload handler. Pin the
-    invariant directly — the existing inline-upload tests hardcoded
-    the field name on both sides and so couldn't catch this mismatch.
+def test_upload_action_field_matches_server_read_field() -> None:
+    """The action dict's importField must equal what the server reads. The bug
+    guard (2026-05-25→28): the JS forwards importField verbatim, so it must match
+    the server-side field for the subject's route.
+
+    ADR-0017 4b: license_summary now routes through the generic dispatcher (no
+    registered handler), which reads request.files["file"] — so its importField
+    must be "file". (For any handler-based subject the field would equal
+    handler.form_field; none are registered today.)
     """
     from cvhealthcheck.quickhc.subject_data_service import _provenance_to_tile_sources
     from cvhealthcheck.web.routes.upload_dispatch import get_handler
 
-    # SA migration (PR2): security_assessment no longer has a bespoke upload
-    # handler (it routes through the generic dispatcher). Only license_summary
-    # remains handler-based, so the importField==form_field invariant applies
-    # to it alone.
-    for subject_id in ("license_summary",):
-        provenance_items = [
-            {"source_type": "html", "status": "available", "label": "HTML import", "description": ""},
-            {"source_type": "csv",  "status": "available", "label": "CSV import",  "description": ""},
-        ]
-        sources = _provenance_to_tile_sources(subject_id, provenance_items)
-        handler = get_handler(subject_id)
-        assert handler is not None, f"{subject_id!r} should have an upload handler registered"
-
-        upload_actions = [
-            action
-            for source in sources
-            for action in source.get("actions", [])
-            if action.get("kind") == "upload"
-        ]
-        assert upload_actions, (
-            f"{subject_id!r} provenance path should produce at least one upload action"
+    subject_id = "license_summary"
+    assert get_handler(subject_id) is None  # generic dispatcher, not a handler
+    provenance_items = [
+        {"source_type": "html", "status": "available", "label": "HTML import", "description": ""},
+        {"source_type": "csv",  "status": "available", "label": "CSV import",  "description": ""},
+    ]
+    sources = _provenance_to_tile_sources(subject_id, provenance_items)
+    upload_actions = [
+        action
+        for source in sources
+        for action in source.get("actions", [])
+        if action.get("kind") == "upload"
+    ]
+    assert upload_actions, "license_summary provenance path should produce an upload action"
+    for action in upload_actions:
+        assert action["importField"] == "file", (
+            f"action.importField={action['importField']!r} for {subject_id!r} must be "
+            "'file' — the generic dispatcher reads request.files['file']."
         )
-        for action in upload_actions:
-            assert action["importField"] == handler.form_field, (
-                f"action.importField={action['importField']!r} for {subject_id!r} differs "
-                f"from handler.form_field={handler.form_field!r} — the JS would submit "
-                f"under the wrong field name; _handle_system_upload would respond "
-                f"'No file selected.'"
-            )

@@ -14,6 +14,7 @@ from cvhealthcheck.license_summary.service import (
 from cvhealthcheck.web.routes.upload_dispatch import (
     UPLOAD_HANDLERS,
     UploadHandler,
+    _LICENSE_SUMMARY_BESPOKE_HANDLER,
     get_handler,
 )
 
@@ -26,9 +27,14 @@ def test_security_assessment_routes_generically() -> None:
     assert get_handler("security_assessment") is None
 
 
-def test_license_summary_handler_is_wired_correctly() -> None:
-    handler = get_handler("license_summary")
-    assert handler is not None
+def test_license_summary_routes_generically_handler_retained() -> None:
+    # ADR-0017 commit 4b: license_summary upload is SWITCHED to the generic
+    # dispatcher — get_handler returns None. The bespoke handler object is RETAINED
+    # (unregistered) as a one-line-revert safety net; assert it is still correctly
+    # configured so the revert path is intact.
+    assert get_handler("license_summary") is None
+
+    handler = _LICENSE_SUMMARY_BESPOKE_HANDLER
     assert isinstance(handler, UploadHandler)
     assert handler.form_field == "license_summary_file"
     assert handler.import_fn is import_license_summary_upload
@@ -59,6 +65,8 @@ def test_unknown_subject_returns_none() -> None:
 
 def test_upload_handlers_has_exactly_the_known_subjects() -> None:
     # Pins the module's surface: any change to UPLOAD_HANDLERS is a deliberate
-    # change that should also update tests/CHANGELOG/HANDOVER. SA migration (PR2)
-    # removed security_assessment — only license_summary remains bespoke.
-    assert set(UPLOAD_HANDLERS.keys()) == {"license_summary"}
+    # change that should also update tests/CHANGELOG/HANDOVER. SA migration removed
+    # security_assessment; ADR-0017 commit 4b removed license_summary — every
+    # subject now routes through the generic dispatcher. The dict is empty (the
+    # machinery + the retained _LICENSE_SUMMARY_BESPOKE_HANDLER remain for reuse).
+    assert UPLOAD_HANDLERS == {}

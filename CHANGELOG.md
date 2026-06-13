@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat — ADR-0017 LS promotion commit 4b/4: route switch + field align)
+
+**Branch:** `main`. License Summary CSV/HTML upload is SWITCHED to the generic dispatcher (`extract_file → result_to_artifact + D2 enrichment`). NO shared-code or bespoke deletion. Full suite 1293 passed; parity 738/0. **The live LS upload is now the generic path** — Michiel's browser verify is the final gate before any cleanup.
+
+### Changed
+- **`upload_dispatch.py`:** `UPLOAD_HANDLERS["license_summary"]` removed → `UPLOAD_HANDLERS == {}`. The handler is RETAINED as `_LICENSE_SUMMARY_BESPOKE_HANDLER` (one-line-revert safety net). With the handler unregistered, `get_handler("license_summary")` returns `None`, so the route falls through to `_unified_dispatcher_upload` AND the UI auto-ships the generic `"file"` upload field (`subject_data_service` derives it from `get_handler`). No new field-name code.
+
+### Added — `tests/test_ls_route_switch.py`
+- **ROUTE-IDENTITY PROOF:** the workload-only HTML imports via the GENERIC path — the bespoke `_handle_system_upload` branch is rigged to `pytest.fail` if taken (it isn't), the response carries the generic `"title"` marker, and the saved artifact is a `CanonicalArtifact` (subject `license_summary`, `capacity_licenses` extracted, `commcell_info` present with the **declared** name `DeclaredCS`). "Import succeeded" alone is insufficient — this distinguishes the route.
+- CSV imports via the generic path; the upload field is `"file"` (gate 3); the handler is unregistered-but-retained (gate 1); the REST collect path is still wired to `LicenseSummaryService` (gate 9); no shared/bespoke LS code deleted — all still import (gate 10).
+
+### Changed — tests (ripple from unregistering the last handler)
+- `UPLOAD_HANDLERS` is now empty: `test_upload_dispatch` updated (handler unregistered, retained object still correct; dict empty). `test_unified_upload_route` handler-machinery tests (`_handle_system_upload` inline success/422/500, no-legacy) re-register `_LICENSE_SUMMARY_BESPOKE_HANDLER` via `monkeypatch.setitem` to exercise the RETAINED handler (the revert path); the field-match test now asserts LS's generic `"file"` field. Commit-1/3 "still bespoke" gates flipped to "switched".
+
+### Notes — post-state
+recipe live (1) · D2 seam live (2) · recognition broadened (3) · HTML extraction tolerant + commcell_name threaded (4a) · **routing GENERIC (4b)** · REST untouched · bespoke upload + shared code retained. NON-GOALS held: no REST change, no deletion. Next: **Michiel browser-verifies** (LS tile → import the workload-only HTML + a CSV → both via the generic path, data renders, commcell_info enriched, reg-code masked, route is generic) before any cleanup.
+
 ## 2026-06-13 (feat — ADR-0017 LS promotion commit 4a: HTML absent-section non-fatal + commcell_name threading)
 
 **Branch:** `main`. Prerequisite for the route switch (4b). Two changes so the generic dispatcher can import real LS HTML. NO route switch, NO REST change, NO deletion. Full suite 1287 passed.

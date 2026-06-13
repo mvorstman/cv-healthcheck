@@ -81,15 +81,25 @@ def _license_summary_success(artifact: dict[str, Any]) -> str:
 # canonical store), like the other catalog subjects. The bespoke
 # import_security_assessment_upload + parsers remain for the held #36 dev
 # Security-Assessment cluster (its own import route), not the workspace upload.
-UPLOAD_HANDLERS: dict[str, UploadHandler] = {
-    "license_summary": UploadHandler(
-        form_field="license_summary_file",
-        import_fn=import_license_summary_upload,
-        error_class=LicenseSummaryImportError,
-        success_format=_license_summary_success,
-        redirect_endpoint="main.quick_hc_license_summary",
-    ),
-}
+#
+# ADR-0017 promotion commit 4b/4: license_summary CSV/HTML upload is SWITCHED to
+# the generic dispatcher too (extract_file -> result_to_artifact + D2
+# enrichment). The bespoke handler is RETAINED but UNREGISTERED as a safety net —
+# revert is one line: add ``"license_summary": _LICENSE_SUMMARY_BESPOKE_HANDLER``
+# back to UPLOAD_HANDLERS. The bespoke import_license_summary_upload + parsers +
+# the REST collect path all stay in place (commit 4b deletes nothing). With the
+# handler unregistered, get_handler("license_summary") returns None, so the route
+# falls through to _unified_dispatcher_upload AND the UI ships the generic "file"
+# upload field (subject_data_service derives the field name from get_handler).
+_LICENSE_SUMMARY_BESPOKE_HANDLER = UploadHandler(
+    form_field="license_summary_file",
+    import_fn=import_license_summary_upload,
+    error_class=LicenseSummaryImportError,
+    success_format=_license_summary_success,
+    redirect_endpoint="main.quick_hc_license_summary",
+)
+
+UPLOAD_HANDLERS: dict[str, UploadHandler] = {}
 
 
 def get_handler(subject_id: str) -> UploadHandler | None:
