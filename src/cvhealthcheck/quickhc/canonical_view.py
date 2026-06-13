@@ -5,6 +5,7 @@ from typing import Any
 
 from cvhealthcheck.artifacts.enums import ArtifactStatus, FindingSeverity, SourceType
 from cvhealthcheck.artifacts.models import (
+    ArtifactSource,
     CanonicalArtifact,
     CardSection,
     Finding,
@@ -202,6 +203,21 @@ def artifact_to_view(artifact: CanonicalArtifact) -> dict[str, Any]:
         "activeSource": active_src,
         "sources": [],
         "sections": sections,
+        # Fix 4: surface the declared-vs-wire CCID verdict (display only — the
+        # workspace badges mismatch/unverifiable prominently; never workflow).
+        "verification": _verification_view(src),
+    }
+
+
+def _verification_view(src: ArtifactSource) -> dict[str, Any] | None:
+    """The stamped CCID verdict for display, or None when unset (legacy
+    artifacts predating Fix 4). Pure read of ArtifactSource — no recompute."""
+    if not getattr(src, "verification_status", None):
+        return None
+    return {
+        "status": src.verification_status,
+        "notes": src.verification_notes,
+        "sources": src.verification_sources or [],
     }
 
 

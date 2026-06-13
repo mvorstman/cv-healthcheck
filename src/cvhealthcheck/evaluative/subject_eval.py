@@ -81,8 +81,19 @@ def evaluate_subject(
         for pr in per_row:
             row_verdicts.append({"section_id": section_id, **pr})
 
+    # Fix 4 surfacing (display only): the stamped declared-vs-wire CCID verdict,
+    # read straight off the artifact's source — no recompute, no workflow.
+    verification = None
+    if getattr(artifact.source, "verification_status", None):
+        verification = {
+            "status": artifact.source.verification_status,
+            "notes": artifact.source.verification_notes,
+            "sources": artifact.source.verification_sources or [],
+        }
+
     return {
         "subject_id": subject_id, "has_artifact": True,
         "rules_evaluated": rules_evaluated, "count": len(findings),
         "findings": findings, "row_verdicts": row_verdicts,
+        "verification": verification,
     }

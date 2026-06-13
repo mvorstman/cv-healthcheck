@@ -393,7 +393,33 @@ def quick_hc_generic_collect(subject_id: str):
         flash(f"REST collection completed for '{title}'. Warnings: {warn_str}", "success")
     else:
         flash(f"REST collection completed for '{title}'.", "success")
+    # Fix 4 surfacing (display only — collection already succeeded and persisted):
+    # a mismatch/unverifiable CCID verdict gets a loud flash; verified is quiet.
+    _flash_ccid_verdict(artifact)
     return _workspace_redirect(subject_id)
+
+
+def _flash_ccid_verdict(artifact) -> None:
+    """Surface the stamped declared-vs-wire CCID verdict (Fix 4) as a flash.
+    Display only — collection has already succeeded and persisted regardless of
+    the verdict. mismatch/unverifiable are loud (warning); verified is a brief
+    success; attested is silent (no wire to compare is the normal import case)."""
+    status = getattr(artifact.source, "verification_status", None)
+    notes = getattr(artifact.source, "verification_notes", "") or ""
+    if status == "mismatch":
+        flash(
+            f"CommCell ID MISMATCH — collected and recorded as evidence, not "
+            f"blocked. {notes}. Check the customer's declared CommCell ID "
+            f"against the CommServe.",
+            "error",
+        )
+    elif status == "unverifiable":
+        flash(
+            f"CommCell ID not verified ({notes}) — recorded as evidence.",
+            "warning",
+        )
+    elif status == "verified":
+        flash("CommCell ID verified against the CommServe.", "success")
 
 
 @bp.route("/quick-hc/<subject_id>/pin-version", methods=["POST"])
