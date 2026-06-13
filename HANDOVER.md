@@ -1,4 +1,4 @@
-# HANDOVER — Phase 1: Fix 2 + D5 + Fix 3 + Fix 4 landed (live gw02 capture pending)
+# HANDOVER — Provenance arc complete (Fix 4 live-verified); ADR-0015 redesign next
 
 You are continuing development on **cv-healthcheck**, a modular Commvault
 operational health check platform (Python/Flask, Pydantic v2 canonical
@@ -7,71 +7,89 @@ artifact schema, MCP server for AI-assisted subject authoring).
 ## Current state
 
 - **Branch:** `main`
-- **Latest commit:** evidence-context foundation (`a6cccd3`/`754287e`/`a3d0dd0`)
-  + a docs commit
-- **Test suite:** 1082 passed (full pytest, exit 0)
-- **Unpushed:** the whole Phase-1 batch is local-only — D5 (`ef6adfb`..
-  `261f7d8`), Fix 3 (`1fc94d2`/`6a4ae97`/`8a52589`), and the evidence-context
-  foundation (`a6cccd3`/`754287e`/`a3d0dd0`) plus their docs commits. They go
-  together after the browser pass (Michiel's call).
-- **In flight:** Phase 1. **Fix 2, D5, and Fix 3 are done** (CHANGELOG
-  2026-06-12 fix(isolation), 2026-06-13 feat(context), 2026-06-13 feat Fix 3):
-  scoped store is the only workspace data source; Context Integrity is
-  enforced at every write choke point; the three identity values are split
-  into distinct normalized columns (connection_url / commserve_name /
-  commcell_id / registration_code / rp_server_url / rp_scoping_id),
-  commcell_hostname frozen READ-ONLY-LEGACY, the conflation killed.
-  Pending human step: authenticated fresh-browser check (D5: no project →
-  clean prompt, selected → scoped; Fix 3: edit a customer, see the new
-  fields, save). Anonymous + headless live checks passed.
-  The evidence-context foundation and **Fix 4 (declared-vs-wire CCID guard)**
-  are also in: the verification-result home is now populated at collection —
-  CC-API reads wire `commcell.commCellId`, compares to the normalized declared
-  customer CCID, and stamps verified/mismatch/attested/unverifiable on
-  ArtifactSource (provenance, never blocks; surfaced in UI flash + view + MCP
-  evaluate_subject). License Summary verification deferred (bespoke path).
-  **PENDING — first live gw02 capture (operator-gated):** collect `environment`
-  against HomeLab/gw02 to capture the real wire commCellId and confirm the
-  stamped verdict matches reality (337f → verified; else → mismatch, a correct
-  catch). Needs the operator to set a HomeLab context + connect to gw02:4433;
-  this session left the app disconnected (reloader wiped the token on .py
-  edits). Do NOT assume verified.
-  **Next after that:** the later cleanup commit to drop commcell_hostname + its
-  read-time fallback once no row needs it; and #34 dataset-GUID portability
-  (rp_scoping_id resolution) per ADR-0015's profile layer.
+- **Current main:** `b78f897` — **1102 tests green** (full pytest, exit 0).
+- **In flight:** none.
+- **Completed (the provenance arc, all on `main`, all pushed):** Fix 2
+  (unscoped global-file layer retired), D5 (Context Integrity enforced at the
+  write layer), Fix 3 (identity-schema split — three identity values kept
+  distinct), the evidence-context foundation (project_id stamp + approval
+  coherence-read + verification-result home on ArtifactSource), and **Fix 4
+  (declared-vs-wire CommCell ID guard)** — the arc is complete and
+  **LIVE-VERIFIED** (see the ground-truth block below).
 
-## What was just completed (Phase 0)
+## Verified Ground Truth — Fix 4 Live Validation (2026-06-13)
 
-See the CHANGELOG entries for 2026-06-11 (×3) and 2026-06-12 — re-read them
-before starting work:
+Collected `environment` against **HomeLab / gw02** and captured the wire value:
 
-- **ADR-0014 `reportsplus_dataset` source type** — implemented, live-gated,
-  end-to-end verified (propose → human approval → collect), throwaway subject
-  cleaned up. Key traps are encoded in code + `docs/research/adr0014-gate-findings.md`.
-- **Wide-table horizontal scroll** in /quick-hc (`2eee3c4`; sticky first
-  column deferred).
-- **Dispatcher active-version fix** (`6359f57`) — imports extract with the
-  ACTIVE subject version, not a hardcoded v1.
-- **`delete_subject` orphan-rule reaping** (`39758f1`) + one-time sweep of the
-  12 dangling csc_*/ccprop_* registry rules.
-- **Dead-code sweeps** (`16d0dec`, `5b91fbf`) — with one correction:
-  `SecurityAssessmentService` is NOT dead (live consumer
-  `quick_hc_api.py:142`); see CHANGELOG 2026-06-12 Notes.
-- **#36 scoped (read-only):** SA module retirement is an LS-coupled decision
-  (SA `ArtifactRegistry` alias + 7 shared model classes), not an API cleanup.
+- **declared** (customer row) CommCell ID = **337f**
+- **wire** (`commcell.commCellId`, GET CommServ on gw02:4433) = **337f**
+- **Fix 4 verdict = `verified`**, persisted on the canonical artifact via
+  `ArtifactSource.verification_status / verification_sources /
+  verification_notes / verified_at` (notes carry both normalized inputs:
+  `declared_normalized=337f / wire_normalized=337f`).
 
-## Recommended next action — Phase 1: Customer/Project Context Integrity
+This was the **first end-to-end provenance verification** — collect → read
+wire → normalize both → compare → stamp → surface — proven against a real
+CommServe, not a fixture.
 
-Per ROADMAP (Now). The first concrete step is **read-only**: stand up the
-two-customer lab (one REST-collected customer, one JSON-import customer with
-multiple report versions) and run an isolation audit across
-collection/storage/evaluation/reporting **before any fix**. The known
-wrong-customer hazard to audit first: `web/active_project.py:42-57` —
-`get_active_project` silently falls back to the Default customer's earliest
-project when the session key is absent or there is no request context. The
-design direction (move active context out of the Flask session into app.db)
-follows the audit, not the other way around. Couple report-identity /
-dataset-GUID portability (#34) into this work.
+Architectural implications (resolved, not open):
+
+1. There is **one** CommCell ID field on the wire (`commcell.commCellId`).
+   The Fix-4 brief's "internal sequence id `2` distinct from a licensed CCID"
+   distinction does **not** exist — confirmed against a live payload.
+2. **gw02 and the `.129` lab box front genuinely different CommServes**
+   (gw02 = `337f`; `.129` = `commCellId=2`). The two customers map to
+   distinct CommCells — not one CommCell mislabelled.
+3. The earlier **`33f7` was a transposition typo in the *declared* value**,
+   not an architectural ambiguity. This **closes the ADR-0007 §189 open
+   question** about the CommCell ID — it is settled, nothing further to verify.
+4. Normalization neutralizes hex/decimal/case, so declared `337f` == wire
+   `337f` → `verified` with **zero false-mismatch risk** — the #1
+   false-positive risk is retired in practice, not just in unit tests.
+5. The verdict and **both** normalized inputs live on
+   `ArtifactSource.verification_*` only — **provenance, never workflow**;
+   nothing was written to `staged_artifacts.status`, `ai_notes`, `subjects`,
+   or `subject_sources`.
+6. The declared-vs-wire pipeline is proven end-to-end, so **future tiers
+   plug into the same seam** (License Summary, RP scoping-id) without
+   re-architecting the guard.
+
+## Next architectural focus — ADR-0015 compile/publish redesign
+
+Start with a **read-only design pass** (no code). The redesign separates the
+catalog lifecycle into **template / profile / runtime** (ADR-0015) and splits
+the staging table accordingly. The gap-audit already scoped the problem:
+
+- **Staging conflates template-drafts with evidence** — `staged_artifacts`
+  holds both `subject_proposal` rows (catalog-global template drafts) and
+  `artifact` rows (customer evidence) in one table with one status lifecycle.
+- **`execute_approval` is overloaded** — one function branches on
+  `artifact_type` to do two unrelated jobs (promote a catalog subject vs
+  persist scoped evidence with the D5/0033 context coherence checks).
+- **Open question: "is artifact-approval even needed?"** — with collection now
+  scoped + context-gated + provenance-verified, whether staged *artifacts*
+  (as opposed to *proposals*) still need a human approval step is genuinely
+  open; the design pass should answer it before any table split.
+
+## Deferred / named register (none of these is forgotten)
+
+- **License Summary verification** — Fix-4 v1 scoped it out (LS collects via a
+  bespoke service path, not `result_to_artifact`; its artifacts carry no
+  verdict, handled as None). Wire it into the same seam later.
+- **RP scoping-id auto-resolution** — `rp_scoping_id` column exists (Fix 3);
+  resolving it live (#34 dataset-GUID portability) is future work.
+- **`commcell_hostname` legacy-column drop** + removal of the read-time
+  fallback in `identity.effective_connection_url` and the three connect sites
+  — once no row needs the legacy value (its own cleanup commit).
+- **Customer detail-page trim** — the detail view grew identity rows in Fix 3;
+  a layout pass is deferred.
+- **Read-path Default fallback** (lower severity, transitional) —
+  `get_active_project` still falls back to the Default project for READS; D5
+  only gated writes. Revisit when active context moves into app.db.
+- **Approval authority-flip follow-on** — `project_id` is now stamped on
+  staged rows and approval coherence-reads it, but the "approval reads the
+  row's creation context instead of re-asking" UX flip is deliberately
+  deferred (the current behaviour is identical-to-D5 on the match case).
 
 ## Hard constraints (non-negotiable)
 
@@ -93,13 +111,15 @@ dataset-GUID portability (#34) into this work.
 
 - `flask run --debug`'s reloader wipes the in-memory held token on any `.py`
   edit — finish code edits before asking the operator to Connect.
-- MCP server must be restarted after any code change
-  (`pkill -f cv-healthcheck-mcp`, relaunch).
+- Restart the MCP server after any code change with
+  **`pkill -f bin/cv-healthcheck-mcp`** (the narrow `bin/` pattern avoids the
+  self-match where the kill command's own line matches `cv-healthcheck-mcp`),
+  then relaunch / reconnect Desktop.
 
 ## Validation
 
 - `python -m compileall src`
-- `venv/bin/python -m pytest` (1070 must keep passing)
+- `venv/bin/python -m pytest` (1102 must keep passing)
 - Never gate a commit on piped pytest output — check the exit code.
 
 ## Commit granularity
