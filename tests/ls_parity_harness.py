@@ -43,13 +43,18 @@ LS_FIXTURE_DIR = Path("data/imports/license_summary")
 _CSV_SUFFIXES = {".csv"}
 _HTML_SUFFIXES = {".htm", ".html"}
 
-# Canonical field ids whose generic representation depends on the unresolved
-# ``number_with_unit`` return shape (ADR-0016 Open Item 1). Comparing them now
-# would prejudge that shape, so they are quarantined PENDING-UNIT. This is the
-# deliberate quarantine list; the harness also reports which of these actually
-# appear in the corpus, feeding the number_with_unit grounding probe.
+# Canonical field ids that map to ``number_with_unit`` (ADR-0016). Quarantined
+# PENDING-UNIT until that transform is implemented, then compared as {value, unit}
+# (Open Item 1 RESOLVED — Amendment A: units are consistent per quantity across
+# the corpus = 38 (Amendment D) LS exports, so {value, unit} suffices; no
+# base-unit normalization).
+#
+# ``usage_percent`` is deliberately NOT here: the grounding pass found it absent
+# (0/184 rows populate "Used %") and, when present, it is a percentage → it maps
+# to to_float_percent, not number_with_unit (Amendments C/D). Quarantining it only
+# stalled None-vs-None comparisons for nothing.
 UNIT_FIELD_IDS = frozenset(
-    {"available_total", "used", "unit", "entitlement_value", "usage_percent"}
+    {"available_total", "used", "unit", "entitlement_value"}
 )
 
 # Canonical field ids that MUST be masked on both sides (security). Not surfaced

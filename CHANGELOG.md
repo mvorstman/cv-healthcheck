@@ -10,6 +10,18 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (docs — ADR-0016 amendment: number_with_unit resolved, Open Item 1)
+
+**Branch:** `main`. A read-only grounding probe over the LS corpus resolved ADR-0016 Open Item 1; the amendment is recorded in `docs/adr/0016-recipe-transform-layer.md` (stays in 0016, not a new ADR) plus the small harness prune it mandates. Transform implementation NOT started.
+
+### Changed
+- **ADR-0016 amended (A–D); Open Item 1 RESOLVED.** The grounding pass found **no canonical quantity appears with a differing unit** across the **corpus = 38** license-bearing LS exports (41 files on disk − 3 misfiled non-LS: two Security-Assessment exports + the `cv_redesign_option_a_refined` mock). So **`number_with_unit` returns `{value, unit}`** (parse-and-keep); base-unit normalization is rejected (Amendment A). It is a CELL transform — header-encoded units (`Available Total (TB)` with plain cells, 112/184 workload rows) are out of scope and dropped to match bespoke; capturing them is a deferred capability, **`unit_from_coalesce_source_name`** (Amendment B). **`to_float_percent`** added to the registry, **spec'd but deferred** — `Used %` is absent in the corpus (0/184 rows), so there is no fixture to validate (Amendment C). Parity coverage is corpus = 38, not 41 (Amendment D).
+- **Parity harness (`tests/ls_parity_harness.py`):** `usage_percent` removed from the PENDING-UNIT set (absent in corpus; a percentage, not unit-bearing — Amendments C/D); `available_total` / `used` / `unit` / `entitlement_value` stay quarantined until `number_with_unit` is implemented. Doc cites corpus = 38.
+
+### Notes
+- The `{value, unit}` verdict holds only while the generic candidate matches bespoke's header-unit-drop; capturing header units (`unit_from_coalesce_source_name`) would change the baseline and must be re-grounded.
+- Review before transform code — transform implementation is the next step, not started here.
+
 ## 2026-06-13 (test — ADR-0016 parity harness for License Summary)
 
 **Branch:** `main`. Harness only — **no transform layer, no LS conversion, no bespoke-LS deletion, no user-facing change.** Suite 1095 passed (+11). The acceptance gate for the later LS de-bespoke is in place; transform implementation NOT started.

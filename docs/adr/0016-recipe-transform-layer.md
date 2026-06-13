@@ -6,6 +6,47 @@
 
 ---
 
+## Amendment (2026-06-13) — Open Item 1 resolved (`number_with_unit` return shape)
+
+Grounded by a read-only probe over the real LS corpus. **Headline: no canonical
+quantity appears with a differing unit.** Across the corpus = 38 license-bearing
+exports, 0 `other_licenses` licenses show more than one real unit, and 0 workload
+quantities vary unit across files (the per-section "variation" was different
+*licenses* within a section — each individual quantity is unit-consistent). This
+resolves Open Item 1 and updates the registry, Section 4, and Section 5 below.
+
+**Amendment A — `number_with_unit` returns `{value, unit}` (parse-and-keep);
+base-unit normalization is REJECTED.** Units are consistent per quantity across
+the 38 exports, so the unit is parsed from the cell and kept verbatim; nothing is
+ever converted to a base unit. (Normalization would only be needed to *equate*
+differing units, which never arises: each row keeps its own value+unit, and a
+parity comparison is same-file, same-cell → same unit on both sides.)
+
+**Amendment B — `number_with_unit` is a CELL transform; header-encoded units are
+out of scope (deferred).** 112 of 184 workload entitlement rows carry the unit in
+the COLUMN HEADER (`Available Total (TB)`) with a plain-number cell; the bespoke
+parser drops that header unit, and `number_with_unit` (a cell-value transform)
+does the same — so parity holds. Capturing header units is a separate, deferred
+capability, **`unit_from_coalesce_source_name`** (derive the unit from the chosen
+coalesce source-column name); it is NOT part of `number_with_unit` and NOT
+required for parity. Revisiting it would change the bespoke baseline and must be
+re-grounded.
+
+**Amendment C — `usage_percent` is a percentage, not unit-bearing; add
+`to_float_percent` (spec'd, deferred).** `usage_percent` is reclassified OUT of
+the unit / PENDING-UNIT set. When present it is `N%` → `to_float_percent`; in the
+current corpus the `Used %` column is absent (0/184 rows populate it), so the
+transform is specified but implementation-blocked-by-absence (no fixture to
+validate against — confirm on a real export that populates it before building).
+
+**Amendment D — the LS parity corpus is 38, not 41.** 3 of the 41 files under
+`data/imports/license_summary/` are misfiled non-LS (two Security-Assessment HTML
+exports + the `cv_redesign_option_a_refined` mock) and produce no license rows.
+Parity coverage (Section 4) is the **corpus = 38** license-bearing exports;
+fixture discovery still sees 41 files on disk.
+
+---
+
 ## Context
 
 The Piece-B recipe-feasibility inventory (2026-06-13) tested two real Commvault export specimens against the generic extractor recipe model:
@@ -50,7 +91,8 @@ Applied in order to the (coalesced) source value. Initial registry — closed; a
 | `null_if_empty` | str → str\|null | empty/placeholder → null |
 | `to_integer` | str → int\|null | coercion; non-numeric → null + warning |
 | `to_float` | str → float\|null | coercion |
-| `number_with_unit` | str → **{value, unit}** | "500 VMs" → {500,"VMs"}. **Return shape: OPEN — see Open Items.** |
+| `to_float_percent` | str → float\|null | "80%" → 80.0. Spec'd, **deferred** — `Used %` absent in the corpus, no fixture to validate (Amendment C). |
+| `number_with_unit` | str → **{value, unit}** | "500 VMs" → {500,"VMs"}. **Return shape RESOLVED: `{value, unit}`** (Amendment A). CELL transform — embedded units only; header-encoded units out of scope (Amendment B). |
 | `mask_registration_code` | str → masked str | security transform; stores only `****`-masked form. Mandatory on `registration_code`. |
 
 No `regex`, no `expression`, no `eval`, no user-supplied callable — those would violate Closed Registry. Adding a transform = adding a named, reviewed, platform-owned entry here.
@@ -99,13 +141,13 @@ Defining it as a *mapping* (rather than hard-coding the single registration_code
 
 ## Section 4 — The parity harness (acceptance gate)
 
-Proves a generic-recipe LS produces the same canonical artifact as the bespoke LS, across the **41 real exports** under `data/imports/license_summary/`. Decisions the harness encodes (recorded here so they are design, not accident):
+Proves a generic-recipe LS produces the same canonical artifact as the bespoke LS, across the **corpus = 38** license-bearing exports under `data/imports/license_summary/` (41 files on disk − 3 misfiled non-LS: two Security-Assessment exports + the `cv_redesign_option_a_refined` mock; Amendment D). Decisions the harness encodes (recorded here so they are design, not accident):
 
 - **Equivalence basis:** semantic equivalence of the `CanonicalArtifact` per section — same sections, same items, same field values — NOT raw byte-equivalence of serialized JSON (key ordering, whitespace, and float formatting are not parity concerns).
 - **Masked-field comparison:** `registration_code` is compared in its **masked** form on both sides (the bespoke path already masks; the generic path masks via transform). The harness never compares unmasked reg-codes — and asserts both sides are masked.
-- **Unit fields:** compared per the `number_with_unit` return shape once Open Item 1 is resolved.
+- **Unit fields:** compared as `{value, unit}` (Amendment A); header-encoded units are dropped on both sides (Amendment B). `usage_percent` is not a unit field (Amendment C).
 - **Computed summaries:** compared semantically (the count values), not byte-wise.
-- **Coverage:** all 41 exports must pass; a single divergence blocks bespoke-LS deletion.
+- **Coverage:** all 38 exports (Amendment D) must pass; a single divergence blocks bespoke-LS deletion.
 
 The harness is the gate for step 5, and the incremental check for steps 3–4.
 
@@ -113,9 +155,9 @@ The harness is the gate for step 5, and the incremental check for steps 3–4.
 
 ## Section 5 — Open items
 
-1. **`number_with_unit` return shape — UNRESOLVED, blocks that transform's implementation.** Is it `{value, unit}`, two flat fields, or a base-unit-normalized scalar? Resolution path: a read-only grounding pass over the 41 LS exports to determine whether the *same quantity* appears in *differing units* across exports (TB vs instances vs raw count). If units are consistent per field → `{value, unit}` suffices. If the same field varies unit across exports → normalization (more than a parse) is required, and `number_with_unit` must be specified accordingly. Do not implement this transform until the grounding settles it.
+1. **`number_with_unit` return shape — RESOLVED (2026-06-13, Amendment A): `{value, unit}`.** The read-only grounding pass over the corpus = 38 LS exports found **no quantity with a differing unit** (`other_licenses`: 0 licenses with >1 real unit; workload: 0 quantities varying across files), so parse-and-keep suffices and base-unit normalization is rejected. Header-encoded units are out of `number_with_unit`'s scope — the deferred `unit_from_coalesce_source_name` capability (Amendment B). `usage_percent` is not unit-bearing → `to_float_percent`, deferred (Amendment C).
 2. **The deliberate bet (recorded, not blocking).** Evidence for the transform layer is currently a single subject. Acceptance of this ADR is acceptance of that bet. If, during conversion, LS turns out to need capabilities *beyond* this registry, that is a signal to reconsider whether LS should stay bespoke — not to grow the registry open-endedly.
-3. **`metadata_pairs` robustness** — confirm against the 41 exports that the scattered-pair labels are stable enough for a `label_map` (vs. varying per report version), during the parity harness work.
+3. **`metadata_pairs` robustness** — confirm against the corpus = 38 exports (Amendment D) that the scattered-pair labels are stable enough for a `label_map` (vs. varying per report version), during the parity harness work.
 
 ---
 
