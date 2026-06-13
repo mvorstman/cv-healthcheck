@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import tempfile
-import uuid
 from pathlib import Path
 from hashlib import md5
 
@@ -753,34 +752,15 @@ def _unified_dispatcher_upload(subject_id: str):
         else:
             artifact = dispatch.artifact
             title = dispatch.recognition_result.title  # type: ignore[union-attr]
-            stage_flag = request.args.get("stage") == "1"
-            if stage_flag:
-                stage_id = f"stage_{uuid.uuid4().hex[:12]}"
-                # D5 (c) + migration 0033: staged customer evidence is stamped
-                # with the explicitly selected (customer, project) — the full
-                # creation context (the route gate guarantees the selection
-                # exists).
-                _ctx_customer, _ctx_project = require_active_context()
-                _staging_db.create_staged_artifact(
-                    db,
-                    stage_id,
-                    artifact.artifact_type,
-                    artifact.model_dump_json(),
-                    source_file=filename,
-                    source_type=dispatch.source_type,
-                    customer_id=_ctx_customer,
-                    project_id=_ctx_project,
-                )
-                msg = f"Imported {title} — review in staging before approving."
-                if inline:
-                    return jsonify({"success": True, "message": msg, "title": title})
-                flash(msg, "success")
-            else:
-                ArtifactStore(*require_active_context()).save_artifact(artifact)
-                msg = f"Imported {title} successfully."
-                if inline:
-                    return jsonify({"success": True, "message": msg, "title": title})
-                flash(msg, "success")
+            # Imports write the artifact directly to the scoped store (the
+            # ?stage=1 artifact-staging branch was removed — vestigial
+            # artifact-approval, ADR-0015 redesign slice 1: no UI ever set
+            # stage=1, and approval added nothing over this direct write).
+            ArtifactStore(*require_active_context()).save_artifact(artifact)
+            msg = f"Imported {title} successfully."
+            if inline:
+                return jsonify({"success": True, "message": msg, "title": title})
+            flash(msg, "success")
     except Exception as exc:
         if inline:
             return jsonify({"success": False, "error": str(exc)}), 500

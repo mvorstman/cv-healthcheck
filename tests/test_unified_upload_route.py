@@ -249,42 +249,6 @@ def test_unified_route_ai_branch_supports_x_inline(
     assert body["title"] == "AI Subject my_ai_report"
 
 
-def test_unified_route_ai_branch_supports_stage_query(
-    ai_subject_client, monkeypatch
-) -> None:
-    """Test 4 — ?stage=1 routes the upload through staged_artifacts
-    instead of saving canonically.
-
-    Session 4 dropped the old-route POST half of this test.
-    """
-    client, saved, db_path = ai_subject_client
-
-    monkeypatch.setattr(
-        quick_hc_routes,
-        "extract_file",
-        lambda *a, **kw: _fake_dispatch_success("my_ai_report"),
-    )
-
-    client.post(
-        "/quick-hc/my_ai_report/import?stage=1",
-        data={"file": (io.BytesIO(b"<html/>"), "report.html")},
-        content_type="multipart/form-data",
-        follow_redirects=True,
-    )
-
-    # Canonical save NOT called (stage=1 routes to staging instead).
-    assert saved == []
-
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    rows = conn.execute(
-        "SELECT subject_id, artifact_type, status FROM staged_artifacts"
-    ).fetchall()
-    conn.close()
-    assert len(rows) == 1
-    assert rows[0]["status"] == "pending"
-
-
 def test_unified_route_security_assessment_no_legacy_artifact_files(
     tmp_path, monkeypatch
 ) -> None:

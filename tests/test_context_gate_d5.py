@@ -520,61 +520,6 @@ def test_proposal_approval_needs_no_context(migrated_db_path):
         db.close()
 
 
-def test_web_stage_import_stamps_customer(monkeypatch, migrated_db_path):
-    from cvhealthcheck.extractors.dispatcher import DispatchResult
-    from cvhealthcheck.extractors.recognition import RecognitionResult
-    import cvhealthcheck.web.routes.quick_hc as route_module
-
-    def open_db():
-        return _migrated_conn(migrated_db_path)
-    monkeypatch.setattr(route_module, "get_db", open_db)
-    # the AI subject must exist for the route's subject lookup
-    db = open_db()
-    from cvhealthcheck.db.subjects import create_subject_from_proposal
-    create_subject_from_proposal(db, {
-        "subject_id": "_d5_stage", "version": 1, "title": "t", "description": "",
-        "category": "operations",
-        "sections": [{"section_id": "s", "title": "S", "section_type": "table",
-                      "default_selected": True, "sort_order": 0}],
-        "extraction_instructions": {"html": {"extractable": True, "sections": {"s": {}}}},
-    })
-    db.close()
-
-    rec = RecognitionResult(subject_id="_d5_stage", version=1, source_type="html",
-                            extractable=True, non_extractable_reason=None, title="t")
-    monkeypatch.setattr(
-        route_module, "extract_file",
-        lambda *a, **k: DispatchResult(
-            recognized=True, subject_id="_d5_stage", version=1, source_type="html",
-            extractable=True, non_extractable_reason=None,
-            artifact=_mk_artifact("_d5_stage"), recognition_result=rec,
-        ),
-    )
-    db = open_db()
-    db.execute(
-        "INSERT INTO customers (customer_id, customer_name, created_at, updated_at)"
-        " VALUES ('cust_stamp', 'Stamp', '2026-01-01', '2026-01-01')"
-    )
-    db.commit()
-    db.close()
-    import io
-    client = _client()
-    _set_context(client, "cust_stamp", "proj_stamp")
-    resp = client.post(
-        "/quick-hc/_d5_stage/import?stage=1",
-        data={"file": (io.BytesIO(b"<html></html>"), "x.html")},
-        content_type="multipart/form-data",
-        headers={"X-Inline": "1"},
-    )
-    assert resp.status_code == 200, resp.get_json()
-    db = open_db()
-    row = db.execute(
-        "SELECT customer_id FROM staged_artifacts ORDER BY created_at DESC LIMIT 1"
-    ).fetchone()
-    db.close()
-    assert row["customer_id"] == "cust_stamp"
-
-
 def test_mcp_save_staged_artifact_validates_customer(monkeypatch, migrated_db_path):
     import cvhealthcheck.mcp.server as mcp
     monkeypatch.setattr(mcp, "get_db", lambda: _migrated_conn(migrated_db_path))
