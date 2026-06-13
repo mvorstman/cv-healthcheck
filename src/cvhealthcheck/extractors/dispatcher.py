@@ -43,11 +43,17 @@ def extract_file(
     db_conn: sqlite3.Connection,
     subject_id: str | None = None,
     version: int | None = None,
+    declared_commcell_id: str | None = None,
 ) -> DispatchResult:
     """
     Identify the file and run the appropriate extractor.
 
     If subject_id is provided, skip recognition and use it directly.
+
+    ``declared_commcell_id`` (import-verification slice #1) is the active
+    customer's CommCell ID, threaded from the upload route so the canonical
+    artifact stamps a declared-vs-wire verdict (PROVENANCE, never blocks)
+    instead of being blanket-unverifiable. None when no customer CCID is set.
     """
     if subject_id is not None:
         # Resolve the subject's ACTIVE version when the caller doesn't pin one.
@@ -160,6 +166,7 @@ def extract_file(
         subject_id=rec.subject_id,
         subject_title=rec.title,
         file_path=file_path,
+        commcell_id=declared_commcell_id,
     )
     return DispatchResult(
         recognized=True,

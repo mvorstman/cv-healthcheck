@@ -767,7 +767,24 @@ def _unified_dispatcher_upload(subject_id: str):
             upload.save(tmp)
             tmp_path = Path(tmp.name)
 
-        dispatch = extract_file(tmp_path, db, subject_id=subject_id)
+        # Thread the active customer's DECLARED CommCell ID into the verdict
+        # (import-verification slice #1). This generic dispatcher path knows the
+        # active customer (require_active_context already ran in the parent
+        # route); pass its normalized CCID so imports stamp an honest verdict
+        # (attested when the file carries no identity) instead of blanket
+        # unverifiable. The bespoke LS handler is a SEPARATE path (_handle_system_
+        # upload) and is deliberately NOT touched here.
+        try:
+            declared_ccid = normalize_commcell_id(
+                get_active_customer(db).get("commcell_id")
+            )
+        except (ValueError, ActiveProjectMissingError):
+            declared_ccid = None
+
+        dispatch = extract_file(
+            tmp_path, db, subject_id=subject_id,
+            declared_commcell_id=declared_ccid,
+        )
 
         if not dispatch.recognized:
             msg = "File not recognised — no matching report type found."
