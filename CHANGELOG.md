@@ -10,6 +10,21 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat — Fix 4: declared-vs-wire CommCell ID guard, provenance not workflow)
+
+**Branch:** `main`. Commits `6607caf`, `413abdb`; suite 1102 passed. The verification-result home (pre-Fix-4 foundation) is now populated by a declared-vs-wire CCID guard — recorded as evidence, never enforced.
+
+### Added
+- **`identity.verify_commcell_id`** — compares `normalize(declared)` vs `normalize(wire)` and returns the four ArtifactSource verification_* values. Four verdicts, attested ≠ unverifiable (never merged): **verified** (both present, equal), **mismatch** (both present, differ), **attested** (declared present; source can't provide a wire value), **unverifiable** (declared absent/un-normalizable, or source could prove but wire value missing). The record preserves BOTH normalized inputs (`declared_normalized=.. / wire_normalized=..`), the wire source, and verified_at. Never raises, never blocks.
+- **`result_to_artifact` wiring**: the CC-API (rest_commserve) tier reads the wire `commcell.commCellId` (raw int) from the single-object card record (`_wire_commcell_id`); every other source type → attested/unverifiable. Both sides normalized (raw compare would false-mismatch hex vs decimal). Stamped on ArtifactSource ONLY — nothing in subjects/subject_sources/staged_artifacts.status/ai_notes. On mismatch the artifact still assembles and persists.
+- **Surfacing (display only):** `artifact_to_view` exposes a `verification` block; the collect route flashes the verdict (mismatch loud, unverifiable warning, verified brief, attested silent) after a successful persisted collect; MCP `evaluate_subject` returns the verdict. None of these gate collection.
+
+### Notes
+- Tests (+20): the four-verdict matrix, attested-vs-unverifiable distinctness, no-false-mismatch (337f vs int 13183 → verified; 337F vs 337f → verified), both inputs persisted, CC-API integration, csv → attested, round-trip, and the surfacing (view/evaluate/flash-does-not-block).
+- **Step-1 correction carried forward:** the brief's "commCellId=2 is an internal sequence id distinct from the licensed CCID" is wrong per ADR-0007 §189 — there is one CCID field (`commcell.commCellId`); the default lab's is genuinely 2. The guard reads that field.
+- **License Summary not wired in v1** — LS collects through a bespoke service path (not result_to_artifact), so its artifacts carry no verdict (view/evaluate handle None). Follow-on.
+- **FIRST LIVE VALIDATION PENDING (operator-gated):** collecting `environment` against HomeLab/gw02 to capture the real wire commCellId requires a live connection to gw02 (creds + reachability) that this session cannot perform. Not assumed verified — the verdict is whatever gw02 returns (337f → verified; anything else → mismatch, a correct catch).
+
 ## 2026-06-13 (feat — evidence-context + verification-result foundation, pre-Fix-4)
 
 **Branch:** `main`. Commits `a6cccd3`, `754287e`, `a3d0dd0`; suite 1082 passed. An inert enabler for Fix 4 — NO declared-vs-wire check, NO approval authority flip, NO D5 weakening.

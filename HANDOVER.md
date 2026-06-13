@@ -1,4 +1,4 @@
-# HANDOVER — Phase 1: Fix 2 + D5 + Fix 3 landed (isolation, context, identity)
+# HANDOVER — Phase 1: Fix 2 + D5 + Fix 3 + Fix 4 landed (live gw02 capture pending)
 
 You are continuing development on **cv-healthcheck**, a modular Commvault
 operational health check platform (Python/Flask, Pydantic v2 canonical
@@ -24,15 +24,21 @@ artifact schema, MCP server for AI-assisted subject authoring).
   Pending human step: authenticated fresh-browser check (D5: no project →
   clean prompt, selected → scoped; Fix 3: edit a customer, see the new
   fields, save). Anonymous + headless live checks passed.
-  The evidence-context foundation is also in (migration 0033 project_id stamp;
-  approval coherence-reads the row's creation context; the verification-result
-  home on ArtifactSource) — all inert enablers, nothing populates the
-  verification fields yet.
-  **Next: Fix 4 — report-identity / dataset-GUID portability (#34)**, which
-  consumes the identity columns (rp_scoping_id resolution) AND writes the
-  ArtifactSource verification fields via the declared-vs-wire check, per
-  ADR-0015's profile layer. Also queued: the later cleanup commit to drop
-  commcell_hostname + its read-time fallback once no row needs it.
+  The evidence-context foundation and **Fix 4 (declared-vs-wire CCID guard)**
+  are also in: the verification-result home is now populated at collection —
+  CC-API reads wire `commcell.commCellId`, compares to the normalized declared
+  customer CCID, and stamps verified/mismatch/attested/unverifiable on
+  ArtifactSource (provenance, never blocks; surfaced in UI flash + view + MCP
+  evaluate_subject). License Summary verification deferred (bespoke path).
+  **PENDING — first live gw02 capture (operator-gated):** collect `environment`
+  against HomeLab/gw02 to capture the real wire commCellId and confirm the
+  stamped verdict matches reality (337f → verified; else → mismatch, a correct
+  catch). Needs the operator to set a HomeLab context + connect to gw02:4433;
+  this session left the app disconnected (reloader wiped the token on .py
+  edits). Do NOT assume verified.
+  **Next after that:** the later cleanup commit to drop commcell_hostname + its
+  read-time fallback once no row needs it; and #34 dataset-GUID portability
+  (rp_scoping_id resolution) per ADR-0015's profile layer.
 
 ## What was just completed (Phase 0)
 
