@@ -208,4 +208,4 @@ Customer-facing pages:
 - [docs/PATTERNS.md](docs/PATTERNS.md) — project-wide patterns and standing conventions to know before adding code.
 - [docs/lab_environment.md](docs/lab_environment.md) — lab setup, connection, token, and realism.
 - [docs/data_flow_audit.md](docs/data_flow_audit.md) — on-disk data-flow audit.
-- [docs/adr/](docs/adr/) — Architecture Decision Records (0001–0016). Required reading before touching the areas they govern.
+- [docs/adr/](docs/adr/) — Architecture Decision Records (0001–0017). Required reading before touching the areas they govern.

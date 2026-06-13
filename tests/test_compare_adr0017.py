@@ -14,6 +14,7 @@ from cvhealthcheck.artifacts.models import (
     ArtifactSubject,
     ArtifactSummary,
     CanonicalArtifact,
+    SummaryMetric,
     TableColumn,
     TableSection,
 )
@@ -33,15 +34,19 @@ def _table(sid, rows):
     return TableSection(type="table", id=sid, title=sid, columns=columns, items=rows)
 
 
-def _artifact(sections):
+def _artifact(sections, metrics=None):
     return CanonicalArtifact(
         artifact_type="license_summary",
         generated_at=_NOW,
         source=ArtifactSource(type=SourceType.csv_import),
         subject=ArtifactSubject(id="license_summary", title="LS"),
-        summary=ArtifactSummary(status=ArtifactStatus.good, metrics=[]),
+        summary=ArtifactSummary(status=ArtifactStatus.good, metrics=metrics or []),
         sections=sections,
     )
+
+
+def _count_section(sid, value):
+    return _table(sid, [{"value": value}])  # the shape extract_computed emits
 
 
 # ── D1 — value/unit equivalence (the function) ───────────────────────────────
@@ -217,6 +222,40 @@ def test_d7_is_directional_bespoke_only_sensitive_still_fails():
     report = compare_artifacts("f", bespoke, generic)
     assert any(r.section == "commcell_meta" and r.outcome is Outcome.FAIL
                for r in report.failed)
+
+
+# ── D3/F5 — summary-metric ≡ same-named computed-section ──────────────────────
+
+def test_d3_summary_metric_equals_computed_section_same_value():
+    bespoke = _artifact([], metrics=[SummaryMetric(id="other_license_count", label="Other", value=16)])
+    generic = _artifact([_count_section("other_license_count", 16)])
+    report = compare_artifacts("f", bespoke, generic)
+    assert not report.failed  # placement (metric vs section) equated when value matches
+    assert any(r.field == "other_license_count" and r.outcome is Outcome.PASS
+               for r in report.passed)
+
+
+def test_d3_different_count_value_fails():
+    bespoke = _artifact([], metrics=[SummaryMetric(id="c", label="C", value=16)])
+    generic = _artifact([_count_section("c", 99)])  # same name, different value
+    report = compare_artifacts("f", bespoke, generic)
+    assert any(r.field == "c" and r.outcome is Outcome.FAIL for r in report.failed)
+
+
+def test_d3_metric_with_no_matching_section_fails():
+    # a bespoke metric absent on the generic side (no metric, no section) → real difference
+    bespoke = _artifact([], metrics=[SummaryMetric(id="orphan", label="O", value=5)])
+    generic = _artifact([])
+    report = compare_artifacts("f", bespoke, generic)
+    assert any(r.field == "orphan" and r.outcome is Outcome.FAIL for r in report.failed)
+
+
+def test_d3_computed_section_with_no_matching_metric_fails():
+    # a generic count-section absent on the bespoke side → real difference (not blanket-passed)
+    bespoke = _artifact([])
+    generic = _artifact([_count_section("orphan", 5)])
+    report = compare_artifacts("f", bespoke, generic)
+    assert any(r.field == "orphan" and r.outcome is Outcome.FAIL for r in report.failed)
 
 
 # ── guards: the equivalences must not make it an always-pass ──────────────────

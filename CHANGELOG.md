@@ -10,6 +10,20 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat/docs — ADR-0017 D3/F5 comparator equivalence + ADR-0017 doc (Proposed))
+
+**Branch:** `main`. Harness-side D3/F5 comparator equivalence + the ADR-0017 decision record (the doc that was missing — D1–D7 lived only in the comparator + CHANGELOG). No recipe/bespoke/enrichment/unit change. Suite 1237 passed (+4).
+
+### Added
+- **`docs/adr/0017-license-summary-canonical-parity-target.md` (Proposed, D1–D7)** — what "parity" proves for the LS de-bespoke: the generic produces the decided canonical TARGET, not byte-replication of bespoke omissions. Records D1 (value/unit equivalence), D2 (identity is enrichment, deferred to the seam), D3 (counts as computed sections ≡ summary metrics), D4 (empty≡absent / dedup tolerance), D5 (usage_percent omitted), D6 (mask-format-independent), D7 (registration_code in the target when present), plus B1 (section-id collision, fixed) and B2 (unit-parse, open). README ADR range → 0001–0017.
+
+### Changed (`tests/ls_parity_harness.py`)
+- **D3/F5 equivalence:** counts are compared in a unified namespace — a bespoke `summary` metric `X` ≡ a generic single-value computed-section `X` (`_is_count_section` = one row `{"value": N}`), matched by name + value. Count-sections are excluded from the section comparison (accounted for in the namespace). **Negative guard:** same name + different value still FAILS; a count present on only one side still FAILS (never blanket-passed).
+- +4 tests (equivalence; different-value fails; metric-with-no-section fails; section-with-no-metric fails).
+
+### Notes — post-D3/F5 breakdown (38): pass 6128, fail 104 (was 241)
+The 152 placement failures cleared. Residual: **D2 commcell_info (38)** — deferred to the enrichment seam; **B2 unit-parse (28)** — one pattern; **"Other Licenses" title ambiguity (22 sections + 14 downstream count-value fails** — the generic misses the table → its `other_license_count` is 0 ≠ bespoke 1, which the D3 negative guard correctly fails); **one sample structural variation (1 section + 1 downstream count)**. The residual count-value fails are symptoms of the title/sample extraction gaps, not a separate class.
+
 ## 2026-06-13 (test — ADR-0017 D7: registration_code is part of the LS canonical target)
 
 **Branch:** `main`. Amendment D7 applied to the parity comparator. (No ADR-0017 doc file exists yet — the ADR-0017 decisions live in the comparator + this CHANGELOG.) No recipe/bespoke change. Suite 1233 passed (+3).

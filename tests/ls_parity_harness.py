@@ -352,15 +352,47 @@ def _is_masked_sensitive_section(section: Any) -> bool:
     return saw_sensitive
 
 
-def _compare_summary(
+def _is_count_section(section: Any) -> bool:
+    """ADR-0017 D3: a single-value computed section — exactly one row of the shape
+    {"value": N}. This is what extract_computed (row_count / distinct_count)
+    emits; bespoke carries the same counts as summary metrics instead."""
+    rows = getattr(section, "items", []) or []
+    return len(rows) == 1 and isinstance(rows[0], dict) and set(rows[0].keys()) == {"value"}
+
+
+def _count_namespace(artifact: CanonicalArtifact) -> dict[str, Any]:
+    """ADR-0017 D3: counts live EITHER as summary metrics (bespoke) OR as
+    single-value computed sections (generic). Unify both into one name→value map
+    so a metric and a same-named computed section are compared by value, not by
+    placement (the deciding-reads confirmed nothing requires the metric placement)."""
+    counts: dict[str, Any] = {m.id: m.value for m in artifact.summary.metrics}
+    for section in artifact.sections:
+        if _is_count_section(section):
+            counts[section.id] = section.items[0].get("value")
+    return counts
+
+
+def _compare_counts(
     report: ParityReport, baseline: CanonicalArtifact, candidate: CanonicalArtifact
 ) -> None:
-    exp = {m.id: m.value for m in baseline.summary.metrics}
-    act = {m.id: m.value for m in candidate.summary.metrics}
-    for mid in sorted(set(exp) | set(act)):
-        report.results.append(
-            _classify_field(report.file, "summary", mid, mid, exp.get(mid), act.get(mid))
-        )
+    base = _count_namespace(baseline)
+    cand = _count_namespace(candidate)
+    for name in sorted(set(base) | set(cand)):
+        in_both = name in base and name in cand
+        bval, cval = base.get(name), cand.get(name)
+        if not in_both:
+            # A count present on only one side (no matching metric OR section on
+            # the other) is a real difference — never blanket-passed.
+            report.results.append(FieldResult(
+                report.file, "summary", name, name, bval, cval, Outcome.FAIL,
+                "count present on one side only"))
+        else:
+            # D3: same name + same value → equal regardless of placement
+            # (metric vs computed-section); a DIFFERENT value still FAILS.
+            report.results.append(FieldResult(
+                report.file, "summary", name, name, bval, cval,
+                Outcome.PASS if _values_equal(bval, cval) else Outcome.FAIL,
+                "D3 summary-metric ≡ computed-section"))
 
 
 def _compare_section(
@@ -459,10 +491,15 @@ def compare_artifacts(
     section don't collide (B1); empty sections are treated as absent (D4/F4), so a
     section present-and-non-empty on only one side is a real difference."""
     report = ParityReport(file=file)
-    _compare_summary(report, baseline, candidate)
+    # D3: counts (summary metrics ∪ single-value computed sections) compared by
+    # name+value, irrespective of placement. Count-sections are then excluded from
+    # the section comparison below (they're accounted for here).
+    _compare_counts(report, baseline, candidate)
 
-    base_map = {_section_key(s): s for s in baseline.sections if not _section_is_empty(s)}
-    cand_map = {_section_key(s): s for s in candidate.sections if not _section_is_empty(s)}
+    base_map = {_section_key(s): s for s in baseline.sections
+                if not _section_is_empty(s) and not _is_count_section(s)}
+    cand_map = {_section_key(s): s for s in candidate.sections
+                if not _section_is_empty(s) and not _is_count_section(s)}
     for key in sorted(set(base_map) | set(cand_map)):
         sid, tag = key
         base_sec, cand_sec = base_map.get(key), cand_map.get(key)
