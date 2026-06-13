@@ -21,22 +21,43 @@ Capability terms, not a feature log — the per-task history lives in `CHANGELOG
 - Quick HC report-composition surface
 - **License Summary CSV/HTML upload promoted to the generic declarative path
   (ADR-0017) — live, browser-verified** on a real workload-heavy export the
-  bespoke parser could not import. First end-to-end de-bespoking of a real,
-  structurally complex subject (recipe transform layer, compile gate, parity).
+  bespoke parser could not import. Proves declarative **extraction** of
+  report-shaped data (recipe transform layer, compile gate, parity); it does NOT
+  prove declarative **collection** — LS REST collect stays bespoke (see Strategic
+  Inflection).
 
-## Strategic Inflection (recorded 2026-06-14)
+## Strategic Inflection (recorded 2026-06-14; scope-corrected)
 
-The platform is now **proven to represent a real, complex subject end-to-end** —
-License Summary, fully declarative, live, and browser-verified (the
-workload-heavy export the bespoke parser *could not* import succeeded via the
-generic path). The question *"can the platform represent a real subject without
-bespoke code?"* is answered: **yes**.
+LS proved **declarative EXTRACTION for report-shaped, already-obtained data** —
+the **upload** path (file → recipe → canonical, **no bespoke parser**), live and
+browser-verified on a workload-heavy export the bespoke parser could not import.
 
-The next high-value move is therefore a **NEW SUBJECT on the proven foundation —
-product development on the platform, not more platform-building** — rather than
-further License-Summary edge-polish. The remaining LS work (REST-collect
-migration) is a contained product decision, not a prerequisite for building new
-subjects.
+It did **NOT** prove (correcting an earlier overclaim that the platform was
+"proven end-to-end"):
+
+- **declarative COLLECTION** — how to call / page / auth / correlate / merge an
+  API. LS's own REST collect remains **bespoke** (`collect_rest.py`, deliberately
+  retained).
+- **declarative extraction for NON-table REST shapes** (nested-by-key; typed-rows
+  needing a pivot). The recipe model HAS the vocabulary (`rest` /
+  `rest_command_center_api` / `reportsplus_dataset`: `root_key`, field dot-paths,
+  `parameters`), but **no live subject has proven it end-to-end**, and the
+  pivot/partition case is an open expressiveness question.
+
+**The next architectural test is therefore NOT another report.** It is a
+**REST-primary subject driven through `rest_command_center_api` /
+`reportsplus_dataset` WITHOUT a bespoke adapter** — exercising both COLLECTION
+and non-table EXTRACTION. Candidate probes, easiest-shape-first:
+
+1. **CommCell Details** (single-object card) — simplest collection + shape.
+2. then a **list / typed-row REST subject** (Capacity License / Backup Job
+   Summary) — to stress the extraction model (pivot / partition).
+
+The outcome determines **how much bespoke collector code is needed long-term** —
+the most valuable open architectural question in cv-healthcheck. This is still a
+**platform-capability test, not yet pure product development**: LS answered
+"declarative extraction of report data — yes"; the open question is "declarative
+*collection* + non-table extraction — how far?"
 
 ## Strategic Themes
 

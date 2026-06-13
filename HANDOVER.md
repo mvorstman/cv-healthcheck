@@ -1,4 +1,4 @@
-# HANDOVER — License Summary CSV/HTML upload promoted to the generic declarative path (ADR-0017, live + browser-verified); next high-value move is a NEW subject
+# HANDOVER — License Summary CSV/HTML upload promoted to the generic declarative path (ADR-0017, live + browser-verified). That proves declarative EXTRACTION of report data, NOT declarative COLLECTION. Next architectural test: a REST-primary subject via rest_command_center_api / reportsplus_dataset with no bespoke adapter (see ROADMAP Strategic Inflection)
 
 You are continuing development on **cv-healthcheck**, a modular Commvault
 operational health check platform (Python/Flask, Pydantic v2 canonical

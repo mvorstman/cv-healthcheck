@@ -10,6 +10,26 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-14 (docs — correct the strategic-inflection overclaim: extraction proven, collection not)
+
+**Branch:** `main`. Docs only — sharpen the ROADMAP Strategic Inflection note (and the HANDOVER title) that previously read as "platform proven end-to-end."
+
+- **`ROADMAP.md` Strategic Inflection (scope-corrected):** LS proved declarative
+  **EXTRACTION** for report-shaped, already-obtained data (the upload path,
+  file → recipe → canonical, no bespoke parser). It did NOT prove declarative
+  **COLLECTION** (call/page/auth/correlate/merge — LS REST collect stays bespoke)
+  nor declarative extraction for **non-table REST shapes** (nested-by-key,
+  typed-rows needing pivot — the `rest`/`rest_command_center_api`/
+  `reportsplus_dataset` vocabulary exists but no live subject has proven it
+  end-to-end; pivot/partition is open). **The next architectural test is a
+  REST-primary subject via `rest_command_center_api` / `reportsplus_dataset` with
+  NO bespoke adapter** — probes easiest-first: CommCell Details (card), then a
+  list/typed-row REST subject (Capacity License / Backup Job Summary). Outcome
+  decides how much bespoke collector code is needed long-term — still a
+  platform-capability test, not yet pure product development.
+- **`HANDOVER.md` title** corrected to match (extraction proven, not collection;
+  points to the ROADMAP inflection). Current State bullet tightened.
+
 ## 2026-06-14 (docs — record the LS upload promotion + boundaries; ADR-0017 Accepted)
 
 **Branch:** `main`. Docs only — no code change.
