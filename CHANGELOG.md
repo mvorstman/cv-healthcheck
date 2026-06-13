@@ -10,6 +10,23 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat — ADR-0017 LS promotion commit 4a: HTML absent-section non-fatal + commcell_name threading)
+
+**Branch:** `main`. Prerequisite for the route switch (4b). Two changes so the generic dispatcher can import real LS HTML. NO route switch, NO REST change, NO deletion. Full suite 1287 passed.
+
+**Why:** the unified upload route uses `extract_file`, which treats ANY `result.errors` as fatal, and the HTML extractor recorded `"Section 'X' not found"` as an *error*. The LS recipe declares 6 workload sections + the other/agent tables, but no single file has all of them (workload XOR tables), so EVERY LS HTML file produced "not found" errors → `extract_file` rejected it. (The parity harness never caught this — it bypasses `extract_file`, calling `HTMLExtractor.extract` + `result_to_artifact` directly.)
+
+### Changed
+- **`html.py` `_find_section_table`:** a declared-but-ABSENT section (`"Section 'X' not found"`) is now a `result.warnings`, not `result.errors` — consistent with the CSV extractor and ADR-0017 D4 (empty ≡ absent). Config errors (`missing selector/title_match`) and malformed `found but contains no table` STAY errors (the non-fatal change is scoped to "declared-but-absent", not "any problem").
+- **`dispatcher.py` `extract_file`:** new `declared_commcell_name` param, forwarded to `result_to_artifact(commcell_name=...)`.
+- **`quick_hc.py` `_unified_dispatcher_upload`:** threads the active customer's `commserve_name` (NEVER `customer_name`; Fix-3) as `declared_commcell_name`, so the D2 top-tier identity (declared context) fires live — not just report-evidence/placeholder.
+
+### Tests
+- `extract_file` produces an artifact for a workload-only HTML and an other+agent HTML (absent sections are warnings); a misconfigured section (no selector/title_match) STILL errors; a declared CommServe name reaches `commcell_info` via `extract_file` (shows the declared name). Updated the SA `test_section_not_found` → now a WARNING (more robust partial import, not a regression). Parity unchanged: 738/0.
+
+### Notes — post-state
+recipe: live (1); D2 seam: live (2); recognition: broadened (3); HTML extraction: tolerant of absent sections + commcell_name threaded (4a); routing: still **bespoke** (4b pending); REST: untouched. The generic dispatcher can now import every real LS HTML file — the route switch (4b) is unblocked.
+
 ## 2026-06-13 (feat — ADR-0017 LS promotion commit 2/4: D2 commcell_info enrichment → live seam)
 
 **Branch:** `main`. Port the D2 `commcell_info` enrichment from test/parity-support into PRODUCTION, called from `result_to_artifact`, caller-fed. Hard prerequisite for commit 4 (else the promoted path drops `commcell_info`). NO recognition change, NO route switch, NO upload-handler change, NO REST change. Full suite 1282 passed.

@@ -288,7 +288,14 @@ class HTMLExtractor:
                 break
 
         if matched is None:
-            result.errors.append(f"Section '{title_match}' not found")
+            # A declared-but-ABSENT section is not a failure — it is expected for
+            # conditionally-present recipes (e.g. License Summary: a file carries
+            # the table sections XOR the workload sections, never all). Record a
+            # WARNING (like the CSV extractor) so the section is simply omitted,
+            # not a fatal extraction error (ADR-0017 D4: empty ≡ absent). Genuine
+            # misconfiguration (missing selector/title_match) and a malformed
+            # title-without-table stay result.errors.
+            result.warnings.append(f"Section '{title_match}' not found")
             return None
 
         # Walk up to the nearest ancestor that scopes a table (≤5 levels). This

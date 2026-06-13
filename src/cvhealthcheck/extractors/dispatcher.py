@@ -44,6 +44,7 @@ def extract_file(
     subject_id: str | None = None,
     version: int | None = None,
     declared_commcell_id: str | None = None,
+    declared_commcell_name: str | None = None,
 ) -> DispatchResult:
     """
     Identify the file and run the appropriate extractor.
@@ -54,6 +55,10 @@ def extract_file(
     customer's CommCell ID, threaded from the upload route so the canonical
     artifact stamps a declared-vs-wire verdict (PROVENANCE, never blocks)
     instead of being blanket-unverifiable. None when no customer CCID is set.
+
+    ``declared_commcell_name`` (ADR-0017 D2) is the active customer's declared
+    CommServe NAME — the top-tier identity for the commcell_info enrichment seam
+    (declared context > report evidence > placeholder). None when unset.
     """
     if subject_id is not None:
         # Resolve the subject's ACTIVE version when the caller doesn't pin one.
@@ -167,6 +172,7 @@ def extract_file(
         subject_title=rec.title,
         file_path=file_path,
         commcell_id=declared_commcell_id,
+        commcell_name=declared_commcell_name,
     )
     return DispatchResult(
         recognized=True,

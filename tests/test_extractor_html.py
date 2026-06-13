@@ -263,10 +263,10 @@ def test_license_summary_extract_empty(
 
 
 # ---------------------------------------------------------------------------
-# Test 5 — missing section produces an error; others still extracted
+# Test 5 — a declared-but-absent section is a WARNING (not a fatal error)
 # ---------------------------------------------------------------------------
 
-def test_section_not_found(extractor: HTMLExtractor, tmp_path: Path) -> None:
+def test_section_not_found_is_warning_not_error(extractor: HTMLExtractor, tmp_path: Path) -> None:
     # All SA sections except "Hardening"
     html = build_security_assessment_html([
         {"title": t, "rows": _SA_DATA_ROWS[:1]}
@@ -277,13 +277,54 @@ def test_section_not_found(extractor: HTMLExtractor, tmp_path: Path) -> None:
 
     result = extractor.extract(html_path, "security_assessment")
 
-    hardening_errors = [e for e in result.errors if "Hardening" in e]
-    assert hardening_errors, f"Expected error for missing 'Hardening' section, got: {result.errors}"
+    # ADR-0017 4a: a declared-but-absent section is a WARNING, not a fatal error
+    # (empty ≡ absent). It is simply omitted; the file still imports. This also
+    # makes a partial SA import more robust (was a hard failure before).
+    hardening_warnings = [w for w in result.warnings if "Hardening" in w]
+    assert hardening_warnings, f"Expected a warning for missing 'Hardening', got: {result.warnings}"
+    assert not [e for e in result.errors if "Hardening" in e]  # no longer fatal
 
-    # Other sections extracted correctly
+    # Other sections extracted correctly; the missing one is absent
     assert "security_assessment.access_security" in result.sections
     assert len(result.sections["security_assessment.access_security"]) == 1
     assert "security_assessment.hardening" not in result.sections
+
+
+def test_misconfigured_section_missing_selector_still_errors() -> None:
+    # The non-fatal change is SCOPED to "declared-but-absent". A genuinely
+    # misconfigured section (no selector / no title_match) STILL errors.
+    from cvhealthcheck.extractors.html import ExtractionResult, HTMLExtractor
+
+    ex = HTMLExtractor(None)  # _find_section_table uses no db state
+    result = ExtractionResult(subject_id="x", source_type="html")
+    soup = BeautifulSoup("<html><body><table></table></body></html>", "html.parser")
+
+    out = ex._find_section_table(soup, selector="", title_match="", section_id="bad", result=result)
+
+    assert out is None
+    assert any("missing selector or title_match" in e for e in result.errors)
+    assert not result.warnings  # a config error is an ERROR, not a tolerated warning
+
+
+def test_absent_section_records_warning_not_error() -> None:
+    # The complementary case: a well-configured section whose title is simply not
+    # in the document → WARNING, no error.
+    from cvhealthcheck.extractors.html import ExtractionResult, HTMLExtractor
+
+    ex = HTMLExtractor(None)
+    result = ExtractionResult(subject_id="x", source_type="html")
+    soup = BeautifulSoup(
+        '<html><body><div class="reportstabletitle">Present</div>'
+        "<table></table></body></html>",
+        "html.parser",
+    )
+
+    out = ex._find_section_table(
+        soup, selector=".reportstabletitle", title_match="Absent", section_id="s", result=result)
+
+    assert out is None
+    assert any("not found" in w for w in result.warnings)
+    assert not result.errors
 
 
 # ---------------------------------------------------------------------------

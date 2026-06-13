@@ -363,6 +363,74 @@ def test_dispatcher_with_explicit_subject_id(
     assert isinstance(result.artifact, CanonicalArtifact)
 
 
+# ---------------------------------------------------------------------------
+# ADR-0017 4a: generic dispatcher tolerates absent declared sections + threads
+# the declared CommServe name (no single LS file has all declared sections).
+# ---------------------------------------------------------------------------
+
+def build_ls_other_agent_only_html() -> str:
+    """other + agent tables, NO workload sections (the recipe's 6 workload sections
+    are declared-but-absent here)."""
+    return (
+        '<html><head><title>License summary</title></head><body>'
+        '<div class="reportstabletitle">Other Licenses - current usage details</div>'
+        "<table><thead><tr><th>License</th><th>Available Total</th><th>Used</th></tr></thead>"
+        "<tbody><tr><td>Dedup</td><td>25 TB</td><td>10 TB</td></tr></tbody></table>"
+        '<div class="reportstabletitle">Agent and Feature Licenses</div>'
+        "<table><thead><tr><th>License</th><th>Permanent Total</th><th>Permanent Used</th>"
+        "<th>Term Total</th><th>Term Used</th></tr></thead>"
+        "<tbody><tr><td>Database</td><td>25</td><td>8</td><td>5</td><td>2</td></tr></tbody></table>"
+        "</body></html>"
+    )
+
+
+def test_extract_file_workload_only_produces_artifact(
+    recog_db: sqlite3.Connection, tmp_path: Path
+) -> None:
+    f = tmp_path / "workload.html"
+    f.write_text(build_ls_workload_heavy_html(), encoding="utf-8")
+
+    result = extract_file(f, recog_db, subject_id="license_summary")
+
+    # absent other/agent table sections are warnings, NOT fatal — artifact produced
+    assert isinstance(result.artifact, CanonicalArtifact)
+    assert not result.extraction_errors
+    assert any("not found" in w for w in result.extraction_warnings)
+    assert any(s.id == "capacity_licenses" for s in result.artifact.sections)
+
+
+def test_extract_file_other_agent_only_produces_artifact(
+    recog_db: sqlite3.Connection, tmp_path: Path
+) -> None:
+    f = tmp_path / "oa.html"
+    f.write_text(build_ls_other_agent_only_html(), encoding="utf-8")
+
+    result = extract_file(f, recog_db, subject_id="license_summary")
+
+    # absent workload sections are warnings, NOT fatal — artifact produced
+    assert isinstance(result.artifact, CanonicalArtifact)
+    assert not result.extraction_errors
+    assert any(s.id == "other_licenses" for s in result.artifact.sections)
+    assert any("not found" in w for w in result.extraction_warnings)
+
+
+def test_extract_file_threads_declared_commcell_name(
+    recog_db: sqlite3.Connection, tmp_path: Path
+) -> None:
+    # ADR-0017 D2 top tier: a declared CommServe name reaches result_to_artifact
+    # via extract_file → commcell_info shows the DECLARED name, not the placeholder.
+    f = tmp_path / "workload.html"
+    f.write_text(build_ls_workload_heavy_html(), encoding="utf-8")
+
+    result = extract_file(
+        f, recog_db, subject_id="license_summary", declared_commcell_name="DeclaredCS")
+
+    ci = [s for s in result.artifact.sections if s.id == "commcell_info"]
+    assert ci, "commcell_info enrichment did not fire on the dispatcher path"
+    name = next(it.value for it in ci[0].items if it.id == "commcell_name")
+    assert name == "DeclaredCS"
+
+
 # Tests 10-13 (POST /quick-hc/import direct-save, ?stage=1, unrecognized,
 # not-extractable) were deleted in session 4 of the unified-upload
 # refactor. They exercised behavior specific to the deleted generic

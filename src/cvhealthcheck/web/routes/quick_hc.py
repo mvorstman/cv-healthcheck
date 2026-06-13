@@ -775,15 +775,22 @@ def _unified_dispatcher_upload(subject_id: str):
         # unverifiable. The bespoke LS handler is a SEPARATE path (_handle_system_
         # upload) and is deliberately NOT touched here.
         try:
-            declared_ccid = normalize_commcell_id(
-                get_active_customer(db).get("commcell_id")
-            )
-        except (ValueError, ActiveProjectMissingError):
+            _customer = get_active_customer(db)
+        except ActiveProjectMissingError:
+            _customer = {}
+        try:
+            declared_ccid = normalize_commcell_id(_customer.get("commcell_id"))
+        except ValueError:
             declared_ccid = None
+        # ADR-0017 D2: also thread the declared CommServe NAME so commcell_info's
+        # top-tier identity (declared context) fires live — not just report
+        # evidence / placeholder. commserve_name, NEVER customer_name (Fix-3).
+        declared_name = _customer.get("commserve_name") or None
 
         dispatch = extract_file(
             tmp_path, db, subject_id=subject_id,
             declared_commcell_id=declared_ccid,
+            declared_commcell_name=declared_name,
         )
 
         if not dispatch.recognized:
