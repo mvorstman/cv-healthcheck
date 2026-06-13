@@ -1,4 +1,4 @@
-# HANDOVER — ADR-0015 redesign slice 1 done (artifact-approval deleted); compile gate next
+# HANDOVER — License Summary CSV/HTML upload promoted to the generic declarative path (ADR-0017, live + browser-verified); next high-value move is a NEW subject
 
 You are continuing development on **cv-healthcheck**, a modular Commvault
 operational health check platform (Python/Flask, Pydantic v2 canonical
@@ -6,18 +6,55 @@ artifact schema, MCP server for AI-assisted subject authoring).
 
 ## Current state
 
-- **Branch:** `main`
-- **Local HEAD:** ADR-0015 slice 1 (`e9acf2e`/`6971734`/`a12d59e`/`03f00c4` +
-  a docs commit) — **1075 tests green** (full pytest, exit 0).
-- **UNPUSHED:** slice 1's commits are local-only — **awaiting Michiel's review +
-  a browser check** (proposal-publish still works; collect still lands scoped +
-  verified) before push. The provenance-arc commits below are already pushed
-  (`b78f897`).
-- **In flight:** ADR-0015 redesign, slice 1 done (see "Next architectural focus").
-- **Completed (the provenance arc, pushed, LIVE-VERIFIED):** Fix 2 (unscoped
-  global-file layer retired), D5 (Context Integrity enforced at the write
-  layer), Fix 3 (identity-schema split), the evidence-context foundation, and
-  **Fix 4 (declared-vs-wire CommCell ID guard)** — ground-truth block below.
+- **Branch:** `main`. **HEAD = `a334b8f`** (all pushed; `HEAD == origin/main`).
+- **Tests:** full pytest **1289 green** (exit 0); LS generic-vs-bespoke parity
+  **738 / 0** over the distinct real-export corpus.
+- **Just completed — the License Summary CSV/HTML UPLOAD de-bespoking (ADR-0017),
+  live + browser-verified.** See the dedicated section below.
+- **Completed earlier (the provenance arc, pushed, LIVE-VERIFIED):** Fix 2
+  (unscoped global-file layer retired), D5 (Context Integrity enforced at the
+  write layer), Fix 3 (identity-schema split), the evidence-context foundation,
+  **Fix 4 (declared-vs-wire CommCell ID guard)** — ground-truth block below — and
+  the **ADR-0015 compile/publish gate** (now live: the LS recipe publishes through
+  it; `db/compile_gate.py`).
+
+## License Summary upload promotion (ADR-0017) — DONE, browser-verified
+
+LS **CSV/HTML upload** is promoted to the generic declarative path
+(`extract_file → result_to_artifact`), replacing the bespoke upload. The commit
+arc, in order:
+
+| Step | What | Commit |
+|---|---|---|
+| recipe → migration | generic recipe authored in `src/` + generated SQL migration `0034` (drift-guarded; `subject_id=license_summary`, bare section ids) | `cc86df1` |
+| D2 → live | `commcell_info` enrichment moved into the live `result_to_artifact` seam (caller-fed identity) | `9d673b9` |
+| recognition | broadened (`.reportstabletitle, h2`; dropped exact `table_count` + `first_table_headers`) | `ab12157` |
+| 4a extraction/threading | declared-but-absent HTML section → warning (not fatal); `commcell_name` threaded through `extract_file` | `7020e8b` |
+| 4b route switch | `UPLOAD_HANDLERS["license_summary"]` removed → generic dispatcher; field auto-aligns to `"file"` | `a42ce43` |
+| routing cleanup | retired the bespoke upload orchestrator/handler/scaffolding/vestigial re-exports/dead xlsx entry | `a334b8f` |
+
+**Browser-verified live** on the **workload-only HTML**
+(`License summary_2026-05-28-11-12-42.html`) — the file the bespoke parser
+*cannot* import (its guard counts only other/agent rows, ignoring workload
+sections), so its success is **unambiguous proof the generic path is live**. CSV
+also verified; `commcell_info` enriched; `registration_code` masked.
+
+### Boundaries (what is and isn't done)
+
+- **LS REST collect REMAINS bespoke** — parity-UNCOVERED, and it shares
+  `normalize` / `models` / adapter / `persist_license_summary_artifact` /
+  `collect_rest`. Migrating it is **its own later slice and possibly a PRODUCT
+  DECISION** (migrate + prove a generic REST path, or retire LS REST-collect
+  entirely) — NOT just a parity exercise.
+- **`import_html.py` is RETAINED as a parity/test reference only** (not a live
+  upload path): 4 `parse_license_summary_html` unit tests + the parity harness's
+  `bespoke_canonical` depend on it.
+- **`_handle_system_upload` generic infra is retained but DORMANT** — LS was the
+  last `UPLOAD_HANDLERS` registrant, so `UPLOAD_HANDLERS == {}`. Named backlog:
+  add synthetic-handler coverage when a subject next registers one.
+- **Parity harness is still generic-vs-bespoke** (738 / 0). Converting it to
+  generic-vs-golden-fixtures is a parked **option-(b)** modernization, only
+  if/when `import_html.py` is retired.
 
 ## Verified Ground Truth — Fix 4 Live Validation (2026-06-13)
 
@@ -87,9 +124,19 @@ params; `.staging-badge-approved` CSS. Named in the CHANGELOG slice-1 entry.
 
 ## Deferred / named register (none of these is forgotten)
 
-- **License Summary verification** — Fix-4 v1 scoped it out (LS collects via a
-  bespoke service path, not `result_to_artifact`; its artifacts carry no
-  verdict, handled as None). Wire it into the same seam later.
+- **License Summary REST collect — migration / product decision (named).** LS
+  CSV/HTML upload is now generic (ADR-0017, above); LS **REST collect** still runs
+  the bespoke service path (parity-UNCOVERED, shares normalize/models/adapter/
+  persist/collect_rest). Its own later slice: migrate + prove a generic REST path,
+  OR retire LS REST-collect — a product decision, not just a parity exercise.
+  (Upload now goes through `result_to_artifact`, so the Fix-4 declared-vs-wire
+  verdict IS stamped on LS upload artifacts; the REST path's verdict wiring rides
+  with that migration.)
+- **Dormant `_handle_system_upload` machinery** — `UPLOAD_HANDLERS == {}` (LS was
+  the last registrant). Retained as reusable infra but now untested; add
+  synthetic-handler coverage when a subject next registers one.
+- **Parity-harness option (b)** — convert generic-vs-bespoke to
+  generic-vs-golden-fixtures, only if/when `import_html.py` retires (parked).
 - **RP scoping-id auto-resolution** — `rp_scoping_id` column exists (Fix 3);
   resolving it live (#34 dataset-GUID portability) is future work.
 - **`commcell_hostname` legacy-column drop** + removal of the read-time
@@ -136,8 +183,11 @@ Growth_20and_20Trends_2026-06-13-11-05-38.html (charts_only — refused honestly
   deletion orphaned (zero bindings across all subjects + zero overrides,
   scoped to the deleted subject's own refs); re-proposing without
   `supersedes` creates duplicate actives — be careful with all of these.
-- Keep the legacy builder path working; LS/security_assessment conversion is
-  a Later item gated by the ADR-0006 D5 re-assessment.
+- LS **upload** + security_assessment upload are now both on the generic
+  declarative path. The remaining bespoke LS surface (REST collect + the
+  retained `import_html.py`/`import_csv`/`normalize`/`models`/adapter that back
+  it and the parity harness) STAYS until the REST migration/product decision —
+  do not delete it as "legacy."
 
 ## Operational notes
 
@@ -151,7 +201,7 @@ Growth_20and_20Trends_2026-06-13-11-05-38.html (charts_only — refused honestly
 ## Validation
 
 - `python -m compileall src`
-- `venv/bin/python -m pytest` (1075 must keep passing)
+- `venv/bin/python -m pytest` (1289 must keep passing)
 - Never gate a commit on piped pytest output — check the exit code.
 
 ## Commit granularity

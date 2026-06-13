@@ -1,11 +1,35 @@
 # ADR-0017: License Summary canonical parity target — what "parity" proves
 
-**Status:** Proposed
-**Date:** 2026-06-13
+**Status:** Accepted (2026-06-14) — REALIZED for the CSV/HTML upload path; LS
+REST-collect retirement tracked as a separate slice (see Realization).
+**Date:** 2026-06-13 (proposed); 2026-06-14 (accepted)
 **Relations:** Closes the loop on ADR-0016 (the transform layer that makes the
 generic LS recipe possible) and feeds the ADR-0016 build order's final steps (LS
 conversion → parity proof → retire bespoke LS). Builds on the Fix-3/Fix-4
 identity/provenance work (the enrichment seam, D2).
+
+## Realization (2026-06-14)
+
+The decided parity target is **realized**: the generic recipe was authored
+against it and the **live** CSV/HTML upload path matches it, browser-verified on
+a real workload-heavy export the bespoke parser could not import. Parity is
+**738 / 0** over the distinct real-export corpus; D1–D8, the B1/B2 comparator
+fixes, and the titleless-fixture exclusion all hold.
+
+Acceptance-criteria status (vs the Consequences list below):
+- generic recipe converts ✓ · parity holds ✓ · B2 unit-parse resolved ✓ ·
+  "Other Licenses" residual (b) resolved (sample via `.reportstabletitle, h2`;
+  5 titleless fixtures named-excluded) ✓ · enrichment seam supplies
+  `commcell_info` ✓.
+- "bespoke LS path retired with no regression" — met **for the upload path**
+  (orchestrator/handler/scaffolding removed; `import_html.py` kept only as a
+  parity/test reference). **LS REST collect remains bespoke** (parity-uncovered;
+  shares normalize/models/adapter/persist/collect_rest) — its retirement is a
+  separate slice / product decision, NOT a regression of this ADR's target.
+
+Commit arc: `cc86df1` (recipe→migration) · `9d673b9` (D2 live) · `ab12157`
+(recognition) · `7020e8b` (4a extraction/threading) · `a42ce43` (route switch) ·
+`a334b8f` (routing cleanup).
 
 ---
 

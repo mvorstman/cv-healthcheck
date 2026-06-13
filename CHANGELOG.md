@@ -10,6 +10,28 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-14 (docs — record the LS upload promotion + boundaries; ADR-0017 Accepted)
+
+**Branch:** `main`. Docs only — no code change.
+
+- **`docs/adr/0017-…md`:** Status **Proposed → Accepted (2026-06-14)** with a
+  **Realization** section: the parity target is realized (live CSV/HTML upload
+  matches it, browser-verified, parity 738/0; D1–D8 + B1/B2 + titleless-exclusion
+  hold). The one criterion met only in part — "bespoke LS path retired" — is
+  scoped to the **upload** path; LS REST-collect retirement is a separate slice
+  (not a regression of the target). Commit arc recorded.
+- **`HANDOVER.md`:** retitled to the LS upload promotion; current state refreshed
+  (HEAD `a334b8f`, 1289 tests, parity 738/0); a dedicated "LS upload promotion
+  (ADR-0017)" section with the commit arc + boundaries (REST stays bespoke;
+  `import_html.py` retained as parity/test reference; `_handle_system_upload`
+  dormant; parity option-(b) parked); deferred register + validation count updated.
+- **`ROADMAP.md`:** Current State gains the LS declarative-upload milestone; new
+  **Strategic Inflection** note (platform proven to represent a real complex
+  subject end-to-end → next high-value move is a NEW subject, i.e. product
+  development, not platform-building); the "Later" LS-conversion entry updated
+  (upload COMPLETE; REST-collect migration / product decision remains; #36 SA-module
+  retirement still gated on LS REST).
+
 ## 2026-06-14 (refactor — ADR-0017 LS bespoke upload ROUTING cleanup, option (a))
 
 **Branch:** `main`. Browser verify passed (workload-only HTML + CSV both import via the generic route; the workload-only HTML succeeding is proof the generic path is live, since bespoke cannot import it). Retire ONLY the live upload-specific, now-unused, parity-backed bespoke routing. NO parity-harness conversion, NO `import_html.py` deletion, NO REST/shared-code deletion. Full suite 1289 passed; parity 738/0.

@@ -19,6 +19,24 @@ Capability terms, not a feature log — the per-task history lives in `CHANGELOG
 - Row-scope rules engine with version-aware comparison; live evaluation on `/quick-hc`
 - Persistent artifact registry; customer/project scoping; application state in `app.db`
 - Quick HC report-composition surface
+- **License Summary CSV/HTML upload promoted to the generic declarative path
+  (ADR-0017) — live, browser-verified** on a real workload-heavy export the
+  bespoke parser could not import. First end-to-end de-bespoking of a real,
+  structurally complex subject (recipe transform layer, compile gate, parity).
+
+## Strategic Inflection (recorded 2026-06-14)
+
+The platform is now **proven to represent a real, complex subject end-to-end** —
+License Summary, fully declarative, live, and browser-verified (the
+workload-heavy export the bespoke parser *could not* import succeeded via the
+generic path). The question *"can the platform represent a real subject without
+bespoke code?"* is answered: **yes**.
+
+The next high-value move is therefore a **NEW SUBJECT on the proven foundation —
+product development on the platform, not more platform-building** — rather than
+further License-Summary edge-polish. The remaining LS work (REST-collect
+migration) is a contained product decision, not a prerequisite for building new
+subjects.
 
 ## Strategic Themes
 
@@ -58,12 +76,15 @@ report-identity / dataset-GUID portability (#34) here.
 
 *Status: Proposed.*
 
-- **LS + security_assessment declarative conversion** — gated by the ADR-0006
-  D5 re-assessment. This subsumes backlog #36: the SA canonical read is
-  already generic, but License Summary is structurally welded to the SA
-  module (runs on the SA `ArtifactRegistry` alias; shares 7 SA model
-  classes), so the SA module cannot be retired without the LS conversion —
-  #36 is an LS-coupled decision, not an API cleanup.
+- **LS declarative conversion — CSV/HTML upload COMPLETE (ADR-0017).** Remaining
+  LS work is the **REST-collect migration** (its own slice / product decision:
+  migrate + prove a generic REST path, or retire LS REST-collect). LS REST collect
+  is still bespoke and shares the retained `normalize`/`models`/adapter/`persist`/
+  `collect_rest`; `import_html.py` is kept only as a parity/test reference.
+- **#36 SA-module retirement** — still gated on the LS REST-collect migration: LS
+  REST is structurally welded to the SA module (runs on the SA `ArtifactRegistry`
+  alias; shares SA model classes), so the SA module can't be retired until LS REST
+  is migrated or retired. The SA canonical read + SA upload are already generic.
 - **Growth & Trends (report 318)** as the first composite-address subject.
 - **Probe oversized-response handling** (1MB Desktop cap).
 - **Set-CVJobRetention.ps1 un-retain opType capture.**
