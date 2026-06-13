@@ -10,6 +10,19 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat — ADR-0016 transform layer slice 5: metadata_pairs)
+
+**Branch:** `main`. Fifth transform-layer slice — the `metadata_pairs` section format only. NOT computed sections (slice 6), the compile gate, the LS recipe, or `number_with_unit` changes. Suite 1184 passed (+17). Parity harness over the 38 unchanged.
+
+### Added
+- **`metadata_pairs` section format** (CSV + HTML) — deterministic exact-label → value extraction from scattered `label: value` rows/lines. `label_map` maps a source label → canonical field. Matching is **trim-only, case-sensitive exact** (a case-only difference does NOT match); NO regex / fuzzy / hierarchical / multi-line (ADR-0016 §1c). Each mapped field uses the SAME closed registry, transforms, and unknown-transform + sensitive-field enforcement as table sections: `extract_metadata_pairs` feeds a label→value map through `resolve_columns(case_sensitive=True)` + `extract_row` — **one registry, one enforcement point, two formats feeding it** (no metadata_pairs-specific copy).
+- **`split_label_value`** (first-colon split, trims both sides, value keeps later colons), a `case_sensitive` flag on `resolve_columns`, and `_extract_metadata_pairs` on both extractors (CSV: a `[label, value]` 2-cell row or a `label: value` single cell; HTML: `label: value` text lines; first occurrence wins, deterministic).
+- **`tests/test_metadata_pairs.py`** (17) — split helper; exact match; case-difference → no match; whitespace trim; unknown label ignored; absent label → no key; transform chain via the shared registry; `registration_code` without mask → `SensitiveFieldError`; with mask → masked; a raw reg-code → fail-closed (not leaked); CSV + HTML end-to-end; HTML case-mismatch → nothing matched.
+
+### Notes
+- `registration_code` is a scattered metadata pair, so `metadata_pairs` is its primary real use — the sensitive-field gate fires identically here (proven end-to-end: a `registration_code` metadata_pairs recipe without mask raises on extract).
+- NOT done: computed sections (slice 6), the compile gate, the LS recipe.
+
 ## 2026-06-13 (feat — ADR-0016 transform layer slice 4: number_with_unit)
 
 **Branch:** `main`. Fourth transform-layer slice — `number_with_unit` only. NOT metadata_pairs (slice 5), computed sections, `to_float_percent` (spec'd-blocked, no corpus sample), header-unit extraction (deferred `unit_from_coalesce_source_name`), or the LS recipe. Suite 1167 passed (+15). Parity harness over the 38 unchanged.

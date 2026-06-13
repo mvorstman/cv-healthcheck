@@ -43,7 +43,12 @@ from typing import Any
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
-from cvhealthcheck.extractors.column_map import extract_row, resolve_columns
+from cvhealthcheck.extractors.column_map import (
+    extract_metadata_pairs,
+    extract_row,
+    resolve_columns,
+    split_label_value,
+)
 
 
 @dataclass
@@ -148,6 +153,21 @@ class HTMLExtractor:
                 continue
 
             output_as = extraction.get("output_as", "table")
+
+            if extraction.get("format") == "metadata_pairs":
+                rows, mp_warnings = self._extract_metadata_pairs(
+                    soup, extraction, extraction.get("null_values", []), section_id
+                )
+                result.warnings.extend(mp_warnings)
+                if not rows:
+                    result.warnings.append(
+                        f"Section '{section_id}' metadata_pairs matched no labels"
+                    )
+                result.sections[section_id] = rows
+                result.section_output_types[section_id] = output_as
+                result.section_titles[section_id] = section_title
+                continue
+
             title_selector = extraction.get("section_title_selector", "")
             title_match = extraction.get("section_title_match", "")
             column_map = extraction.get("column_map", [])
@@ -345,3 +365,31 @@ class HTMLExtractor:
                 result_rows.append(row_dict)
 
         return result_rows, warnings
+
+    # ------------------------------------------------------------------
+    # metadata_pairs (ADR-0016 slice 5)
+    # ------------------------------------------------------------------
+
+    def _extract_metadata_pairs(
+        self,
+        soup: BeautifulSoup,
+        extraction: dict,
+        null_values: list[str],
+        section_id: str,
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        warnings: list[str] = []
+        label_map = extraction.get("label_map", [])
+
+        # Scattered "label: value" lines anywhere in the document text. First
+        # occurrence wins (deterministic); exact-case label, trim only.
+        pairs: dict[str, str] = {}
+        for line in soup.get_text("\n", strip=True).splitlines():
+            pv = split_label_value(line.strip())
+            if pv is not None:
+                pairs.setdefault(pv[0], pv[1])
+
+        row = extract_metadata_pairs(
+            pairs, label_map, section_id=section_id,
+            null_values=null_values, warnings=warnings,
+        )
+        return ([row] if row else []), warnings

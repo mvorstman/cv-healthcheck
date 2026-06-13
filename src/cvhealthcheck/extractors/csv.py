@@ -45,7 +45,13 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from cvhealthcheck.extractors.column_map import extract_row, header_has_all, resolve_columns
+from cvhealthcheck.extractors.column_map import (
+    extract_metadata_pairs,
+    extract_row,
+    header_has_all,
+    resolve_columns,
+    split_label_value,
+)
 from cvhealthcheck.extractors.html import ExtractionResult
 
 
@@ -93,6 +99,10 @@ class CSVExtractor:
             elif fmt == "multi_section":
                 rows, warnings = self._extract_multi_section(
                     rows_raw, extraction, column_map, null_values, section_id
+                )
+            elif fmt == "metadata_pairs":
+                rows, warnings = self._extract_metadata_pairs(
+                    rows_raw, extraction, null_values, section_id
                 )
             else:
                 result.errors.append(f"Unknown CSV format '{fmt}' for section '{section_id}'")
@@ -295,3 +305,39 @@ class CSVExtractor:
                 result_rows.append(row_dict)
 
         return result_rows, warnings
+
+    # ------------------------------------------------------------------
+    # metadata_pairs (ADR-0016 slice 5)
+    # ------------------------------------------------------------------
+
+    def _extract_metadata_pairs(
+        self,
+        rows_raw: list[list[str]],
+        extraction: dict,
+        null_values: list[str],
+        section_id: str,
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        warnings: list[str] = []
+        label_map = extraction.get("label_map", [])
+
+        # Build the exact-case, trimmed label → value map. A row is a pair when it
+        # has a non-empty first+second cell ([label, value]) or a single
+        # "label: value" cell. First occurrence wins (deterministic).
+        pairs: dict[str, str] = {}
+        for row in rows_raw:
+            cells = [c.strip() for c in row]
+            non_empty = [c for c in cells if c]
+            if not non_empty:
+                continue
+            if len(cells) >= 2 and cells[0] and cells[1]:
+                pairs.setdefault(cells[0], cells[1])
+            else:
+                pv = split_label_value(non_empty[0])
+                if pv is not None:
+                    pairs.setdefault(pv[0], pv[1])
+
+        row = extract_metadata_pairs(
+            pairs, label_map, section_id=section_id,
+            null_values=null_values, warnings=warnings,
+        )
+        return ([row] if row else []), warnings

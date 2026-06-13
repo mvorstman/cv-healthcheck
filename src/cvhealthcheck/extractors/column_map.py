@@ -71,6 +71,7 @@ def resolve_columns(
     section_id: str,
     warnings: list[str],
     fuzzy: bool = False,
+    case_sensitive: bool = False,
 ) -> list[ResolvedColumn]:
     """Resolve each column_map entry's source(s) to header indices, in order.
 
@@ -114,10 +115,12 @@ def resolve_columns(
 
         candidates: list[tuple[str, int]] = []
         for src in sources:
-            idx = header_map.get(src.lower())
+            # Table headers match case-insensitively (existing); metadata_pairs
+            # labels match case-sensitively (ADR-0016 slice 5 — exact, not fuzzy).
+            idx = header_map.get(src if case_sensitive else src.lower())
             if idx is None and col_fuzzy and src.startswith("None_"):
                 stripped = src[5:]
-                idx = header_map.get(stripped.lower())
+                idx = header_map.get(stripped if case_sensitive else stripped.lower())
                 if idx is not None:
                     warnings.append(
                         f"Fuzzy-matched '{src}' → '{stripped}' for section '{section_id}'"
@@ -365,3 +368,51 @@ def extract_row(
             raw = cell_texts[idx] if idx < len(cell_texts) else ""
             row[rc.canonical] = _shape_value(raw, rc, null_values, src, section_id, warnings)
     return row
+
+
+# ---------------------------------------------------------------------------
+# metadata_pairs section format (ADR-0016 slice 5)
+#
+# Deterministic exact-label → value extraction from scattered "label: value"
+# rows/lines. Trim-only, CASE-SENSITIVE exact label match — NO regex, fuzzy,
+# hierarchical, or multi-line assembly (ADR-0016 §1c constraint). The label→value
+# map is fed through the SAME resolve_columns + extract_row path (case_sensitive=
+# True), so the closed registry, transforms, unknown-transform check, and
+# sensitive-field enforcement are the ONE shared mechanism — table sections and
+# metadata_pairs both feed it, neither owns a private copy.
+# ---------------------------------------------------------------------------
+
+def split_label_value(text: str) -> tuple[str, str] | None:
+    """Split a single ``label: value`` line on the FIRST colon (the value keeps
+    any later colons). Trims both sides. Returns None when there is no colon or
+    either side is empty — deterministic, no pattern matching."""
+    if ":" not in text:
+        return None
+    label, value = text.split(":", 1)
+    label, value = label.strip(), value.strip()
+    if not label or not value:
+        return None
+    return label, value
+
+
+def extract_metadata_pairs(
+    pairs: dict[str, str],
+    label_map: list[dict],
+    *,
+    section_id: str,
+    null_values: list[str],
+    warnings: list[str],
+) -> dict[str, Any]:
+    """Resolve a ``label_map`` (same shape as a column_map: source=the exact
+    label) against the parsed ``pairs`` (exact-case, trimmed labels → values) and
+    return one canonical row. Routes through resolve_columns(case_sensitive=True)
+    + extract_row so transforms and enforcement are shared. A mapped label absent
+    from ``pairs`` yields no key for that field (null by convention)."""
+    labels = list(pairs.keys())
+    header_map = {label: idx for idx, label in enumerate(labels)}
+    cell_texts = [pairs[label] for label in labels]
+    resolved = resolve_columns(
+        label_map, header_map,
+        section_id=section_id, warnings=warnings, case_sensitive=True,
+    )
+    return extract_row(cell_texts, resolved, null_values, section_id, warnings)
