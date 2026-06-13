@@ -22,6 +22,16 @@ class ArtifactSource(BaseModel):
     # "capacity_license_v2". Optional on read so artifacts predating ADR 0004
     # phase 1 load cleanly; set on every write through result_to_artifact.
     template_version: str | None   = None
+    # Verification-result home (evidence-context foundation, pre-Fix-4). Field
+    # names mirror the staged_artifacts columns for a consistent vocabulary.
+    # All optional/unset — NOTHING populates these yet; Fix 4's declared-vs-wire
+    # check writes them later. Additive: pre-existing artifacts load with these
+    # as None (the home is here so the verdict has somewhere to live, not so a
+    # verdict exists).
+    verification_status:  str | None       = None
+    verification_sources: list[str] | None = None
+    verification_notes:   str | None       = None
+    verified_at:          datetime | None  = None
 
 
 class ArtifactSubject(BaseModel):

@@ -247,3 +247,56 @@ def test_d5_refusal_without_context_preserved(migrated_db_path):
             execute_approval(db, "st_noctx", reviewed_by="t")
     finally:
         db.close()
+
+
+# ── PART 2 (commit 3): verification-result home on ArtifactSource ─────────────
+
+from datetime import datetime, timezone
+
+from cvhealthcheck.artifacts.models import ArtifactSource, CanonicalArtifact
+
+
+def test_artifact_source_defaults_verification_fields_to_none():
+    src = ArtifactSource(type="rest")
+    assert src.verification_status is None
+    assert src.verification_sources is None
+    assert src.verification_notes is None
+    assert src.verified_at is None
+
+
+def test_artifact_round_trips_verification_fields(migrated_db_path, tmp_path):
+    """A fully-populated verification home survives ArtifactStore save/load."""
+    artifact = _mk_artifact("users")
+    src = artifact.source
+    populated = src.model_copy(update={
+        "verification_status": "verified",
+        "verification_sources": ["rest", "csv"],
+        "verification_notes": "declared CCID matched wire",
+        "verified_at": datetime(2026, 6, 13, 9, 0, tzinfo=timezone.utc),
+    })
+    artifact = artifact.model_copy(update={"source": populated})
+
+    store = ArtifactStore("ev_rt_cust", "ev_rt_proj", base_dir=tmp_path / "store")
+    store.save_artifact(artifact)
+    loaded = store.load_latest_artifact("users")
+
+    assert loaded.source.verification_status == "verified"
+    assert loaded.source.verification_sources == ["rest", "csv"]
+    assert loaded.source.verification_notes == "declared CCID matched wire"
+    assert loaded.source.verified_at == datetime(2026, 6, 13, 9, 0, tzinfo=timezone.utc)
+
+
+def test_preexisting_artifact_without_verification_fields_loads(tmp_path):
+    """An artifact JSON predating these fields loads cleanly (additive/optional)."""
+    artifact = _mk_artifact("users")
+    payload = artifact.model_dump(mode="json")
+    # Simulate an on-disk artifact written before the fields existed.
+    payload["source"].pop("verification_status", None)
+    payload["source"].pop("verification_sources", None)
+    payload["source"].pop("verification_notes", None)
+    payload["source"].pop("verified_at", None)
+
+    reloaded = CanonicalArtifact.model_validate(payload)
+    assert reloaded.source.verification_status is None
+    assert reloaded.source.verification_sources is None
+    assert reloaded.source.verified_at is None
