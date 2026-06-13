@@ -10,6 +10,22 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (test/docs — ADR-0017 residual (b): named scope-out + corpus dedup → parity GREEN)
+
+**Branch:** `main`. Formal close of ADR-0017 Open-question residual (b): the 5 titleless synthetic classifier fixtures are excluded from the parity corpus BY NAME, and duplicate upload copies are collapsed to distinct contents, leaving parity green over the real-export corpus.
+
+### Changed (`tests/ls_parity_harness.py`)
+- `EXCLUDED_SYNTHETIC_FIXTURES` — an explicit, per-file, classified list of the 5 titleless fixtures (3× `lab-*`, 2× `License20summary_*`, 142–180 B). Each is `<html><body><table>…</table></body></html>` with the bare `[License, Available Total, Used]` header and NO title markup (no `.reportstabletitle`, no `<h2>`). Reachable only by header-shape recognition — a capability the target deliberately does NOT implement (the header collides with the workload sections; ADR-0017 D3). Not a broad "drop untitled files" rule.
+- `discover_ls_fixtures` now dedups by content hash. The fixture dir IS the live bespoke import dir, so re-uploads accumulate byte-identical copies (one content had 14). The corpus is now the set of DISTINCT export contents — honest signal (each export counted once) and stable across re-uploads. Discovery found **40 saved files → 9 distinct contents (7 LS-bearing + 2 non-LS)**.
+
+### Added
+- **`test_excluded_synthetic_fixtures_exist_on_disk_but_are_scoped_out`** — each named file still exists on disk (list not stale), is exactly the titleless shape (no `.reportstabletitle`, no `<h2>`), and is omitted from the discovered corpus.
+- The corpus signal test now asserts `fail == 0` (was `fail > 0`).
+- Drift-detector constants updated to the distinct-corpus counts: `EXPECTED_CORPUS 41→9`, `EXPECTED_CSV 10→3`, `EXPECTED_HTML 31→6` (deliberate, per the test's own contract).
+
+### Notes — post-scope-out + dedup parity (real corpus): pass 738, fail 0, pending 0
+Residual (b) RESOLVED in two parts: the sample reached via the `.reportstabletitle, h2` selector extension (prior commit `6c398da`); the 5 titleless fixtures named-excluded here. The prior "pass 6246/6944 over 38–40 files" was honest but **inflated by duplicate uploads** — the true corpus is **7 distinct LS exports** (incl. the workload-only 2 MB export that the bespoke HTML upload rejects). Dedup makes that explicit. ADR-0017 Open questions updated.
+
 ## 2026-06-13 (feat/test — ADR-0017 selector extension: <h2>-titled tables reachable (Case A))
 
 **Branch:** `main`. The LS recipe's title selector now also accepts `<h2>`; the HTML extractor associates a section title with the table that FOLLOWS it. Still title-anchored, still exact match — NO header-shape matching. Full suite 1256 passed (+2).

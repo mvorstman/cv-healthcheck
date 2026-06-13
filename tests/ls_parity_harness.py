@@ -28,6 +28,7 @@ conversion, swap in the generic recipe output.
 """
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass, field
 from enum import Enum
@@ -43,6 +44,26 @@ from cvhealthcheck.license_summary.service import persist_license_summary_artifa
 LS_FIXTURE_DIR = Path("data/imports/license_summary")
 _CSV_SUFFIXES = {".csv"}
 _HTML_SUFFIXES = {".htm", ".html"}
+
+# ADR-0017 residual (b) — NAMED scope-out of the 5 titleless synthetic classifier
+# fixtures. Each is a 142–180 byte hand-authored file of the form
+# ``<html><body><table>…</table></body></html>`` carrying the bare
+# ``[License, Available Total, Used]`` header shape and NO title markup of any
+# kind (no ``.reportstabletitle``, no ``<h2>``). They are reachable ONLY by
+# header-shape table recognition — a capability the target architecture
+# deliberately does NOT implement (that header shape collides with the workload
+# sections, which is exactly why the recipe is title-anchored; ADR-0017 D3). They
+# are not representative of real exports (every real export carries a title
+# marker). Excluding them is declining to re-add a retired capability to satisfy
+# unrepresentative fixtures — it is NOT excluding genuine failures. This is an
+# explicit, named, per-file list (not a broad "drop untitled files" rule).
+EXCLUDED_SYNTHETIC_FIXTURES = frozenset({
+    "lab-20260527T203454Z-16397c5c.html",
+    "lab-20260527T203454Z-bfb0be28.html",
+    "lab-20260528T112154Z-488be002.html",
+    "License20summary_2026-05-27-20-16-24-20260528T112154Z-c1f34722.html",
+    "License20summary_2026-05-27-20-16-24-20260528T112802Z-34ea718e.html",
+})
 
 # ADR-0017 D1: unit-bearing value fields are now ACTIVELY COMPARED via a
 # value/unit equivalence (no longer quarantined PENDING-UNIT). The bespoke flat
@@ -114,13 +135,30 @@ class ParityReport:
 # ---------------------------------------------------------------------------
 
 def discover_ls_fixtures(base: Path = LS_FIXTURE_DIR) -> list[Path]:
-    """Every real LS export under ``base`` (csv + html). xlsx (the REST API
-    viewer recording) is a separate source path and is out of scope here."""
-    return sorted(
+    """The parity corpus: the DISTINCT real LS exports under ``base`` (csv + html).
+    xlsx (the REST API viewer recording) is a separate source path, out of scope.
+
+    Two filters define "the real corpus":
+      - the 5 named titleless synthetic classifier fixtures
+        (:data:`EXCLUDED_SYNTHETIC_FIXTURES`) are dropped (ADR-0017 residual (b));
+      - duplicate UPLOADS are collapsed to DISTINCT contents. This dir IS the live
+        bespoke import dir, so re-uploading a file saves another timestamped,
+        byte-identical copy (one content currently has 14 copies). The corpus is
+        the set of distinct export *contents*, not every saved upload — so the
+        parity signal counts each export once and the count is stable across
+        re-uploads (a genuinely new export is a deliberate +1). Deterministic:
+        the lexicographically-first filename represents each content hash."""
+    candidates = sorted(
         p
         for p in base.glob("*")
         if p.is_file() and p.suffix.lower() in (_CSV_SUFFIXES | _HTML_SUFFIXES)
+        and p.name not in EXCLUDED_SYNTHETIC_FIXTURES
     )
+    by_content: dict[str, Path] = {}
+    for p in candidates:
+        digest = hashlib.sha256(p.read_bytes()).hexdigest()
+        by_content.setdefault(digest, p)
+    return sorted(by_content.values())
 
 
 def fixture_format(path: Path) -> str:

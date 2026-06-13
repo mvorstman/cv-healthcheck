@@ -32,7 +32,12 @@ from ls_generic_recipe import (
     publish_ls_recipe,
     run_signal,
 )
-from ls_parity_harness import bespoke_canonical, discover_ls_fixtures
+from ls_parity_harness import (
+    EXCLUDED_SYNTHETIC_FIXTURES,
+    LS_FIXTURE_DIR,
+    bespoke_canonical,
+    discover_ls_fixtures,
+)
 
 _NOW = datetime(2026, 6, 13, 12, 0, tzinfo=timezone.utc)
 
@@ -132,8 +137,31 @@ def test_generic_candidate_runs_over_corpus_and_signal_is_produced(migrated_db_p
     # The comparison ran and produced real pass results (sections that match).
     assert signal["totals"]["pass"] > 0
     # First-signal slice — genuine differences exist and are reported, not hidden.
-    assert signal["totals"]["fail"] > 0
-    assert len(signal["failure_classes"]) > 0
+    # ADR-0017 residual (b): the 5 named titleless fixtures are scoped out, so the
+    # parity corpus is GREEN — every remaining (real-export) fail must be zero.
+    assert signal["totals"]["fail"] == 0
+
+
+# ── ADR-0017 residual (b): the named titleless-fixture scope-out is intentional ──
+
+def test_excluded_synthetic_fixtures_exist_on_disk_but_are_scoped_out():
+    """Each named exclusion is a REAL file on disk (the list is not stale) and is
+    EXACTLY the titleless classifier shape (no .reportstabletitle, no <h2>) — the
+    documented basis for excluding it — and is omitted from the discovered corpus.
+    This pins the scope-out as an explicit, per-file, classified decision — not a
+    broad "drop untitled files" rule."""
+    from bs4 import BeautifulSoup
+
+    discovered = {p.name for p in discover_ls_fixtures()}
+    assert EXCLUDED_SYNTHETIC_FIXTURES, "the named exclusion list must not be empty"
+    for name in EXCLUDED_SYNTHETIC_FIXTURES:
+        path = LS_FIXTURE_DIR / name
+        assert path.is_file(), f"named exclusion no longer on disk: {name}"
+        # classification basis: titleless (no title markup of any kind)
+        soup = BeautifulSoup(path.read_text(encoding="utf-8"), "html.parser")
+        assert not soup.select(".reportstabletitle"), f"{name} has .reportstabletitle"
+        assert not soup.find_all("h2"), f"{name} has an <h2> title"
+        assert name not in discovered, f"{name} should be scoped out of the corpus"
 
 
 # ── "Other Licenses" disambiguation — the recipe matches the table by full title ─

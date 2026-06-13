@@ -168,6 +168,23 @@ FAIL (negative guards).
   this is the "HTML section not found" class, separate from "Other Licenses".
   Residual (a) — RESOLVED by D8: the workload-vs-table id collision is accepted as
   a non-preserved quirk (the target drops the bespoke workload "Other Licenses").
+  Residual (b) — RESOLVED in two parts. **The sample** carries its titles in plain
+  `<h2>` headings (siblings of their tables); the recipe's `section_title_selector`
+  was broadened to `.reportstabletitle, h2` and the extractor now binds a title to
+  the table that FOLLOWS it (still title-anchored, exact match — no header-shape
+  reach), so the sample's tables are reached and parity-clean. **The remaining 5
+  titleless files** (3× `lab-*`, 2× `License20summary_*`, 142–180 B each) are
+  `<html><body><table>…</table></body></html>` with the bare
+  `[License, Available Total, Used]` header and NO title markup of any kind. They
+  are reachable ONLY by header-shape table recognition — a capability the target
+  deliberately does NOT implement (that header shape collides with the workload
+  sections; D3). They are NAMED and excluded from the parity corpus
+  (`EXCLUDED_SYNTHETIC_FIXTURES` in `tests/ls_parity_harness.py`, guarded by
+  `test_excluded_synthetic_fixtures_exist_on_disk_but_are_scoped_out`): synthetic
+  classifier fixtures, not representative of real exports (every real export carries
+  a title marker). This is declining to re-add a retired capability for
+  unrepresentative fixtures — NOT excluding genuine failures. With both parts done,
+  parity is GREEN (0 fail) over the real-export corpus.
 - **D2 enrichment seam**: the mechanism that attaches context identity onto the
   artifact at assembly.
 

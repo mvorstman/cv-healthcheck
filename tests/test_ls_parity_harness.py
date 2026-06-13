@@ -37,11 +37,14 @@ from ls_parity_harness import (  # sibling module (tests/ is on sys.path)
 
 _NOW = datetime(2026, 6, 13, 12, 0, tzinfo=timezone.utc)
 
-# The ADR-0016 acceptance corpus is fixed at 41 real exports; pin it so any
-# change to the corpus is a deliberate, reviewed event (the gate's coverage).
-EXPECTED_CORPUS = 41
-EXPECTED_CSV = 10
-EXPECTED_HTML = 31
+# The ADR-0016 acceptance corpus = DISTINCT real exports (discover_ls_fixtures
+# dedups byte-identical re-uploads and drops the 5 named titleless fixtures). Pin
+# the distinct count so any genuine corpus change is a deliberate, reviewed event.
+# 9 distinct = 7 LS-bearing exports + 2 non-LS (a stray Security-Assessment HTML +
+# the cv_redesign mock, which carry no LS rows and are filtered by run_signal).
+EXPECTED_CORPUS = 9
+EXPECTED_CSV = 3
+EXPECTED_HTML = 6
 
 
 def _table_artifact(rows: list[dict], *, other_count: int = 0) -> CanonicalArtifact:
