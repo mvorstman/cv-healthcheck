@@ -323,63 +323,6 @@ def test_list_staged_artifacts_status_filter_works(patch_db: None) -> None:
     assert [record["stage_id"] for record in rejected_records] == [rejected["stage_id"]]
 
 
-def test_approve_staged_artifact_promotes_to_artifact_store(
-    monkeypatch: pytest.MonkeyPatch,
-    patch_db: None,
-) -> None:
-    saved_artifacts = []
-
-    class FakeArtifactStore:
-        def __init__(self, customer_id: str = "", project_id: str = "") -> None:
-            pass
-
-        def save_artifact(self, artifact):  # type: ignore[no-untyped-def]
-            saved_artifacts.append(artifact)
-            return Path("/tmp/fake.json")
-
-    import cvhealthcheck.db.staging as _staging_mod
-    monkeypatch.setattr(_staging_mod, "ArtifactStore", FakeArtifactStore)
-    staged = server.save_staged_artifact("security_assessment", json.dumps(_artifact_payload()))
-
-    customer_id, project_id = _default_pair()
-    approved = server.approve_staged_artifact(
-        staged["stage_id"], reviewed_by="alice",
-        customer_id=customer_id, project_id=project_id,
-    )
-
-    assert approved["status"] == "approved"
-    assert approved["reviewed_by"] == "alice"
-    assert saved_artifacts
-    assert saved_artifacts[0].artifact_type == "security_assessment"
-
-
-def test_approve_staged_artifact_double_approval_raises(
-    monkeypatch: pytest.MonkeyPatch,
-    patch_db: None,
-) -> None:
-    class FakeArtifactStore:
-        def __init__(self, customer_id: str = "", project_id: str = "") -> None:
-            pass
-
-        def save_artifact(self, artifact):  # type: ignore[no-untyped-def]
-            return Path("/tmp/fake.json")
-
-    import cvhealthcheck.db.staging as _staging_mod
-    monkeypatch.setattr(_staging_mod, "ArtifactStore", FakeArtifactStore)
-    staged = server.save_staged_artifact("security_assessment", json.dumps(_artifact_payload()))
-    customer_id, project_id = _default_pair()
-    server.approve_staged_artifact(
-        staged["stage_id"], reviewed_by="alice",
-        customer_id=customer_id, project_id=project_id,
-    )
-
-    with pytest.raises(ValueError, match="artifact is not pending"):
-        server.approve_staged_artifact(
-            staged["stage_id"], reviewed_by="bob",
-            customer_id=customer_id, project_id=project_id,
-        )
-
-
 def test_reject_staged_artifact_returns_rejected_record(patch_db: None) -> None:
     staged = server.save_staged_artifact("security_assessment", json.dumps(_artifact_payload()))
 
@@ -619,32 +562,6 @@ def test_approve_subject_proposal_marks_staged_row_approved(patch_db: None) -> N
     proposals = server.list_proposed_subjects(status="approved")
     assert len(proposals) == 1
     assert proposals[0]["stage_id"] == result["stage_id"]
-
-
-def test_approve_regular_artifact_still_calls_artifact_store_regression(
-    monkeypatch: pytest.MonkeyPatch,
-    patch_db: None,
-) -> None:
-    saved: list = []
-
-    class FakeArtifactStore:
-        def __init__(self, customer_id: str = "", project_id: str = "") -> None:
-            pass
-
-        def save_artifact(self, artifact):  # type: ignore[no-untyped-def]
-            saved.append(artifact)
-            return Path("/tmp/fake.json")
-
-    import cvhealthcheck.db.staging as _staging_mod
-    monkeypatch.setattr(_staging_mod, "ArtifactStore", FakeArtifactStore)
-    staged = server.save_staged_artifact("security_assessment", json.dumps(_artifact_payload()))
-    customer_id, project_id = _default_pair()
-    approved = server.approve_staged_artifact(
-        staged["stage_id"], customer_id=customer_id, project_id=project_id
-    )
-
-    assert approved["status"] == "approved"
-    assert len(saved) == 1
 
 
 # ── ADR 0004 #35 hardening ──

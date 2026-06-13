@@ -106,28 +106,6 @@ def test_staging_page_returns_200(client) -> None:
     assert "No rejected staged artifacts." in body
 
 
-def test_approve_pending_artifact_redirects(client, db_path: Path) -> None:
-    stage_id = _create_artifact(db_path)
-    response = client.post(
-        f"/quick-hc/staging/{stage_id}/approve",
-        follow_redirects=True,
-    )
-    assert response.status_code == 200
-    body = response.get_data(as_text=True)
-    assert "Approved staged artifact" in body
-
-
-def test_double_approval_flashes_error(client, db_path: Path) -> None:
-    stage_id = _create_artifact(db_path)
-    client.post(f"/quick-hc/staging/{stage_id}/approve")
-    response = client.post(
-        f"/quick-hc/staging/{stage_id}/approve",
-        follow_redirects=True,
-    )
-    assert response.status_code == 200
-    assert "artifact is not pending" in response.get_data(as_text=True)
-
-
 def test_reject_pending_artifact_redirects(client, db_path: Path) -> None:
     stage_id = _create_artifact(db_path)
     response = client.post(
@@ -267,18 +245,6 @@ def test_approve_subject_proposal_marks_staged_artifact_approved(
     conn.close()
 
     assert row["status"] == "approved"
-
-
-def test_approve_regular_artifact_still_works_after_proposal_changes(
-    client, db_path: Path
-) -> None:
-    stage_id = _create_artifact(db_path)
-    response = client.post(
-        f"/quick-hc/staging/{stage_id}/approve",
-        follow_redirects=True,
-    )
-    assert response.status_code == 200
-    assert "Approved staged artifact" in response.get_data(as_text=True)
 
 
 def test_staging_review_loop_survives_dev_tools_retirement() -> None:

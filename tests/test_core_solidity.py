@@ -257,39 +257,6 @@ def test_artifact_source_commcell_fields() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_execute_approval_artifact(tmp_path: Path, migrated_db: sqlite3.Connection) -> None:
-    from cvhealthcheck.quickhc import subject_data_service as sds
-
-    store = ArtifactStore("default", "default", base_dir=tmp_path / "artifacts")
-    artifact = _make_artifact("security_assessment")
-    artifact_json = artifact.model_dump_json()
-
-    create_staged_artifact(
-        migrated_db,
-        "stage-001",
-        "security_assessment",
-        artifact_json,
-        source_type="html",
-    )
-
-    original_store = sds._canonical_store
-    sds._canonical_store = store
-
-    try:
-        result = execute_approval(migrated_db, "stage-001", reviewed_by="tester", store=store)
-    finally:
-        sds._canonical_store = original_store
-
-    assert result["status"] == "approved"
-    assert result["type"] == "artifact"
-    assert result["subject_id"] == "security_assessment"
-
-
-# ---------------------------------------------------------------------------
-# 8. execute_approval for a subject_proposal
-# ---------------------------------------------------------------------------
-
-
 def test_execute_approval_subject_proposal(migrated_db: sqlite3.Connection) -> None:
     proposal = {
         "subject_id": "test_ai_subject",

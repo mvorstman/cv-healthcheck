@@ -5,7 +5,6 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
-from cvhealthcheck.artifacts.models import CanonicalArtifact
 from cvhealthcheck.artifacts.store import ArtifactStore
 
 
@@ -149,28 +148,23 @@ def execute_approval(
     project_id: str | None = None,
     store: ArtifactStore | None = None,
 ) -> dict[str, Any]:
+    """Publish a reviewed SUBJECT PROPOSAL into the catalog — the ADR-0015
+    compile/publish step. This is the only thing approval does now.
+
+    Artifact approval was removed (ADR-0015 redesign slice 1): it was
+    vestigial — collection writes evidence directly to the scoped store,
+    context-gated (D5) and provenance-verified (Fix 4), so approving an
+    artifact added nothing over that write. Only ``subject_proposal`` rows
+    are approvable.
+
+    ``customer_id`` / ``project_id`` / ``store`` are accepted but UNUSED —
+    proposals are catalog-global (Catalog Purity). They remain on the
+    signature so the existing callers (web staging/proposal approve, MCP
+    approve_staged_artifact) are undisturbed this slice; a later cleanup
+    drops them.
+
+    Raises ValueError if not found, not pending, or not a subject_proposal.
     """
-    Execute the approval for a staged artifact.
-
-    D5 (ADR-0015 Context Integrity): an ARTIFACT approval requires explicit
-    ``customer_id`` + ``project_id`` — proof of selection as an input, not an
-    ambient default. Both are validated against existing rows; the store is
-    constructed internally from the pair. ``store`` is retained for tests
-    only — production callers pass the context, never a pre-built store.
-
-    Coherence with the staged row's stamp:
-      - row stamped for a DIFFERENT customer -> ContextMismatchError, nothing
-        written, row untouched;
-      - NULL-stamped row (legacy) -> the approval context wins and BACK-STAMPS
-        the row (customer_id set; the back-stamp recorded in ai_notes).
-
-    SUBJECT-PROPOSAL approvals need no context: the catalog is global by
-    design (Catalog Purity) — a proposal carries no customer data.
-
-    Raises ValueError if not pending or not found.
-    """
-    from cvhealthcheck.context import ContextMismatchError, NoExplicitContextError
-    from cvhealthcheck.db.customers import validate_known_context
     from cvhealthcheck.db.subjects import create_subject_from_proposal
 
     existing = get_staged_artifact(db, stage_id)
@@ -178,78 +172,22 @@ def execute_approval(
         raise ValueError(f"staged artifact not found: {stage_id}")
     if existing["status"] != "pending":
         raise ValueError("artifact is not pending")
+    if existing.get("artifact_type") != "subject_proposal":
+        raise ValueError(
+            "only subject proposals can be approved; artifact approval was "
+            "removed (collection writes evidence directly — ADR-0015 slice 1)"
+        )
 
-    if existing.get("artifact_type") == "subject_proposal":
-        # Catalog-global by design — no customer context involved.
-        proposal = json.loads(existing["artifact_json"])
-        created = create_subject_from_proposal(db, proposal)
-        approve_staged_artifact(db, stage_id, reviewed_by=reviewed_by)
-        return {
-            "type": "subject_proposal",
-            "stage_id": stage_id,
-            "status": "approved",
-            "subject_id": created["subject_id"],
-            "version": created["version"],
-            "title": created["title"],
-        }
-
-    artifact = CanonicalArtifact.model_validate_json(existing["artifact_json"])
-    if store is None:
-        if not customer_id or not project_id:
-            raise NoExplicitContextError(
-                "approving a staged ARTIFACT requires explicit customer_id "
-                "and project_id (the store it lands in); no silent default."
-            )
-        validate_known_context(db, customer_id, project_id)
-        # Coherence-read of the row's CREATION context (migration 0033). When a
-        # row carries its own stamp, that stamp is AUTHORITY — the approval-
-        # supplied context is checked against it (mismatch -> nothing written).
-        # When a row's stamp is NULL (legacy), D5 behaviour is unchanged: the
-        # approval-supplied context is authority and the customer_id is
-        # back-stamped. This is an inert enabler — on the match case the store
-        # built below is identical to D5 (approval context == stamp); the
-        # "approval stops re-asking" UX change is deliberately deferred.
-        stamped_customer = existing.get("customer_id")
-        stamped_project = existing.get("project_id")
-        if stamped_customer and stamped_customer != customer_id:
-            raise ContextMismatchError(
-                f"staged row {stage_id} is stamped for customer "
-                f"{stamped_customer!r} but approval was attempted under "
-                f"{customer_id!r}; nothing written."
-            )
-        if stamped_project and stamped_project != project_id:
-            raise ContextMismatchError(
-                f"staged row {stage_id} is stamped for project "
-                f"{stamped_project!r} but approval was attempted under "
-                f"{project_id!r}; nothing written."
-            )
-        if not stamped_customer:
-            # Legacy NULL-stamped row: the approval context wins; record the
-            # back-stamp on the row (ai_notes — no schema change). D5 logic,
-            # unchanged: customer_id only (project_id back-stamp is not part of
-            # the preserved D5 behaviour).
-            db.execute(
-                "UPDATE staged_artifacts SET customer_id = ?,"
-                " ai_notes = COALESCE(ai_notes, '') || ?"
-                " WHERE stage_id = ?",
-                (
-                    customer_id,
-                    f"\n[customer_id back-stamped to {customer_id!r} at approval {_now()}]",
-                    stage_id,
-                ),
-            )
-            db.commit()
-        store = ArtifactStore(customer_id, project_id)
-    store.save_artifact(artifact)
-    approved = approve_staged_artifact(db, stage_id, reviewed_by=reviewed_by)
+    proposal = json.loads(existing["artifact_json"])
+    created = create_subject_from_proposal(db, proposal)
+    approve_staged_artifact(db, stage_id, reviewed_by=reviewed_by)
     return {
-        "type": "artifact",
+        "type": "subject_proposal",
         "stage_id": stage_id,
         "status": "approved",
-        "subject_id": existing["subject_id"],
-        "artifact_type": existing.get("artifact_type"),
-        "reviewed_at": approved["reviewed_at"] if approved else None,
-        "reviewed_by": reviewed_by,
+        "subject_id": created["subject_id"],
+        "version": created["version"],
+        "title": created["title"],
     }
 
 
