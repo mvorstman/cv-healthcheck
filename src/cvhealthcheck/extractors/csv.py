@@ -45,6 +45,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from cvhealthcheck.extractors.column_map import extract_row, header_has_all, resolve_columns
 from cvhealthcheck.extractors.html import ExtractionResult
 
 
@@ -185,12 +186,11 @@ class CSVExtractor:
         section_id: str,
     ) -> tuple[list[dict[str, Any]], list[str]]:
         warnings: list[str] = []
-        sources_lower = {col["source"].lower() for col in column_map}
 
         header_idx: int | None = None
         for i, row in enumerate(rows_raw):
             cells_lower = {c.strip().lower() for c in row if c.strip()}
-            if sources_lower and sources_lower.issubset(cells_lower):
+            if header_has_all(column_map, cells_lower):
                 header_idx = i
                 break
 
@@ -201,15 +201,16 @@ class CSVExtractor:
         header_cells = [c.strip() for c in rows_raw[header_idx]]
         header_map: dict[str, int] = {c.lower(): idx for idx, c in enumerate(header_cells)}
 
-        resolved = self._resolve_columns(column_map, header_map, section_id, warnings, fuzzy=False)
+        resolved = resolve_columns(
+            column_map, header_map, section_id=section_id, warnings=warnings, fuzzy=False
+        )
 
         result_rows: list[dict[str, Any]] = []
         for row in rows_raw[header_idx + 1:]:
             cells = [c.strip() for c in row]
             if not any(cells):
                 break
-            row_dict, row_warnings = self._extract_row(cells, resolved, null_values, section_id)
-            warnings.extend(row_warnings)
+            row_dict = extract_row(cells, resolved, null_values, section_id, warnings)
             if row_dict:
                 result_rows.append(row_dict)
 
@@ -283,113 +284,14 @@ class CSVExtractor:
         header_map: dict[str, int] = {c.lower(): idx for idx, c in enumerate(header_cells)}
 
         has_fuzzy = any(col.get("fuzzy_match") for col in column_map)
-        resolved = self._resolve_columns(
-            column_map, header_map, section_id, warnings, fuzzy=has_fuzzy
+        resolved = resolve_columns(
+            column_map, header_map, section_id=section_id, warnings=warnings, fuzzy=has_fuzzy
         )
 
         result_rows: list[dict[str, Any]] = []
         for row in target[2:]:
-            row_dict, row_warnings = self._extract_row(row, resolved, null_values, section_id)
-            warnings.extend(row_warnings)
+            row_dict = extract_row(row, resolved, null_values, section_id, warnings)
             if row_dict:
                 result_rows.append(row_dict)
 
         return result_rows, warnings
-
-    # ------------------------------------------------------------------
-    # Column resolution and row extraction
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _resolve_columns(
-        column_map: list[dict],
-        header_map: dict[str, int],
-        section_id: str,
-        warnings: list[str],
-        fuzzy: bool = False,
-    ) -> list[tuple[str, str, str, int]]:
-        resolved: list[tuple[str, str, str, int]] = []
-        for col in column_map:
-            source: str = col.get("source", "")
-            canonical: str = col.get("canonical", source)
-            col_type: str = col.get("type", "string")
-            col_fuzzy: bool = fuzzy or bool(col.get("fuzzy_match"))
-
-            col_idx = header_map.get(source.lower())
-
-            if col_idx is None and col_fuzzy and source.startswith("None_"):
-                stripped = source[5:]
-                col_idx = header_map.get(stripped.lower())
-                if col_idx is not None:
-                    warnings.append(
-                        f"Fuzzy-matched '{source}' → '{stripped}'"
-                        f" for section '{section_id}'"
-                    )
-
-            if col_idx is None:
-                warnings.append(
-                    f"Column '{source}' not found in CSV headers"
-                    f" for section '{section_id}'"
-                )
-                continue
-            resolved.append((source, canonical, col_type, col_idx))
-        return resolved
-
-    @staticmethod
-    def _extract_row(
-        cells: list[str],
-        resolved: list[tuple[str, str, str, int]],
-        null_values: list[str],
-        section_id: str,
-    ) -> tuple[dict[str, Any], list[str]]:
-        warnings: list[str] = []
-        row_dict: dict[str, Any] = {}
-        for _source, canonical, col_type, col_idx in resolved:
-            raw = cells[col_idx] if col_idx < len(cells) else ""
-            value, warn = CSVExtractor._coerce(raw, col_type, null_values, _source, section_id)
-            if warn:
-                warnings.append(warn)
-            row_dict[canonical] = value
-        return row_dict, warnings
-
-    # ------------------------------------------------------------------
-    # Type coercion
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _coerce(
-        raw: str,
-        col_type: str,
-        null_values: list[str],
-        col_name: str,
-        section_name: str,
-    ) -> tuple[Any, str | None]:
-        stripped = raw.strip()
-
-        if stripped in null_values:
-            return None, None
-
-        if col_type == "string":
-            return stripped, None
-
-        if col_type == "integer":
-            try:
-                return int(stripped), None
-            except (ValueError, TypeError):
-                return (
-                    None,
-                    f"Could not coerce '{stripped}' to integer"
-                    f" (col='{col_name}', section='{section_name}')",
-                )
-
-        if col_type == "float":
-            try:
-                return float(stripped), None
-            except (ValueError, TypeError):
-                return (
-                    None,
-                    f"Could not coerce '{stripped}' to float"
-                    f" (col='{col_name}', section='{section_name}')",
-                )
-
-        return stripped, None

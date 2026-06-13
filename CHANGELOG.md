@@ -10,6 +10,21 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat — ADR-0016 transform layer slice 1: source coalesce)
+
+**Branch:** `main`. First transform-layer slice — **coalesce only** (NOT the full registry, NOT mask / number_with_unit / metadata_pairs / computed sections, NOT the LS conversion, NOT compile-gate work). Suite 1109 passed (+14). Parity harness over the 38 unchanged — coalesce lives in the generic extractor, not the bespoke LS path.
+
+### Added
+- **`source` coalesce (`string | list[string]`).** A recipe column's `source` may now be a list: among the candidates, in order, the first present-and-non-empty (and non-null) value wins — no merge / concat / arithmetic (ADR-0016 D4). A string source is unchanged (1:1). New shared resolver `cvhealthcheck/extractors/column_map.py` (`resolve_columns` / `extract_row` / `coerce` / `header_has_all`), imported by BOTH the CSV and HTML extractors so coalesce behaves identically across formats (License Summary imports either — the parity the harness depends on).
+- **`tests/test_column_coalesce.py`** (14 tests) — the five required behaviors (string 1:1 regression; first present; first absent/empty → second; none → null; order honored) at the resolver level, plus end-to-end wiring through the real CSV and HTML extractors.
+
+### Changed
+- **`extractors/csv.py` + `extractors/html.py`** now delegate column resolution / row extraction / coercion to the shared `column_map` module; their duplicated `_resolve_columns` / `_extract_row` / `_coerce` were removed. String-source behavior is identical (the existing extractor suites stay green).
+
+### Notes
+- **Coalesce unblocks (input to the eventual LS conversion — NOT authored here):** the LS workload-summary `entitlement_value` and `used` fields, which the bespoke `_first_present_text` resolves across report-version / license-type column-name variants (`Available Total` / `Available Total (TB)` / `(instances)` / `(users)` / `Permanent Purchased…`). `other_licenses` `available_total` / `used` are single columns and need no coalesce.
+- NOT done (later slices): mask, number_with_unit, to_float_percent, metadata_pairs, computed sections, compile-gate validation, the LS recipe itself.
+
 ## 2026-06-13 (docs — ADR-0016 amendment: number_with_unit resolved, Open Item 1)
 
 **Branch:** `main`. A read-only grounding probe over the LS corpus resolved ADR-0016 Open Item 1; the amendment is recorded in `docs/adr/0016-recipe-transform-layer.md` (stays in 0016, not a new ADR) plus the small harness prune it mandates. Transform implementation NOT started.

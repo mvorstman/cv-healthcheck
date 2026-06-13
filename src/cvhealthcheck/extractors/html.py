@@ -43,6 +43,8 @@ from typing import Any
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
+from cvhealthcheck.extractors.column_map import extract_row, resolve_columns
+
 
 @dataclass
 class ExtractionResult:
@@ -322,20 +324,12 @@ class HTMLExtractor:
             text = cell.get_text(" ", strip=True).strip().lower()
             header_map[text] = idx
 
-        # Resolve column_map entries against actual headers.
-        resolved: list[tuple[str, str, str, int]] = []  # (source, canonical, type, col_idx)
-        for col in column_map:
-            source: str = col.get("source", "")
-            canonical: str = col.get("canonical", source)
-            col_type: str = col.get("type", "string")
-            col_idx = header_map.get(source.lower())
-            if col_idx is None:
-                warnings.append(
-                    f"Column '{source}' not found in table headers"
-                    f" for section '{section_title_match}'"
-                )
-                continue
-            resolved.append((source, canonical, col_type, col_idx))
+        # Resolve column_map entries against actual headers (shared coalesce-aware
+        # resolver, identical to the CSV extractor — ADR-0016 slice 1).
+        resolved = resolve_columns(
+            column_map, header_map,
+            section_id=section_title_match, warnings=warnings,
+        )
 
         # Extract data rows.
         result_rows: list[dict[str, Any]] = []
@@ -343,58 +337,11 @@ class HTMLExtractor:
             cells = row.find_all(["td", "th"])
             if not cells:
                 continue
-            row_dict: dict[str, Any] = {}
-            for _source, canonical, col_type, col_idx in resolved:
-                raw = cells[col_idx].get_text(" ", strip=True) if col_idx < len(cells) else ""
-                value, warn = self._coerce(
-                    raw, col_type, null_values, _source, section_title_match
-                )
-                if warn:
-                    warnings.append(warn)
-                row_dict[canonical] = value
+            cell_texts = [c.get_text(" ", strip=True) for c in cells]
+            row_dict = extract_row(
+                cell_texts, resolved, null_values, section_title_match, warnings
+            )
             if row_dict:
                 result_rows.append(row_dict)
 
         return result_rows, warnings
-
-    # ------------------------------------------------------------------
-    # Type coercion
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _coerce(
-        raw: str,
-        col_type: str,
-        null_values: list[str],
-        col_name: str,
-        section_name: str,
-    ) -> tuple[Any, str | None]:
-        stripped = raw.strip()
-
-        if stripped in null_values:
-            return None, None
-
-        if col_type == "string":
-            return stripped, None
-
-        if col_type == "integer":
-            try:
-                return int(stripped), None
-            except (ValueError, TypeError):
-                return (
-                    None,
-                    f"Could not coerce '{stripped}' to integer"
-                    f" (col='{col_name}', section='{section_name}')",
-                )
-
-        if col_type == "float":
-            try:
-                return float(stripped), None
-            except (ValueError, TypeError):
-                return (
-                    None,
-                    f"Could not coerce '{stripped}' to float"
-                    f" (col='{col_name}', section='{section_name}')",
-                )
-
-        return stripped, None
