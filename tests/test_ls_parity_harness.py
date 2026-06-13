@@ -108,7 +108,10 @@ def test_comparator_reflexive_no_failures_across_corpus():
         )
 
 
-def test_corpus_comparison_has_pass_and_pending_but_no_fail():
+def test_corpus_comparison_no_fail_and_pending_dropped():
+    # ADR-0017 D1: unit/value fields are now actively compared (no longer
+    # quarantined), so PENDING-UNIT has dropped to zero while pass/fail stays
+    # honest (reflexive bespoke-vs-bespoke → all pass, no fail).
     total_pass = total_pending = total_fail = 0
     for path in discover_ls_fixtures():
         report = compare_artifacts(
@@ -119,7 +122,7 @@ def test_corpus_comparison_has_pass_and_pending_but_no_fail():
         total_fail += len(report.failed)
     assert total_fail == 0
     assert total_pass > 0
-    assert total_pending > 0  # unit fields ARE quarantined, not silently skipped
+    assert total_pending == 0  # D1 lifted the unit fields out of PENDING-UNIT
 
 
 # ── the comparator genuinely detects differences (green is meaningful) ────────
@@ -151,16 +154,16 @@ def test_comparator_detects_summary_count_difference():
     )
 
 
-# ── unit fields quarantined PENDING-UNIT, never pass/fail ─────────────────────
+# ── ADR-0017 D1: unit/value fields are now ACTIVELY compared (not quarantined) ─
 
-def test_comparator_quarantines_unit_field_even_when_differing():
+def test_comparator_unit_value_actively_compared_and_fails_on_difference():
     a = _table_artifact([{"license": "L1", "used": 5}])
-    b = _table_artifact([{"license": "L1", "used": 9}])  # differ, but 'used' is unit-class
+    b = _table_artifact([{"license": "L1", "used": 9}])  # genuinely differs
     report = compare_artifacts("f", a, b)
-    assert not report.failed, "a differing unit field must NOT be a FAIL"
+    assert not report.pending, "unit fields are no longer quarantined (D1)"
     assert any(
-        r.field == "used" and r.outcome is Outcome.PENDING_UNIT for r in report.pending
-    )
+        r.field == "used" and r.outcome is Outcome.FAIL for r in report.failed
+    ), "a differing unit value must now FAIL (actively compared)"
 
 
 # ── sensitive-field masking enforced on both sides ───────────────────────────

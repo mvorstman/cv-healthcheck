@@ -28,6 +28,7 @@ conversion, swap in the generic recipe output.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -43,19 +44,14 @@ LS_FIXTURE_DIR = Path("data/imports/license_summary")
 _CSV_SUFFIXES = {".csv"}
 _HTML_SUFFIXES = {".htm", ".html"}
 
-# Canonical field ids that map to ``number_with_unit`` (ADR-0016). Quarantined
-# PENDING-UNIT until that transform is implemented, then compared as {value, unit}
-# (Open Item 1 RESOLVED — Amendment A: units are consistent per quantity across
-# the corpus = 38 (Amendment D) LS exports, so {value, unit} suffices; no
-# base-unit normalization).
-#
-# ``usage_percent`` is deliberately NOT here: the grounding pass found it absent
-# (0/184 rows populate "Used %") and, when present, it is a percentage → it maps
-# to to_float_percent, not number_with_unit (Amendments C/D). Quarantining it only
-# stalled None-vs-None comparisons for nothing.
-UNIT_FIELD_IDS = frozenset(
-    {"available_total", "used", "unit", "entitlement_value"}
-)
+# ADR-0017 D1: unit-bearing value fields are now ACTIVELY COMPARED via a
+# value/unit equivalence (no longer quarantined PENDING-UNIT). The bespoke flat
+# shape — a number plus a separate row `unit` field (other_licenses), or a
+# "N unit" string (workload entitlement) — is treated as equal to the generic
+# nested {value, unit} when their (value, unit) pairs match. The standalone `unit`
+# field is SUBSUMED into these pairs (not compared on its own). number_with_unit is
+# parse-and-keep, no normalization (Amendment A); the corpus is 38 (Amendment D).
+UNIT_VALUE_FIELDS = frozenset({"available_total", "used", "entitlement_value"})
 
 # Canonical field ids that MUST be masked on both sides (security). Not surfaced
 # into the canonical by the bespoke adapter today (masking happens at parse), but
@@ -206,8 +202,11 @@ def run_baseline(
 
 
 # ---------------------------------------------------------------------------
-# Semantic comparator (ADR-0016 parity rules)
+# Semantic comparator (ADR-0016 parity rules + ADR-0017 decided equivalences)
 # ---------------------------------------------------------------------------
+
+_NUM_UNIT_RE = re.compile(r"^(-?[\d,]+(?:\.\d+)?)\s*(.*)$")
+
 
 def _is_masked(value: Any) -> bool:
     """A sensitive value is safe iff it carries no raw content: absent (None)
@@ -223,30 +222,91 @@ def _values_equal(expected: Any, actual: Any) -> bool:
     return str(expected) == str(actual)
 
 
+# ── ADR-0017 D1: value/unit equivalence ──────────────────────────────────────
+
+def _num_norm(value: Any) -> Any:
+    """Numbers (and numeric strings) → float for comparison; non-numeric → the
+    stripped string; None → None."""
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return float(value)
+    s = str(value).strip()
+    try:
+        return float(s.replace(",", ""))
+    except ValueError:
+        return s
+
+
+def _to_unit_pair(operand: Any) -> tuple[Any, Any]:
+    """Normalize a unit-field operand to (value_norm, unit_or_None). Accepts a
+    (value, unit) tuple (bespoke flat: number + the row's separate `unit`), a
+    {value, unit} dict (generic nested), a "N unit" string (bespoke workload
+    text), a bare number, or None."""
+    if operand is None:
+        return (None, None)
+    if isinstance(operand, tuple):
+        value, unit = operand
+    elif isinstance(operand, dict) and "value" in operand:
+        value, unit = operand.get("value"), operand.get("unit")
+    elif isinstance(operand, str):
+        match = _NUM_UNIT_RE.match(operand.strip())
+        if match:
+            value, unit = match.group(1), (match.group(2).strip() or None)
+        else:
+            value, unit = operand, None
+    else:  # bare number
+        value, unit = operand, None
+    return (_num_norm(value), unit or None)
+
+
+def unit_value_equal(left: Any, right: Any) -> bool:
+    """ADR-0017 D1: two unit-bearing values are equal iff their (value, unit)
+    pairs match — regardless of flat (number + separate unit, or "N unit" string)
+    vs nested {value, unit} representation."""
+    return _to_unit_pair(left) == _to_unit_pair(right)
+
+
+def _unit_operand_from_row(row: dict[str, Any], field_id: str) -> Any:
+    """Build a unit-field operand from a row: a dict / string / None passes
+    through (parsed by _to_unit_pair); a bare number is paired with the row's
+    separate `unit` field (the bespoke other_licenses flat shape)."""
+    val = row.get(field_id)
+    if isinstance(val, (dict, str)) or val is None:
+        return val
+    return (val, row.get("unit"))
+
+
 def _classify_field(
-    file: str, section: str, item: str, field_id: str,
-    expected: Any, actual: Any,
-    unit_field_ids: frozenset[str], sensitive_field_ids: frozenset[str],
+    file: str, section: str, item: str, field_id: str, expected: Any, actual: Any,
 ) -> FieldResult:
-    if field_id in unit_field_ids:
-        return FieldResult(
-            file, section, item, field_id, expected, actual, Outcome.PENDING_UNIT,
-            "unit field — number_with_unit return shape unresolved (ADR-0016 Open Item 1)",
-        )
-    if field_id in sensitive_field_ids:
+    # ADR-0017 D6: a sensitive field is equal iff BOTH sides are masked and
+    # NEITHER leaks raw — the mask FORMAT is not compared (generic segment-mask ≡
+    # bespoke first-4/last-4).
+    if field_id in SENSITIVE_FIELD_IDS:
         exp_safe, act_safe = _is_masked(expected), _is_masked(actual)
         if not (exp_safe and act_safe):
             return FieldResult(
                 file, section, item, field_id, expected, actual, Outcome.FAIL,
                 f"RAW sensitive value present (expected_masked={exp_safe}, actual_masked={act_safe})",
             )
-        if _values_equal(expected, actual):
-            return FieldResult(file, section, item, field_id, expected, actual,
-                               Outcome.PASS, "masked-form match")
         return FieldResult(file, section, item, field_id, expected, actual,
-                           Outcome.FAIL, "masked forms differ")
+                           Outcome.PASS, "both masked, raw absent (D6 — mask-format-independent)")
     outcome = Outcome.PASS if _values_equal(expected, actual) else Outcome.FAIL
     return FieldResult(file, section, item, field_id, expected, actual, outcome)
+
+
+def _classify_unit_value(
+    file: str, section: str, item: str, field_id: str,
+    brow: dict[str, Any], crow: dict[str, Any],
+) -> FieldResult:
+    equal = unit_value_equal(
+        _unit_operand_from_row(brow, field_id), _unit_operand_from_row(crow, field_id)
+    )
+    return FieldResult(
+        file, section, item, field_id, brow.get(field_id), crow.get(field_id),
+        Outcome.PASS if equal else Outcome.FAIL, "D1 value/unit equivalence",
+    )
 
 
 def _metric_items(section: Any) -> dict[str, Any]:
@@ -262,6 +322,17 @@ def _row_key(row: dict[str, Any], index: int) -> str:
     return str(name) if name else f"#{index}"
 
 
+def _section_is_empty(section: Any) -> bool:
+    """ADR-0017 D4/F4: a section with no rows is 'no rows of that type' —
+    semantically identical to the section being absent."""
+    if section is None:
+        return True
+    return (
+        len(getattr(section, "items", []) or []) == 0
+        and len(getattr(section, "series", []) or []) == 0
+    )
+
+
 def _compare_summary(
     report: ParityReport, baseline: CanonicalArtifact, candidate: CanonicalArtifact
 ) -> None:
@@ -269,17 +340,12 @@ def _compare_summary(
     act = {m.id: m.value for m in candidate.summary.metrics}
     for mid in sorted(set(exp) | set(act)):
         report.results.append(
-            _classify_field(
-                report.file, "summary", mid, mid,
-                exp.get(mid), act.get(mid),
-                UNIT_FIELD_IDS, SENSITIVE_FIELD_IDS,
-            )
+            _classify_field(report.file, "summary", mid, mid, exp.get(mid), act.get(mid))
         )
 
 
 def _compare_section(
-    report: ParityReport, sid: str, base_sec: Any, cand_sec: Any,
-    unit_field_ids: frozenset[str], sensitive_field_ids: frozenset[str],
+    report: ParityReport, sid: str, base_sec: Any, cand_sec: Any
 ) -> None:
     stype = getattr(base_sec, "type", None)
     if stype != getattr(cand_sec, "type", None):
@@ -292,14 +358,14 @@ def _compare_section(
         exp, act = _metric_items(base_sec), _metric_items(cand_sec)
         for fid in sorted(set(exp) | set(act)):
             report.results.append(_classify_field(
-                report.file, sid, fid, fid, exp.get(fid), act.get(fid),
-                unit_field_ids, sensitive_field_ids))
+                report.file, sid, fid, fid, exp.get(fid), act.get(fid)))
         return
 
     if stype == "table":
         base_rows, cand_rows = _table_rows(base_sec), _table_rows(cand_sec)
-        # Match rows by 'license' key when both sides carry it everywhere;
-        # otherwise fall back to positional matching.
+        # ADR-0017 D4/F3: match rows by 'license' key — this collapses duplicate
+        # rows to the DISTINCT set, so row-multiplicity differences (bespoke drops
+        # dupes, generic surfaces them) are tolerated; the distinct set must match.
         keyed = (
             all(r.get("license") for r in base_rows)
             and all(r.get("license") for r in cand_rows)
@@ -326,9 +392,14 @@ def _compare_section(
                     Outcome.FAIL, "row presence mismatch"))
                 continue
             for fid in sorted(set(brow) | set(crow)):
-                report.results.append(_classify_field(
-                    report.file, sid, item_key, fid, brow.get(fid), crow.get(fid),
-                    unit_field_ids, sensitive_field_ids))
+                if fid == "unit":
+                    continue  # D1: subsumed into the value/unit pairs
+                if fid in UNIT_VALUE_FIELDS:
+                    report.results.append(
+                        _classify_unit_value(report.file, sid, item_key, fid, brow, crow))
+                else:
+                    report.results.append(_classify_field(
+                        report.file, sid, item_key, fid, brow.get(fid), crow.get(fid)))
         return
 
     # Fallback for any other section type — compare serialized form whole.
@@ -341,13 +412,9 @@ def _compare_section(
 
 
 def compare_artifacts(
-    file: str, baseline: CanonicalArtifact, candidate: CanonicalArtifact,
-    *,
-    unit_field_ids: frozenset[str] = UNIT_FIELD_IDS,
-    sensitive_field_ids: frozenset[str] = SENSITIVE_FIELD_IDS,
+    file: str, baseline: CanonicalArtifact, candidate: CanonicalArtifact
 ) -> ParityReport:
-    """Semantic CanonicalArtifact parity per ADR-0016. Returns a ParityReport
-    whose results carry the three outcomes (pass / fail / pending-unit)."""
+    """Semantic CanonicalArtifact parity (ADR-0016 + ADR-0017 equivalences)."""
     report = ParityReport(file=file)
     _compare_summary(report, baseline, candidate)
 
@@ -355,14 +422,20 @@ def compare_artifacts(
     cand_secs = {s.id: s for s in candidate.sections}
     for sid in sorted(set(base_secs) | set(cand_secs)):
         if sid not in base_secs or sid not in cand_secs:
-            report.results.append(FieldResult(
-                file, sid, "", "<section>",
-                "present" if sid in base_secs else "absent",
-                "present" if sid in cand_secs else "absent",
-                Outcome.FAIL, "section presence mismatch"))
+            # ADR-0017 D4/F4: an empty section ≡ an absent section.
+            present = base_secs.get(sid) or cand_secs.get(sid)
+            if _section_is_empty(present):
+                report.results.append(FieldResult(
+                    file, sid, "", "<section>", "absent/empty", "absent/empty",
+                    Outcome.PASS, "empty section ≡ absent section (D4/F4)"))
+            else:
+                report.results.append(FieldResult(
+                    file, sid, "", "<section>",
+                    "present" if sid in base_secs else "absent",
+                    "present" if sid in cand_secs else "absent",
+                    Outcome.FAIL, "section presence mismatch (non-empty)"))
             continue
-        _compare_section(report, sid, base_secs[sid], cand_secs[sid],
-                         unit_field_ids, sensitive_field_ids)
+        _compare_section(report, sid, base_secs[sid], cand_secs[sid])
     return report
 
 

@@ -10,6 +10,21 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (test — ADR-0017 comparator adjustment: decided equivalences in the LS parity harness)
+
+**Branch:** `main`. Harness-side only — adjusts the parity comparator so subsequent LS-recipe parity failures are REAL differences, not comparator artifacts. NOT the LS recipe, no recipe-model change, no bespoke change. Suite 1226 passed (+15).
+
+### Changed (`tests/ls_parity_harness.py`)
+- **D1 value/unit equivalence:** `available_total` / `used` / `entitlement_value` are now ACTIVELY compared (lifted out of PENDING-UNIT) via `unit_value_equal` — bespoke flat (a number + a separate row `unit`, or a `"N unit"` string) is treated as equal to generic nested `{value, unit}` when the (value, unit) pairs match. The standalone `unit` field is subsumed into those pairs (not compared on its own).
+- **D4/F4 empty ≡ absent:** a section with no rows compares EQUAL to an absent section; a non-empty section vs absent still FAILS (no over-equating).
+- **D6 mask-format independence:** the sensitive branch asserts BOTH-masked + raw-absent only — no longer byte-identical masks (generic segment-mask ≡ bespoke first-4/last-4); a raw value on either side still FAILS.
+- **D4/F3 dedup tolerance:** table rows match by `license` key (distinct-set comparison), so duplicate-row multiplicity differences are tolerated where the distinct set matches; a differing distinct set still FAILS.
+
+### Notes
+- Corpus reflexive run (bespoke-vs-bespoke) after the adjustment: **pass 6339, fail 0, PENDING-UNIT 0** (was pass 5251 / pending 1448 — the three value fields moved pending→pass, the `unit` field is subsumed). pass/fail stays honest.
+- New `tests/test_compare_adr0017.py` (15): each equivalence + guards that the comparator still FAILS on genuine differences (value diff, missing field, wrong content). Two existing harness self-tests updated (pending now 0; unit fields actively compared).
+- NOT done: the LS recipe (next, authored against this adjusted comparator).
+
 ## 2026-06-13 (feat — ADR-0015 compile gate: publish-time recipe validation, transform-aware)
 
 **Branch:** `main`. The ADR-0015 compile/publish gate, built transform-aware per ADR-0016 D2 — runs at the publish chokepoint before any write and rejects a proposal whose recipe fails validation, listing every violation. The interim apply-time raises stay as defense-in-depth. NOT the LS recipe, no bespoke deletion, no new transforms, no recipe-model changes. Suite 1211 passed (+14). Parity harness over the 38 unchanged.
