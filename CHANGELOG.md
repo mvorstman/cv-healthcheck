@@ -10,6 +10,22 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat — ADR-0016 transform layer slice 3: Security-by-Construction)
+
+**Branch:** `main`. Third transform-layer slice — `mask_registration_code` + the sensitive-field mandatory-transform rule. NOT number_with_unit (slice 4), metadata_pairs, computed sections, compile gate, or LS recipe. Suite 1152 passed (+25). Parity harness over the 38 unchanged (no LS recipe uses mask; the bespoke path masks via its own function).
+
+### Added
+- **`mask_registration_code`** in the closed registry — `XXXX-XXXX-XXXX-1234` → `****-****-****-1234` (reveals only the trailing identifier segment). **Fail-closed:** any input it cannot confidently mask (null, empty, or a shape that is not the dash-segmented form) returns None — a raw registration code never survives under ANY input, anticipated or not. Idempotent (`*` is an allowed segment char, so re-masking a masked value is stable).
+- **Sensitive-field enforcement (Security-by-Construction).** `SENSITIVE_FIELD_REQUIREMENTS = {"registration_code": ["mask_registration_code"]}`. A recipe that declares a sensitive-tagged canonical field MUST include the SPECIFIC required transform in its chain (not merely "some transform"); `resolve_columns` raises `SensitiveFieldError` eagerly otherwise. A recipe that does NOT declare the sensitive field is accepted. Interim apply-time enforcement, same pattern as slice 2 — the ADR-0015 compile gate will reject at publish later.
+- **`tests/test_sensitive_field_mask.py`** (25) — masking (canonical / 2-segment / length-preserving); fail-closed across 7 unexpected shapes (raw never survives); idempotent + already-masked; null/empty/whitespace safe; compose-after-trim; the enforcement rule (no mask → error, only-`trim` → error, with-mask → accepted, `trim`-then-mask → accepted, no-sensitive-field → accepted, non-sensitive field → accepted); a clear error message; and end-to-end through the real CSV extractor (masked output; a `registration_code`-without-mask recipe raises on extract).
+
+### Changed
+- `tests/test_transform_registry.py` registry-contents assertion relaxed from exact-four to subset — slice 3 legitimately adds `mask_registration_code`.
+
+### Notes
+- The generic `mask_registration_code` uses a segment-mask scheme (`****-****-****-1234`); the bespoke LS `normalize.mask_registration_code` uses first-4 + last-4. They are SEPARATE functions (LS not converted); the difference is a slice-5 / conversion concern that the parity harness will surface when the LS recipe is authored.
+- NOT done (later slices): `number_with_unit` (slice 4), `to_float_percent`, `metadata_pairs`, computed sections, the compile gate, the LS recipe.
+
 ## 2026-06-13 (feat — ADR-0016 transform layer slice 2: closed registry + simple transforms)
 
 **Branch:** `main`. Second transform-layer slice — the closed-registry mechanism + the four pure coercions only. NOT mask (slice 3), NOT number_with_unit (slice 4), NOT to_float_percent / metadata_pairs / computed sections, no sensitive-field enforcement, no compile gate, no LS recipe. Suite 1127 passed (+18). Parity harness over the 38 unchanged (no LS recipe uses transforms; transforms are in the generic extractor, not the bespoke LS path).

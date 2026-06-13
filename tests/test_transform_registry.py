@@ -32,8 +32,10 @@ def _resolved(column_map, header_map):
 
 # ── the registry is exactly the four simple transforms (no mask / units yet) ──
 
-def test_registry_is_the_four_simple_transforms():
-    assert set(TRANSFORMS) == {"trim", "null_if_empty", "to_integer", "to_float"}
+def test_registry_contains_the_four_simple_transforms():
+    # Slice 2 introduced exactly these four; later slices add more by ADR
+    # amendment (mask_registration_code in slice 3), so this is a subset check.
+    assert {"trim", "null_if_empty", "to_integer", "to_float"} <= set(TRANSFORMS)
 
 
 # ── each of the four in isolation ────────────────────────────────────────────

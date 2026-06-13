@@ -16,6 +16,7 @@ cell-text strings; everything below is shared.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -26,6 +27,16 @@ class UnknownTransformError(ValueError):
     Interim enforcement: unknown transform raises at application time now; the
     ADR-0015 compile gate will reject at publish later (ADR-0016 Compile-Validated
     invariant — held even before the gate exists)."""
+
+
+class SensitiveFieldError(ValueError):
+    """Raised when a sensitive-tagged canonical field omits its mandatory
+    transform (ADR-0016 Security-by-Construction).
+
+    Interim enforcement: raised eagerly at recipe-application time (resolve_
+    columns) now; the ADR-0015 compile gate will reject at publish later — same
+    pattern as the unknown-transform check. A masking transform cannot be omitted
+    by author oversight."""
 
 
 @dataclass
@@ -84,6 +95,21 @@ def resolve_columns(
                 raise UnknownTransformError(
                     f"Unknown transform '{name}' for field '{canonical}' in section "
                     f"'{section_id}'. Known transforms: {sorted(TRANSFORMS)}."
+                )
+
+        # ADR-0016 Security-by-Construction: a sensitive field must carry its
+        # mandatory transform(s). A recipe that does not declare the sensitive
+        # field at all is fine (nothing to protect); one that DOES must include
+        # the specific required transform — not merely "some transform".
+        required = SENSITIVE_FIELD_REQUIREMENTS.get(canonical)
+        if required:
+            missing = [t for t in required if t not in transforms]
+            if missing:
+                raise SensitiveFieldError(
+                    f"Sensitive field '{canonical}' in section '{section_id}' must "
+                    f"apply {required} but is missing {missing}. A masking transform "
+                    f"cannot be omitted (interim apply-time enforcement; the ADR-0015 "
+                    f"compile gate will reject at publish later)."
                 )
 
         candidates: list[tuple[str, int]] = []
@@ -191,11 +217,46 @@ def _t_to_float(value: Any) -> Any:
         return None
 
 
+# A registration code is a dash-separated run of alphanumeric (or already-masked
+# ``*``) segments — "XXXX-XXXX-XXXX-1234" / "****-****-****-1234". The ``*`` is
+# allowed so masking is idempotent (re-masking a masked value matches).
+_REG_CODE_SHAPE = re.compile(r"^[A-Za-z0-9*]+(?:-[A-Za-z0-9*]+)+$")
+
+
+def _t_mask_registration_code(value: Any) -> Any:
+    """Mask a registration code, revealing only the trailing identifier segment:
+    ``XXXX-XXXX-XXXX-1234`` → ``****-****-****-1234`` (ADR-0016 slice 3).
+
+    FAIL CLOSED — the security property: any input this cannot confidently mask
+    (null, empty, or a shape that is not the dash-segmented form above) returns
+    None. A raw registration code must NOT survive this transform under ANY input,
+    anticipated or not — so the only outcomes are a correctly-masked value or
+    None, never the raw. Idempotent: re-masking a masked value yields the same
+    masked value (``*`` segments stay ``*``)."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s or not _REG_CODE_SHAPE.match(s):
+        return None
+    segments = s.split("-")
+    masked = ["*" * len(seg) for seg in segments[:-1]] + [segments[-1]]
+    return "-".join(masked)
+
+
 TRANSFORMS: dict[str, Callable[[Any], Any]] = {
     "trim": _t_trim,
     "null_if_empty": _t_null_if_empty,
     "to_integer": _t_to_integer,
     "to_float": _t_to_float,
+    "mask_registration_code": _t_mask_registration_code,
+}
+
+# ADR-0016 Security-by-Construction: a sensitive-tagged canonical field MUST carry
+# the specific required transform(s) in its chain. Closed, platform-owned —
+# extended only by ADR amendment. The compile gate will enforce at publish later;
+# resolve_columns enforces eagerly at apply-time now.
+SENSITIVE_FIELD_REQUIREMENTS: dict[str, list[str]] = {
+    "registration_code": ["mask_registration_code"],
 }
 
 
