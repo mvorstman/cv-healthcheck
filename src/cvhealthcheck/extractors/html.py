@@ -184,21 +184,14 @@ class HTMLExtractor:
             null_values = extraction.get("null_values", [])
             status_to_severity = extraction.get("status_to_severity", {})
 
-            container = self._find_section_container(
+            table = self._find_section_table(
                 soup,
                 selector=title_selector,
                 title_match=title_match,
                 section_id=section_id,
                 result=result,
             )
-            if container is None:
-                continue
-
-            table = container.find("table")
             if table is None:
-                result.errors.append(
-                    f"Section '{title_match}' found but contains no table"
-                )
                 continue
 
             rows, row_warnings = self._extract_table_rows(
@@ -271,7 +264,7 @@ class HTMLExtractor:
     # Section finding
     # ------------------------------------------------------------------
 
-    def _find_section_container(
+    def _find_section_table(
         self,
         soup: BeautifulSoup,
         selector: str,
@@ -298,19 +291,32 @@ class HTMLExtractor:
             result.errors.append(f"Section '{title_match}' not found")
             return None
 
-        # Walk up DOM to find ancestor that contains a <table>.
-        parent = matched.parent
+        # Walk up to the nearest ancestor that scopes a table (≤5 levels). This
+        # bounds the search so a matched title with no table of its own cannot
+        # silently borrow a later section's table.
+        scope = matched.parent
         for _ in range(5):
-            if parent is None:
+            if scope is None:
                 break
-            if parent.find("table"):
-                return parent
-            parent = parent.parent
+            if scope.find("table") is not None:
+                break
+            scope = scope.parent
+        if scope is None or scope.find("table") is None:
+            result.errors.append(
+                f"Section '{title_match}' found but contains no table"
+            )
+            return None
 
-        result.errors.append(
-            f"Section '{title_match}' found but contains no table"
-        )
-        return None
+        # A section title labels the table that FOLLOWS it in document order.
+        # This handles both the tightly-wrapped export layout
+        # (<div class="reportstabletitle">…</div><table>) and a sibling-heading
+        # layout (<h2>…</h2><table>). Bounded to the scope so the title never
+        # reaches past its own section into a later one; in the common
+        # one-table-per-wrapper case this is the same table the scope holds.
+        following = matched.find_next("table")
+        if following is not None and following in scope.find_all("table"):
+            return following
+        return scope.find("table")
 
     # ------------------------------------------------------------------
     # Table row extraction

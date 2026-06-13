@@ -10,6 +10,20 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat/test — ADR-0017 selector extension: <h2>-titled tables reachable (Case A))
+
+**Branch:** `main`. The LS recipe's title selector now also accepts `<h2>`; the HTML extractor associates a section title with the table that FOLLOWS it. Still title-anchored, still exact match — NO header-shape matching. Full suite 1256 passed (+2).
+
+### Changed
+- **Recipe (`tests/ls_generic_recipe.py` `_html_table`):** `section_title_selector` broadened from `.reportstabletitle` to `.reportstabletitle, h2`. Covers `other_licenses`, `agent_feature_licenses`, and the workload sections uniformly. Still EXACT `section_title_match`; the extension only broadens WHERE a title may live, not what counts as a section.
+- **Extractor (`src/cvhealthcheck/extractors/html.py`):** `_find_section_container` → `_find_section_table`. A section title now labels the table that FOLLOWS it in document order (bounded to the nearest table-scoping ancestor, ≤5 levels). Handles both the tightly-wrapped export layout (`<div class="reportstabletitle">…</div><table>`) and a sibling-heading layout (`<h2>…</h2><table>`); for the common one-table-per-wrapper case it resolves to the same table the old ancestor-walk returned (no regression — legacy security_assessment + license_summary extractor tests stay green). The earlier walk-up mis-assigned a sibling `<h2>` section to the first table under `<body>`.
+
+### Added — `tests/test_ls_parity_signal.py`
+- **+2 tests:** sibling-`<h2>` sample layout — both `other_licenses` and `agent_feature_licenses` are reached and the agent `<h2>` resolves to ITS following table (no cross-wiring); a bare untitled table is still NOT reached (the extension is "title may be in more places", not "match untitled tables by header shape").
+
+### Notes — post-extension breakdown (38): pass 6246, fail 10 (was 14)
+The 4 `license-summary-sample` fails cleared (its `other_licenses` + `other_license_count` + `agent_feature_licenses` + `agent_feature_count`). **No new field-level diffs** on the now-reachable sample tables: `other_licenses` matches via the existing D1 value/unit equivalence (bespoke flat `value`+`unit` ≡ generic nested `{value,unit}`); `agent_feature_licenses` is byte-identical — bespoke `normalize_agent_feature_record` ALSO drops `Client`/`Agent`/`Install Date`, so the recipe's 5-field `_AGENT_CM` exactly matches bespoke's kept fields. Remaining 10 = the 5 titleless classifier fixtures (3× lab-*, 2× License20summary_*) × (`other_licenses` present-on-one-side + `other_license_count`) — Case B, scope-out candidates (next step).
+
 ## 2026-06-13 (test/docs — ADR-0017 D8: workload "Other Licenses" id-collision not preserved)
 
 **Branch:** `main`. ADR-0017 D8 recorded (docs) + scoped comparator acceptance. No recipe change, no bespoke change, no general bespoke-only pass. Comparator suite 34 passed; full suite green.

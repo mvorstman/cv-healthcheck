@@ -139,7 +139,11 @@ def _csv_sections() -> dict:
 
 
 def _html_table(title, column_map):
-    return {"section_title_selector": ".reportstabletitle", "section_title_match": title,
+    # Title-anchored: a section title may live in the Commvault export wrapper
+    # (.reportstabletitle) OR in a plain <h2> heading (the sample-style export).
+    # Still EXACT section_title_match, still title-anchored — NOT header-shape
+    # matching. The extractor associates the title with the table that FOLLOWS it.
+    return {"section_title_selector": ".reportstabletitle, h2", "section_title_match": title,
             "column_map": column_map, "null_values": _NULLS, "output_as": "table"}
 
 

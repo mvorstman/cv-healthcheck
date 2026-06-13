@@ -74,6 +74,33 @@ _WORKLOAD_ONLY_HTML = (
     "</body></html>"
 )
 
+# Sample-style layout: section titles in classless <h2> siblings of their tables
+# (no .reportstabletitle wrapper). The two tables are siblings under <body>, so a
+# naive "walk up to a common ancestor" mis-assigns the second section to the first
+# table — the title must label the table that FOLLOWS it.
+_H2_SIBLING_HTML = (
+    "<html><body>"
+    "<h1>License summary</h1>"
+    "<h2>Other Licenses - current usage details</h2>"
+    "<table><thead><tr><th>License</th><th>Available Total</th><th>Used</th></tr></thead>"
+    "<tbody><tr><td>Deduplication</td><td>25 TB</td><td>10 TB</td></tr></tbody></table>"
+    "<h2>Agent and Feature Licenses - current usage details</h2>"
+    "<table><thead><tr><th>License</th><th>Permanent Total</th><th>Permanent Used</th>"
+    "<th>Term Total</th><th>Term Used</th><th>Client</th><th>Agent</th><th>Install Date</th>"
+    "</tr></thead>"
+    "<tbody><tr><td>Database</td><td>25</td><td>8</td><td>5</td><td>2</td>"
+    "<td>Client B</td><td>Agent B</td><td>2026-04-15</td></tr></tbody></table>"
+    "</body></html>"
+)
+# A bare, untitled table (no .reportstabletitle, no <h2>) — the extension broadens
+# WHERE a title may live, it does NOT match untitled tables by header shape.
+_TITLELESS_TABLE_HTML = (
+    "<html><body>"
+    "<table><thead><tr><th>License</th><th>Available Total</th><th>Used</th></tr></thead>"
+    "<tbody><tr><td>SomeLicense</td><td>10</td><td>5</td></tr></tbody></table>"
+    "</body></html>"
+)
+
 
 def _conn(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path))
@@ -124,6 +151,43 @@ def test_other_licenses_table_matched_by_full_title_not_workload(migrated_db_pat
     # the TABLE (full title) is extracted, not the bare-"Other Licenses" workload
     assert rows and rows[0]["license"] == "HyperScale"
     assert rows[0]["available_total"] == {"value": 25, "unit": "TB"}
+
+
+# ── <h2> title markup reachable (sample, Case A) — still title-anchored ────────
+
+def test_h2_titled_tables_reached_without_cross_wiring(migrated_db_path: Path):
+    conn = _conn(migrated_db_path)
+    try:
+        publish_ls_recipe(conn)
+        html_path = migrated_db_path.parent / "h2sample.html"
+        html_path.write_text(_H2_SIBLING_HTML, encoding="utf-8")
+        result = HTMLExtractor(conn).extract(html_path, GENERIC_SUBJECT_ID)
+    finally:
+        conn.close()
+    other = result.sections.get("other_licenses")
+    agent = result.sections.get("agent_feature_licenses")
+    # both <h2>-titled tables are now reached (present-on-both)
+    assert other and other[0]["license"] == "Deduplication"
+    assert other[0]["available_total"] == {"value": 25, "unit": "TB"}
+    # the agent <h2> resolves to ITS following table, not the first table under
+    # <body> (no cross-wiring): a permanent_total field, not an other-licenses one
+    assert agent and agent[0]["license"] == "Database"
+    assert agent[0]["permanent_total"] == 25
+    assert "available_total" not in agent[0]
+
+
+def test_h2_extension_does_not_match_titleless_table(migrated_db_path: Path):
+    conn = _conn(migrated_db_path)
+    try:
+        publish_ls_recipe(conn)
+        html_path = migrated_db_path.parent / "titleless.html"
+        html_path.write_text(_TITLELESS_TABLE_HTML, encoding="utf-8")
+        result = HTMLExtractor(conn).extract(html_path, GENERIC_SUBJECT_ID)
+    finally:
+        conn.close()
+    # the extension broadens WHERE a title may live (now also <h2>); it does NOT
+    # match a bare, untitled table by header shape (no header-shape reach).
+    assert not result.sections.get("other_licenses")
 
 
 def test_other_licenses_bare_workload_not_grabbed_as_table(migrated_db_path: Path):
