@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from datetime import datetime
+from typing import Any
 from urllib.parse import urlsplit
 
 _HEX_LETTERS = set("abcdefABCDEF")
@@ -88,3 +90,63 @@ def effective_connection_url(customer: Mapping[str, object]) -> str | None:
         return normalize_connection_url(raw)
     except ValueError:
         return None
+
+
+def verify_commcell_id(
+    declared: object,
+    wire: object,
+    *,
+    wire_available: bool,
+    wire_source: str | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Declared-vs-wire CommCell ID verdict (Fix 4) — PROVENANCE, not workflow.
+
+    Compares ``normalize_commcell_id(declared)`` against
+    ``normalize_commcell_id(wire)`` and returns the four ArtifactSource
+    verification_* field values. NEVER raises on bad input (un-normalizable ->
+    None) and NEVER blocks: the caller stamps the verdict and continues.
+
+    Verdicts (attested != unverifiable — never collapsed):
+      verified     both normalize present and equal.
+      mismatch     both present and differ.
+      attested     declared present; the source CANNOT provide a wire value
+                   (wire_available False) — no proof possible.
+      unverifiable declared absent/un-normalizable, OR the source could prove
+                   (wire_available True) but the wire value is missing/
+                   unparseable — comparison impossible.
+
+    The returned verification_notes records BOTH normalized inputs (the
+    evidence that produced the verdict), and verification_sources records where
+    the wire value was looked for. ``now`` stamps verified_at."""
+    def _safe_norm(value: object) -> str | None:
+        try:
+            return normalize_commcell_id(value)
+        except ValueError:
+            return None
+
+    declared_norm = _safe_norm(declared)
+    wire_norm = _safe_norm(wire) if wire_available else None
+
+    if declared_norm is None:
+        status = "unverifiable"           # declared absent / un-normalizable
+    elif not wire_available:
+        status = "attested"               # no proof possible from this source
+    elif wire_norm is None:
+        status = "unverifiable"           # proof possible, wire value unusable
+    elif declared_norm == wire_norm:
+        status = "verified"
+    else:
+        status = "mismatch"
+
+    sources = [wire_source] if (wire_available and wire_source) else []
+    notes = (
+        f"declared_normalized={declared_norm or 'none'}; "
+        f"wire_normalized={wire_norm or 'none'}"
+    )
+    return {
+        "verification_status": status,
+        "verification_sources": sources,
+        "verification_notes": notes,
+        "verified_at": now,
+    }

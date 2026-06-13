@@ -25,6 +25,7 @@ from cvhealthcheck.extractors.card_section import build_card_section
 from cvhealthcheck.extractors.chart_section import build_chart_section
 from cvhealthcheck.extractors.html import ExtractionResult
 from cvhealthcheck.extractors.metric_section import build_metric_section, worst_metric_severity
+from cvhealthcheck.identity import verify_commcell_id
 
 
 _SEVERITY_MAP: dict[str, FindingSeverity] = {
@@ -53,6 +54,18 @@ _SOURCE_TYPE_MAP: dict[str, SourceType] = {
 _LIVE_SOURCE_TYPES = {SourceType.rest, SourceType.rest_commserve}
 
 
+def _wire_commcell_id(result: ExtractionResult) -> Any:
+    """The wire CommCell ID from a CC-API result's single-object record
+    (commcell.commCellId, raw int) — Fix 4. None if not present in any section
+    record (CC-API but no id -> unverifiable, comparison impossible)."""
+    for rows in result.sections.values():
+        if rows and isinstance(rows[0], dict):
+            commcell = rows[0].get("commcell")
+            if isinstance(commcell, dict) and commcell.get("commCellId") is not None:
+                return commcell["commCellId"]
+    return None
+
+
 def result_to_artifact(
     result: ExtractionResult,
     subject_id: str,
@@ -68,6 +81,20 @@ def result_to_artifact(
     # ADR 0004: live REST collection records collected_at; file imports record
     # only imported_at (the file may have been generated earlier elsewhere).
     collected_at = now if artifact_source_type in _LIVE_SOURCE_TYPES else None
+    # Fix 4: declared-vs-wire CommCell ID guard (PROVENANCE, never blocks). The
+    # CC-API (rest_commserve) tier can provide a wire CCID — read it from the
+    # single-object card record (commcell.commCellId, raw int). Every other
+    # source type cannot provide a live wire CCID -> attested/unverifiable.
+    # commcell_id here is the DECLARED value (customer row). The verdict is
+    # stamped on ArtifactSource only.
+    wire_available = artifact_source_type == SourceType.rest_commserve
+    wire_ccid = _wire_commcell_id(result) if wire_available else None
+    verdict = verify_commcell_id(
+        commcell_id, wire_ccid,
+        wire_available=wire_available,
+        wire_source="commserv:commcell.commCellId" if wire_available else None,
+        now=now,
+    )
     source = ArtifactSource(
         type=artifact_source_type,
         collected_at=collected_at,
@@ -76,6 +103,7 @@ def result_to_artifact(
         commcell_name=commcell_name,
         # The version-bearing subject_id this collection ran under.
         template_version=subject_id,
+        **verdict,
     )
     subject = ArtifactSubject(id=subject_id, title=subject_title)
 
