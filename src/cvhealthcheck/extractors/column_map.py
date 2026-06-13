@@ -243,12 +243,52 @@ def _t_mask_registration_code(value: Any) -> Any:
     return "-".join(masked)
 
 
+# A leading number (with optional thousands commas / decimal) followed by an
+# optional unit token in the SAME cell. Header-encoded units (e.g. an
+# "Available Total (TB)" column header with a plain-number cell) are out of scope
+# and deferred (ADR-0016 Amendment B: unit_from_coalesce_source_name).
+_NUMBER_UNIT_RE = re.compile(r"^(-?[\d,]+(?:\.\d+)?)\s*(.*)$")
+
+
+def _t_number_with_unit(value: Any) -> Any:
+    """Parse a cell of the form "<number> <unit>" into a {value, unit} pair —
+    ADR-0016 slice 4 / Amendment A (resolved Open Item 1, grounded on 38 exports:
+    units are consistent per quantity, so this is parse-and-keep, NOT base-unit
+    normalization). CELL CONTENTS ONLY (Amendment B).
+
+        "25 TB"   -> {"value": 25,  "unit": "TB"}
+        "500 VMs" -> {"value": 500, "unit": "VMs"}
+        "500"     -> {"value": 500, "unit": None}
+
+    ``value`` is numeric (int when integral, float when decimal). null / empty /
+    no-leading-number input returns None (no quantity to represent)."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    if s == "":
+        return None
+    match = _NUMBER_UNIT_RE.match(s)
+    if not match:
+        return None
+    number_text = match.group(1).replace(",", "")
+    unit = match.group(2).strip() or None
+    try:
+        number: int | float = int(number_text)
+    except ValueError:
+        try:
+            number = float(number_text)
+        except ValueError:
+            return None
+    return {"value": number, "unit": unit}
+
+
 TRANSFORMS: dict[str, Callable[[Any], Any]] = {
     "trim": _t_trim,
     "null_if_empty": _t_null_if_empty,
     "to_integer": _t_to_integer,
     "to_float": _t_to_float,
     "mask_registration_code": _t_mask_registration_code,
+    "number_with_unit": _t_number_with_unit,
 }
 
 # ADR-0016 Security-by-Construction: a sensitive-tagged canonical field MUST carry

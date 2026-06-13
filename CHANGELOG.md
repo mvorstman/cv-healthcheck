@@ -10,6 +10,18 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat — ADR-0016 transform layer slice 4: number_with_unit)
+
+**Branch:** `main`. Fourth transform-layer slice — `number_with_unit` only. NOT metadata_pairs (slice 5), computed sections, `to_float_percent` (spec'd-blocked, no corpus sample), header-unit extraction (deferred `unit_from_coalesce_source_name`), or the LS recipe. Suite 1167 passed (+15). Parity harness over the 38 unchanged.
+
+### Added
+- **`number_with_unit`** in the closed registry — parses a "<number> <unit>" cell into `{value, unit}` per ADR-0016 Amendment A (resolved Open Item 1: parse-and-keep, NO base-unit normalization; grounded on the 38 exports). **Cell contents only** (Amendment B — header-encoded units deferred). `"25 TB"` → `{value: 25, unit: "TB"}`; `"500"` → `{value: 500, unit: None}`. `value` is numeric (int when integral, float when decimal); thousands commas tolerated; null / empty / no-leading-number → None. Plain counts and unit-bearing values are handled uniformly (no separate `to_integer` carve-out, Amendment A).
+- **`tests/test_number_with_unit.py`** (15) — unit-bearing values, plain counts, zero, null/empty/non-numeric → None, whitespace tolerance, numeric-type assertions (int vs float), thousands separators, compose-after-`trim`, the `{value, unit}` shape round-tripping through the `CanonicalArtifact` model, and end-to-end through the real CSV extractor.
+
+### Notes
+- The harness PENDING-UNIT fields (`available_total` / `used` / `unit` / `entitlement_value`) stay pending — they move pending→comparable only when the LS recipe is authored to USE `number_with_unit` (a later slice), not here.
+- NOT done: `metadata_pairs` (slice 5), computed sections, `to_float_percent`, header-unit extraction (`unit_from_coalesce_source_name`), the compile gate, the LS recipe.
+
 ## 2026-06-13 (feat — ADR-0016 transform layer slice 3: Security-by-Construction)
 
 **Branch:** `main`. Third transform-layer slice — `mask_registration_code` + the sensitive-field mandatory-transform rule. NOT number_with_unit (slice 4), metadata_pairs, computed sections, compile gate, or LS recipe. Suite 1152 passed (+25). Parity harness over the 38 unchanged (no LS recipe uses mask; the bespoke path masks via its own function).
