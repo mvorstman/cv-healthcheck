@@ -102,6 +102,14 @@ class ExtractionResult:
     # resolution into the verdict_chain happens at canonicalization. Empty for
     # paths/subjects with no overrides.
     section_overrides: dict[str, list[dict]] = field(default_factory=dict)
+    # Import-verification slice (#2 resolver seam): the wire CommCell ID this
+    # source can self-report, surfaced by the extractor for result_to_artifact's
+    # declared-vs-wire guard. HTML's metricsCommcellInfo extraction (#3) is
+    # deferred, so this stays None for now and the resolver falls through to the
+    # CC-API identity payload, or to "no wire" (attested). When an extractor sets
+    # it, result_to_artifact verifies it against the declared CommCell ID.
+    wire_commcell_id: Any = None
+    wire_commcell_source: str | None = None
 
 
 class HTMLExtractor:

@@ -96,7 +96,6 @@ def verify_commcell_id(
     declared: object,
     wire: object,
     *,
-    wire_available: bool,
     wire_source: str | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -107,14 +106,20 @@ def verify_commcell_id(
     verification_* field values. NEVER raises on bad input (un-normalizable ->
     None) and NEVER blocks: the caller stamps the verdict and continues.
 
+    The caller's per-source resolver decides what ``wire`` value a source can
+    provide; this function only compares. A ``wire`` that resolves to None means
+    the source offered no identity to compare against ("no proof possible").
+
     Verdicts (attested != unverifiable — never collapsed):
-      verified     both normalize present and equal.
+      verified     declared and wire both normalize present and equal.
       mismatch     both present and differ.
-      attested     declared present; the source CANNOT provide a wire value
-                   (wire_available False) — no proof possible.
-      unverifiable declared absent/un-normalizable, OR the source could prove
-                   (wire_available True) but the wire value is missing/
-                   unparseable — comparison impossible.
+      attested     declared present, but the source offered NO wire identity
+                   (wire absent / un-normalizable) — no proof possible. This is
+                   the normal import case and the non-identity CC-API endpoint
+                   case (server_groups, storage_policies, … carry no CommCell
+                   ID), which is why those are attested, not unverifiable.
+      unverifiable declared absent / un-normalizable — there is nothing to
+                   compare against, regardless of what the source carries.
 
     The returned verification_notes records BOTH normalized inputs (the
     evidence that produced the verdict), and verification_sources records where
@@ -126,20 +131,18 @@ def verify_commcell_id(
             return None
 
     declared_norm = _safe_norm(declared)
-    wire_norm = _safe_norm(wire) if wire_available else None
+    wire_norm = _safe_norm(wire)
 
     if declared_norm is None:
-        status = "unverifiable"           # declared absent / un-normalizable
-    elif not wire_available:
-        status = "attested"               # no proof possible from this source
+        status = "unverifiable"           # nothing declared to compare against
     elif wire_norm is None:
-        status = "unverifiable"           # proof possible, wire value unusable
+        status = "attested"               # source offered no identity to compare
     elif declared_norm == wire_norm:
         status = "verified"
     else:
         status = "mismatch"
 
-    sources = [wire_source] if (wire_available and wire_source) else []
+    sources = [wire_source] if (wire_norm is not None and wire_source) else []
     notes = (
         f"declared_normalized={declared_norm or 'none'}; "
         f"wire_normalized={wire_norm or 'none'}"

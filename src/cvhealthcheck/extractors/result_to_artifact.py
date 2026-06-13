@@ -81,19 +81,27 @@ def result_to_artifact(
     # ADR 0004: live REST collection records collected_at; file imports record
     # only imported_at (the file may have been generated earlier elsewhere).
     collected_at = now if artifact_source_type in _LIVE_SOURCE_TYPES else None
-    # Fix 4: declared-vs-wire CommCell ID guard (PROVENANCE, never blocks). The
-    # CC-API (rest_commserve) tier can provide a wire CCID — read it from the
-    # single-object card record (commcell.commCellId, raw int). Every other
-    # source type cannot provide a live wire CCID -> attested/unverifiable.
-    # commcell_id here is the DECLARED value (customer row). The verdict is
+    # Fix 4 + import-verification slice: stamp the declared-vs-wire CommCell ID
+    # verdict (PROVENANCE, never blocks). The per-source resolver decides what
+    # wire CCID THIS source can provide:
+    #   1. an extractor-surfaced wire CCID (result.wire_commcell_id) — e.g. an
+    #      HTML metricsCommcellInfo panel. The seam is live; HTML extraction of
+    #      it is deferred, so this is None today.
+    #   2. else the CC-API (rest_commserve) identity payload (commcell.commCellId,
+    #      raw int) read from the single-object record.
+    #   3. else no wire identity -> attested (plain CSV; non-identity CC-API
+    #      endpoints like server_groups/storage_policies that carry no CCID).
+    # commcell_id here is the DECLARED value (customer row). No wire -> attested;
+    # no declared -> unverifiable (the two are kept distinct). The verdict is
     # stamped on ArtifactSource only.
-    wire_available = artifact_source_type == SourceType.rest_commserve
-    wire_ccid = _wire_commcell_id(result) if wire_available else None
+    wire_ccid = getattr(result, "wire_commcell_id", None)
+    wire_source = getattr(result, "wire_commcell_source", None)
+    if wire_ccid is None and artifact_source_type == SourceType.rest_commserve:
+        wire_ccid = _wire_commcell_id(result)
+        if wire_ccid is not None:
+            wire_source = "commserv:commcell.commCellId"
     verdict = verify_commcell_id(
-        commcell_id, wire_ccid,
-        wire_available=wire_available,
-        wire_source="commserv:commcell.commCellId" if wire_available else None,
-        now=now,
+        commcell_id, wire_ccid, wire_source=wire_source, now=now,
     )
     source = ArtifactSource(
         type=artifact_source_type,
