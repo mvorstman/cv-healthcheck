@@ -7,14 +7,8 @@ non-None handler, everything else returns None.
 """
 from __future__ import annotations
 
-from cvhealthcheck.license_summary.service import (
-    LicenseSummaryImportError,
-    import_license_summary_upload,
-)
 from cvhealthcheck.web.routes.upload_dispatch import (
     UPLOAD_HANDLERS,
-    UploadHandler,
-    _LICENSE_SUMMARY_BESPOKE_HANDLER,
     get_handler,
 )
 
@@ -27,29 +21,11 @@ def test_security_assessment_routes_generically() -> None:
     assert get_handler("security_assessment") is None
 
 
-def test_license_summary_routes_generically_handler_retained() -> None:
-    # ADR-0017 commit 4b: license_summary upload is SWITCHED to the generic
-    # dispatcher — get_handler returns None. The bespoke handler object is RETAINED
-    # (unregistered) as a one-line-revert safety net; assert it is still correctly
-    # configured so the revert path is intact.
+def test_license_summary_routes_generically() -> None:
+    # ADR-0017 routing cleanup: license_summary upload is SWITCHED to the generic
+    # dispatcher and the bespoke upload orchestrator + handler were RETIRED.
+    # get_handler returns None — LS uploads run through the generic dispatcher.
     assert get_handler("license_summary") is None
-
-    handler = _LICENSE_SUMMARY_BESPOKE_HANDLER
-    assert isinstance(handler, UploadHandler)
-    assert handler.form_field == "license_summary_file"
-    assert handler.import_fn is import_license_summary_upload
-    assert handler.error_class is LicenseSummaryImportError
-    assert handler.redirect_endpoint == "main.quick_hc_license_summary"
-    msg = handler.success_format({
-        "source_type": "csv",
-        "source_file": "/tmp/ls.csv",
-        "other_licenses": [{}, {}, {}],
-        "agent_feature_licenses": [{}, {}],
-    })
-    assert "CSV import completed" in msg
-    assert "/tmp/ls.csv" in msg
-    assert "3 other licenses" in msg
-    assert "2 agent/feature licenses" in msg
 
 
 def test_ai_subject_returns_none() -> None:
@@ -66,7 +42,7 @@ def test_unknown_subject_returns_none() -> None:
 def test_upload_handlers_has_exactly_the_known_subjects() -> None:
     # Pins the module's surface: any change to UPLOAD_HANDLERS is a deliberate
     # change that should also update tests/CHANGELOG/HANDOVER. SA migration removed
-    # security_assessment; ADR-0017 commit 4b removed license_summary — every
-    # subject now routes through the generic dispatcher. The dict is empty (the
-    # machinery + the retained _LICENSE_SUMMARY_BESPOKE_HANDLER remain for reuse).
+    # security_assessment; ADR-0017 removed license_summary — every subject now
+    # routes through the generic dispatcher. The dict is empty (the UploadHandler /
+    # get_handler machinery remains for any future custom-upload subject).
     assert UPLOAD_HANDLERS == {}

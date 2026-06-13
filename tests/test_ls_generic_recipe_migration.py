@@ -184,13 +184,11 @@ def test_recognition_broadened_by_commit3(migrated_db_path: Path):
 
 
 def test_upload_route_switched_to_generic_after_commit4():
-    # Commit 4b: the bespoke license_summary handler is UNREGISTERED — LS upload
-    # falls through to the generic dispatcher. The handler object is retained for
-    # a one-line revert (safety net; commit 4 deletes nothing).
+    # Commit 4 + routing cleanup: the bespoke license_summary handler is gone —
+    # LS upload falls through to the generic dispatcher.
     from cvhealthcheck.web.routes import upload_dispatch as ud
     assert "license_summary" not in ud.UPLOAD_HANDLERS
     assert ud.get_handler("license_summary") is None
-    assert ud._LICENSE_SUMMARY_BESPOKE_HANDLER is not None  # revert path retained
 
 
 def test_d2_enrichment_is_live_in_result_to_artifact():

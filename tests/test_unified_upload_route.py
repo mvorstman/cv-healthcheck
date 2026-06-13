@@ -38,21 +38,7 @@ from cvhealthcheck.artifacts.models import (
 from cvhealthcheck.extractors.dispatcher import DispatchResult
 from cvhealthcheck.extractors.recognition import RecognitionResult
 import cvhealthcheck.web.routes.quick_hc as quick_hc_routes
-import cvhealthcheck.web.routes.upload_dispatch as upload_dispatch_module
 from cvhealthcheck.web.app import create_app
-
-
-def _register_ls_bespoke_handler(monkeypatch: pytest.MonkeyPatch) -> None:
-    """ADR-0017 4b: the LS bespoke upload handler is UNREGISTERED in production
-    (LS routes through the generic dispatcher). It is RETAINED as a one-line-revert
-    safety net. These handler-machinery tests re-register it for the duration of
-    the test to exercise _handle_system_upload + the retained handler (the revert
-    path)."""
-    monkeypatch.setitem(
-        upload_dispatch_module.UPLOAD_HANDLERS,
-        "license_summary",
-        upload_dispatch_module._LICENSE_SUMMARY_BESPOKE_HANDLER,
-    )
 
 
 # Reuse the SA-HTML and LS-CSV builders from the existing tests so the
@@ -61,7 +47,6 @@ def _register_ls_bespoke_handler(monkeypatch: pytest.MonkeyPatch) -> None:
 # collection (no `tests/__init__.py`), so the sibling test modules are
 # imported directly by name rather than via a `tests.` package prefix.
 from test_security_assessment_import import HTML_SAMPLE, SA_PANEL_HTML
-from test_license_summary_web import CSV_SAMPLE
 
 
 # ---------------------------------------------------------------------------
@@ -304,41 +289,13 @@ def test_unified_route_security_assessment_no_legacy_artifact_files(
     assert canonical_files, "canonical store should have received the artifact"
 
 
-def test_unified_route_license_summary_no_legacy_artifact_files(
-    tmp_path, monkeypatch
-) -> None:
-    """Test 6 — Option A regression for License Summary (new test the
-    2026-05-27 HANDOVER flagged as missing).
-
-    POSTing to /quick-hc/license_summary/import (underscore) must
-    produce zero legacy artifact JSON files in data/catalog/license_summary/.
-    """
-    _patch_license_summary_paths(tmp_path, monkeypatch)
-    _register_ls_bespoke_handler(monkeypatch)  # 4b: test the retained handler
-
-    app = create_app()
-    client = app.test_client()
-    _select_ctx(client)
-    response = client.post(
-        "/quick-hc/license_summary/import",
-        data={
-            "license_summary_file": (
-                io.BytesIO(CSV_SAMPLE.encode("utf-8")),
-                "license-summary.csv",
-            )
-        },
-        content_type="multipart/form-data",
-        follow_redirects=True,
-    )
-    assert response.status_code == 200
-
-    legacy_artifact_files = list((tmp_path / "catalog").rglob("*.json"))
-    assert legacy_artifact_files == [], (
-        f"Option A violated via unified route (license_summary): wrote legacy "
-        f"artifact files {legacy_artifact_files}"
-    )
-    canonical_files = list((tmp_path / "data" / "catalog" / "artifacts").rglob("*.json"))
-    assert canonical_files, "canonical store should have received the artifact"
+# NOTE: the License-Summary "no legacy artifact files" test (and the
+# _handle_system_upload inline success/422/500 tests) were removed in the ADR-0017
+# routing cleanup: LS upload no longer uses the bespoke handler (it routes through
+# the generic dispatcher, covered by tests/test_ls_route_switch.py), and the bespoke
+# upload orchestrator/handler were retired, so there is no LS handler behavior left
+# to exercise here. The generic SA no-legacy test above and the AI-branch inline
+# tests cover the live (generic) inline behavior.
 
 
 def test_unified_route_returns_404_for_system_subject_without_upload(
@@ -361,46 +318,17 @@ def test_unified_route_returns_404_for_system_subject_without_upload(
 
 
 # ---------------------------------------------------------------------------
-# Inline-mode (X-Inline: 1) tests for the system-subject upload branch
-# (security_assessment + license_summary).
-#
-# Latent bug fixed 2026-05-27: _handle_system_upload used to flash+redirect
-# unconditionally, even when X-Inline:1 was set, causing the JS to receive
-# an HTML 302 response and fail JSON-parsing it. The fix mirrored the
-# inline branch from _unified_dispatcher_upload (the AI-branch tests
-# above already cover the inline-mode behavior of THAT branch).
+# Inline-mode (X-Inline: 1) — the no-file 400 path. The _handle_system_upload
+# inline success/422/500 tests were removed in the ADR-0017 routing cleanup
+# (no subject uses the bespoke handler anymore; the generic dispatcher's inline
+# success/error behavior is covered by the AI-branch tests above and by
+# tests/test_ls_route_switch.py). The no-file 400 below now exercises the GENERIC
+# dispatcher (request.files["file"] missing) — the same JSON shape, route-agnostic.
 # ---------------------------------------------------------------------------
 
-def test_system_upload_inline_returns_json_on_success(tmp_path, monkeypatch) -> None:
-    """Test 8 — X-Inline:1 + valid file → 200 JSON {"success": True, ...}.
-    Covers LS; SA's identical because the handler shape is shared.
-    """
-    _patch_license_summary_paths(tmp_path, monkeypatch)
-    _register_ls_bespoke_handler(monkeypatch)  # 4b: test the retained handler
-
-    app = create_app()
-    client = app.test_client()
-    _select_ctx(client)
-    response = client.post(
-        "/quick-hc/license_summary/import",
-        data={
-            "license_summary_file": (
-                io.BytesIO(CSV_SAMPLE.encode("utf-8")),
-                "license-summary.csv",
-            )
-        },
-        content_type="multipart/form-data",
-        headers={"X-Inline": "1"},
-    )
-    assert response.status_code == 200
-    assert response.is_json
-    body = response.get_json()
-    assert body["success"] is True
-    assert "license" in body["message"].lower()
-
-
 def test_system_upload_inline_returns_400_when_no_file(tmp_path, monkeypatch) -> None:
-    """Test 9 — X-Inline:1 + no file → 400 JSON {"success": False, "error": "No file selected."}."""
+    """X-Inline:1 + no file → 400 JSON {"success": False, "error": "No file selected."}
+    (generic dispatcher path — license_summary has no handler)."""
     _patch_license_summary_paths(tmp_path, monkeypatch)
 
     app = create_app()
@@ -416,82 +344,6 @@ def test_system_upload_inline_returns_400_when_no_file(tmp_path, monkeypatch) ->
     assert response.is_json
     body = response.get_json()
     assert body == {"success": False, "error": "No file selected."}
-
-
-def test_system_upload_inline_returns_422_on_handler_error_class(
-    tmp_path, monkeypatch
-) -> None:
-    """Test 10 — X-Inline:1 + import that raises handler.error_class
-    (LicenseSummaryImportError) → 422 JSON with the exception message.
-
-    Triggered by uploading a file with an unsupported extension, which
-    import_license_summary_upload rejects with LicenseSummaryImportError.
-    """
-    _patch_license_summary_paths(tmp_path, monkeypatch)
-    _register_ls_bespoke_handler(monkeypatch)  # 4b: test the retained handler
-
-    app = create_app()
-    client = app.test_client()
-    _select_ctx(client)
-    response = client.post(
-        "/quick-hc/license_summary/import",
-        data={
-            "license_summary_file": (io.BytesIO(b"junk"), "report.txt"),  # .txt rejected
-        },
-        content_type="multipart/form-data",
-        headers={"X-Inline": "1"},
-    )
-    assert response.status_code == 422
-    assert response.is_json
-    body = response.get_json()
-    assert body["success"] is False
-    assert "Unsupported file type" in body["error"]
-
-
-def test_system_upload_inline_returns_500_on_generic_exception(
-    tmp_path, monkeypatch
-) -> None:
-    """Test 11 — X-Inline:1 + import_fn raising a non-handler.error_class
-    Exception → 500 JSON with "Import failed: <msg>".
-    """
-    _patch_license_summary_paths(tmp_path, monkeypatch)
-
-    # Patch the upload handler's import_fn to raise a generic Exception.
-    import cvhealthcheck.web.routes.upload_dispatch as dispatch_module
-
-    def _boom(stream, *, original_filename):
-        raise RuntimeError("upstream crashed")
-
-    original = dispatch_module._LICENSE_SUMMARY_BESPOKE_HANDLER  # retained (4b)
-    patched = dispatch_module.UploadHandler(
-        form_field=original.form_field,
-        import_fn=_boom,
-        error_class=original.error_class,
-        success_format=original.success_format,
-        redirect_endpoint=original.redirect_endpoint,
-    )
-    monkeypatch.setitem(dispatch_module.UPLOAD_HANDLERS, "license_summary", patched)
-
-    app = create_app()
-    client = app.test_client()
-    _select_ctx(client)
-    response = client.post(
-        "/quick-hc/license_summary/import",
-        data={
-            "license_summary_file": (
-                io.BytesIO(CSV_SAMPLE.encode("utf-8")),
-                "license-summary.csv",
-            )
-        },
-        content_type="multipart/form-data",
-        headers={"X-Inline": "1"},
-    )
-    assert response.status_code == 500
-    assert response.is_json
-    body = response.get_json()
-    assert body["success"] is False
-    assert "upstream crashed" in body["error"]
-    assert body["error"].startswith("Import failed:")
 
 
 # ---------------------------------------------------------------------------

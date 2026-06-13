@@ -148,18 +148,18 @@ def test_upload_field_aligned_to_file():
     assert upload_actions[0]["importField"] == "file"
 
 
-# ── gate 1 / route fall-through: handler unregistered, retained for revert ─────
+# ── gate 1 / route fall-through: handler gone, LS routes generic ──────────────
 
-def test_ls_handler_unregistered_but_retained():
+def test_ls_handler_gone_routes_generic():
     from cvhealthcheck.web.routes import upload_dispatch as ud
 
     assert "license_summary" not in ud.UPLOAD_HANDLERS
     assert ud.get_handler("license_summary") is None
-    # safety net: the handler object survives for a one-line revert
-    assert ud._LICENSE_SUMMARY_BESPOKE_HANDLER.import_fn.__name__ == "import_license_summary_upload"
+    # the bespoke upload orchestrator was retired (routing cleanup)
+    assert not hasattr(ud, "_LICENSE_SUMMARY_BESPOKE_HANDLER")
 
 
-# ── gate 9/10: REST collect still bespoke; no shared/bespoke code deleted ──────
+# ── REST collect still bespoke; shared/REST code NOT deleted ──────────────────
 
 def test_rest_collect_path_untouched():
     # The REST collect route is still wired to the bespoke LicenseSummaryService.
@@ -170,12 +170,19 @@ def test_rest_collect_path_untouched():
     assert hasattr(LicenseSummaryService, "collect_from_rest")
 
 
-def test_no_shared_or_bespoke_code_deleted():
-    # Commit 4b deletes nothing — the bespoke upload + REST + shared code all import.
+def test_shared_rest_and_parity_code_not_deleted():
+    # The routing cleanup retired ONLY the upload orchestrator/handler. REST +
+    # shared + parity-reference code all still import.
     from cvhealthcheck.adapters.license_summary import adapt  # noqa: F401
     from cvhealthcheck.license_summary import normalize, models  # noqa: F401
-    from cvhealthcheck.license_summary.collect_rest import collect_license_summary_rest  # noqa: F401
-    from cvhealthcheck.license_summary.service import (  # noqa: F401
-        import_license_summary_upload,
-        persist_license_summary_artifact,
+    from cvhealthcheck.license_summary.collect_rest import (  # noqa: F401
+        collect_license_summary_rest,
+        import_license_summary_xlsx_recording,
     )
+    from cvhealthcheck.license_summary.import_html import import_license_summary_html  # noqa: F401  (parity reference)
+    from cvhealthcheck.license_summary.import_csv import _artifact_from_rows  # noqa: F401  (REST-shared)
+    from cvhealthcheck.license_summary.service import persist_license_summary_artifact  # noqa: F401
+
+    # the upload orchestrator IS gone
+    import cvhealthcheck.license_summary.service as svc
+    assert not hasattr(svc, "import_license_summary_upload")

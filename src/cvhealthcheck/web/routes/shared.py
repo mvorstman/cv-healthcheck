@@ -33,7 +33,6 @@ from cvhealthcheck.labreadiness.evaluator import assess_lab_readiness
 from cvhealthcheck.license_summary import (
     LicenseSummaryImportError,
     LicenseSummaryService,
-    import_license_summary_upload,
 )
 from cvhealthcheck.output.json_report import to_pretty_json
 from cvhealthcheck.quickhc import get_commcell_identity

@@ -10,6 +10,25 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-14 (refactor — ADR-0017 LS bespoke upload ROUTING cleanup, option (a))
+
+**Branch:** `main`. Browser verify passed (workload-only HTML + CSV both import via the generic route; the workload-only HTML succeeding is proof the generic path is live, since bespoke cannot import it). Retire ONLY the live upload-specific, now-unused, parity-backed bespoke routing. NO parity-harness conversion, NO `import_html.py` deletion, NO REST/shared-code deletion. Full suite 1289 passed; parity 738/0.
+
+### Removed (upload-specific, zero-consumer after the route switch)
+- **`service.py` `import_license_summary_upload`** — the live upload orchestrator — and its exclusive helpers `_save_upload` / `_build_saved_filename`, the `ALLOWED_EXTENSIONS` map, and the now-unused imports (`secure_filename`, `secrets`, `BinaryIO`, `datetime/UTC`, `import_license_summary_html`, `import_license_summary_csv`, `import_license_summary_xlsx_recording`). The dead `.xlsx` upload entry point goes with it.
+- **`upload_dispatch.py`:** `_LICENSE_SUMMARY_BESPOKE_HANDLER` (the retained revert object), `_license_summary_success`, and the LS-specific imports. `UPLOAD_HANDLERS` stays `{}`; the generic `UploadHandler` / `get_handler` machinery is retained for any future custom-upload subject.
+- **Vestigial re-exports:** `web/routes/shared.py` and `license_summary/__init__.py` (`__all__`) — confirmed no real importer.
+- **Handler-machinery tests** that exercised the deleted bespoke path: `test_upload_dispatch` (handler-wired case → routes-generically), `test_unified_upload_route` (the `_handle_system_upload` inline success/422/500 + LS no-legacy cases), `test_ls_route_switch` / `test_ls_generic_recipe_migration` handler-retained assertions flipped to "gone".
+
+### Kept (explicitly NOT touched)
+- **`import_html.py` + its 4 `parse_license_summary_html` unit tests** (`test_license_summary.py`) — now a pure parity/test reference, not a live upload path.
+- The **parity harness** `bespoke_canonical` (still calls the bespoke parsers directly) — parity is unchanged at 738/0.
+- **All REST/shared code:** `collect_rest`, `import_csv._artifact_from_rows`, `normalize`, `models`, the adapter, `persist_license_summary_artifact`, `import_license_summary_xlsx_recording` (REST collect is still bespoke and live).
+- The generic `UploadHandler` / `get_handler` / `_handle_system_upload` infra (reusable; now dormant + untested — re-pointing to a synthetic handler is a possible follow-up if that machinery is to stay covered).
+
+### Notes — STEP 1 zero-consumer finding
+`import_html.py` had an extra consumer beyond the harness — `test_license_summary.py` unit-tests `parse_license_summary_html` directly — so option (a) (keep `import_html.py` alive) was chosen over (b) (drop bespoke + golden fixtures), which would have required deleting those parser tests too. Gates: live LS upload generic+working; `import_html` + its 4 tests still pass; parity 738/0; REST untouched; compile gate still accepts the LS recipe; suite green.
+
 ## 2026-06-13 (feat — ADR-0017 LS promotion commit 4b/4: route switch + field align)
 
 **Branch:** `main`. License Summary CSV/HTML upload is SWITCHED to the generic dispatcher (`extract_file → result_to_artifact + D2 enrichment`). NO shared-code or bespoke deletion. Full suite 1293 passed; parity 738/0. **The live LS upload is now the generic path** — Michiel's browser verify is the final gate before any cleanup.

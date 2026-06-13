@@ -25,11 +25,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from cvhealthcheck.license_summary.service import (
-    LicenseSummaryImportError,
-    import_license_summary_upload,
-)
-
 
 @dataclass(frozen=True)
 class UploadHandler:
@@ -65,40 +60,17 @@ class UploadHandler:
     redirect_endpoint: str
 
 
-def _license_summary_success(artifact: dict[str, Any]) -> str:
-    source_type = str(artifact.get("source_type") or "unknown").upper()
-    other_count = len(artifact.get("other_licenses") or [])
-    agent_count = len(artifact.get("agent_feature_licenses") or [])
-    return (
-        f"{source_type} import completed for {artifact.get('source_file')} "
-        f"with {other_count} other licenses and {agent_count} "
-        f"agent/feature licenses."
-    )
-
-
-# SA migration: security_assessment was removed here — SA uploads now fall
-# through to the generic dispatcher path (extract_file -> result_to_artifact ->
-# canonical store), like the other catalog subjects. The bespoke
-# import_security_assessment_upload + parsers remain for the held #36 dev
-# Security-Assessment cluster (its own import route), not the workspace upload.
+# SA migration: security_assessment was removed here — SA uploads fall through to
+# the generic dispatcher path (extract_file -> result_to_artifact -> canonical
+# store), like the other catalog subjects.
 #
-# ADR-0017 promotion commit 4b/4: license_summary CSV/HTML upload is SWITCHED to
-# the generic dispatcher too (extract_file -> result_to_artifact + D2
-# enrichment). The bespoke handler is RETAINED but UNREGISTERED as a safety net —
-# revert is one line: add ``"license_summary": _LICENSE_SUMMARY_BESPOKE_HANDLER``
-# back to UPLOAD_HANDLERS. The bespoke import_license_summary_upload + parsers +
-# the REST collect path all stay in place (commit 4b deletes nothing). With the
-# handler unregistered, get_handler("license_summary") returns None, so the route
-# falls through to _unified_dispatcher_upload AND the UI ships the generic "file"
-# upload field (subject_data_service derives the field name from get_handler).
-_LICENSE_SUMMARY_BESPOKE_HANDLER = UploadHandler(
-    form_field="license_summary_file",
-    import_fn=import_license_summary_upload,
-    error_class=LicenseSummaryImportError,
-    success_format=_license_summary_success,
-    redirect_endpoint="main.quick_hc_license_summary",
-)
-
+# ADR-0017 promotion: license_summary CSV/HTML upload was switched to the generic
+# dispatcher too, and the routing cleanup retired the bespoke upload orchestrator +
+# handler entirely. UPLOAD_HANDLERS is now empty — every subject routes through the
+# generic dispatcher. The UploadHandler / get_handler machinery is retained for any
+# FUTURE subject that needs custom upload behavior (one entry brings it back). The
+# bespoke LS REST collect path + parsers (import_html/import_csv) remain in place
+# for REST and the parity harness; only the live UPLOAD routing was removed.
 UPLOAD_HANDLERS: dict[str, UploadHandler] = {}
 
 

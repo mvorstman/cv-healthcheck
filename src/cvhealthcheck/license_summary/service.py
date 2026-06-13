@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import json
 import logging
 from pathlib import Path
-import secrets
-from typing import Any, BinaryIO
+from typing import Any
 from uuid import uuid4
-
-from werkzeug.utils import secure_filename
 
 from cvhealthcheck.adapters.license_summary import adapt as _adapt_license_summary
 from cvhealthcheck.artifact_registry import ArtifactRegistry, create_artifact_registry
@@ -18,9 +14,7 @@ from cvhealthcheck.reportsplus.catalog import collected_at
 from cvhealthcheck.reportsplus.client import ReportsPlusClient
 
 from .artifact import LICENSE_SUMMARY_CATALOG_DIR, write_license_summary_artifact
-from .collect_rest import collect_license_summary_rest, import_license_summary_xlsx_recording
-from .import_csv import import_license_summary_csv
-from .import_html import import_license_summary_html
+from .collect_rest import collect_license_summary_rest
 from .models import (
     ArtifactRecord,
     CommCellContext,
@@ -34,12 +28,6 @@ from .models import (
 
 LICENSE_SUMMARY_IMPORTS_DIR = Path("data/imports/license_summary")
 LICENSE_SUMMARY_REGISTRY_PATH = LICENSE_SUMMARY_IMPORTS_DIR / "artifact_registry.sqlite3"
-ALLOWED_EXTENSIONS = {
-    ".csv": "csv",
-    ".htm": "html",
-    ".html": "html",
-    ".xlsx": "rest",
-}
 DEFAULT_CUSTOMER_CONTEXT = CustomerContext(
     customer_id="unknown_customer",
     customer_name="Unknown Customer",
@@ -155,62 +143,6 @@ class LicenseSummaryService:
             "normalized": persisted,
             "artifact": persisted.get("artifact_paths", {}).get("latest"),
         }
-
-
-def import_license_summary_upload(
-    stream: BinaryIO,
-    *,
-    original_filename: str,
-    imports_dir: Path | None = None,
-    catalog_dir: Path | None = None,
-    registry_path: Path | None = None,
-    customer_context: CustomerContext | None = None,
-    commcell_context: CommCellContext | None = None,
-    engagement_context: EngagementContext | None = None,
-    report_stream: ReportStream | None = None,
-    report_run: ReportRun | None = None,
-    imported_by: str | None = None,
-) -> dict[str, Any]:
-    safe_name = secure_filename(original_filename or "")
-    if not safe_name:
-        raise LicenseSummaryImportError("No file selected.")
-
-    extension = Path(safe_name).suffix.lower()
-    source_type = ALLOWED_EXTENSIONS.get(extension)
-    if source_type is None:
-        raise LicenseSummaryImportError(
-            "Unsupported file type. Upload a License Summary CSV, HTML, or XLSX API viewer recording."
-        )
-
-    saved_path = _save_upload(
-        stream,
-        safe_name,
-        imports_dir=imports_dir or LICENSE_SUMMARY_IMPORTS_DIR,
-    )
-    if source_type == "html":
-        artifact = import_license_summary_html(saved_path, write_artifact=False)
-    elif source_type == "csv":
-        artifact = import_license_summary_csv(saved_path, write_artifact=False)
-    else:
-        artifact = import_license_summary_xlsx_recording(saved_path, write_artifact=False)
-
-    if not artifact.get("other_licenses") and not artifact.get("agent_feature_licenses"):
-        raise LicenseSummaryImportError(f"{source_type.upper()} import produced no license rows.")
-
-    persisted = persist_license_summary_artifact(
-        artifact,
-        catalog_dir=catalog_dir,
-        registry_path=registry_path,
-        customer_context=customer_context,
-        commcell_context=commcell_context,
-        engagement_context=engagement_context,
-        report_stream=report_stream,
-        report_run=report_run,
-        imported_by=imported_by,
-        write_legacy=False,
-    )
-    _require_project_store().save_artifact(_adapt_license_summary(persisted))
-    return persisted
 
 
 def persist_license_summary_artifact(
@@ -410,23 +342,3 @@ def _load_artifact_payload_from_record(
         },
     )
     return payload
-
-
-def _save_upload(
-    stream: BinaryIO,
-    original_filename: str,
-    *,
-    imports_dir: Path,
-) -> Path:
-    imports_dir.mkdir(parents=True, exist_ok=True)
-    filename = _build_saved_filename(original_filename)
-    path = imports_dir / filename
-    path.write_bytes(stream.read())
-    return path
-
-
-def _build_saved_filename(original_filename: str) -> str:
-    path = Path(original_filename)
-    timestamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
-    token = secrets.token_hex(4)
-    return f"{path.stem}-{timestamp}-{token}{path.suffix.lower()}"
