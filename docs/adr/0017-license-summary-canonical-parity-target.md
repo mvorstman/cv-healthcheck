@@ -49,14 +49,30 @@ Amendment A (units are consistent per quantity across the 38; `number_with_unit`
 is parse-and-keep, no normalization). Applies to `available_total`, `used`,
 `entitlement_value`.
 
-**D2 — identity is enrichment, not extraction.** `commcell_info` (CommCell name /
-version / license expiry / last collection) comes from the active customer/project
-CONTEXT, not the file — the exports mostly do not carry these labels (bespoke
-fills them from the import context, defaulting to "Unknown CommCell"). It attaches
-at the post-extraction enrichment seam (`result_to_artifact`'s `ArtifactSource`
-stamping, caller-fed from `get_active_customer` / `require_active_context` — the
-same seam Fix 3/4 use). The generic recipe does NOT extract `commcell_info`; it is
-deferred to that seam.
+**D2 — `commcell_info` is a MIXED-SOURCE enrichment section** (clarified
+2026-06-13 — a strengthening, not a retreat). Two field categories, two
+authorities:
+  - **Identity** (`commcell_name`, `commcell_id`): authoritative source = the
+    CUSTOMER CONTEXT (the declared active customer). `commcell_id` is stamped on
+    `ArtifactSource` (Fix-3/4); `commcell_name` is a `commcell_info` item.
+  - **Observational metadata** (`commcell_version`, `license_expiry`,
+    `last_collection`): authoritative source = the REPORT EVIDENCE —
+    transport-agnostic (the `ExtractionResult` is today's transport, NOT the
+    authority; the field's truth lives in the report, reachable by whatever
+    mechanism — today `metadata_pairs`-over-HTML/CSV, tomorrow possibly REST).
+
+  The enrichment layer ASSEMBLES `commcell_info` from BOTH authorities at the
+  `result_to_artifact` seam — identity from context, observational from report
+  evidence — present only where each value exists (matching bespoke's per-file
+  variation: 28 name-only / 8 full / 2 name+expiry). It is enrichment-ASSEMBLED,
+  not a recipe section; the recipe MAY `metadata_pairs`-extract the observational
+  labels (legitimate report evidence, NOT identity injection).
+
+  **Identity precedence (`commcell_name`):** real declared context value > real
+  report-evidence value > placeholder/default. "Unknown CommCell" is treated as
+  NO authoritative value (absence of identity), so a real file-observed name
+  ("CommServe A") beats the bare default — preserving Fix-3/4 (declared identity
+  wins; the placeholder is not a declared identity).
 
 **D3 — counts are computed sections, not summary metrics.** A bespoke
 summary-metric `X` is EQUAL to a generic same-named computed-section `X` (same

@@ -10,6 +10,20 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat/docs — ADR-0017 D2: commcell_info mixed-source enrichment)
+
+**Branch:** `main`. ADR-0017 D2 clarified (mixed-source) + the enrichment implemented (candidate-seam side). No comparator tolerance, no recipe "inject context", no bespoke change. Suite 1250 passed (+5).
+
+### Changed
+- **ADR-0017 D2 clarified (docs):** `commcell_info` is a MIXED-SOURCE enrichment section — IDENTITY (`commcell_name`) from CUSTOMER CONTEXT, OBSERVATIONAL (`commcell_version` / `license_expiry` / `last_collection`) from REPORT EVIDENCE (transport-agnostic; the ExtractionResult is today's transport, not the authority). Identity precedence: declared context > report-evidence > placeholder; "Unknown CommCell" is treated as absence-of-identity, so a real evidence name beats it. Enrichment-ASSEMBLED, not a recipe section.
+- **D2 enrichment (`tests/ls_generic_recipe.py`):** `_enrich_commcell_info` assembles the `commcell_info` MetricSection at the candidate seam — identity from context (precedence), observational from a staged `_commcell_observed` `metadata_pairs` section (consumed, never emitted; `null_values=[]` so `"N/A"` is preserved). Observational labels confirmed from the corpus: `Version`, `License expiration`/`License Expiry`, `Usage collection time`; evidence name `CommCell Name`. No new file-reading in enrichment — the recipe extracts the labels (report evidence).
+- **+5 tests** (context-beats-evidence; evidence-when-no-context; placeholder; `"N/A"` preserved; end-to-end `commcell_info` == bespoke).
+
+### Notes — post-D2 breakdown (38): pass 6228, fail 22 (was 60)
+The 38 `commcell_info` present-on-one-side fails cleared (real parity — `commcell_info` now compares present-on-both, no tolerance). Remaining is exactly the two known residuals:
+- **workload "Other Licenses" (8)** — DB-constraint (ADR decision pending).
+- **HTML-structure variation (14: 6 table + 6 count + 1 agent + 1 count)** — 6 files with no `.reportstabletitle`.
+
 ## 2026-06-13 (test — ADR-0017 B2: unit trailing-token equivalence)
 
 **Branch:** `main`. Comparator-side B2: a unit's identity is its TRAILING token; the qualifier before it is ignored for parity (it qualifies the quantity, not the unit). No `number_with_unit` / recipe / D2 / bespoke change. Suite 1245 passed (+6).

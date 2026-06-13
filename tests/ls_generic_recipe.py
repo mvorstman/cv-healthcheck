@@ -18,7 +18,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from cvhealthcheck.artifacts.models import CanonicalArtifact
+from cvhealthcheck.artifacts.models import (
+    CanonicalArtifact,
+    MetricItem,
+    MetricSection,
+)
 from cvhealthcheck.db.subjects import create_subject_from_proposal
 from cvhealthcheck.extractors.csv import CSVExtractor
 from cvhealthcheck.extractors.html import HTMLExtractor
@@ -77,6 +81,22 @@ _META_LM = [
      "transforms": ["trim", "mask_registration_code"]},
 ]
 
+# D2 OBSERVATIONAL metadata (report evidence) — exact labels confirmed across the
+# corpus. Extracted into a staging section the enrichment CONSUMES into
+# commcell_info. null_values=[] so "N/A" (a real bespoke value) is preserved.
+# "CommCell Name" is report-evidence identity (used only as the precedence
+# fallback when no declared context is present).
+_OBSERVED_LM = [
+    {"source": ["CommCell Name"], "canonical": "commcell_name"},
+    {"source": ["Version", "CommCell Version"], "canonical": "commcell_version"},
+    {"source": ["License expiration", "License Expiry", "License expiry"],
+     "canonical": "license_expiry"},
+    {"source": ["Usage collection time", "Last collection time",
+                "Last Collection Time", "Usage Collection Time"],
+     "canonical": "last_collection"},
+]
+_OBSERVED_SECTION = "_commcell_observed"  # staging section, consumed by enrichment
+
 
 def _section_decls() -> list[dict]:
     decls = [
@@ -85,6 +105,7 @@ def _section_decls() -> list[dict]:
         ("other_license_count", "metric"),       # computed (sort after its source)
         ("agent_feature_count", "metric"),       # computed (sort after its source)
         ("commcell_meta", "metric"),             # metadata_pairs (registration_code)
+        (_OBSERVED_SECTION, "metric"),           # metadata_pairs (observational; staged)
     ]
     decls += [(sid, "table") for _name, sid in _WORKLOAD]
     return [
@@ -112,6 +133,8 @@ def _csv_sections() -> dict:
         "agent_feature_count": _computed("distinct_count", "agent_feature_licenses", "license"),
         "commcell_meta": {"format": "metadata_pairs", "label_map": _META_LM,
                           "null_values": _NULLS, "output_as": "table"},
+        _OBSERVED_SECTION: {"format": "metadata_pairs", "label_map": _OBSERVED_LM,
+                            "null_values": [], "output_as": "table"},
     }
 
 
@@ -133,6 +156,8 @@ def _html_sections() -> dict:
         "agent_feature_count": _computed("distinct_count", "agent_feature_licenses", "license"),
         "commcell_meta": {"format": "metadata_pairs", "label_map": _META_LM,
                           "null_values": _NULLS, "output_as": "table"},
+        _OBSERVED_SECTION: {"format": "metadata_pairs", "label_map": _OBSERVED_LM,
+                            "null_values": [], "output_as": "table"},
     }
     for name, sid in _WORKLOAD:
         secs[sid] = _html_table(name, _WORKLOAD_CM)
@@ -159,13 +184,55 @@ def publish_ls_recipe(db) -> dict:
     return create_subject_from_proposal(db, LS_RECIPE_PROPOSAL)
 
 
-def generic_candidate(path: Path, db) -> CanonicalArtifact:
-    """The generic recipe output for a real export — the harness candidate seam."""
+def generic_candidate(path: Path, db, customer: dict | None = None) -> CanonicalArtifact:
+    """The generic recipe output for a real export — the harness candidate seam.
+    Includes the D2 enrichment: assemble commcell_info from {context identity +
+    report-evidence observational}. ``customer`` is the active-customer context
+    (None in the harness, where no customer is selected — matching bespoke's
+    no-context "Unknown CommCell" default)."""
     fmt = fixture_format(path)
     extractor = CSVExtractor(db) if fmt == "csv" else HTMLExtractor(db)
     result = extractor.extract(path, GENERIC_SUBJECT_ID)
-    return result_to_artifact(result, subject_id=GENERIC_SUBJECT_ID,
-                              subject_title="License Summary")
+    artifact = result_to_artifact(result, subject_id=GENERIC_SUBJECT_ID,
+                                  subject_title="License Summary")
+    return _enrich_commcell_info(artifact, customer)
+
+
+def _enrich_commcell_info(artifact: CanonicalArtifact, customer: dict | None) -> CanonicalArtifact:
+    """ADR-0017 D2: assemble the commcell_info MetricSection from context identity
+    (commcell_name) + report-evidence observational fields (consumed from the
+    staged metadata_pairs section). Present only where each value exists, matching
+    bespoke's per-file variation. The staging section is dropped (enrichment-
+    assembled, not a recipe section)."""
+    observed: dict = {}
+    kept = []
+    for section in artifact.sections:
+        if section.id == _OBSERVED_SECTION:
+            rows = getattr(section, "items", []) or []
+            if rows:
+                observed = rows[0]
+            continue  # consume the staging section — never appears in the output
+        kept.append(section)
+
+    # identity precedence: real declared context > real report-evidence > placeholder
+    ctx_name = (customer or {}).get("commserve_name")
+    ctx_name = ctx_name if (ctx_name and str(ctx_name).strip()) else None
+    evidence_name = observed.get("commcell_name") or None
+    commcell_name = ctx_name or evidence_name or "Unknown CommCell"
+
+    items: list[MetricItem] = []
+    _add_metric_item(items, "commcell_name", "CommCell Name", commcell_name)
+    _add_metric_item(items, "commcell_version", "CommCell Version", observed.get("commcell_version"))
+    _add_metric_item(items, "license_expiry", "License Expiry", observed.get("license_expiry"))
+    _add_metric_item(items, "last_collection", "Last Collection Time", observed.get("last_collection"))
+    kept.append(MetricSection(type="metric", id="commcell_info", title="CommCell Info", items=items))
+    return artifact.model_copy(update={"sections": kept})
+
+
+def _add_metric_item(items: list[MetricItem], item_id: str, label: str, value) -> None:
+    # Mirror the bespoke adapter's _add_metric: skip None / blank.
+    if value is not None and str(value).strip():
+        items.append(MetricItem(id=item_id, label=label, value=str(value)))
 
 
 # ---------------------------------------------------------------------------
