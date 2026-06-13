@@ -16,8 +16,16 @@ cell-text strings; everything below is shared.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Callable
+
+
+class UnknownTransformError(ValueError):
+    """Raised when a recipe names a transform absent from the closed registry.
+
+    Interim enforcement: unknown transform raises at application time now; the
+    ADR-0015 compile gate will reject at publish later (ADR-0016 Compile-Validated
+    invariant — held even before the gate exists)."""
 
 
 @dataclass
@@ -26,6 +34,7 @@ class ResolvedColumn:
     col_type: str
     candidates: list[tuple[str, int]]   # (source-name, header index), in priority order
     coalesce: bool
+    transforms: list[str] = field(default_factory=list)
 
 
 def entry_sources(col: dict) -> list[str]:
@@ -66,6 +75,17 @@ def resolve_columns(
         canonical = col.get("canonical") or (sources[0] if sources else "")
         col_fuzzy = fuzzy or bool(col.get("fuzzy_match"))
 
+        # ADR-0016 slice 2: validate the transform chain eagerly (once per
+        # column, before row extraction) — unknown name raises here, regardless
+        # of whether the column's source is present.
+        transforms = list(col.get("transforms", []) or [])
+        for name in transforms:
+            if name not in TRANSFORMS:
+                raise UnknownTransformError(
+                    f"Unknown transform '{name}' for field '{canonical}' in section "
+                    f"'{section_id}'. Known transforms: {sorted(TRANSFORMS)}."
+                )
+
         candidates: list[tuple[str, int]] = []
         for src in sources:
             idx = header_map.get(src.lower())
@@ -85,13 +105,15 @@ def resolve_columns(
                     f"No coalesce candidate for '{canonical}' found among "
                     f"{sources} for section '{section_id}'"
                 )
-                resolved.append(ResolvedColumn(canonical, col_type, [], True))
+                resolved.append(ResolvedColumn(canonical, col_type, [], True, transforms))
             else:
                 warnings.append(
                     f"Column '{sources[0]}' not found in headers for section '{section_id}'"
                 )
             continue
-        resolved.append(ResolvedColumn(canonical, col_type, candidates, is_coalesce))
+        resolved.append(
+            ResolvedColumn(canonical, col_type, candidates, is_coalesce, transforms)
+        )
     return resolved
 
 
@@ -122,6 +144,94 @@ def coerce(
     return stripped, None
 
 
+# ---------------------------------------------------------------------------
+# Transform registry (ADR-0016 slice 2) — closed, platform-owned.
+#
+# A recipe field may carry ``transforms: [name, ...]``, applied in order to the
+# (coalesced) source value. Names resolve ONLY against this registry; an unknown
+# name is an error. Interim enforcement: unknown transform raises at application
+# time now (resolve_columns / apply_transforms); the ADR-0015 compile gate will
+# reject at publish later (ADR-0016 Compile-Validated invariant — held even
+# before the gate exists). Slice 2 ships the four pure coercions only — mask
+# (slice 3), number_with_unit (slice 4), to_float_percent, metadata_pairs and
+# computed sections are NOT here.
+# ---------------------------------------------------------------------------
+
+def _t_trim(value: Any) -> Any:
+    return value.strip() if isinstance(value, str) else value
+
+
+def _t_null_if_empty(value: Any) -> Any:
+    if value is None:
+        return None
+    return None if str(value).strip() == "" else value
+
+
+def _t_to_integer(value: Any) -> Any:
+    if value is None:
+        return None
+    s = str(value).strip()
+    if s == "":
+        return None
+    try:
+        return int(s)
+    except (ValueError, TypeError):
+        return None
+
+
+def _t_to_float(value: Any) -> Any:
+    if value is None:
+        return None
+    s = str(value).strip()
+    if s == "":
+        return None
+    try:
+        return float(s)
+    except (ValueError, TypeError):
+        return None
+
+
+TRANSFORMS: dict[str, Callable[[Any], Any]] = {
+    "trim": _t_trim,
+    "null_if_empty": _t_null_if_empty,
+    "to_integer": _t_to_integer,
+    "to_float": _t_to_float,
+}
+
+
+def apply_transforms(names: list[str], value: Any) -> Any:
+    """Apply a transform chain (by name, in order) to a value. Unknown name →
+    UnknownTransformError (interim enforcement; the compile gate catches it at
+    publish later)."""
+    result = value
+    for name in names:
+        fn = TRANSFORMS.get(name)
+        if fn is None:
+            raise UnknownTransformError(
+                f"Unknown transform '{name}'. Known transforms: {sorted(TRANSFORMS)}."
+            )
+        result = fn(result)
+    return result
+
+
+def _shape_value(
+    raw: Any,
+    rc: ResolvedColumn,
+    null_values: list[str],
+    source_name: str,
+    section_id: str,
+    warnings: list[str],
+) -> Any:
+    """Shape a selected raw cell into the canonical value: the transform chain
+    when the column declares one, else the legacy ``type`` coercion (unchanged)."""
+    if rc.transforms:
+        return apply_transforms(rc.transforms, raw)
+    value, warn = coerce(raw, rc.col_type, null_values, source_name, section_id)
+    if warn:
+        warnings.append(warn)
+    return value
+
+
 def extract_row(
     cell_texts: list[str],
     resolved: list[ResolvedColumn],
@@ -146,15 +256,11 @@ def extract_row(
             if chosen is None:
                 row[rc.canonical] = None
             else:
-                value, warn = coerce(chosen[0], rc.col_type, null_values, chosen[1], section_id)
-                if warn:
-                    warnings.append(warn)
-                row[rc.canonical] = value
+                row[rc.canonical] = _shape_value(
+                    chosen[0], rc, null_values, chosen[1], section_id, warnings
+                )
         else:
             src, idx = rc.candidates[0]
             raw = cell_texts[idx] if idx < len(cell_texts) else ""
-            value, warn = coerce(raw, rc.col_type, null_values, src, section_id)
-            if warn:
-                warnings.append(warn)
-            row[rc.canonical] = value
+            row[rc.canonical] = _shape_value(raw, rc, null_values, src, section_id, warnings)
     return row

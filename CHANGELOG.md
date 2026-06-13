@@ -10,6 +10,19 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-13 (feat — ADR-0016 transform layer slice 2: closed registry + simple transforms)
+
+**Branch:** `main`. Second transform-layer slice — the closed-registry mechanism + the four pure coercions only. NOT mask (slice 3), NOT number_with_unit (slice 4), NOT to_float_percent / metadata_pairs / computed sections, no sensitive-field enforcement, no compile gate, no LS recipe. Suite 1127 passed (+18). Parity harness over the 38 unchanged (no LS recipe uses transforms; transforms are in the generic extractor, not the bespoke LS path).
+
+### Added
+- **`transforms: [name, ...]` on a recipe field** — applied in order to the (coalesced) source value; names resolve only against a closed, platform-owned registry (`TRANSFORMS` in `extractors/column_map.py`). Initial registry: `trim`, `null_if_empty`, `to_integer`, `to_float`. When a column declares transforms the chain produces the value (replacing the legacy `type` coercion for that column); a column without transforms is byte-identical to before.
+- **Interim Compile-Validated enforcement:** an unknown transform name raises `UnknownTransformError` at recipe-application time — eagerly in `resolve_columns`, once per column, with field + section context (and defensively in `apply_transforms`). Held now even though the ADR-0015 compile gate (which will reject at publish) does not yet exist.
+- **`tests/test_transform_registry.py`** (18) — each transform in isolation; ordered chains; unknown-name raises (apply + resolve, including when the source column is absent); composition with slice-1 coalesce (list source → first present → transform chain); a no-transforms regression; and end-to-end through the real CSV extractor.
+
+### Notes
+- Transforms are pure value→value; `to_integer` / `to_float` return None on non-numeric. When present, the chain replaces the column's `type` coercion (the chain is authoritative), and whitespace is preserved unless `trim` is in the chain.
+- NOT done (later slices): `mask_registration_code` (slice 3, with sensitive-field gate enforcement), `number_with_unit` (slice 4), `to_float_percent`, `metadata_pairs`, computed sections, the compile gate, and the LS recipe itself.
+
 ## 2026-06-13 (feat — ADR-0016 transform layer slice 1: source coalesce)
 
 **Branch:** `main`. First transform-layer slice — **coalesce only** (NOT the full registry, NOT mask / number_with_unit / metadata_pairs / computed sections, NOT the LS conversion, NOT compile-gate work). Suite 1109 passed (+14). Parity harness over the 38 unchanged — coalesce lives in the generic extractor, not the bespoke LS path.
