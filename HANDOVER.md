@@ -124,6 +124,19 @@ params; `.staging-badge-approved` CSS. Named in the CHANGELOG slice-1 entry.
 
 ## Deferred / named register (none of these is forgotten)
 
+- **Fix-4 follow-up — per-source CommCell identifier precision.** The Fix-4
+  identity/provenance guard false-mismatches on the CommServ environment endpoint:
+  `GET /commandcenter/api/CommServ` reports the internal `commCellId` (`2`), while
+  the customer record may declare the licensed CCID (`337f`) — different identifier
+  namespaces for the same CommCell, NOT wrong-customer data. Observed live
+  2026-06-14 (HomeLab via gw02: endpoint `commCellId=2`, declared `337f` → mismatch
+  banner). Follow-up: the per-source CCID resolver must distinguish identifier
+  *type* (licensed CCID vs internal `commCellId` vs CommServe GUID/name), must NOT
+  use the CommServ internal `commCellId` as the licensed-CCID comparison key, and
+  the banner must NOT claim "possible wrong-customer data" for a known
+  identifier-namespace difference. **Re-opens** the Fix-4 "single CCID field"
+  conclusion. Backlog/follow-up; does NOT block Context Integrity read-isolation
+  closure. (CHANGELOG 2026-06-14 docs/backlog entry.)
 - **License Summary REST collect — migration / product decision (named).** LS
   CSV/HTML upload is now generic (ADR-0017, above); LS **REST collect** still runs
   the bespoke service path (parity-UNCOVERED, shares normalize/models/adapter/
