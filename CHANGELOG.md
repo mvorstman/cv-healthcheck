@@ -10,6 +10,25 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-14 (feat — ADR-0015 D4a: rule ownership/classification axis (INERT))
+
+**Branch:** `main`. First D4 slice: the rules registry gains an ownership axis separating universal **policy** rules from **customer_assertion** (customer/person/org-specific) rules. **INERT** — classification only; no firing/binding/override change (like the project_id stamp was inert). Full suite 1318 passed.
+
+### STEP 0 (read-only classification, 2026-06-14) — binary CLEAN
+All 16 live rules classified; no rule was "genuinely neither" (no third value needed).
+- **policy (10):** audit_critical_retention_warning, capacity_utilisation, metrics_healthcheck_service_disabled, sg_empty_group, spcj_aux_copy_pending, spcj_data_not_available, spcj_job_failed, spcj_job_killed, spcj_unencrypted_job, users_never_logged_in.
+- **customer_assertion (6):** clients_company1_warning, clients_company2_critical, michiel_account_enabled, sg_rommelgroep_company_1, users_michiel_enabled_critical, and **sg_naming_convention** (the one judgment call — a `GRP_` org naming standard, i.e. a customer-specific policy, classified customer_assertion; flagged for review, a one-line flip if read as policy).
+
+### Added
+- **Migration `0036_rule_ownership_axis.sql`:** `ALTER TABLE rules ADD COLUMN rule_class TEXT NOT NULL DEFAULT 'policy' CHECK (rule_class IN ('policy','customer_assertion'))` + backfill UPDATE of the 6 customer_assertion rule_ids (policy rules take the column default — so no customer_assertion silently rides the default). Backfill no-ops where a rule is absent (rules are runtime-authored, not migration-seeded).
+- **`db/rules.py`:** `RULE_CLASSES` / `DEFAULT_RULE_CLASS`; `save_rule(…, rule_class=None)` — validates against the vocabulary, **preserves** the existing class on a body re-save (mirrors `created_by`), defaults `policy` for new rules; `list_rules` and the MCP `save_rule` output **expose** `rule_class`. Stored as a COLUMN, never in `definition_json` — so the evaluator never sees it (INERT / firing-safe).
+
+### Tests — `tests/test_rule_ownership_axis_adr0015.py` (+11, tests-first)
+vocabulary; new rule defaults policy; seeded `capacity_utilisation` is policy; CHECK + `save_rule` reject an invalid class; explicit customer_assertion stored; class preserved on re-save; `list_rules` exposes it; `rule_class` absent from the definition body (firing-safe); bind/delete back-compat; migration backfills exactly the Step-0 set. Migration count 35→36. Existing rule/eval/MCP tests green.
+
+### Non-goals (explicit) + the D4b flag
+NO firing change, NO row_rules move, NO bindings table, NO profile object (that is **D4b**), NO SPCJ resolved-id/parameter portability or §119 (that is **D4c** — needs a second live-environment collect). **D4b flag:** default-policy is safe ONLY while the axis is inert. When D4b makes the axis scope firing, it must decide whether scoping should REQUIRE explicit classification rather than defaulting universal — a customer_assertion mis-defaulted to `policy` would otherwise fire against every customer.
+
 ## 2026-06-14 (docs — Context Integrity read-isolation gate CLOSED (browser-verified); D4 unblocked; renderer backlog)
 
 Browser verify passed — docs only, no code change.

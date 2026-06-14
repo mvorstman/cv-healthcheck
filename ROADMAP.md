@@ -72,8 +72,8 @@ The stable "why" behind the work.
 
 ## Initiatives — Now
 
-*Status: CLOSED (browser-verified 2026-06-14). The next read-only investigation is
-the D4 bindings/profile-ownership boundary check.*
+*Status: CLOSED (browser-verified 2026-06-14). D4 boundary check done; D4a (rule
+ownership axis) shipped INERT; D4b/D4c are the remaining D4 build slices.*
 
 **Customer/Project Context Integrity — CLOSED.** Scoped reads/writes on the
 ADR-0002 customer+project entities are enforced on **both** sides: writes via D5
@@ -99,7 +99,10 @@ template-portability question (needs a live two-environment collect).
 *Status: Planned.*
 
 - **Finish ADR-0004 phase 8** (Shapes + recommend stage) and ratify ADR-0004.
-- **Build the thin Report Profile** (ADR-0013: selected subjects/sections/view-mode).
+- **Build the thin Report Profile** (ADR-0013: selected subjects/sections/view-mode;
+  ADR-0015 **D4b** — the profile object that scopes firing by the D4a `rule_class` axis,
+  and must decide whether scoping REQUIRES explicit classification; **D4c** — SPCJ
+  resolved-bindings/parameter portability, coupled to §119, needs a second live collect).
 - **Report Output framework** — HTML master → PDF/DOCX via docxtpl+python-docx /
   WeasyPrint or LibreOffice; matplotlib on the shared severity palette.
 

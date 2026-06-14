@@ -546,7 +546,7 @@ def list_rules(subject_id: str | None = None, enabled: bool | None = None) -> li
         db.close()
 
 
-def save_rule(rule: dict, bind: dict | None = None) -> dict:
+def save_rule(rule: dict, bind: dict | None = None, rule_class: str | None = None) -> dict:
     """Author (upsert) a row-scope (``kind:"row_match"``) evaluation rule,
     optionally binding it to a table section in one call.
 
@@ -574,6 +574,11 @@ def save_rule(rule: dict, bind: dict | None = None) -> dict:
         table section's ``evaluative.row_rules`` (idempotent). Omit to save unbound
         (bind later with another ``save_rule`` carrying a target). Rule body and
         section binding stay separable, so one rule can bind to several sections.
+    rule_class : str | None
+        Optional ownership axis (ADR-0015 D4a): ``"policy"`` (universal — the
+        default) or ``"customer_assertion"`` (customer/person/org-specific). On
+        re-save it is preserved when omitted. INERT today — it classifies only and
+        does not change firing; a later slice scopes evaluation by it.
     """
     db = get_db()
     try:
@@ -582,13 +587,15 @@ def save_rule(rule: dict, bind: dict | None = None) -> dict:
         # evaluator's kind check always matches (it defaults missing kind to
         # row_match too, so old kind-less rules still fire — belt and suspenders).
         rule = {**rule, "kind": "row_match", "scope": "row"}
-        saved = db_save_rule(db, rule)
+        saved = db_save_rule(db, rule, rule_class=rule_class)
         bound_sections = 0
         if bind is not None:
             bound_sections = db_bind_rule(
                 db, saved["rule_id"], bind["subject_id"], bind["section_id"]
             )
-        return {"rule": saved, "bound_sections": bound_sections}
+        # `saved` carries the resolved rule_class (db_save_rule output).
+        return {"rule": saved, "rule_class": saved.get("rule_class"),
+                "bound_sections": bound_sections}
     finally:
         db.close()
 

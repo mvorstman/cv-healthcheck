@@ -24,6 +24,12 @@ import json
 import sqlite3
 from typing import Any
 
+# ADR-0015 D4a: the rule ownership/classification axis. `policy` = a universal
+# rule (applies to every customer); `customer_assertion` = a customer/person/
+# org-specific rule. INERT this slice — classification only, no firing change.
+RULE_CLASSES = ("policy", "customer_assertion")
+DEFAULT_RULE_CLASS = "policy"
+
 
 # ── ADR-0015 D2a: recipe immutability guard ───────────────────────────────────
 #
@@ -216,19 +222,47 @@ def list_rules(
         items = list(registry.values())
     if enabled is not None:
         items = [d for d in items if bool(d.get("enabled", True)) is bool(enabled)]
+    # ADR-0015 D4a: expose the ownership class (a column, not part of the body) so
+    # tooling can distinguish policy from customer_assertion. Output-only — the
+    # stored definition body is untouched.
+    classes = _rule_classes(db)
+    items = [{**d, "rule_class": classes.get(str(d.get("rule_id")), DEFAULT_RULE_CLASS)}
+             for d in items]
     return sorted(items, key=lambda d: str(d.get("rule_id")))
 
 
-def save_rule(db: sqlite3.Connection, definition: dict[str, Any]) -> dict[str, Any]:
+def _rule_classes(db: sqlite3.Connection) -> dict[str, str]:
+    """``{rule_id: rule_class}`` from the registry column. Defensive against a DB
+    migrated below 0036 (no column) — returns an empty map (callers default)."""
+    try:
+        rows = db.execute("SELECT rule_id, rule_class FROM rules").fetchall()
+    except sqlite3.OperationalError:
+        return {}
+    return {row["rule_id"]: row["rule_class"] for row in rows}
+
+
+def save_rule(
+    db: sqlite3.Connection,
+    definition: dict[str, Any],
+    *,
+    rule_class: str | None = None,
+) -> dict[str, Any]:
     """Upsert a rule definition by ``rule_id`` (the body is the JSON blob). Bumps
     ``version`` when the body changed; preserves the original ``created_by`` on
     update; defaults ``enabled`` to True. Returns the stored definition.
+
+    ``rule_class`` (ADR-0015 D4a, optional) is the ownership axis — ``policy`` |
+    ``customer_assertion``. When omitted: preserved on re-save of an existing rule,
+    else ``policy`` for a new rule. It is stored as a COLUMN (never in the body),
+    so it is INERT for firing. Returns the stored body plus a ``rule_class`` key.
 
     Kind-specific validation (``validate_row_match_rule``) is the caller's
     responsibility — this is the low-level persist."""
     rule_id = definition.get("rule_id")
     if not rule_id:
         raise ValueError("rule_id is required")
+    if rule_class is not None and rule_class not in RULE_CLASSES:
+        raise ValueError(f"rule_class must be one of {RULE_CLASSES}, got {rule_class!r}")
     existing = load_rules_registry(db).get(rule_id)
     new_def = dict(definition)
     new_def.setdefault("enabled", True)
@@ -240,13 +274,20 @@ def save_rule(db: sqlite3.Connection, definition: dict[str, Any]) -> dict[str, A
         prev = {k: v for k, v in existing.items() if k != "version"}
         cur = {k: v for k, v in new_def.items() if k != "version"}
         new_def["version"] = existing.get("version", 1) + (1 if cur != prev else 0)
+    # rule_class: explicit value wins; else preserve the existing row's class; else
+    # default. (Preserve mirrors created_by — a body re-save never silently resets
+    # the ownership class.)
+    if rule_class is None:
+        rule_class = _rule_classes(db).get(rule_id, DEFAULT_RULE_CLASS)
     db.execute(
-        "INSERT INTO rules (rule_id, definition_json, created_by) VALUES (?, ?, ?) "
-        "ON CONFLICT(rule_id) DO UPDATE SET definition_json = excluded.definition_json",
-        (rule_id, json.dumps(new_def), new_def["created_by"]),
+        "INSERT INTO rules (rule_id, definition_json, created_by, rule_class) "
+        "VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(rule_id) DO UPDATE SET "
+        "definition_json = excluded.definition_json, rule_class = excluded.rule_class",
+        (rule_id, json.dumps(new_def), new_def["created_by"], rule_class),
     )
     db.commit()
-    return new_def
+    return {**new_def, "rule_class": rule_class}
 
 
 def bind_rule(
