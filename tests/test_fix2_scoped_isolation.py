@@ -11,11 +11,27 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from flask import session
+
 from cvhealthcheck.artifacts.store import ArtifactStore
 from cvhealthcheck.extractors.html import ExtractionResult
 from cvhealthcheck.extractors.result_to_artifact import result_to_artifact
 from cvhealthcheck.quickhc.subject_data_service import build_subject_initial_data
 from cvhealthcheck.web.active_project import resolve_default_project
+from cvhealthcheck.web.app import create_app
+
+
+def _initial_data_as(db, customer_id: str, project_id: str) -> dict:
+    """build_subject_initial_data under an EXPLICIT active context. Context
+    Integrity read-side (2026-06-14): the workspace no longer falls back to the
+    Default project for reads, so rendering a project's scoped artifact requires
+    that project to be explicitly selected — exactly what these tests assert."""
+    app = create_app()
+    app.config["TESTING"] = True
+    app.config["SECRET_KEY"] = "test"
+    with app.test_request_context():
+        session["active_project"] = {"customer_id": customer_id, "project_id": project_id}
+        return build_subject_initial_data(db, customer_id=customer_id)
 
 LEGACY_SIX = [
     "environment",
@@ -110,7 +126,7 @@ def test_commcell_header_from_scoped_environment_card(migrated_db_path):
             CanonicalArtifact.model_validate(payload)
         )
 
-        header = build_subject_initial_data(db)["commcell"]
+        header = _initial_data_as(db, customer_id, project_id)["commcell"]
         assert header == {
             "exists": True, "name": "cs01.lab", "version": "11.40",
             "id": "ABC-123", "timezone": "UTC",
@@ -147,12 +163,13 @@ def test_get_commcell_identity_writes_no_global_file(tmp_path, monkeypatch):
 def test_scoped_artifact_renders_for_its_project_only(migrated_db_path):
     db = _conn(migrated_db_path)
     try:
-        # save into the ACTIVE (fallback: Default) project's store
+        # save into a project's store, then read it back under that project
+        # EXPLICITLY selected (no Default fallback on reads anymore)
         customer_id, project_id = resolve_default_project(db)
         ArtifactStore(customer_id, project_id).save_artifact(
             _artifact("capacity_license")
         )
-        subjects = _subjects_by_id(build_subject_initial_data(db))
+        subjects = _subjects_by_id(_initial_data_as(db, customer_id, project_id))
         assert subjects["capacity_license"]["state"] != "nodata"
         assert subjects["capacity_license"]["sections"]
         # siblings with no scoped artifact stay honest-empty

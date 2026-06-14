@@ -99,10 +99,16 @@ Scope of D2a (and what it intentionally is NOT):
 **D6 — Publication requires structured parameterization.** A source type that cannot express address, identity, and parameters as separately declared elements may not be published as a reusable template. Current mechanism: the ADR-0014 typed `reportsplus_dataset` source for RP-sourced subjects; hand-built query strings via the generic endpoint are rejected at compile time for RP addresses. (The flagship specimen routed around the typed source after it shipped — capability without enforcement produced the defect. The principle outlives the class name: any future source type is held to the same bar.)
 
 **Invariants (named, normative):**
-- **Context Integrity:** a customer-data write may only occur against an explicitly selected context; absence of explicit selection is an error, never a silent default.
+- **Context Integrity:** a customer-data write may only occur against an explicitly selected context, and a customer-data READ may only surface the explicitly selected context's data; absence of explicit selection is an error (writes) or an honest empty state (reads), never a silent default. *(Read-side added 2026-06-14 — see the realization note below.)*
 - **Publication Integrity:** the object approved by a reviewer must be the same object executed by the platform.
 - **Template Catalog:** a template must transfer to a brand-new customer without modification; customer-specific information belongs in the project profile, not the template.
 - **Catalog Purity (review criterion):** the catalog must not require access to any customer to be understood, reviewed, versioned, approved, or transported.
+
+### Context Integrity realization (2026-06-14)
+
+The invariant is now enforced on **both** sides. **Writes:** D5 (`require_active_context`). **Reads:** the read-context resolvers (`get_active_project`/`get_active_customer`/`make_active_project_store`) gained `allow_default=False`; live web reads (Quick HC workspace + the canonical APIs) pass it, so a no-context read renders an honest empty state (`{"active_context": false, …}` at HTTP 200; workspace not-collected) instead of silently surfacing the **Default** customer's scoped data. The legacy fallback survives only for opted-in non-request callers (CLI, tests, MCP/staging).
+
+A 2026-06-14 read-only two-customer audit confirmed the **cross-isolation** half (customer A's data under customer B) was already structurally + physically impossible; the only residue was the bounded no-context → **Default** display hazard, which the read-side fix closes. Remaining: §119 cross-environment id-variance (a template-portability question needing a live two-environment **collect**, NOT a customer-isolation concern); and the deferred move of active context from the Flask session into `app.db` (the narrow read-fix proved sufficient without it).
 
 ---
 

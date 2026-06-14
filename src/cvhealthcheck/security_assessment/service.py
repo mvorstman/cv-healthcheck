@@ -51,13 +51,13 @@ logger = logging.getLogger(__name__)
 def _active_project_store() -> ArtifactStore:
     """Construct an ArtifactStore scoped to the active project on demand.
 
-    Replaces the module-level singleton from before ADR 0002 phase 2.
-    Constructed per-call so each call sees the current session's active
-    project (or falls back to the Default project outside a request
-    context — e.g. tests, CLI, MCP staging).
+    READ paths only (get_canonical). Context Integrity read-side: NO Default
+    fallback — an absent explicit selection raises NoExplicitContextError, which
+    the canonical API translates into an honest no-active-context response rather
+    than surfacing the Default customer's artifact.
     """
     from cvhealthcheck.web.active_project import make_active_project_store
-    return make_active_project_store()
+    return make_active_project_store(allow_default=False)
 
 
 class SecurityAssessmentImportError(ValueError):

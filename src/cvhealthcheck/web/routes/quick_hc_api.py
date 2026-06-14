@@ -2,11 +2,24 @@ from __future__ import annotations
 
 from flask import jsonify
 
+from cvhealthcheck.context import NoExplicitContextError
 from cvhealthcheck.identity import effective_connection_url
 from cvhealthcheck.web.active_project import (
     ActiveProjectMissingError,
     get_active_customer,
 )
+
+
+def _no_active_context_payload() -> dict:
+    """The structured no-active-context read response — Context Integrity
+    read-side. "Nothing selected" is a NORMAL state (HTTP 200, not 4xx); the
+    shape mirrors the workspace empty-state semantically (``active_context`` flag)
+    so the two surfaces do not diverge."""
+    return {
+        "active_context": False,
+        "artifact": None,
+        "message": "No customer or project selected.",
+    }
 
 from .shared import (
     AuthError,
@@ -141,6 +154,8 @@ def api_quick_hc_subject_description(subject_id: str):
 def api_security_assessment_canonical():
     try:
         canonical = SecurityAssessmentService().get_canonical()
+    except NoExplicitContextError:
+        return jsonify(_no_active_context_payload()), 200
     except FileNotFoundError:
         return jsonify({"error": "No canonical artifact exists yet."}), 404
     return jsonify(canonical.model_dump(mode="json"))
@@ -150,6 +165,8 @@ def api_security_assessment_canonical():
 def api_license_summary_canonical():
     try:
         canonical = LicenseSummaryService().get_canonical()
+    except NoExplicitContextError:
+        return jsonify(_no_active_context_payload()), 200
     except FileNotFoundError:
         return jsonify({"error": "No canonical artifact exists yet."}), 404
     return jsonify(canonical.model_dump(mode="json"))

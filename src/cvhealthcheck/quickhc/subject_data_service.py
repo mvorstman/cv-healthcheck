@@ -32,12 +32,13 @@ from cvhealthcheck.db.subjects import (
 def _canonical_store() -> ArtifactStore:
     """Construct an ArtifactStore for the active project on demand.
 
-    Replaces the module-level singleton from before ADR 0002 phase 2.
-    Each call resolves the current request's active project (falling back
-    to the Default project outside a request context).
+    Context Integrity read-side: NO Default fallback. An absent explicit
+    selection raises NoExplicitContextError (caught by
+    _load_from_canonical_store → honest not-collected state), so the workspace
+    never silently renders the Default customer's scoped data.
     """
     from cvhealthcheck.web.active_project import make_active_project_store
-    return make_active_project_store()
+    return make_active_project_store(allow_default=False)
 from cvhealthcheck.quickhc import canonical_view as _canonical_view
 from cvhealthcheck.quickhc.description_service import resolve_tile_description
 from cvhealthcheck.quickhc.registry import (
@@ -352,8 +353,14 @@ def _tile_def_to_dict(tile: Any) -> dict[str, Any]:
 
 
 def _load_from_canonical_store(subject_id: str) -> CanonicalArtifact | None:
+    from cvhealthcheck.context import NoExplicitContextError
+
     try:
         return _canonical_store().load_latest_artifact(subject_id)
+    except NoExplicitContextError:
+        # No explicit customer/project selected → honest not-collected state,
+        # never the Default customer's data (Context Integrity read-side).
+        return None
     except FileNotFoundError:
         return None
     except Exception:

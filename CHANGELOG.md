@@ -10,6 +10,28 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-14 (feat(context) — Context Integrity READ-side enforced; isolation gate closed pending browser verify)
+
+**Branch:** `main`. The D5 complement: a no-context web READ no longer silently renders the Default customer's scoped artifacts — it returns an honest no-active-context state. Closes the last open half of the Customer/Project Context Integrity gate (writes were already enforced by D5). Full suite 1307 passed.
+
+### STEP 0 (recorded) — `registry/execution.py` is NOT a live write gap
+`build_and_save_artifact` (which saves via `_active_project_store()`, the read fallback) has **zero production callers** — only `registry/__init__` re-exports it and `tests/test_registry_execution.py` calls it. Live collection writes go through the dispatcher → `ArtifactStore(*require_active_context())` and the LS/SA `_require_project_store` (D5). So its `_active_project_store()` default is unreachable in production — not a write-to-Default-without-context gap. Left unchanged (out of scope).
+
+### Changed — read-context resolution gains no-fallback opt-out
+- **`web/active_project.py`:** `get_active_project` / `get_active_customer` / `make_active_project_store` gain `allow_default: bool = True`. With `allow_default=False` an absent explicit selection raises `NoExplicitContextError` instead of resolving the Default customer. The legacy fallback survives only for the opted-in non-request callers (CLI, tests, MCP/staging).
+- **Live web reads pass `allow_default=False`:** `subject_data_service._canonical_store` (workspace tiles), `license_summary`/`security_assessment` `_active_project_store` (the canonical API). `_load_from_canonical_store` catches `NoExplicitContextError` → honest not-collected tile (never an error log).
+- **No-context behavior, one shape both surfaces:** `GET /quick-hc` renders the not-collected workspace + an "No customer or project selected" notice + `initial_data["active_context"]=False`; the canonical API GETs return a structured `{"active_context": false, "artifact": null, "message": …}` at **HTTP 200** (not 404 — "nothing selected" is a normal state).
+- Explicit selection preserved: an explicitly-selected customer reads only its own scoped store; no read returns Default unless the caller opts in.
+
+### Tests — `tests/test_context_read_isolation.py` (+6, tests-first)
+no-context resolver raises (project/customer/store); opt-in still falls back; a Default-customer artifact is NOT rendered without explicit selection; explicit selection renders only that customer's store (no cross-leak); canonical API with no session → structured no-context 200 (LS + SA). Two Fix-2 tests that asserted the *old* fallback-renders-Default behavior were adapted to render via explicit selection (the new contract). D5 write tests stay green.
+
+### Gate status
+- **Two-customer cross-isolation: PASSED** (2026-06-14 read-only audit) — the scary half (A's data under B) was already structurally + physically impossible.
+- **No-context → Default display hazard: CLOSED** by this slice (bounded-to-Default fallback removed from live reads).
+- **Context Integrity (customer/project isolation) gate: CLOSED pending Michiel's browser verify** (no-context → empty state on workspace + canonical APIs; select TC1 → TC1; select TC2 → TC2). On pass, **D4 (report-profile / bindings ownership) unblocks**.
+- **Separate, still open:** ADR-0015 §119 cross-environment id-variance — a *template-portability* question needing a live two-environment **collect**, NOT a customer-isolation blocker. Also not done (deferred, named): moving active context out of the Flask session into `app.db` (this slice proved the narrower read-fix sufficient without it).
+
 ## 2026-06-14 (feat — ADR-0015 D2a: recipe immutability guard makes approval truthful)
 
 **Branch:** `main`. A post-approval write to a section's `extraction_instructions` may now change ONLY `evaluative.row_rules`; the extraction recipe (and every other `evaluative` subkey) is locked at approval. Interim realization of D2 ahead of D4 (bindings stay co-located but become un-mutable-except-row_rules). No bindings table, no migration, no multi-version scoping change. Full suite 1301 passed.

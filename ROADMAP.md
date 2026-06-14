@@ -72,17 +72,27 @@ The stable "why" behind the work.
 
 ## Initiatives — Now
 
-*Status: In Progress.*
+*Status: CLOSED pending browser verify (was the gating item).*
 
-**Customer/Project Context Integrity (gating).** Enforce scoped
-reads/writes/storage/reporting on the existing ADR-0002 customer+project
-entities. First move active context out of the Flask session into app.db
-(today `get_active_project` silently falls back to the Default customer's
-earliest project when the session key is absent or there's no request
-context — a wrong-customer hazard). Stand up the two-customer lab (one REST,
-one JSON import with multiple report versions); run a read-only isolation
-audit across collection/storage/evaluation/reporting before any fix. Couple
-report-identity / dataset-GUID portability (#34) here.
+**Customer/Project Context Integrity.** Scoped reads/writes on the ADR-0002
+customer+project entities are now enforced on **both** sides: writes via D5
+(`require_active_context`); reads via the `allow_default=False` no-fallback path
+on the live web reads (Quick HC workspace + canonical APIs) — a no-context read
+renders an honest empty state, never the Default customer's data. The two-customer
+lab (`test_customer_1`/HomeLab REST + `test_customer_2` import, both populated)
+was stood up and a read-only isolation audit run (2026-06-14): **cross-isolation
+PASSED** (A's data under B was already structurally + physically impossible); the
+only residue, the bounded no-context → Default display hazard, is **closed**.
+Remaining to mark fully CLOSED: Michiel's browser verify (no-context → empty;
+select TC1 → TC1; select TC2 → TC2). **On verify, the report-profile layer (D4)
+unblocks.**
+
+Deferred (named, NOT blocking): moving active context out of the Flask session
+into `app.db` — the narrow read-fix proved sufficient without it; revisit if the
+session-scoped context becomes limiting. Report-identity / dataset-GUID
+portability (#34) rides with the REST-primary subject probe (see Strategic
+Inflection), not here. ADR-0015 §119 cross-environment id-variance is a separate
+template-portability question (needs a live two-environment collect).
 
 ## Initiatives — Next
 

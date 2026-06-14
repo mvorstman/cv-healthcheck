@@ -124,18 +124,28 @@ def _quick_hc_asset_version() -> str:
 def quick_hc():
     db = get_db()
     try:
-        # Best-effort active customer for the source-tile version dropdown.
+        # Context Integrity read-side: NO silent Default fallback. With no explicit
+        # selection, customer_id stays None and the tiles render the honest
+        # not-collected state (the scoped store is no-fallback too) — never the
+        # Default customer's data.
         try:
-            customer_id = get_active_customer(db).get("customer_id")
-        except Exception:
+            customer_id = get_active_customer(db, allow_default=False).get("customer_id")
+        except (NoExplicitContextError, ActiveProjectMissingError):
             customer_id = None
         initial_data = build_subject_initial_data(db, customer_id=customer_id)
+        # Mirror the canonical API's no-active-context shape (semantically aligned).
+        initial_data["active_context"] = customer_id is not None
     finally:
         db.close()
     flashes = [
         {"category": cat, "message": msg}
         for cat, msg in get_flashed_messages(with_categories=True)
     ]
+    if not initial_data.get("active_context"):
+        flashes.append({
+            "category": "info",
+            "message": "No customer or project selected — choose one to view collected data.",
+        })
     return render_template(
         "quick_hc.html",
         initial_data=initial_data,

@@ -61,18 +61,25 @@ def _explicit_context() -> tuple[str, str] | None:
     return None
 
 
-def get_active_project(db: sqlite3.Connection | None = None) -> tuple[str, str]:
+def get_active_project(
+    db: sqlite3.Connection | None = None, *, allow_default: bool = True
+) -> tuple[str, str]:
     """Return (customer_id, project_id) for the active project — READ paths.
 
-    Reads the Flask session first. If nothing is set there (no request
-    context, or the user hasn't switched projects yet), falls back to
-    the Default customer's earliest-created project. Write paths must use
-    :func:`require_active_context` instead — the fallback here can never
-    authorize a write.
+    Reads the Flask session first. With ``allow_default=True`` (the legacy
+    default, for explicitly-opted-in non-request callers — CLI, tests,
+    MCP/staging), an absent selection falls back to the Default customer's
+    earliest-created project. With ``allow_default=False`` (live web reads,
+    Context Integrity read-side), an absent selection raises
+    :class:`NoExplicitContextError` so a no-context read renders an honest
+    empty state instead of silently surfacing the Default customer's data.
+    Write paths must use :func:`require_active_context`.
     """
     explicit = _explicit_context()
     if explicit is not None:
         return explicit
+    if not allow_default:
+        raise NoExplicitContextError()
     return resolve_default_project(db)
 
 
@@ -154,16 +161,20 @@ def _value_at(row: Any, key: str, fallback_index: int) -> str:
         return row[fallback_index]
 
 
-def get_active_customer(db: sqlite3.Connection | None = None) -> dict[str, Any]:
+def get_active_customer(
+    db: sqlite3.Connection | None = None, *, allow_default: bool = True
+) -> dict[str, Any]:
     """Return the customer row backing the active project.
 
     Chains get_active_project → get_customer. Used by the CommCell auth
     flow and the collect handler under ADR 0003 phase 3: both need the
     active customer's commcell_hostname, commcell_id, and customer_name.
     Raises ActiveProjectMissingError if the customer row is missing (the
-    project FK should make this impossible in a healthy DB).
+    project FK should make this impossible in a healthy DB). With
+    ``allow_default=False``, an absent selection raises NoExplicitContextError
+    (Context Integrity read-side) instead of resolving the Default customer.
     """
-    customer_id, _ = get_active_project(db)
+    customer_id, _ = get_active_project(db, allow_default=allow_default)
     customer = get_customer(customer_id)
     if customer is None:
         raise ActiveProjectMissingError(
@@ -174,13 +185,17 @@ def get_active_customer(db: sqlite3.Connection | None = None) -> dict[str, Any]:
     return customer
 
 
-def make_active_project_store(db: sqlite3.Connection | None = None) -> ArtifactStore:
+def make_active_project_store(
+    db: sqlite3.Connection | None = None, *, allow_default: bool = True
+) -> ArtifactStore:
     """Construct an ArtifactStore scoped to the active project.
 
-    Resolves the active (customer_id, project_id) via get_active_project
-    and returns a fresh ArtifactStore. Web routes call this when they
-    need to read or write artifacts.
+    Resolves the active (customer_id, project_id) via get_active_project and
+    returns a fresh ArtifactStore. Live web READS pass ``allow_default=False``
+    (Context Integrity read-side): an absent selection raises
+    NoExplicitContextError rather than scoping the store to the Default
+    customer. Non-request callers keep the default fallback.
     """
-    customer_id, project_id = get_active_project(db)
+    customer_id, project_id = get_active_project(db, allow_default=allow_default)
     return ArtifactStore(customer_id, project_id)
 
