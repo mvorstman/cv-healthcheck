@@ -10,6 +10,28 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-14 (docs/backlog — Fix-4 follow-up: per-source CommCell identifier precision)
+
+Backlog item only — NO code change, NO Fix-4 edit, NO banner change in this commit.
+
+**Fix-4 follow-up: per-source CommCell identifier precision.** The Fix-4
+identity/provenance guard false-mismatches on the CommServ environment endpoint:
+`GET /commandcenter/api/CommServ` reports the internal `commCellId` (`2`), while
+the customer record may declare the licensed CCID (`337f`). These are different
+identifier namespaces for the same CommCell — not necessarily wrong-customer data.
+
+- **Observed live 2026-06-14:** HomeLab reaches cs01 via gw02; the CommServ
+  endpoint reports `commCellId=2`; HomeLab declares `337f`; the guard raised a
+  mismatch banner.
+- **Follow-up:** the per-source CCID resolver must distinguish identifier *type*
+  (licensed CCID vs internal `commCellId` vs CommServe GUID/name), must NOT treat
+  the CommServ endpoint's internal `commCellId` as the licensed-CCID comparison
+  key, and the banner must NOT claim "possible wrong-customer data" for a known
+  identifier-namespace difference.
+- **Re-opens** the Fix-4 session's "single CCID field" conclusion — different
+  Commvault surfaces expose different CommCell identifier forms.
+- Backlog/follow-up; does **NOT** block Context Integrity read-isolation closure.
+
 ## 2026-06-14 (feat(context) — Context Integrity READ-side enforced; isolation gate closed pending browser verify)
 
 **Branch:** `main`. The D5 complement: a no-context web READ no longer silently renders the Default customer's scoped artifacts — it returns an honest no-active-context state. Closes the last open half of the Customer/Project Context Integrity gate (writes were already enforced by D5). Full suite 1307 passed.
