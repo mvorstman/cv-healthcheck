@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 from hashlib import md5
+from typing import Any
 
 from flask import jsonify
 
@@ -38,7 +39,10 @@ from cvhealthcheck.extractors.reportsplus_dataset import (
     ReportsPlusDatasetExtractor,
 )
 from cvhealthcheck.extractors.rest import RESTExtractor
-from cvhealthcheck.extractors.result_to_artifact import result_to_artifact
+from cvhealthcheck.extractors.result_to_artifact import (
+    _wire_commcell_id,
+    result_to_artifact,
+)
 from cvhealthcheck.reportsplus.session import CommvaultSession
 
 from .shared import (
@@ -370,6 +374,25 @@ def quick_hc_generic_collect(subject_id: str):
         stamped_ccid = normalize_commcell_id(customer.get("commcell_id"))
     except ValueError:
         stamped_ccid = None
+    # Fix-4 session-level wire comparand: a live CC-API collect runs against a
+    # real CommServe session, but only the environment/CommCell-Details card hits
+    # /CommServ and self-reports its commCellId; every other CC-API subject
+    # (clients, users, storage_policies, …) hits a non-identity endpoint and would
+    # fall to a SILENT "attested" verdict — masking a wrong-customer connection.
+    # Probe the session identity ONCE and supply it as the wire id ONLY when the
+    # subject's own endpoint carried none (_wire_commcell_id is None), so attested
+    # becomes a real verified/mismatch. Endpoint-carried identity stays
+    # authoritative (the card is untouched, no double-stamp); a probe failure
+    # falls back to no-wire/attested and never blocks (see _probe_session_commcell_id).
+    if (
+        result.source_type == COMMAND_CENTER_SOURCE_TYPE
+        and result.wire_commcell_id is None
+        and _wire_commcell_id(result) is None
+    ):
+        probed_ccid = _probe_session_commcell_id(token)
+        if probed_ccid is not None:
+            result.wire_commcell_id = probed_ccid
+            result.wire_commcell_source = "session:commserv.commCellId"
     artifact = result_to_artifact(
         result,
         subject_id=active_subject_id,
@@ -465,6 +488,26 @@ def _flash_ccid_verdict(artifact, *, silent_when_attested: bool = False) -> None
     if status == "attested" and silent_when_attested:
         return
     flash(message, category)
+
+
+def _probe_session_commcell_id(token: str | None) -> Any:
+    """One live CommServ identity probe for the Fix-4 wire comparand on a CC-API
+    collect — reuses the display route's ``get_commcell_identity`` (ADR-0008: the
+    current session token ONLY, never a mint).
+
+    Returns the wire ``commcell.commCellId``, or None on ANY failure (exception,
+    expired token, error payload, missing field) so the collect falls back to a
+    no-wire ``attested`` verdict and never blocks — a probe failure is
+    indistinguishable in safety from the pre-probe behavior."""
+    try:
+        probe = get_commcell_identity(token=token)
+        raw = probe.get("raw") if isinstance(probe, dict) else None
+        commcell = raw.get("commcell") if isinstance(raw, dict) else None
+        if isinstance(commcell, dict):
+            return commcell.get("commCellId")
+    except Exception:
+        return None
+    return None
 
 
 @bp.route("/quick-hc/<subject_id>/pin-version", methods=["POST"])

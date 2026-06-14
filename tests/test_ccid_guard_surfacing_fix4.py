@@ -142,6 +142,11 @@ def test_attested_collect_is_silent_but_persists(monkeypatch, migrated_db_path):
     monkeypatch.setattr(route_module, "_has_command_center_source", lambda *a, **k: True)
     monkeypatch.setattr(route_module, "CommandCenterExtractor", FakeExtractor)
     monkeypatch.setattr(route_module, "ArtifactStore", FakeStore)
+    # The result carries no endpoint identity, so the Fix-4 session-wire probe
+    # fires; give it a no-identity payload so the verdict stays attested
+    # deterministically (no real network call). See test_session_wire_ccid_fix4.
+    monkeypatch.setattr(route_module, "get_commcell_identity",
+                        lambda *a, **k: {"http_status": 401, "ok": False, "raw": {}})
 
     client = create_app().test_client()
     with client.session_transaction() as sess:

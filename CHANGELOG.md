@@ -10,6 +10,26 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-14 (fix — Fix-4: session-level wire CCID comparand for live CC-API collects)
+
+**Branch:** `main`. Live CC-API collects now carry a **session-level wire CommCell-ID comparand**, so AI-subject collects (clients, users, storage_policies, disk_storage, …) produce a real **verified/mismatch** verdict instead of always-`attested`. Full suite 1324 passed.
+
+### Problem (confirmed read-only, failure mode 4b — no-comparand)
+The Fix-4 declared-vs-wire verify runs on **every** collect via the universal `result_to_artifact` tail, but the AI subjects' endpoints (`/Client`, `/v2/storagepolicy`, `/v4/user`, `/v4/storage/disk`, …) carry no `commcell.commCellId`, so `_wire_commcell_id` returned None → `verify(declared, None)` → `attested` → silent. Result: a TC2 declaring `19417` (= `4bd9`) connected to a CommServe reporting `337f` is a real wrong-customer mismatch that landed **silently**. The comparand was session-reachable but never read at collect time. (Only the bespoke `environment`/CommCell-Details *card*, which hits `/CommServ` and self-reports its id, ever produced a real verdict.)
+
+### Fixed
+- **`web/routes/quick_hc.py`:** on a live CC-API collect, do ONE session identity probe (`_probe_session_commcell_id` → reuses the display route's `get_commcell_identity`, ADR-0008 current-session token only, never minted) and thread its `commcell.commCellId` into `result_to_artifact` via the **existing seam** (`result.wire_commcell_id` + `wire_commcell_source="session:commserv.commCellId"`). **No change to `verify_commcell_id`, the verdict ladder, or the never-block contract** — the producer simply now receives a comparand.
+- **Fallback, not preempt:** the probe supplies the wire id **only when the subject's own endpoint carried none** (`_wire_commcell_id(result) is None`). The `environment` card's own `/CommServ` read stays authoritative (source label `commserv:commcell.commCellId`, verdict unchanged) — no double-stamp, no conflict; well-defined precedence.
+- **Never-block preserved; mismatch loud:** a mismatch records the verdict and writes the evidence (provenance, not workflow) — the collect still returns 302. It surfaces through the existing loud `error`-category banner (`MISMATCH — declared X, source reports Y …`); `attested` stays silent on collect; `verified` is a quiet success. The shared verdict display is unchanged, so the bespoke path's surfacing is identical.
+- **Scope:** live CC-API collect only. File imports (HTML/CSV) have no session to probe — the probe lives on the collect route, never the import path, so imports stay `attested`, unchanged.
+- **Robustness:** the probe is one extra `GET /CommServ`; any failure (exception, expired token, error payload, missing field) → returns None → falls back to no-wire `attested` and never crashes or blocks. A probe failure is indistinguishable in safety from the pre-probe behavior.
+
+### Tests — `tests/test_session_wire_ccid_fix4.py` (+6, tests-first)
+session-wire == declared → **verified** (was attested); session-wire != declared (`19417`/`4bd9` vs `337f`) → **mismatch**, evidence still written, loud banner; probe raises → falls back to attested, not blocked; reachable probe with no identity (401) → attested; bespoke `environment` card → unchanged (verdict + `commserv:` source via its own `/CommServ`, probe does NOT override even when it reports a different id); import seam stays attested. Updated `test_ccid_guard_surfacing_fix4.py::test_attested_collect_is_silent_but_persists` to stub the probe deterministically (no real network).
+
+### Non-goals (explicit)
+NO change to `verify_commcell_id` / the verdict ladder; NO change to the never-block contract (block-on-confirmed-wrong-customer is a separate later slice); NO change to the bespoke collect path's existing behavior; NO import-path change; NO CommServ-endpoint-namespace work (the `337f`-vs-`2` backlog). §119 link: this makes declared-vs-wire variance **observable** on the generic path — a step toward §119's burden of proof, **NOT** a discharge (§119 still needs the cross-environment portability collect).
+
 ## 2026-06-14 (feat — ADR-0015 D4a: rule ownership/classification axis (INERT))
 
 **Branch:** `main`. First D4 slice: the rules registry gains an ownership axis separating universal **policy** rules from **customer_assertion** (customer/person/org-specific) rules. **INERT** — classification only; no firing/binding/override change (like the project_id stamp was inert). Full suite 1318 passed.
