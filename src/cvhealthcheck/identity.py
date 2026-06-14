@@ -153,3 +153,63 @@ def verify_commcell_id(
         "verification_notes": notes,
         "verified_at": now,
     }
+
+
+def _normalize_csguid(raw: object) -> str | None:
+    """Canonical CommServe csGUID = trimmed lowercase string. None for empty.
+
+    A GUID is a single stable namespace (unlike the CommCell ID, which exists in
+    both a licensed and an internal form) — so there is nothing to bridge: just
+    case-fold for comparison. Never raises."""
+    if raw is None:
+        return None
+    s = str(raw).strip().lower()
+    return s or None
+
+
+def verify_commcell_guid(
+    declared: object,
+    wire: object,
+    *,
+    wire_source: str | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Declared-vs-wire CommServe **csGUID** verdict (Fix 4, namespace-precision)
+    — PROVENANCE, not workflow. Same return shape and never-block/never-raise
+    contract as :func:`verify_commcell_id`, but it compares the CommServe GUID (a
+    single stable namespace), which is why it REPLACES the cross-namespace CCID
+    compare as the identity verdict driver: declared LICENSED `337f` vs wire
+    INTERNAL `2` false-mismatched the legitimate customer; GUIDs do not.
+
+    Ladder (note the divergence from the CCID ladder — both-sides-unset folds to
+    attested, there is no `unverifiable`):
+      verified  declared and wire both present and case-insensitively equal.
+      mismatch  both present and differ.
+      attested  either side absent — declared GUID not yet learned/set (the
+                normal first-connect/import case) OR the probe offered no wire
+                GUID. No proof possible; trusted, not verified.
+
+    The returned verification_notes records both normalized GUIDs (reusing the
+    declared_normalized/wire_normalized keys so the shared verdict display words
+    the banner concretely). ``now`` stamps verified_at."""
+    declared_norm = _normalize_csguid(declared)
+    wire_norm = _normalize_csguid(wire)
+
+    if declared_norm is None or wire_norm is None:
+        status = "attested"               # either side absent -> no proof possible
+    elif declared_norm == wire_norm:
+        status = "verified"
+    else:
+        status = "mismatch"
+
+    sources = [wire_source] if (wire_norm is not None and wire_source) else []
+    notes = (
+        f"declared_normalized={declared_norm or 'none'}; "
+        f"wire_normalized={wire_norm or 'none'}"
+    )
+    return {
+        "verification_status": status,
+        "verification_sources": sources,
+        "verification_notes": notes,
+        "verified_at": now,
+    }

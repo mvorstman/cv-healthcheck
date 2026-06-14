@@ -24,6 +24,10 @@ _CUSTOMER_COLUMNS = (
     "rp_server_url",
     "rp_scoping_id",
     "company_guid",
+    # Fix-4 namespace-precision: the declared CommServe csGUID (migration 0037),
+    # the same-namespace comparand for the identity verdict. TOFU-learned or
+    # set manually; distinct from company_guid (tenant/company, not CommServe).
+    "commserve_csguid",
     "contact_info",
     "notes",
     "created_at",
@@ -74,6 +78,7 @@ def create_customer(
     rp_server_url: str | None = None,
     rp_scoping_id: str | None = None,
     company_guid: str | None = None,
+    commserve_csguid: str | None = None,
     contact_info: str | None = None,
     notes: str | None = None,
     db_path: Path | None = None,
@@ -90,9 +95,9 @@ def create_customer(
         conn.execute(
             "INSERT INTO customers (customer_id, customer_name, commcell_id,"
             " connection_url, commserve_name, registration_code,"
-            " rp_server_url, rp_scoping_id, company_guid, contact_info, notes,"
-            " created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " rp_server_url, rp_scoping_id, company_guid, commserve_csguid,"
+            " contact_info, notes, created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 cid,
                 customer_name.strip(),
@@ -103,6 +108,7 @@ def create_customer(
                 rp_server_url,
                 rp_scoping_id,
                 company_guid,
+                commserve_csguid,
                 contact_info,
                 notes,
                 now,
@@ -181,6 +187,7 @@ def update_customer(
     rp_server_url: str | None = None,
     rp_scoping_id: str | None = None,
     company_guid: str | None = None,
+    commserve_csguid: str | None = None,
     contact_info: str | None = None,
     notes: str | None = None,
     db_path: Path | None = None,
@@ -207,6 +214,7 @@ def update_customer(
         "rp_server_url": rp_server_url,
         "rp_scoping_id": rp_scoping_id,
         "company_guid": company_guid,
+        "commserve_csguid": commserve_csguid,
         "contact_info": contact_info,
         "notes": notes,
     }
@@ -223,6 +231,35 @@ def update_customer(
         cursor = conn.execute(
             f"UPDATE customers SET {', '.join(updates)} WHERE customer_id = ?",
             params,
+        )
+        conn.commit()
+    return cursor.rowcount > 0
+
+
+def learn_commserve_csguid(
+    customer_id: str,
+    csguid: str,
+    *,
+    db_path: Path | None = None,
+) -> bool:
+    """Trust-on-first-use: record the wire CommServe csGUID on a customer the
+    FIRST time a verified live connect observes it (Fix-4 namespace-precision).
+
+    SET-ONCE — the WHERE clause only writes when commserve_csguid is unset, so a
+    later connect to a DIFFERENT CommServe (a changed GUID) is left to surface as
+    a verdict `mismatch`, never silently auto-updated. Returns True iff a row was
+    written (i.e. the GUID was newly learned). The manual customer-form override
+    (update_customer) is the escape hatch to change an already-set value."""
+    if not str(csguid or "").strip():
+        return False
+    path = db_path or DB_PATH
+    now = _now()
+    with _connect(path) as conn:
+        cursor = conn.execute(
+            "UPDATE customers SET commserve_csguid = ?, updated_at = ?"
+            " WHERE customer_id = ?"
+            "   AND (commserve_csguid IS NULL OR TRIM(commserve_csguid) = '')",
+            (csguid, now, customer_id),
         )
         conn.commit()
     return cursor.rowcount > 0

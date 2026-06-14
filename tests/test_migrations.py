@@ -155,7 +155,7 @@ def test_all_seeded_subjects_are_active(fresh_db: Path) -> None:
 
 def test_migration_status_reports_all_applied(fresh_db: Path) -> None:
     statuses = migration_status(db_path=fresh_db)
-    assert len(statuses) == 36  # 0036: rule ownership/classification axis (ADR-0015 D4a)
+    assert len(statuses) == 37  # 0037: customer commserve_csguid (Fix-4 namespace-precision)
     assert all(s["status"] == "applied" for s in statuses)
     migration_ids = [s["migration_id"] for s in statuses]
     assert migration_ids == sorted(migration_ids)

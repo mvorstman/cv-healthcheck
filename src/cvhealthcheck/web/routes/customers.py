@@ -71,6 +71,10 @@ def _form_payload(form: Any) -> dict[str, Any]:
         "rp_server_url": normalize_connection_url(_clean(form.get("rp_server_url"))),
         "rp_scoping_id": _clean(form.get("rp_scoping_id")),
         "company_guid": _clean(form.get("company_guid")),
+        # Fix-4 namespace-precision: the declared CommServe csGUID (the identity
+        # verdict comparand). Manual set/override here; also TOFU-learned on the
+        # first verified live collect. Lowercased — the verdict compares case-fold.
+        "commserve_csguid": (lambda g: g.lower() if g else None)(_clean(form.get("commserve_csguid"))),
         "contact_info": _clean(form.get("contact_info")),
         "notes": _clean(form.get("notes")),
     }
@@ -79,7 +83,8 @@ def _form_payload(form: Any) -> dict[str, Any]:
 _SELECT_COLUMNS = (
     "customer_id, customer_name, commcell_id, commcell_hostname, "
     "connection_url, commserve_name, registration_code, rp_server_url, "
-    "rp_scoping_id, company_guid, contact_info, notes, created_at, updated_at"
+    "rp_scoping_id, company_guid, commserve_csguid, contact_info, notes, "
+    "created_at, updated_at"
 )
 
 
@@ -192,9 +197,9 @@ def customers_new():
             db.execute(
                 "INSERT INTO customers (customer_id, customer_name, commcell_id,"
                 " connection_url, commserve_name, registration_code,"
-                " rp_server_url, rp_scoping_id, company_guid, contact_info,"
-                " notes, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " rp_server_url, rp_scoping_id, company_guid, commserve_csguid,"
+                " contact_info, notes, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     customer_id,
                     payload["customer_name"],
@@ -205,6 +210,7 @@ def customers_new():
                     payload["rp_server_url"],
                     payload["rp_scoping_id"],
                     payload["company_guid"],
+                    payload["commserve_csguid"],
                     payload["contact_info"],
                     payload["notes"],
                     now,
@@ -260,7 +266,7 @@ def customers_edit(customer_id: str):
                 "UPDATE customers SET customer_name = ?, commcell_id = ?,"
                 " connection_url = ?, commserve_name = ?, registration_code = ?,"
                 " rp_server_url = ?, rp_scoping_id = ?, company_guid = ?,"
-                " contact_info = ?, notes = ?, updated_at = ?"
+                " commserve_csguid = ?, contact_info = ?, notes = ?, updated_at = ?"
                 " WHERE customer_id = ?",
                 (
                     payload["customer_name"],
@@ -271,6 +277,7 @@ def customers_edit(customer_id: str):
                     payload["rp_server_url"],
                     payload["rp_scoping_id"],
                     payload["company_guid"],
+                    payload["commserve_csguid"],
                     payload["contact_info"],
                     payload["notes"],
                     now,

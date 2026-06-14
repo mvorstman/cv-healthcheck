@@ -191,6 +191,13 @@
     </div>
 
     <div class="cust-field">
+      <label class="cust-label" for="commserve_csguid">CommServe GUID</label>
+      <input class="cust-input" id="commserve_csguid" name="commserve_csguid" type="text"
+             value="{{ customer.commserve_csguid or '' }}" maxlength="200">
+      <span class="cust-hint">Optional. The CommServe <code>csGUID</code> — the stable identity verified against the live connection. Usually learned automatically on the first collect; set it here to override. Distinct from Company GUID.</span>
+    </div>
+
+    <div class="cust-field">
       <label class="cust-label" for="rp_server_url">Reports Plus server URL</label>
       <input class="cust-input" id="rp_server_url" name="rp_server_url" type="text"
              value="{{ customer.rp_server_url or '' }}" maxlength="200">

@@ -10,6 +10,28 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-14 (fix — Fix-4: csGUID identity comparand (namespace-precision); CCID-precision backlog CLOSED)
+
+**Branch:** `main`. The identity verdict now compares the CommServe **csGUID** — a single stable namespace — instead of the cross-namespace CommCell ID. This **resolves** the per-source CCID-precision backlog item (the false HomeLab mismatch the prior session-probe slice made loud). Full suite 1334 passed.
+
+### Root cause (read-only confirmed)
+The declared `customer.commcell_id` is the **LICENSED** CCID (`337f`); the wire `_wire_commcell_id` / session probe read `GET /CommServ`'s **INTERNAL** `commcell.commCellId` (`2`). These are different *numbers* in different namespaces, so `normalize_commcell_id` cannot bridge them — HomeLab false-mismatched (`337f` vs `2`). The 2026-06-13 "one CommCell ID field / no internal-vs-licensed distinction" ground-truth note was an overclaim (it read gw02's value before the `.129` box exposed `commCellId=2`); the 2026-06-14 backlog re-opened it; this slice closes it. The CommServe **csGUID** (`C721DF1F-…`, already in the `/CommServ` payload) is the same-namespace comparand both sides can agree on.
+
+### Fixed
+- **`identity.py`:** new `verify_commcell_guid` — mirrors `verify_commcell_id`'s shape/never-block contract but compares case-insensitive GUID strings; ladder folds either-side-absent to `attested` (no `unverifiable`). `verify_commcell_id` is retained (ladder unchanged) but is **no longer the verdict driver**.
+- **`result_to_artifact`:** the stamped `verification_*` verdict is now GUID-driven (`commserve_guid` declared vs `result.wire_commserve_guid`). The CCID compare and `_wire_commcell_id` are **removed** from the verdict path; the licensed `commcell_id` stays on the source as **displayed-not-verified provenance**.
+- **`web/routes/quick_hc.py`:** on a live CC-API collect, probe the session `/CommServ` csGUID once (`_probe_session_commserve_guid`, ADR-0008 current-session token only) and thread it in. **TOFU** (`db.customers.learn_commserve_csguid`, set-once): learn the GUID on the first verified connect; a changed GUID later surfaces as `mismatch`, never auto-updates. The verdict for the learning collect itself is `attested` (we record what we saw; we do not verify against a value learned the same instant). Probe failure → `attested`, never blocks.
+- **Schema + form:** migration `0037` adds nullable `customers.commserve_csguid`; `db.customers` create/update + the customer form expose it for manual set/override (distinct from `company_guid`). Migration count 36→37.
+
+### Effect (the regression the prior slice introduced is gone)
+HomeLab with an unset declared GUID → `attested` (false `337f`-vs-`2` banner **gone**); after one connect TOFU learns `C721DF1F-…` → subsequent collects `verified`. A genuinely wrong CommServe (declared GUID ≠ wire GUID) is still a loud `mismatch`, evidence still written (never-block preserved). Imports stay `attested` (no session).
+
+### Tests
+`tests/test_csguid_comparand_fix4.py` (NEW, +20: pure `verify_commcell_guid`, GUID-driven `result_to_artifact`, TOFU set-once + manual override, live-collect probe/TOFU/loud-mismatch); `tests/test_ccid_guard_fix4.py` + `tests/test_ccid_guard_surfacing_fix4.py` rewritten to the GUID contract; `tests/test_session_wire_ccid_fix4.py` **removed** (its internal-CCID comparand is superseded). `test_import_ccid_threading` unchanged (imports were attested under both schemes).
+
+### Non-goals
+NO verdict-ladder rewrite (`verify_commcell_id` kept); NO popup/block (the block-on-confirmed-wrong-customer slice is next, on top of this); NO licensed-CCID wire-source hunt (Option B, deferred — no LS report-206 dependency); NO change to the session-probe's `/CommServ` fetch. **§119:** GUID-based identity is the portability direction this advances and makes variance *observable*, but §119 is **not discharged** (still needs the cross-environment portability collect).
+
 ## 2026-06-14 (fix — Fix-4: session-level wire CCID comparand for live CC-API collects)
 
 **Branch:** `main`. Live CC-API collects now carry a **session-level wire CommCell-ID comparand**, so AI-subject collects (clients, users, storage_policies, disk_storage, …) produce a real **verified/mismatch** verdict instead of always-`attested`. Full suite 1324 passed.

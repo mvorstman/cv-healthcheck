@@ -26,7 +26,7 @@ from cvhealthcheck.extractors.commcell_enrich import enrich_commcell_info
 from cvhealthcheck.extractors.chart_section import build_chart_section
 from cvhealthcheck.extractors.html import ExtractionResult
 from cvhealthcheck.extractors.metric_section import build_metric_section, worst_metric_severity
-from cvhealthcheck.identity import verify_commcell_id
+from cvhealthcheck.identity import verify_commcell_guid
 
 
 _SEVERITY_MAP: dict[str, FindingSeverity] = {
@@ -55,18 +55,6 @@ _SOURCE_TYPE_MAP: dict[str, SourceType] = {
 _LIVE_SOURCE_TYPES = {SourceType.rest, SourceType.rest_commserve}
 
 
-def _wire_commcell_id(result: ExtractionResult) -> Any:
-    """The wire CommCell ID from a CC-API result's single-object record
-    (commcell.commCellId, raw int) — Fix 4. None if not present in any section
-    record (CC-API but no id -> unverifiable, comparison impossible)."""
-    for rows in result.sections.values():
-        if rows and isinstance(rows[0], dict):
-            commcell = rows[0].get("commcell")
-            if isinstance(commcell, dict) and commcell.get("commCellId") is not None:
-                return commcell["commCellId"]
-    return None
-
-
 def result_to_artifact(
     result: ExtractionResult,
     subject_id: str,
@@ -74,6 +62,7 @@ def result_to_artifact(
     file_path: Path | None = None,
     commcell_id: str | None = None,
     commcell_name: str | None = None,
+    commserve_guid: str | None = None,
 ) -> CanonicalArtifact:
     now = datetime.now(timezone.utc)
     artifact_source_type = _SOURCE_TYPE_MAP.get(
@@ -82,27 +71,19 @@ def result_to_artifact(
     # ADR 0004: live REST collection records collected_at; file imports record
     # only imported_at (the file may have been generated earlier elsewhere).
     collected_at = now if artifact_source_type in _LIVE_SOURCE_TYPES else None
-    # Fix 4 + import-verification slice: stamp the declared-vs-wire CommCell ID
-    # verdict (PROVENANCE, never blocks). The per-source resolver decides what
-    # wire CCID THIS source can provide:
-    #   1. an extractor-surfaced wire CCID (result.wire_commcell_id) — e.g. an
-    #      HTML metricsCommcellInfo panel. The seam is live; HTML extraction of
-    #      it is deferred, so this is None today.
-    #   2. else the CC-API (rest_commserve) identity payload (commcell.commCellId,
-    #      raw int) read from the single-object record.
-    #   3. else no wire identity -> attested (plain CSV; non-identity CC-API
-    #      endpoints like server_groups/storage_policies that carry no CCID).
-    # commcell_id here is the DECLARED value (customer row). No wire -> attested;
-    # no declared -> unverifiable (the two are kept distinct). The verdict is
-    # stamped on ArtifactSource only.
-    wire_ccid = getattr(result, "wire_commcell_id", None)
-    wire_source = getattr(result, "wire_commcell_source", None)
-    if wire_ccid is None and artifact_source_type == SourceType.rest_commserve:
-        wire_ccid = _wire_commcell_id(result)
-        if wire_ccid is not None:
-            wire_source = "commserv:commcell.commCellId"
-    verdict = verify_commcell_id(
-        commcell_id, wire_ccid, wire_source=wire_source, now=now,
+    # Fix 4 (namespace-precision): stamp the declared-vs-wire IDENTITY verdict
+    # (PROVENANCE, never blocks) — compared on the CommServe **csGUID**, a single
+    # stable namespace. This REPLACED the cross-namespace CommCell-ID compare
+    # (declared LICENSED `337f` vs wire INTERNAL `2`), which false-mismatched the
+    # legitimate customer. The wire GUID is supplied by the live-collect caller
+    # (result.wire_commserve_guid, from the session /CommServ probe); imports
+    # supply none -> attested. The licensed `commcell_id` is retained below as
+    # DISPLAYED-not-verified provenance — it no longer drives the verdict. The
+    # verdict is stamped on ArtifactSource only.
+    wire_guid = getattr(result, "wire_commserve_guid", None)
+    wire_guid_source = getattr(result, "wire_commserve_guid_source", None)
+    verdict = verify_commcell_guid(
+        commserve_guid, wire_guid, wire_source=wire_guid_source, now=now,
     )
     source = ArtifactSource(
         type=artifact_source_type,

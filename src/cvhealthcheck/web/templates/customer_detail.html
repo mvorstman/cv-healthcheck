@@ -208,6 +208,10 @@
         <dt>CommCell ID</dt>
         <dd style="font-family: var(--mono); font-size: 12px;">{{ customer.commcell_id }}</dd>
       {% endif %}
+      {% if customer.commserve_csguid %}
+        <dt>CommServe GUID</dt>
+        <dd style="font-family: var(--mono); font-size: 12px;">{{ customer.commserve_csguid }}</dd>
+      {% endif %}
       {% if customer.registration_code %}
         <dt>Registration code</dt>
         <dd style="font-family: var(--mono); font-size: 12px;">{{ customer.registration_code }}</dd>

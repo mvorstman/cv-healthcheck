@@ -65,6 +65,18 @@ also verified; `commcell_info` enriched; `registration_code` masked.
 
 ## Verified Ground Truth — Fix 4 Live Validation (2026-06-13)
 
+> **⚠ Corrected 2026-06-14 — implications #1 and #4 below were an overclaim.**
+> A later read-only check (and the committed `/CommServ` capture in
+> `tests/test_adapter_commcell_details.py`) show the wire `commcell.commCellId`
+> is the **internal** id (`2` on HomeLab), distinct from the **licensed** CCID
+> (`337f`) the customer declares — so the "one CommCell ID field / no
+> internal-vs-licensed distinction" conclusion is **false**, and declared `337f`
+> vs wire `2` is a **false-mismatch**, not `verified`. Resolved by the
+> 2026-06-14 csGUID comparand (the identity verdict now compares the CommServe
+> csGUID, a single stable namespace). The end-to-end pipeline claim (collect →
+> read wire → compare → stamp → surface) stands; only the choice of comparand
+> was wrong.
+
 Collected `environment` against **HomeLab / gw02** and captured the wire value:
 
 - **declared** (customer row) CommCell ID = **337f**
@@ -131,19 +143,21 @@ params; `.staging-badge-approved` CSS. Named in the CHANGELOG slice-1 entry.
 
 ## Deferred / named register (none of these is forgotten)
 
-- **Fix-4 follow-up — per-source CommCell identifier precision.** The Fix-4
-  identity/provenance guard false-mismatches on the CommServ environment endpoint:
-  `GET /commandcenter/api/CommServ` reports the internal `commCellId` (`2`), while
-  the customer record may declare the licensed CCID (`337f`) — different identifier
-  namespaces for the same CommCell, NOT wrong-customer data. Observed live
-  2026-06-14 (HomeLab via gw02: endpoint `commCellId=2`, declared `337f` → mismatch
-  banner). Follow-up: the per-source CCID resolver must distinguish identifier
-  *type* (licensed CCID vs internal `commCellId` vs CommServe GUID/name), must NOT
-  use the CommServ internal `commCellId` as the licensed-CCID comparison key, and
-  the banner must NOT claim "possible wrong-customer data" for a known
-  identifier-namespace difference. **Re-opens** the Fix-4 "single CCID field"
-  conclusion. Backlog/follow-up; does NOT block Context Integrity read-isolation
-  closure. (CHANGELOG 2026-06-14 docs/backlog entry.)
+- **Fix-4 follow-up — per-source CommCell identifier precision. ✅ RESOLVED
+  2026-06-14 (csGUID comparand).** The identity verdict now compares the CommServe
+  **csGUID** (a single stable namespace, already in the `/CommServ` payload), not
+  the cross-namespace CommCell ID — so the declared **licensed** CCID (`337f`) is
+  no longer compared against the wire **internal** `commCellId` (`2`) that
+  false-mismatched HomeLab. `result_to_artifact` drives `verification_*` from
+  `verify_commcell_guid`; the licensed CCID is demoted to displayed-not-verified
+  provenance on the source. The live collect probes the session `/CommServ`
+  csGUID once and TOFU-learns it on the customer (set-once; a changed GUID later
+  surfaces as `mismatch`, never auto-updates); the learning collect itself is
+  `attested`. Manual override on the customer form (`commserve_csguid`, migration
+  0037). Probe failure → `attested`, never blocks. (CHANGELOG 2026-06-14 csGUID
+  entry; ADR-0015 §119 progress note.) **Superseded:** the 2026-06-13 "single CCID
+  field / no internal-vs-licensed distinction" ground-truth claim below — see the
+  correction there.
 - **Generic table renderer value coercion (cosmetic).** Some generic table-render
   paths display structured `{value, unit}` values raw (e.g.
   `{'unit': None, 'value': 100}`, observed in License Summary capacity/license

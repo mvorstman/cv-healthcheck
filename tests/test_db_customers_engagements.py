@@ -65,6 +65,7 @@ def test_create_customer_returns_all_fields(db: Path) -> None:
         "rp_server_url",
         "rp_scoping_id",
         "company_guid",
+        "commserve_csguid",        # Fix-4 namespace-precision (migration 0037)
         "contact_info",
         "notes",
         "created_at",
