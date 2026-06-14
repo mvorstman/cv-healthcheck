@@ -72,20 +72,20 @@ The stable "why" behind the work.
 
 ## Initiatives — Now
 
-*Status: CLOSED pending browser verify (was the gating item).*
+*Status: CLOSED (browser-verified 2026-06-14). The next read-only investigation is
+the D4 bindings/profile-ownership boundary check.*
 
-**Customer/Project Context Integrity.** Scoped reads/writes on the ADR-0002
-customer+project entities are now enforced on **both** sides: writes via D5
-(`require_active_context`); reads via the `allow_default=False` no-fallback path
-on the live web reads (Quick HC workspace + canonical APIs) — a no-context read
+**Customer/Project Context Integrity — CLOSED.** Scoped reads/writes on the
+ADR-0002 customer+project entities are enforced on **both** sides: writes via D5
+(`require_active_context`); reads via the `allow_default=False` no-fallback path on
+the live web reads (Quick HC workspace + canonical APIs) — a no-context read
 renders an honest empty state, never the Default customer's data. The two-customer
-lab (`test_customer_1`/HomeLab REST + `test_customer_2` import, both populated)
-was stood up and a read-only isolation audit run (2026-06-14): **cross-isolation
-PASSED** (A's data under B was already structurally + physically impossible); the
-only residue, the bounded no-context → Default display hazard, is **closed**.
-Remaining to mark fully CLOSED: Michiel's browser verify (no-context → empty;
-select TC1 → TC1; select TC2 → TC2). **On verify, the report-profile layer (D4)
-unblocks.**
+lab (`test_customer_1`/HomeLab REST + `test_customer_2` import, both populated) ran
+a read-only isolation audit (2026-06-14): **cross-isolation PASSED**. Browser
+verify (2026-06-14) confirmed: no-context → empty; HomeLab selected → only HomeLab
+data; TC2 selected → only TC2 data; a TC2 License Summary HTML import landed under
+the active TC2 context (scoped to the selection, not the file). **D4 (report-profile
+/ bindings ownership) is now UNBLOCKED.**
 
 Deferred (named, NOT blocking): moving active context out of the Flask session
 into `app.db` — the narrow read-fix proved sufficient without it; revisit if the
@@ -153,3 +153,5 @@ Deferred, deliberate — not defects.
 - **Full report-profile persistence/schema** — deferred; first Report Profile is an in-memory/view contract only.
 - **Contextual advisory/lifecycle engine** — deferred; it must not be hidden inside report composition.
 - **Health Domain / compliance profile consumers** — deferred; Domain Labels exist, but the first consumer is not designed yet.
+- **Generic table renderer value coercion (cosmetic)** — some generic table-render paths display structured `{value, unit}` objects raw (e.g. `{'unit': None, 'value': 100}`, observed in License Summary capacity/license rendering). Follow-up: generic display coercion → user-facing scalar text; likely the generic complement to bespoke LS formatting. Does NOT block Context Integrity, D4, or isolation.
+- **Fix-4 per-source CommCell identifier precision** — the guard false-mismatches when the CommServ endpoint reports internal `commCellId=2` vs a declared licensed CCID `337f` (different identifier namespaces, not wrong-customer data). Resolver must distinguish identifier type; backlog, not blocking. (See HANDOVER register + CHANGELOG 2026-06-14.)

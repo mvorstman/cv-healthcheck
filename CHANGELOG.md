@@ -10,6 +10,41 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-14 (docs — Context Integrity read-isolation gate CLOSED (browser-verified); D4 unblocked; renderer backlog)
+
+Browser verify passed — docs only, no code change.
+
+### Context Integrity read-isolation gate: **CLOSED**
+Evidence (browser-verified 2026-06-14):
+- No-context session → honest empty / no-active-context state.
+- Canonical APIs return `active_context=false`, `artifact=null` — no Default data rendered.
+- HomeLab (`test_customer_1`) selected → renders only HomeLab scoped data.
+- `Test_Customer_2` selected → renders only TC2 scoped data.
+- A TC2 **License Summary HTML import** landed under the active TC2 context; the import mechanism scopes to the selected customer/project, NOT to anything baked into the file.
+- **Two-customer cross-isolation is therefore considered proven for the current lab.**
+- **D4 report-profile / bindings-ownership boundary check is now UNBLOCKED** (the next read-only investigation).
+
+### Verification-verdict behavior (recorded, correct)
+The LS HTML import produced an **attested / trusted-not-verified** identity verdict:
+- the source carries no comparable CommCell identity;
+- the guard did NOT block the import;
+- the banner is correct for this source type — **trusted because the user imported it into the selected context, not verified from embedded source identity**.
+- This is DISTINCT from the CommServ endpoint mismatch case (a per-source identifier-namespace issue — see the Fix-4 backlog).
+
+### Caveats / non-closures (not overclaimed)
+- **ADR-0015 §119 cross-environment id-variance: OPEN** — a template-portability / source-identifier question requiring a second live-environment **collect**, NOT a customer read-isolation blocker.
+- **active-context → app.db: DEFERRED (not cancelled)** — the narrow read-side enforcement closed the current gate without requiring that migration.
+- **Fix-4 per-source CommCell identifier precision: BACKLOG** — CommServ endpoint may report internal `commCellId=2` while the customer record declares licensed CCID `337f`. Logged previously; not blocking this gate.
+
+### New backlog — generic table renderer value coercion (deferred / cosmetic)
+Some generic table-render paths display structured values such as `{'unit': None, 'value': 100}` raw (observed in License Summary capacity/license rendering). Desired follow-up: generic display coercion for `{value, unit}` value objects → user-facing scalar text instead of a Python/JSON dict. Cosmetic; does NOT block Context Integrity, D4, or data isolation. Likely the generic complement to bespoke License Summary formatting.
+
+### Final state
+- Context Integrity read-isolation gate: **CLOSED**.
+- D4 bindings/profile ownership boundary check: **UNBLOCKED** (next read-only investigation).
+- Fix-4 CCID-form mismatch: backlog, not blocking.
+- Generic table renderer raw `{unit,value}`: backlog, not blocking.
+
 ## 2026-06-14 (docs/backlog — Fix-4 follow-up: per-source CommCell identifier precision)
 
 Backlog item only — NO code change, NO Fix-4 edit, NO banner change in this commit.

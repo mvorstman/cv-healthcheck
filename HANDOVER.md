@@ -6,11 +6,18 @@ artifact schema, MCP server for AI-assisted subject authoring).
 
 ## Current state
 
-- **Branch:** `main`. **HEAD = `a334b8f`** (all pushed; `HEAD == origin/main`).
-- **Tests:** full pytest **1289 green** (exit 0); LS generic-vs-bespoke parity
+- **Branch:** `main` (all pushed; `HEAD == origin/main`).
+- **Tests:** full pytest **1307 green** (exit 0); LS generic-vs-bespoke parity
   **738 / 0** over the distinct real-export corpus.
-- **Just completed — the License Summary CSV/HTML UPLOAD de-bespoking (ADR-0017),
-  live + browser-verified.** See the dedicated section below.
+- **Context Integrity read-isolation gate: CLOSED (browser-verified 2026-06-14).**
+  Reads now enforce explicit context (no silent Default fallback) — D5's
+  complement; two-customer cross-isolation proven (HomeLab vs TC2). **The next
+  read-only investigation is the D4 report-profile / bindings-ownership boundary
+  check (now UNBLOCKED).** Caveats (not closures): ADR-0015 §119 cross-environment
+  id-variance is OPEN (template-portability, needs a second live-environment
+  collect); active-context → app.db is DEFERRED (the narrow read-fix sufficed).
+- **Earlier — the License Summary CSV/HTML UPLOAD de-bespoking (ADR-0017), live +
+  browser-verified.** See the dedicated section below.
 - **Completed earlier (the provenance arc, pushed, LIVE-VERIFIED):** Fix 2
   (unscoped global-file layer retired), D5 (Context Integrity enforced at the
   write layer), Fix 3 (identity-schema split), the evidence-context foundation,
@@ -137,6 +144,12 @@ params; `.staging-badge-approved` CSS. Named in the CHANGELOG slice-1 entry.
   identifier-namespace difference. **Re-opens** the Fix-4 "single CCID field"
   conclusion. Backlog/follow-up; does NOT block Context Integrity read-isolation
   closure. (CHANGELOG 2026-06-14 docs/backlog entry.)
+- **Generic table renderer value coercion (cosmetic).** Some generic table-render
+  paths display structured `{value, unit}` values raw (e.g.
+  `{'unit': None, 'value': 100}`, observed in License Summary capacity/license
+  rendering). Follow-up: generic display coercion → user-facing scalar text;
+  likely the generic complement to bespoke LS formatting. Cosmetic; does NOT block
+  Context Integrity, D4, or data isolation. (CHANGELOG 2026-06-14.)
 - **License Summary REST collect — migration / product decision (named).** LS
   CSV/HTML upload is now generic (ADR-0017, above); LS **REST collect** still runs
   the bespoke service path (parity-UNCOVERED, shares normalize/models/adapter/
