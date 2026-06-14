@@ -19,9 +19,76 @@ already do for ``extraction_instructions``; it is not evaluation.
 """
 from __future__ import annotations
 
+import copy
 import json
 import sqlite3
 from typing import Any
+
+
+# ── ADR-0015 D2a: recipe immutability guard ───────────────────────────────────
+#
+# Approval locks the extraction RECIPE. The only post-approval write to a
+# section's extraction_instructions is rule (un)binding, which may touch ONLY
+# evaluative.row_rules. Bindings are an intentionally-mutable layer co-located in
+# the section blob today (physical separation is D4). This guard makes approval
+# truthful: it rejects any write whose non-row_rules content differs from the
+# stored row — an ALLOWLIST (only row_rules may change), so a recipe key nobody
+# enumerated, and every other evaluative subkey, is protected by default.
+
+class RecipeImmutabilityError(ValueError):
+    """A guarded write tried to change something other than evaluative.row_rules
+    in an approved section's extraction_instructions (ADR-0015 D2a)."""
+
+
+def _as_instr_dict(instr: Any) -> dict[str, Any]:
+    if isinstance(instr, dict):
+        return instr
+    if not instr:
+        return {}
+    try:
+        parsed = json.loads(instr)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _instr_minus_row_rules(instr: Any) -> dict[str, Any]:
+    """A deep copy of extraction_instructions with evaluative.row_rules removed;
+    an 'evaluative' dict left empty by that removal is dropped, so 'no evaluative'
+    and 'evaluative holding only row_rules' compare equal (the first-bind case)."""
+    clone = copy.deepcopy(_as_instr_dict(instr))
+    evaluative = clone.get("evaluative")
+    if isinstance(evaluative, dict):
+        evaluative.pop("row_rules", None)
+        if not evaluative:
+            clone.pop("evaluative", None)
+    return clone
+
+
+def assert_recipe_unchanged(old_instr: Any, new_instr: Any) -> None:
+    """Raise RecipeImmutabilityError unless OLD and NEW extraction_instructions are
+    structurally identical except for evaluative.row_rules. Compares PARSED
+    structures (each arg may be a raw JSON string or a dict), so JSON key
+    reordering never trips the guard."""
+    if _instr_minus_row_rules(old_instr) != _instr_minus_row_rules(new_instr):
+        raise RecipeImmutabilityError(
+            "post-approval write may change only evaluative.row_rules; the recipe "
+            "(or another evaluative subkey) differs — locked at approval (ADR-0015 D2a)"
+        )
+
+
+def _write_section_instructions(
+    db: sqlite3.Connection, row_id: int, old_instr: Any, new_instr: dict[str, Any]
+) -> None:
+    """Guarded UPDATE of a section's extraction_instructions: rejects any
+    non-row_rules delta (ADR-0015 D2a), then persists. Version-agnostic — it
+    validates WHAT changed, never WHICH rows are written (multi-version write
+    scoping is unchanged; see bind_rule)."""
+    assert_recipe_unchanged(old_instr, new_instr)
+    db.execute(
+        "UPDATE subject_section_sources SET extraction_instructions = ? WHERE id = ?",
+        (json.dumps(new_instr), row_id),
+    )
 
 
 def load_rules_registry(db: sqlite3.Connection) -> dict[str, dict[str, Any]]:
@@ -204,10 +271,8 @@ def bind_rule(
         row_rules = instr.setdefault("evaluative", {}).setdefault("row_rules", [])
         if not any(e.get("ref") == rule_id for e in row_rules):
             row_rules.append({"ref": rule_id})
-            db.execute(
-                "UPDATE subject_section_sources SET extraction_instructions = ? WHERE id = ?",
-                (json.dumps(instr), row["id"]),
-            )
+            # ADR-0015 D2a: guarded write — only evaluative.row_rules may change.
+            _write_section_instructions(db, row["id"], row["instr"], instr)
             bound += 1
     db.commit()
     return bound
@@ -234,10 +299,8 @@ def delete_rule(db: sqlite3.Connection, rule_id: str) -> dict[str, Any]:
         kept = [e for e in row_rules if e.get("ref") != rule_id]
         if len(kept) != len(row_rules):
             instr["evaluative"]["row_rules"] = kept
-            db.execute(
-                "UPDATE subject_section_sources SET extraction_instructions = ? WHERE id = ?",
-                (json.dumps(instr), row["id"]),
-            )
+            # ADR-0015 D2a: guarded write — only evaluative.row_rules may change.
+            _write_section_instructions(db, row["id"], instr_raw, instr)
             stripped += 1
     cur = db.execute("DELETE FROM rules WHERE rule_id = ?", (rule_id,))
     db.commit()

@@ -10,6 +10,27 @@ See `HANDOVER.md` for what to do next. See `README.md` for what the project is.
 
 ---
 
+## 2026-06-14 (feat — ADR-0015 D2a: recipe immutability guard makes approval truthful)
+
+**Branch:** `main`. A post-approval write to a section's `extraction_instructions` may now change ONLY `evaluative.row_rules`; the extraction recipe (and every other `evaluative` subkey) is locked at approval. Interim realization of D2 ahead of D4 (bindings stay co-located but become un-mutable-except-row_rules). No bindings table, no migration, no multi-version scoping change. Full suite 1301 passed.
+
+### EXCEPTION CHECK (recorded)
+`row_rules` is the ONLY `evaluative` subkey mutated at runtime post-approval — confirmed: the only runtime writes to `subject_section_sources` are `bind_rule` (rules.py) and `delete_rule`, both touching only `evaluative.row_rules`; the other subkeys (`rules` for card/metric, `scope`, `vendor`, `threshold`) are read-only at runtime (written solely by migrations / `create_subject_from_proposal`). So the allowlist is correct and does not break card/metric rules.
+
+### Added (`db/rules.py`)
+- `RecipeImmutabilityError` + `assert_recipe_unchanged(old, new)` — an **allowlist** guard: passes iff `(NEW − evaluative.row_rules)` structurally equals `(OLD − evaluative.row_rules)`. Compares PARSED structures (each arg may be a raw JSON string or a dict), so key reordering never trips it; an emptied `evaluative` is treated as absent (first-bind case); a recipe key nobody enumerated is protected by default.
+- `_write_section_instructions(db, row_id, old, new)` — guarded UPDATE; `bind_rule`/`delete_rule` now write through it.
+
+### Preserved (explicit non-goals)
+- The authoring loop: `save_rule(bind=…)` adds/removes `row_rules` refs on an active subject; `delete_rule` strips refs — both still one-call, no version bump.
+- **Multi-version write behavior UNCHANGED** — `bind_rule` still writes every matching section row across versions (incl. superseded); the guard is version-agnostic. Asserted explicitly in a test so a future scoping change is loud.
+
+### Tests — `tests/test_recipe_immutability_guard_adr0015.py` (+12, tests-first)
+guard allows row_rules add/change/empty; rejects a recipe-key delta, a new recipe key, and another evaluative subkey delta; compares parsed-not-raw; treats empty/absent evaluative as equal; bind/delete round-trip through the guard preserving the recipe; idempotent rebind; and the multi-version write is asserted unchanged (writes both versions). Existing rule tests (`test_bind_version_scoping`, `test_delete_rule_reaping`, `test_rules_mcp_adr0010`, …) stay green.
+
+### Docs
+ADR-0015 gains **D2a** (recipe locked at approval; evaluative bindings an intentionally-mutable layer, co-located now, physically separated by D4; not a bindings-immutability decision; no multi-version scoping change).
+
 ## 2026-06-14 (docs — correct the strategic-inflection overclaim: extraction proven, collection not)
 
 **Branch:** `main`. Docs only — sharpen the ROADMAP Strategic Inflection note (and the HANDOVER title) that previously read as "platform proven end-to-end."
